@@ -1,0 +1,85 @@
+// Baluarte V2 — modelo de dados real (Prisma + SQLite).
+// SQLite nao suporta enums nativos no Prisma, por isso os campos de "enum"
+// (perfil, status, tipo, severidade) sao String validados na camada de aplicacao.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  nome      String
+  email     String   @unique
+  senhaHash String
+  perfil    String   @default("Analista") // Administrador | Analista | Colaborador
+  status    String   @default("Ativo")    // Ativo | Inativo | Pendente
+  criadoEm  DateTime @default(now())
+}
+
+model Asset {
+  id       String   @id @default(cuid())
+  nome     String
+  host     String   @unique
+  tipo     String // Servidor | Aplicacao | Rede | Banco de Dados
+  status   String   @default("Ativo") // Ativo | Inativo
+  criadoEm DateTime @default(now())
+  scans    Scan[]
+}
+
+model Scan {
+  id          String    @id @default(cuid())
+  assetId     String
+  asset       Asset     @relation(fields: [assetId], references: [id])
+  status      String    @default("EM_FILA") // EM_FILA | EM_ANDAMENTO | CONCLUIDA
+  criadoEm    DateTime  @default(now())
+  concluidoEm DateTime?
+  findings    Finding[]
+}
+
+model Finding {
+  id             String   @id @default(cuid())
+  scanId         String
+  scan           Scan     @relation(fields: [scanId], references: [id])
+  categoriaOwasp String
+  cvss           Float
+  severidade     String // Baixo | Medio | Alto | Critico
+  descricao      String
+  evidencia      String
+  status         String   @default("Aberta") // Aberta | Em revisao | Resolvida
+  criadoEm       DateTime @default(now())
+}
+
+model Campaign {
+  id       String          @id @default(cuid())
+  nome     String
+  template String // urgencia | autoridade | curiosidade
+  status   String          @default("AGENDADA") // AGENDADA | ATIVA | ENCERRADA
+  criadoEm DateTime        @default(now())
+  eventos  CampaignEvent[]
+}
+
+model CampaignEvent {
+  id           String    @id @default(cuid())
+  campaignId   String
+  campaign     Campaign  @relation(fields: [campaignId], references: [id])
+  destinatario String
+  enviadoEm    DateTime?
+  abertoEm     DateTime?
+  clicadoEm    DateTime?
+  submeteuEm   DateTime? // submeteu credenciais no formulario falso
+  reportouEm   DateTime? // reportou o e-mail suspeito ao time de TI
+  treinou      Boolean   @default(false)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  usuarioId String?
+  acao      String
+  detalhe   String?
+  timestamp DateTime @default(now())
+}

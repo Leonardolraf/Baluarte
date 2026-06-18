@@ -1,0 +1,18 @@
+# dependências
+node_modules/
+
+# build
+dist/
+
+# banco e ambiente
+*.db
+*.db-journal
+.env
+
+# resultados de teste gerados
+e2e/resultados*/
+**/selenium-screenshot-*.png
+
+# python / robot
+**/__pycache__/
+*.log
