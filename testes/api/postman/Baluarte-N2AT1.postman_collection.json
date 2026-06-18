@@ -1,0 +1,575 @@
+{
+  "info": {
+    "name": "Baluarte — N2 AT1 Testes de API (Login + Varredura)",
+    "_postman_id": "baluarte-n2at1-login-varredura",
+    "description": "Testes de API do projeto Baluarte (Teste de Software / N2 AT1). Dois testes de API por Partição de Equivalência: POST /api/login e POST /api/scans. Pré-requisito: subir o stub local (node stub-api/server.js) em http://localhost:8080. Rode a collection inteira (Login antes de Varredura): a CT-S* reutiliza o token capturado na CT-L1.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Login — Partição de Equivalência (POST /api/login)",
+      "item": [
+        {
+          "name": "CT-L1 — CE1 credenciais válidas → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Retorna token e perfil do usuário\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"sucesso\");",
+                  "    pm.expect(json.dados).to.have.property(\"token\");",
+                  "    pm.expect(json.dados.perfil).to.eql(\"Analista\");",
+                  "});",
+                  "// Captura o token para reutilizar nos testes de Varredura",
+                  "var dados = pm.response.json().dados;",
+                  "if (dados && dados.token) { pm.collectionVariables.set(\"token\", dados.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-L2 — CE2 e-mail com formato inválido → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Mensagem de formato de e-mail inválido\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.codigoErro).to.eql(\"EMAIL_INVALIDO\");",
+                  "    pm.expect(json.mensagem).to.eql(\"Formato de e-mail inválido\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista-empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-L3 — CE3 e-mail não cadastrado → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Credenciais inválidas\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"naoexiste@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-L4 — CE4 e-mail vazio → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"E-mail é obrigatório\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_OBRIGATORIO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-L5 — CE5 senha incorreta → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Credenciais inválidas\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"SenhaErrada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-L6 — CE6 senha vazia → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Senha é obrigatória\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"SENHA_OBRIGATORIA\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Varredura — Partição de Equivalência (POST /api/scans)",
+      "item": [
+        {
+          "name": "CT-S1 — CE1 ativo com status Ativo → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Varredura enfileirada (EM_FILA)\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"sucesso\");",
+                  "    pm.expect(json.dados.statusVarredura).to.eql(\"EM_FILA\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "scans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-S2 — CE2 ativo Inativo → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test(\"Ativo inativo bloqueia a varredura\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_INATIVO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "scans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-S3 — CE3 ativo inexistente → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"Ativo não encontrado\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_NAO_ENCONTRADO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-999\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "scans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-S4 — CE4 requisição sem token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Token não fornecido\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"TOKEN_AUSENTE\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "scans"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-S5 — CE5 ativoId ausente → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"ativoId é obrigatório\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_OBRIGATORIO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/scans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "scans"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

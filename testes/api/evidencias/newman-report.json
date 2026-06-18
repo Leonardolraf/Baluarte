@@ -1,0 +1,4456 @@
+{
+  "collection": {
+    "_": {
+      "postman_id": "baluarte-n2at1-login-varredura"
+    },
+    "item": [
+      {
+        "id": "2578ba85-0c9a-4b42-918c-a682cb1851d6",
+        "name": "1. Login — Partição de Equivalência (POST /api/login)",
+        "item": [
+          {
+            "id": "cd50b075-c7cf-42be-bb25-13efc79e6dc1",
+            "name": "CT-L1 — CE1 credenciais válidas → 200",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "login"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "4d06eb25-b2e6-4c7f-b8dd-fd1418208977",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 200\", function () {",
+                    "    pm.response.to.have.status(200);",
+                    "});",
+                    "pm.test(\"Retorna token e perfil do usuário\", function () {",
+                    "    var json = pm.response.json();",
+                    "    pm.expect(json.status).to.eql(\"sucesso\");",
+                    "    pm.expect(json.dados).to.have.property(\"token\");",
+                    "    pm.expect(json.dados.perfil).to.eql(\"Analista\");",
+                    "});",
+                    "// Captura o token para reutilizar nos testes de Varredura",
+                    "var dados = pm.response.json().dados;",
+                    "if (dados && dados.token) { pm.collectionVariables.set(\"token\", dados.token); }"
+                  ],
+                  "_lastExecutionId": "cf7acb1f-9f54-4709-b3a1-55a837f7efac"
+                }
+              }
+            ]
+          },
+          {
+            "id": "46edec09-30a9-4038-8007-7a2463de2fda",
+            "name": "CT-L2 — CE2 e-mail com formato inválido → 400",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "login"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"analista-empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "2f6410f2-ddb0-485c-8e94-b37e1b7a9aba",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 400\", function () {",
+                    "    pm.response.to.have.status(400);",
+                    "});",
+                    "pm.test(\"Mensagem de formato de e-mail inválido\", function () {",
+                    "    var json = pm.response.json();",
+                    "    pm.expect(json.codigoErro).to.eql(\"EMAIL_INVALIDO\");",
+                    "    pm.expect(json.mensagem).to.eql(\"Formato de e-mail inválido\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "62d9017b-a40b-4fee-bc43-1dbb531abd5d"
+                }
+              }
+            ]
+          },
+          {
+            "id": "64314650-b243-4c2e-ba96-9e9996661f35",
+            "name": "CT-L3 — CE3 e-mail não cadastrado → 401",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "login"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"naoexiste@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "16c1c56d-7552-4c26-b444-475bdbab05d7",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 401\", function () {",
+                    "    pm.response.to.have.status(401);",
+                    "});",
+                    "pm.test(\"Credenciais inválidas\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "38dde18e-2769-44f8-8e25-6c482040a2c9"
+                }
+              }
+            ]
+          },
+          {
+            "id": "334b6994-3023-4866-8b9f-56a541846966",
+            "name": "CT-L4 — CE4 e-mail vazio → 400",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "login"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"\",\n  \"senha\": \"Senha@123\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "3abefdc4-06f2-4fdd-b405-3044bb8e086c",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 400\", function () {",
+                    "    pm.response.to.have.status(400);",
+                    "});",
+                    "pm.test(\"E-mail é obrigatório\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_OBRIGATORIO\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "7ba98936-290d-4842-965a-61148e313bf2"
+                }
+              }
+            ]
+          },
+          {
+            "id": "54e71c38-0b37-4e93-b6f2-ebc0c512debd",
+            "name": "CT-L5 — CE5 senha incorreta → 401",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "login"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"SenhaErrada\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "08a7a299-765a-49a7-ab21-3150c64aa13c",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 401\", function () {",
+                    "    pm.response.to.have.status(401);",
+                    "});",
+                    "pm.test(\"Credenciais inválidas\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "5bad1b22-bde8-446c-96e9-5831b61b8459"
+                }
+              }
+            ]
+          },
+          {
+            "id": "ba71a20f-86e2-4b4f-956d-dddae8248cc3",
+            "name": "CT-L6 — CE6 senha vazia → 400",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "login"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "6bdda97d-e54a-40ef-b5e3-a186202eb0c8",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 400\", function () {",
+                    "    pm.response.to.have.status(400);",
+                    "});",
+                    "pm.test(\"Senha é obrigatória\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"SENHA_OBRIGATORIA\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "6431237a-0b6d-46e0-b7b2-3a4b9a9edbbd"
+                }
+              }
+            ]
+          }
+        ],
+        "event": []
+      },
+      {
+        "id": "635f2a4a-f516-48c5-a292-16e1c7cfd0e1",
+        "name": "2. Varredura — Partição de Equivalência (POST /api/scans)",
+        "item": [
+          {
+            "id": "376a277e-5c70-40a9-bec6-626d2ad1608b",
+            "name": "CT-S1 — CE1 ativo com status Ativo → 201",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "scans"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "f47c8d46-0067-4e82-bfd5-e1bc2f1ede9e",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 201\", function () {",
+                    "    pm.response.to.have.status(201);",
+                    "});",
+                    "pm.test(\"Varredura enfileirada (EM_FILA)\", function () {",
+                    "    var json = pm.response.json();",
+                    "    pm.expect(json.status).to.eql(\"sucesso\");",
+                    "    pm.expect(json.dados.statusVarredura).to.eql(\"EM_FILA\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "67b5144c-b47b-4c18-980a-d1abfb16ef2c"
+                }
+              }
+            ]
+          },
+          {
+            "id": "e8196980-7e3c-46ca-9647-d0f4ea6daea4",
+            "name": "CT-S2 — CE2 ativo Inativo → 422",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "scans"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"ativoId\": \"ativo-002\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "76a1ba40-ec04-4804-8a82-db8ecc58f71c",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 422\", function () {",
+                    "    pm.response.to.have.status(422);",
+                    "});",
+                    "pm.test(\"Ativo inativo bloqueia a varredura\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_INATIVO\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "43966a60-79d3-4a3f-8bef-b4f8addaaec9"
+                }
+              }
+            ]
+          },
+          {
+            "id": "2f19bf85-47d3-4181-8215-a1694d1ae486",
+            "name": "CT-S3 — CE3 ativo inexistente → 404",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "scans"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"ativoId\": \"ativo-999\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "b459d198-ce5f-4128-8659-722daee0144a",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 404\", function () {",
+                    "    pm.response.to.have.status(404);",
+                    "});",
+                    "pm.test(\"Ativo não encontrado\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_NAO_ENCONTRADO\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "27f59537-726c-4d00-aba3-5ff0899953e9"
+                }
+              }
+            ]
+          },
+          {
+            "id": "ae3c2538-b5b8-49a5-94b2-73420317bab5",
+            "name": "CT-S4 — CE4 requisição sem token → 401",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "scans"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "ea9f5099-1356-4167-b574-4d77f4b9817d",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 401\", function () {",
+                    "    pm.response.to.have.status(401);",
+                    "});",
+                    "pm.test(\"Token não fornecido\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"TOKEN_AUSENTE\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "c94aa8ba-0380-4183-bac3-5ccb5edbd455"
+                }
+              }
+            ]
+          },
+          {
+            "id": "d486ffe9-fca7-4da2-9c1f-6665e59bc22d",
+            "name": "CT-S5 — CE5 ativoId ausente → 400",
+            "request": {
+              "url": {
+                "path": [
+                  "api",
+                  "scans"
+                ],
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "query": [],
+                "variable": []
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{token}}"
+                }
+              ],
+              "method": "POST",
+              "body": {
+                "mode": "raw",
+                "raw": "{}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              }
+            },
+            "response": [],
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "id": "7662ea08-a9e5-434c-8b96-3fe9ad8209f0",
+                  "type": "text/javascript",
+                  "exec": [
+                    "pm.test(\"Status code deve ser 400\", function () {",
+                    "    pm.response.to.have.status(400);",
+                    "});",
+                    "pm.test(\"ativoId é obrigatório\", function () {",
+                    "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_OBRIGATORIO\");",
+                    "});"
+                  ],
+                  "_lastExecutionId": "aab71751-9ec8-49ad-96cb-56a01dc00deb"
+                }
+              }
+            ]
+          }
+        ],
+        "event": []
+      }
+    ],
+    "event": [],
+    "variable": [
+      {
+        "type": "string",
+        "value": "http://localhost:8080",
+        "key": "baseUrl"
+      },
+      {
+        "type": "string",
+        "value": "",
+        "key": "token"
+      }
+    ],
+    "info": {
+      "_postman_id": "baluarte-n2at1-login-varredura",
+      "name": "Baluarte — N2 AT1 Testes de API (Login + Varredura)",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+      "description": {
+        "content": "Testes de API do projeto Baluarte (Teste de Software / N2 AT1). Dois testes de API por Partição de Equivalência: POST /api/login e POST /api/scans. Pré-requisito: subir o stub local (node stub-api/server.js) em http://localhost:8080. Rode a collection inteira (Login antes de Varredura): a CT-S* reutiliza o token capturado na CT-L1.",
+        "type": "text/plain"
+      }
+    }
+  },
+  "environment": {
+    "_": {
+      "postman_variable_scope": "environment"
+    },
+    "id": "baluarte-local-8080",
+    "name": "Baluarte Local (:8080)",
+    "values": [
+      {
+        "type": "any",
+        "value": "http://localhost:8080",
+        "key": "baseUrl"
+      }
+    ]
+  },
+  "globals": {
+    "id": "f1e63c3f-4b24-447b-9fe4-6b91b9217e82",
+    "values": []
+  },
+  "run": {
+    "stats": {
+      "iterations": {
+        "total": 1,
+        "pending": 0,
+        "failed": 0
+      },
+      "items": {
+        "total": 11,
+        "pending": 0,
+        "failed": 0
+      },
+      "scripts": {
+        "total": 11,
+        "pending": 0,
+        "failed": 0
+      },
+      "prerequests": {
+        "total": 11,
+        "pending": 0,
+        "failed": 0
+      },
+      "requests": {
+        "total": 11,
+        "pending": 0,
+        "failed": 0
+      },
+      "tests": {
+        "total": 11,
+        "pending": 0,
+        "failed": 0
+      },
+      "assertions": {
+        "total": 22,
+        "pending": 0,
+        "failed": 0
+      },
+      "testScripts": {
+        "total": 11,
+        "pending": 0,
+        "failed": 0
+      },
+      "prerequestScripts": {
+        "total": 0,
+        "pending": 0,
+        "failed": 0
+      }
+    },
+    "timings": {
+      "responseAverage": 4.181818181818182,
+      "responseMin": 1,
+      "responseMax": 25,
+      "responseSd": 6.603279926303593,
+      "dnsAverage": 0,
+      "dnsMin": 0,
+      "dnsMax": 0,
+      "dnsSd": 0,
+      "firstByteAverage": 0,
+      "firstByteMin": 0,
+      "firstByteMax": 0,
+      "firstByteSd": 0,
+      "started": 1781750512692,
+      "completed": 1781750513669
+    },
+    "executions": [
+      {
+        "cursor": {
+          "position": 0,
+          "iteration": 0,
+          "length": 11,
+          "cycles": 1,
+          "empty": false,
+          "eof": false,
+          "bof": true,
+          "cr": false,
+          "ref": "3fbf6161-54bb-435e-b3ba-ceda0e7301ca",
+          "httpRequestId": "8e6852d8-24d4-4f03-96dd-8bacf28aefc0"
+        },
+        "item": {
+          "id": "cd50b075-c7cf-42be-bb25-13efc79e6dc1",
+          "name": "CT-L1 — CE1 credenciais válidas → 200",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "login"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "4d06eb25-b2e6-4c7f-b8dd-fd1418208977",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Retorna token e perfil do usuário\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"sucesso\");",
+                  "    pm.expect(json.dados).to.have.property(\"token\");",
+                  "    pm.expect(json.dados.perfil).to.eql(\"Analista\");",
+                  "});",
+                  "// Captura o token para reutilizar nos testes de Varredura",
+                  "var dados = pm.response.json().dados;",
+                  "if (dados && dados.token) { pm.collectionVariables.set(\"token\", dados.token); }"
+                ],
+                "_lastExecutionId": "cf7acb1f-9f54-4709-b3a1-55a837f7efac"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "login"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "b41cdf05-3c57-46df-bd1f-18f3a4264565",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "61",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "2aa6c24a-2e95-41e0-9211-c86c8c971400",
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:52 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              115,
+              117,
+              99,
+              101,
+              115,
+              115,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              65,
+              117,
+              116,
+              101,
+              110,
+              116,
+              105,
+              99,
+              97,
+              100,
+              111,
+              32,
+              99,
+              111,
+              109,
+              32,
+              115,
+              117,
+              99,
+              101,
+              115,
+              115,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              100,
+              97,
+              100,
+              111,
+              115,
+              34,
+              58,
+              32,
+              123,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              116,
+              111,
+              107,
+              101,
+              110,
+              34,
+              58,
+              32,
+              34,
+              115,
+              116,
+              117,
+              98,
+              45,
+              116,
+              111,
+              107,
+              101,
+              110,
+              45,
+              97,
+              110,
+              97,
+              108,
+              105,
+              115,
+              116,
+              97,
+              45,
+              48,
+              48,
+              49,
+              34,
+              44,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              105,
+              100,
+              85,
+              115,
+              117,
+              97,
+              114,
+              105,
+              111,
+              34,
+              58,
+              32,
+              34,
+              117,
+              45,
+              48,
+              48,
+              49,
+              34,
+              44,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              101,
+              109,
+              97,
+              105,
+              108,
+              34,
+              58,
+              32,
+              34,
+              97,
+              110,
+              97,
+              108,
+              105,
+              115,
+              116,
+              97,
+              64,
+              101,
+              109,
+              112,
+              114,
+              101,
+              115,
+              97,
+              46,
+              99,
+              111,
+              109,
+              34,
+              44,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              112,
+              101,
+              114,
+              102,
+              105,
+              108,
+              34,
+              58,
+              32,
+              34,
+              65,
+              110,
+              97,
+              108,
+              105,
+              115,
+              116,
+              97,
+              34,
+              10,
+              32,
+              32,
+              125,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 25,
+          "responseSize": 212
+        },
+        "id": "cd50b075-c7cf-42be-bb25-13efc79e6dc1",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 200",
+            "skipped": false
+          },
+          {
+            "assertion": "Retorna token e perfil do usuário",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "74b50423-8eb9-4a90-ad28-1761e172c163",
+          "length": 11,
+          "cycles": 1,
+          "position": 1,
+          "iteration": 0,
+          "httpRequestId": "7df52ec8-1ad9-47f6-9591-8b152d53b7db"
+        },
+        "item": {
+          "id": "46edec09-30a9-4038-8007-7a2463de2fda",
+          "name": "CT-L2 — CE2 e-mail com formato inválido → 400",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "login"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista-empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "2f6410f2-ddb0-485c-8e94-b37e1b7a9aba",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Mensagem de formato de e-mail inválido\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.codigoErro).to.eql(\"EMAIL_INVALIDO\");",
+                  "    pm.expect(json.mensagem).to.eql(\"Formato de e-mail inválido\");",
+                  "});"
+                ],
+                "_lastExecutionId": "62d9017b-a40b-4fee-bc43-1dbb531abd5d"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "login"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "6a02872d-1c7f-4aa3-bdbf-edd28ef39fb5",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "61",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"email\": \"analista-empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "c1796738-18cc-43a7-8f6f-f6cbfaff61e0",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:52 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              70,
+              111,
+              114,
+              109,
+              97,
+              116,
+              111,
+              32,
+              100,
+              101,
+              32,
+              101,
+              45,
+              109,
+              97,
+              105,
+              108,
+              32,
+              105,
+              110,
+              118,
+              195,
+              161,
+              108,
+              105,
+              100,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              69,
+              77,
+              65,
+              73,
+              76,
+              95,
+              73,
+              78,
+              86,
+              65,
+              76,
+              73,
+              68,
+              79,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              50,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 2,
+          "responseSize": 140
+        },
+        "id": "46edec09-30a9-4038-8007-7a2463de2fda",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 400",
+            "skipped": false
+          },
+          {
+            "assertion": "Mensagem de formato de e-mail inválido",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "7d25beec-0897-4678-8495-569c628b5aa9",
+          "length": 11,
+          "cycles": 1,
+          "position": 2,
+          "iteration": 0,
+          "httpRequestId": "59467fa3-41eb-4f4b-92f9-6ef6126c91e6"
+        },
+        "item": {
+          "id": "64314650-b243-4c2e-ba96-9e9996661f35",
+          "name": "CT-L3 — CE3 e-mail não cadastrado → 401",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "login"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"naoexiste@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "16c1c56d-7552-4c26-b444-475bdbab05d7",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Credenciais inválidas\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
+                  "});"
+                ],
+                "_lastExecutionId": "38dde18e-2769-44f8-8e25-6c482040a2c9"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "login"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "156590d5-e779-4353-afae-0393afcc79f9",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "62",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"email\": \"naoexiste@empresa.com\",\n  \"senha\": \"Senha@123\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "433c1d59-1dc2-4d0f-82c0-2d456fedd1fc",
+          "status": "Unauthorized",
+          "code": 401,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:52 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              69,
+              45,
+              109,
+              97,
+              105,
+              108,
+              32,
+              111,
+              117,
+              32,
+              115,
+              101,
+              110,
+              104,
+              97,
+              32,
+              105,
+              110,
+              118,
+              195,
+              161,
+              108,
+              105,
+              100,
+              111,
+              115,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              67,
+              82,
+              69,
+              68,
+              69,
+              78,
+              67,
+              73,
+              65,
+              73,
+              83,
+              95,
+              73,
+              78,
+              86,
+              65,
+              76,
+              73,
+              68,
+              65,
+              83,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              50,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 3,
+          "responseSize": 146
+        },
+        "id": "64314650-b243-4c2e-ba96-9e9996661f35",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 401",
+            "skipped": false
+          },
+          {
+            "assertion": "Credenciais inválidas",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "f42d274a-2efa-4979-a1cc-d8c1bec4f61f",
+          "length": 11,
+          "cycles": 1,
+          "position": 3,
+          "iteration": 0,
+          "httpRequestId": "d5ea026f-9f2f-4a0c-914b-8acc9c67d5fe"
+        },
+        "item": {
+          "id": "334b6994-3023-4866-8b9f-56a541846966",
+          "name": "CT-L4 — CE4 e-mail vazio → 400",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "login"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"\",\n  \"senha\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "3abefdc4-06f2-4fdd-b405-3044bb8e086c",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"E-mail é obrigatório\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_OBRIGATORIO\");",
+                  "});"
+                ],
+                "_lastExecutionId": "7ba98936-290d-4842-965a-61148e313bf2"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "login"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "7f10bd04-9b69-4b02-a4ce-a8a7d40a144e",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "41",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"email\": \"\",\n  \"senha\": \"Senha@123\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "e822161f-c0e1-4fc5-92b1-de71556bd973",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              69,
+              45,
+              109,
+              97,
+              105,
+              108,
+              32,
+              195,
+              169,
+              32,
+              111,
+              98,
+              114,
+              105,
+              103,
+              97,
+              116,
+              195,
+              179,
+              114,
+              105,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              69,
+              77,
+              65,
+              73,
+              76,
+              95,
+              79,
+              66,
+              82,
+              73,
+              71,
+              65,
+              84,
+              79,
+              82,
+              73,
+              79,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 2,
+          "responseSize": 138
+        },
+        "id": "334b6994-3023-4866-8b9f-56a541846966",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 400",
+            "skipped": false
+          },
+          {
+            "assertion": "E-mail é obrigatório",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "c5c37dad-a65b-47b0-ab0b-7d4a8823b9f3",
+          "length": 11,
+          "cycles": 1,
+          "position": 4,
+          "iteration": 0,
+          "httpRequestId": "1335f824-a9f8-4d03-856c-19ddae5cccee"
+        },
+        "item": {
+          "id": "54e71c38-0b37-4e93-b6f2-ebc0c512debd",
+          "name": "CT-L5 — CE5 senha incorreta → 401",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "login"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"SenhaErrada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "08a7a299-765a-49a7-ab21-3150c64aa13c",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Credenciais inválidas\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
+                  "});"
+                ],
+                "_lastExecutionId": "5bad1b22-bde8-446c-96e9-5831b61b8459"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "login"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "a3a16e55-0991-45e4-bd77-f19e945ece00",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "63",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"SenhaErrada\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "135a43fc-7a2e-4f1a-9d4c-cf9923b6cded",
+          "status": "Unauthorized",
+          "code": 401,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              69,
+              45,
+              109,
+              97,
+              105,
+              108,
+              32,
+              111,
+              117,
+              32,
+              115,
+              101,
+              110,
+              104,
+              97,
+              32,
+              105,
+              110,
+              118,
+              195,
+              161,
+              108,
+              105,
+              100,
+              111,
+              115,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              67,
+              82,
+              69,
+              68,
+              69,
+              78,
+              67,
+              73,
+              65,
+              73,
+              83,
+              95,
+              73,
+              78,
+              86,
+              65,
+              76,
+              73,
+              68,
+              65,
+              83,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 3,
+          "responseSize": 146
+        },
+        "id": "54e71c38-0b37-4e93-b6f2-ebc0c512debd",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 401",
+            "skipped": false
+          },
+          {
+            "assertion": "Credenciais inválidas",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "578d70f8-0a52-42ac-acce-259c65cefded",
+          "length": 11,
+          "cycles": 1,
+          "position": 5,
+          "iteration": 0,
+          "httpRequestId": "baf23a01-40e7-4743-92a5-acc0e47792c0"
+        },
+        "item": {
+          "id": "ba71a20f-86e2-4b4f-956d-dddae8248cc3",
+          "name": "CT-L6 — CE6 senha vazia → 400",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "login"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "6bdda97d-e54a-40ef-b5e3-a186202eb0c8",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Senha é obrigatória\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"SENHA_OBRIGATORIA\");",
+                  "});"
+                ],
+                "_lastExecutionId": "6431237a-0b6d-46e0-b7b2-3a4b9a9edbbd"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "login"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "1bfef1d9-c0aa-4504-b702-2f06f47bc5ca",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "52",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"email\": \"analista@empresa.com\",\n  \"senha\": \"\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "4ff9377c-2345-443c-8bd7-f8fad9a1d517",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              83,
+              101,
+              110,
+              104,
+              97,
+              32,
+              195,
+              169,
+              32,
+              111,
+              98,
+              114,
+              105,
+              103,
+              97,
+              116,
+              195,
+              179,
+              114,
+              105,
+              97,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              83,
+              69,
+              78,
+              72,
+              65,
+              95,
+              79,
+              66,
+              82,
+              73,
+              71,
+              65,
+              84,
+              79,
+              82,
+              73,
+              65,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 2,
+          "responseSize": 137
+        },
+        "id": "ba71a20f-86e2-4b4f-956d-dddae8248cc3",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 400",
+            "skipped": false
+          },
+          {
+            "assertion": "Senha é obrigatória",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "1bbb5a91-eb5a-497f-9192-f0bee6c65531",
+          "length": 11,
+          "cycles": 1,
+          "position": 6,
+          "iteration": 0,
+          "httpRequestId": "dc6f45f1-043c-4e79-87cd-3da93d80daa5"
+        },
+        "item": {
+          "id": "376a277e-5c70-40a9-bec6-626d2ad1608b",
+          "name": "CT-S1 — CE1 ativo com status Ativo → 201",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "scans"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "f47c8d46-0067-4e82-bfd5-e1bc2f1ede9e",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Varredura enfileirada (EM_FILA)\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"sucesso\");",
+                  "    pm.expect(json.dados.statusVarredura).to.eql(\"EM_FILA\");",
+                  "});"
+                ],
+                "_lastExecutionId": "67b5144c-b47b-4c18-980a-d1abfb16ef2c"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "scans"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer stub-token-analista-001"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "75618ccd-a1e0-4f44-aac2-5d4843953d42",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "28",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "43fee207-b4e4-4bb9-bd45-418f34c9bd20",
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              115,
+              117,
+              99,
+              101,
+              115,
+              115,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              86,
+              97,
+              114,
+              114,
+              101,
+              100,
+              117,
+              114,
+              97,
+              32,
+              101,
+              110,
+              102,
+              105,
+              108,
+              101,
+              105,
+              114,
+              97,
+              100,
+              97,
+              32,
+              99,
+              111,
+              109,
+              32,
+              115,
+              117,
+              99,
+              101,
+              115,
+              115,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              100,
+              97,
+              100,
+              111,
+              115,
+              34,
+              58,
+              32,
+              123,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              115,
+              99,
+              97,
+              110,
+              73,
+              100,
+              34,
+              58,
+              32,
+              34,
+              115,
+              45,
+              120,
+              110,
+              118,
+              49,
+              122,
+              118,
+              34,
+              44,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              97,
+              116,
+              105,
+              118,
+              111,
+              73,
+              100,
+              34,
+              58,
+              32,
+              34,
+              97,
+              116,
+              105,
+              118,
+              111,
+              45,
+              48,
+              48,
+              49,
+              34,
+              44,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              86,
+              97,
+              114,
+              114,
+              101,
+              100,
+              117,
+              114,
+              97,
+              34,
+              58,
+              32,
+              34,
+              69,
+              77,
+              95,
+              70,
+              73,
+              76,
+              65,
+              34,
+              44,
+              10,
+              32,
+              32,
+              32,
+              32,
+              34,
+              99,
+              114,
+              105,
+              97,
+              100,
+              111,
+              69,
+              109,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              32,
+              32,
+              125,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 2,
+          "responseSize": 221
+        },
+        "id": "376a277e-5c70-40a9-bec6-626d2ad1608b",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 201",
+            "skipped": false
+          },
+          {
+            "assertion": "Varredura enfileirada (EM_FILA)",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "fc781829-69fd-42d8-908b-f74fb07585c8",
+          "length": 11,
+          "cycles": 1,
+          "position": 7,
+          "iteration": 0,
+          "httpRequestId": "d3125ea3-ae77-4796-953c-736e8b41c2a8"
+        },
+        "item": {
+          "id": "e8196980-7e3c-46ca-9647-d0f4ea6daea4",
+          "name": "CT-S2 — CE2 ativo Inativo → 422",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "scans"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "76a1ba40-ec04-4804-8a82-db8ecc58f71c",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test(\"Ativo inativo bloqueia a varredura\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_INATIVO\");",
+                  "});"
+                ],
+                "_lastExecutionId": "43966a60-79d3-4a3f-8bef-b4f8addaaec9"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "scans"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer stub-token-analista-001"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "b8bdd213-1ab6-4597-b1a6-4573a81fa155",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "28",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"ativoId\": \"ativo-002\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "ddf2fc62-f27f-4b34-b44d-675633289e98",
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              86,
+              97,
+              114,
+              114,
+              101,
+              100,
+              117,
+              114,
+              97,
+              32,
+              110,
+              195,
+              163,
+              111,
+              32,
+              112,
+              101,
+              114,
+              109,
+              105,
+              116,
+              105,
+              100,
+              97,
+              58,
+              32,
+              97,
+              116,
+              105,
+              118,
+              111,
+              32,
+              101,
+              115,
+              116,
+              195,
+              161,
+              32,
+              105,
+              110,
+              97,
+              116,
+              105,
+              118,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              65,
+              84,
+              73,
+              86,
+              79,
+              95,
+              73,
+              78,
+              65,
+              84,
+              73,
+              86,
+              79,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 2,
+          "responseSize": 157
+        },
+        "id": "e8196980-7e3c-46ca-9647-d0f4ea6daea4",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 422",
+            "skipped": false
+          },
+          {
+            "assertion": "Ativo inativo bloqueia a varredura",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "f0bd1535-827c-4a64-a1f8-6fe69e9ff1b8",
+          "length": 11,
+          "cycles": 1,
+          "position": 8,
+          "iteration": 0,
+          "httpRequestId": "7942b5ca-82bb-4e2c-8fd4-c2df106b0aa6"
+        },
+        "item": {
+          "id": "2f19bf85-47d3-4181-8215-a1694d1ae486",
+          "name": "CT-S3 — CE3 ativo inexistente → 404",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "scans"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-999\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "b459d198-ce5f-4128-8659-722daee0144a",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"Ativo não encontrado\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_NAO_ENCONTRADO\");",
+                  "});"
+                ],
+                "_lastExecutionId": "27f59537-726c-4d00-aba3-5ff0899953e9"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "scans"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer stub-token-analista-001"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "98656e70-83e1-47a9-8192-c7fedfe92791",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "28",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"ativoId\": \"ativo-999\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "4c595969-e4ff-40dd-bfea-c3a96d2cf446",
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              65,
+              116,
+              105,
+              118,
+              111,
+              32,
+              110,
+              195,
+              163,
+              111,
+              32,
+              101,
+              110,
+              99,
+              111,
+              110,
+              116,
+              114,
+              97,
+              100,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              65,
+              84,
+              73,
+              86,
+              79,
+              95,
+              78,
+              65,
+              79,
+              95,
+              69,
+              78,
+              67,
+              79,
+              78,
+              84,
+              82,
+              65,
+              68,
+              79,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 2,
+          "responseSize": 140
+        },
+        "id": "2f19bf85-47d3-4181-8215-a1694d1ae486",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 404",
+            "skipped": false
+          },
+          {
+            "assertion": "Ativo não encontrado",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "9ba03cf3-42e4-4eec-baf4-fabc3f407349",
+          "length": 11,
+          "cycles": 1,
+          "position": 9,
+          "iteration": 0,
+          "httpRequestId": "75157b74-b088-40ab-9d72-b369fe844ded"
+        },
+        "item": {
+          "id": "ae3c2538-b5b8-49a5-94b2-73420317bab5",
+          "name": "CT-S4 — CE4 requisição sem token → 401",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "scans"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "ea9f5099-1356-4167-b574-4d77f4b9817d",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test(\"Token não fornecido\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"TOKEN_AUSENTE\");",
+                  "});"
+                ],
+                "_lastExecutionId": "c94aa8ba-0380-4183-bac3-5ccb5edbd455"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "scans"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "e61d58e6-a22d-4e4c-a46e-0276a95252c8",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "28",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{\n  \"ativoId\": \"ativo-001\"\n}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "d6e36537-99a7-4c71-bbdb-b4ea4ab1aaf8",
+          "status": "Unauthorized",
+          "code": 401,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              84,
+              111,
+              107,
+              101,
+              110,
+              32,
+              110,
+              195,
+              163,
+              111,
+              32,
+              102,
+              111,
+              114,
+              110,
+              101,
+              99,
+              105,
+              100,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              84,
+              79,
+              75,
+              69,
+              78,
+              95,
+              65,
+              85,
+              83,
+              69,
+              78,
+              84,
+              69,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 2,
+          "responseSize": 132
+        },
+        "id": "ae3c2538-b5b8-49a5-94b2-73420317bab5",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 401",
+            "skipped": false
+          },
+          {
+            "assertion": "Token não fornecido",
+            "skipped": false
+          }
+        ]
+      },
+      {
+        "cursor": {
+          "ref": "9b6247f9-6482-4032-8a21-cea2f639bbf5",
+          "length": 11,
+          "cycles": 1,
+          "position": 10,
+          "iteration": 0,
+          "httpRequestId": "7a4aa598-91b5-443e-a763-d4b182806fd7"
+        },
+        "item": {
+          "id": "d486ffe9-fca7-4da2-9c1f-6665e59bc22d",
+          "name": "CT-S5 — CE5 ativoId ausente → 400",
+          "request": {
+            "url": {
+              "path": [
+                "api",
+                "scans"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "id": "7662ea08-a9e5-434c-8b96-3fe9ad8209f0",
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"ativoId é obrigatório\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_OBRIGATORIO\");",
+                  "});"
+                ],
+                "_lastExecutionId": "aab71751-9ec8-49ad-96cb-56a01dc00deb"
+              }
+            }
+          ]
+        },
+        "request": {
+          "url": {
+            "protocol": "http",
+            "port": "8080",
+            "path": [
+              "api",
+              "scans"
+            ],
+            "host": [
+              "localhost"
+            ],
+            "query": [],
+            "variable": []
+          },
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "key": "Authorization",
+              "value": "Bearer stub-token-analista-001"
+            },
+            {
+              "key": "User-Agent",
+              "value": "PostmanRuntime/7.39.1",
+              "system": true
+            },
+            {
+              "key": "Accept",
+              "value": "*/*",
+              "system": true
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache",
+              "system": true
+            },
+            {
+              "key": "Postman-Token",
+              "value": "3d974b72-8bfe-43c5-b815-37e6c1c7a979",
+              "system": true
+            },
+            {
+              "key": "Host",
+              "value": "localhost:8080",
+              "system": true
+            },
+            {
+              "key": "Accept-Encoding",
+              "value": "gzip, deflate, br",
+              "system": true
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive",
+              "system": true
+            },
+            {
+              "key": "Content-Length",
+              "value": "2",
+              "system": true
+            }
+          ],
+          "method": "POST",
+          "body": {
+            "mode": "raw",
+            "raw": "{}",
+            "options": {
+              "raw": {
+                "language": "json"
+              }
+            }
+          }
+        },
+        "response": {
+          "id": "af718d57-163a-41f2-b6da-ab3ed2f5245b",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Date",
+              "value": "Thu, 18 Jun 2026 02:41:53 GMT"
+            },
+            {
+              "key": "Connection",
+              "value": "keep-alive"
+            },
+            {
+              "key": "Keep-Alive",
+              "value": "timeout=5"
+            },
+            {
+              "key": "Transfer-Encoding",
+              "value": "chunked"
+            }
+          ],
+          "stream": {
+            "type": "Buffer",
+            "data": [
+              123,
+              10,
+              32,
+              32,
+              34,
+              115,
+              116,
+              97,
+              116,
+              117,
+              115,
+              34,
+              58,
+              32,
+              34,
+              101,
+              114,
+              114,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              109,
+              101,
+              110,
+              115,
+              97,
+              103,
+              101,
+              109,
+              34,
+              58,
+              32,
+              34,
+              97,
+              116,
+              105,
+              118,
+              111,
+              73,
+              100,
+              32,
+              195,
+              169,
+              32,
+              111,
+              98,
+              114,
+              105,
+              103,
+              97,
+              116,
+              195,
+              179,
+              114,
+              105,
+              111,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              99,
+              111,
+              100,
+              105,
+              103,
+              111,
+              69,
+              114,
+              114,
+              111,
+              34,
+              58,
+              32,
+              34,
+              65,
+              84,
+              73,
+              86,
+              79,
+              95,
+              79,
+              66,
+              82,
+              73,
+              71,
+              65,
+              84,
+              79,
+              82,
+              73,
+              79,
+              34,
+              44,
+              10,
+              32,
+              32,
+              34,
+              116,
+              105,
+              109,
+              101,
+              115,
+              116,
+              97,
+              109,
+              112,
+              34,
+              58,
+              32,
+              34,
+              50,
+              48,
+              50,
+              54,
+              45,
+              48,
+              54,
+              45,
+              49,
+              56,
+              84,
+              48,
+              50,
+              58,
+              52,
+              49,
+              58,
+              53,
+              51,
+              90,
+              34,
+              10,
+              125
+            ]
+          },
+          "cookie": [],
+          "responseTime": 1,
+          "responseSize": 139
+        },
+        "id": "d486ffe9-fca7-4da2-9c1f-6665e59bc22d",
+        "assertions": [
+          {
+            "assertion": "Status code deve ser 400",
+            "skipped": false
+          },
+          {
+            "assertion": "ativoId é obrigatório",
+            "skipped": false
+          }
+        ]
+      }
+    ],
+    "transfers": {
+      "responseTotal": 1708
+    },
+    "failures": [],
+    "error": null
+  }
+}

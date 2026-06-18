@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.14.5 on win32)" generated="2026-06-18T00:18:40.247895" rpa="false" schemaversion="5">
+<suite id="s1" name="Campanha de Phishing" source="C:\Users\Leo\Desktop\Baluarte-Geral\Teste de Software\N2-AT1-Testes-API\ui-tests\robot\campanha_phishing.robot">
+<kw name="Abrir o navegador na tela de campanha" type="SETUP">
+<kw name="Open Browser" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:40.633114" level="INFO">Opening browser 'chrome' to base url 'http://localhost:3000/campanha.html'.</msg>
+<arg>${URL}</arg>
+<arg>${BROWSER}</arg>
+<arg>options=${OPCOES}</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="PASS" start="2026-06-18T00:18:40.632865" elapsed="0.714108"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:40.632381" elapsed="0.714833"/>
+</kw>
+<test id="s1-t1" name="CT01 - Deve criar campanha com destinatário interno (CE1 válida)" line="20">
+<kw name="Preencher campanha">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.348238" elapsed="0.069580"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.418008" elapsed="0.015798"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.434232" level="INFO">Typing text 'Phishing Q2' into text field 'id=nomeCampanha'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.433958" elapsed="0.068277"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.502669" level="INFO">Typing text 'colaborador@empresa.com' into text field 'id=destinatario'.</msg>
+<arg>${INPUT_DESTINATARIO}</arg>
+<arg>${destinatario}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.502396" elapsed="0.065299"/>
+</kw>
+<if>
+<branch type="IF" condition="'${template}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.568311" level="INFO">Selecting options from selection list 'id=template' by value urgencia.</msg>
+<arg>${SELECT_TEMPLATE}</arg>
+<arg>${template}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.568075" elapsed="0.053446"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:41.567848" elapsed="0.053753"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:18:41.567813" elapsed="0.053843"/>
+</if>
+<arg>Phishing Q2</arg>
+<arg>colaborador@empresa.com</arg>
+<arg>urgencia</arg>
+<status status="PASS" start="2026-06-18T00:18:41.347907" elapsed="0.273818"/>
+</kw>
+<kw name="Solicitar a criação">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.622422" level="INFO">Clicking element 'id=btnCriar'.</msg>
+<arg>${BOTAO_CRIAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.622211" elapsed="0.046843"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:41.621970" elapsed="0.047188"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.669571" elapsed="0.016272"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.728315" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-1.png"&gt;&lt;img src="selenium-screenshot-1.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.686002" elapsed="0.042417"/>
+</kw>
+<arg>Campanha criada com sucesso</arg>
+<status status="PASS" start="2026-06-18T00:18:41.669319" elapsed="0.059191"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:41.347323" elapsed="0.381313"/>
+</test>
+<test id="s1-t2" name="CT02 - Deve bloquear destinatário externo (CE2)" line="25">
+<kw name="Preencher campanha">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.729523" elapsed="0.026760"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.756443" elapsed="0.013761"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.770589" level="INFO">Typing text 'Phishing Q2' into text field 'id=nomeCampanha'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.770352" elapsed="0.052767"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.823525" level="INFO">Typing text 'colaborador@gmail.com' into text field 'id=destinatario'.</msg>
+<arg>${INPUT_DESTINATARIO}</arg>
+<arg>${destinatario}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.823280" elapsed="0.057390"/>
+</kw>
+<if>
+<branch type="IF" condition="'${template}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.881695" level="INFO">Selecting options from selection list 'id=template' by value urgencia.</msg>
+<arg>${SELECT_TEMPLATE}</arg>
+<arg>${template}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.881096" elapsed="0.041434"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:41.880836" elapsed="0.041788"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:18:41.880797" elapsed="0.041887"/>
+</if>
+<arg>Phishing Q2</arg>
+<arg>colaborador@gmail.com</arg>
+<arg>urgencia</arg>
+<status status="PASS" start="2026-06-18T00:18:41.729274" elapsed="0.193472"/>
+</kw>
+<kw name="Solicitar a criação">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:41.923401" level="INFO">Clicking element 'id=btnCriar'.</msg>
+<arg>${BOTAO_CRIAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.923172" elapsed="0.039258"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:41.922920" elapsed="0.039673"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.963106" elapsed="0.010917"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.020916" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-2.png"&gt;&lt;img src="selenium-screenshot-2.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:41.974188" elapsed="0.046818"/>
+</kw>
+<arg>Destinatário não autorizado: apenas e-mails internos</arg>
+<status status="PASS" start="2026-06-18T00:18:41.962819" elapsed="0.058266"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:41.728871" elapsed="0.292312"/>
+</test>
+<test id="s1-t3" name="CT03 - Deve validar formato de e-mail (CE3)" line="30">
+<kw name="Preencher campanha">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.021938" elapsed="0.027628"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.049748" elapsed="0.014550"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.064741" level="INFO">Typing text 'Phishing Q2' into text field 'id=nomeCampanha'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.064465" elapsed="0.055329"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.120270" level="INFO">Typing text 'emailinvalido' into text field 'id=destinatario'.</msg>
+<arg>${INPUT_DESTINATARIO}</arg>
+<arg>${destinatario}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.119975" elapsed="0.056805"/>
+</kw>
+<if>
+<branch type="IF" condition="'${template}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.177400" level="INFO">Selecting options from selection list 'id=template' by value urgencia.</msg>
+<arg>${SELECT_TEMPLATE}</arg>
+<arg>${template}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.177152" elapsed="0.042231"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.176926" elapsed="0.042532"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:18:42.176896" elapsed="0.042603"/>
+</if>
+<arg>Phishing Q2</arg>
+<arg>emailinvalido</arg>
+<arg>urgencia</arg>
+<status status="PASS" start="2026-06-18T00:18:42.021733" elapsed="0.197813"/>
+</kw>
+<kw name="Solicitar a criação">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.220073" level="INFO">Clicking element 'id=btnCriar'.</msg>
+<arg>${BOTAO_CRIAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.219886" elapsed="0.037919"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.219690" elapsed="0.038215"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.258287" elapsed="0.010250"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.307343" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-3.png"&gt;&lt;img src="selenium-screenshot-3.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.268681" elapsed="0.038753"/>
+</kw>
+<arg>Formato de e-mail inválido</arg>
+<status status="PASS" start="2026-06-18T00:18:42.258053" elapsed="0.049461"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.021388" elapsed="0.286220"/>
+</test>
+<test id="s1-t4" name="CT04 - Deve exigir template (CE4)" line="35">
+<kw name="Preencher campanha">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.308524" elapsed="0.027298"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.336014" elapsed="0.013601"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.350060" level="INFO">Typing text 'Phishing Q2' into text field 'id=nomeCampanha'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.349808" elapsed="0.054510"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.404771" level="INFO">Typing text 'colaborador@empresa.com' into text field 'id=destinatario'.</msg>
+<arg>${INPUT_DESTINATARIO}</arg>
+<arg>${destinatario}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.404488" elapsed="0.059589"/>
+</kw>
+<if>
+<branch type="IF" condition="'${template}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<arg>${SELECT_TEMPLATE}</arg>
+<arg>${template}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="NOT RUN" start="2026-06-18T00:18:42.464430" elapsed="0.000030"/>
+</kw>
+<status status="NOT RUN" start="2026-06-18T00:18:42.464211" elapsed="0.000286"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:18:42.464184" elapsed="0.000344"/>
+</if>
+<arg>Phishing Q2</arg>
+<arg>colaborador@empresa.com</arg>
+<arg>${EMPTY}</arg>
+<status status="PASS" start="2026-06-18T00:18:42.308077" elapsed="0.156498"/>
+</kw>
+<kw name="Solicitar a criação">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.465115" level="INFO">Clicking element 'id=btnCriar'.</msg>
+<arg>${BOTAO_CRIAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.464924" elapsed="0.038220"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.464729" elapsed="0.038561"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.503737" elapsed="0.009992"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.554140" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-4.png"&gt;&lt;img src="selenium-screenshot-4.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.513851" elapsed="0.040382"/>
+</kw>
+<arg>Template é obrigatório</arg>
+<status status="PASS" start="2026-06-18T00:18:42.503469" elapsed="0.050846"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.307765" elapsed="0.246643"/>
+</test>
+<test id="s1-t5" name="CT05 - Deve exigir nome da campanha (CE5)" line="40">
+<kw name="Preencher campanha">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.555310" elapsed="0.027071"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.582566" elapsed="0.013037"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.595985" level="INFO">Typing text '' into text field 'id=nomeCampanha'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.595750" elapsed="0.045520"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.641666" level="INFO">Typing text 'colaborador@empresa.com' into text field 'id=destinatario'.</msg>
+<arg>${INPUT_DESTINATARIO}</arg>
+<arg>${destinatario}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.641423" elapsed="0.057416"/>
+</kw>
+<if>
+<branch type="IF" condition="'${template}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.700290" level="INFO">Selecting options from selection list 'id=template' by value urgencia.</msg>
+<arg>${SELECT_TEMPLATE}</arg>
+<arg>${template}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.699242" elapsed="0.040449"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.699033" elapsed="0.040790"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:18:42.699005" elapsed="0.040892"/>
+</if>
+<arg>${EMPTY}</arg>
+<arg>colaborador@empresa.com</arg>
+<arg>urgencia</arg>
+<status status="PASS" start="2026-06-18T00:18:42.554884" elapsed="0.185097"/>
+</kw>
+<kw name="Solicitar a criação">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.740628" level="INFO">Clicking element 'id=btnCriar'.</msg>
+<arg>${BOTAO_CRIAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.740408" elapsed="0.038455"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.740162" elapsed="0.038866"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.779670" elapsed="0.011760"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:42.831549" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-5.png"&gt;&lt;img src="selenium-screenshot-5.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.791624" elapsed="0.040058"/>
+</kw>
+<arg>Nome da campanha é obrigatório</arg>
+<status status="PASS" start="2026-06-18T00:18:42.779279" elapsed="0.052511"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.554566" elapsed="0.277336"/>
+</test>
+<kw name="Fechar o navegador" type="TEARDOWN">
+<kw name="Close Browser" owner="SeleniumLibrary">
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-06-18T00:18:42.832692" elapsed="2.100927"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:42.832484" elapsed="2.101288"/>
+</kw>
+<doc>Teste automatizado de interface web — Criar Campanha de Phishing (Baluarte).
+Técnica de modelagem: Partição de Equivalência sobre o destinatário
+(interno / externo / formato inválido), o template e o nome da campanha.</doc>
+<status status="PASS" start="2026-06-18T00:18:40.249327" elapsed="4.684500"/>
+</suite>
+<statistics>
+<total>
+<stat pass="5" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="Campanha de Phishing" id="s1" pass="5" fail="0" skip="0">Campanha de Phishing</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>

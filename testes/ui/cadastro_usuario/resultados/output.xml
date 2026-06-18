@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.14.5 on win32)" generated="2026-06-18T00:18:15.765633" rpa="false" schemaversion="5">
+<suite id="s1" name="Cadastro de Usuario" source="C:\Users\Leo\Desktop\Baluarte-Geral\Teste de Software\N2-AT1-Testes-API\ui-tests\robot\cadastro_usuario.robot">
+<kw name="Abrir o navegador na tela de cadastro" type="SETUP">
+<kw name="Open Browser" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:16.133293" level="INFO">Opening browser 'chrome' to base url 'http://localhost:3000/cadastro-usuario.html'.</msg>
+<arg>${URL}</arg>
+<arg>${BROWSER}</arg>
+<arg>options=${OPCOES}</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="PASS" start="2026-06-18T00:18:16.132998" elapsed="1.979236"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:16.132225" elapsed="1.980220"/>
+</kw>
+<test id="s1-t1" name="CT01 - Deve cadastrar com dados válidos (R1..R4 = S)" line="21">
+<kw name="Preencher cadastro">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.113919" elapsed="0.090788"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.204868" elapsed="0.055276"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.260581" level="INFO">Typing text 'João Silva' into text field 'id=nome'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.260304" elapsed="0.079675"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.340568" level="INFO">Typing text 'joao@email.com' into text field 'id=email'.</msg>
+<arg>${INPUT_EMAIL}</arg>
+<arg>${email}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.340207" elapsed="0.069023"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.409731" level="INFO">Typing password into text field 'id=senha'.</msg>
+<msg time="2026-06-18T00:18:18.435091" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_SENHA}</arg>
+<arg>${senha}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.409407" elapsed="0.056422"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.466396" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:18:18.490876" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_CONFIRMAR}</arg>
+<arg>${confirmar}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.466051" elapsed="0.055592"/>
+</kw>
+<arg>João Silva</arg>
+<arg>joao@email.com</arg>
+<arg>12345678</arg>
+<arg>12345678</arg>
+<status status="PASS" start="2026-06-18T00:18:18.113495" elapsed="0.408300"/>
+</kw>
+<kw name="Solicitar o cadastro">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.522560" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO_CADASTRAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.522263" elapsed="0.046737"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:18.521991" elapsed="0.047168"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.569666" elapsed="0.017589"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.625755" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-1.png"&gt;&lt;img src="selenium-screenshot-1.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.587492" elapsed="0.038381"/>
+</kw>
+<arg>Cadastro realizado com sucesso</arg>
+<status status="PASS" start="2026-06-18T00:18:18.569373" elapsed="0.056609"/>
+</kw>
+<doc>Regra: todas as condições satisfeitas -&gt; cadastro realizado.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.112589" elapsed="0.513568"/>
+</test>
+<test id="s1-t2" name="CT02 - Deve exigir nome (R1 = N)" line="27">
+<kw name="Preencher cadastro">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.627939" elapsed="0.028947"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.657072" elapsed="0.013758"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.671391" level="INFO">Typing text '' into text field 'id=nome'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.671033" elapsed="0.050245"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.721829" level="INFO">Typing text 'joao@email.com' into text field 'id=email'.</msg>
+<arg>${INPUT_EMAIL}</arg>
+<arg>${email}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.721492" elapsed="0.053756"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.775817" level="INFO">Typing password into text field 'id=senha'.</msg>
+<msg time="2026-06-18T00:18:18.798042" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_SENHA}</arg>
+<arg>${senha}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.775487" elapsed="0.053678"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.829776" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:18:18.851392" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_CONFIRMAR}</arg>
+<arg>${confirmar}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.829411" elapsed="0.052881"/>
+</kw>
+<arg>${EMPTY}</arg>
+<arg>joao@email.com</arg>
+<arg>12345678</arg>
+<arg>12345678</arg>
+<status status="PASS" start="2026-06-18T00:18:18.626963" elapsed="0.255451"/>
+</kw>
+<kw name="Solicitar o cadastro">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.883198" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO_CADASTRAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.882919" elapsed="0.041067"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:18.882621" elapsed="0.041514"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.924673" elapsed="0.011652"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:18.976931" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-2.png"&gt;&lt;img src="selenium-screenshot-2.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.936502" elapsed="0.040564"/>
+</kw>
+<arg>Nome obrigatório</arg>
+<status status="PASS" start="2026-06-18T00:18:18.924329" elapsed="0.052863"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:18.626488" elapsed="0.350861"/>
+</test>
+<test id="s1-t3" name="CT03 - Deve validar e-mail inválido (R2 = N)" line="32">
+<kw name="Preencher cadastro">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:18.978258" elapsed="0.027721"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.006189" elapsed="0.013592"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.020328" level="INFO">Typing text 'João Silva' into text field 'id=nome'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.019975" elapsed="0.054815"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.075435" level="INFO">Typing text 'joaoemail.com' into text field 'id=email'.</msg>
+<arg>${INPUT_EMAIL}</arg>
+<arg>${email}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.074976" elapsed="0.054556"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.130134" level="INFO">Typing password into text field 'id=senha'.</msg>
+<msg time="2026-06-18T00:18:19.150918" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_SENHA}</arg>
+<arg>${senha}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.129729" elapsed="0.052668"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.182866" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:18:19.204754" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_CONFIRMAR}</arg>
+<arg>${confirmar}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.182598" elapsed="0.053810"/>
+</kw>
+<arg>João Silva</arg>
+<arg>joaoemail.com</arg>
+<arg>12345678</arg>
+<arg>12345678</arg>
+<status status="PASS" start="2026-06-18T00:18:18.977963" elapsed="0.258599"/>
+</kw>
+<kw name="Solicitar o cadastro">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.237284" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO_CADASTRAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.237078" elapsed="0.040352"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:19.236793" elapsed="0.040775"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.278007" elapsed="0.011556"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.332280" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-3.png"&gt;&lt;img src="selenium-screenshot-3.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.289773" elapsed="0.042639"/>
+</kw>
+<arg>Email inválido</arg>
+<status status="PASS" start="2026-06-18T00:18:19.277774" elapsed="0.054760"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:18.977613" elapsed="0.355056"/>
+</test>
+<test id="s1-t4" name="CT04 - Deve validar senha curta (R3 = N)" line="37">
+<kw name="Preencher cadastro">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.333696" elapsed="0.027194"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.361119" elapsed="0.016078"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.377872" level="INFO">Typing text 'João Silva' into text field 'id=nome'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.377445" elapsed="0.054773"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.432794" level="INFO">Typing text 'joao@email.com' into text field 'id=email'.</msg>
+<arg>${INPUT_EMAIL}</arg>
+<arg>${email}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.432424" elapsed="0.058877"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.491902" level="INFO">Typing password into text field 'id=senha'.</msg>
+<msg time="2026-06-18T00:18:19.514275" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_SENHA}</arg>
+<arg>${senha}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.491503" elapsed="0.052209"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.544245" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:18:19.564674" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_CONFIRMAR}</arg>
+<arg>${confirmar}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.543927" elapsed="0.049203"/>
+</kw>
+<arg>João Silva</arg>
+<arg>joao@email.com</arg>
+<arg>123</arg>
+<arg>123</arg>
+<status status="PASS" start="2026-06-18T00:18:19.333371" elapsed="0.259895"/>
+</kw>
+<kw name="Solicitar o cadastro">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.593955" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO_CADASTRAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.593699" elapsed="0.040349"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:19.593463" elapsed="0.040774"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.634853" elapsed="0.011965"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.688065" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-4.png"&gt;&lt;img src="selenium-screenshot-4.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.647005" elapsed="0.041175"/>
+</kw>
+<arg>Senha inválida</arg>
+<status status="PASS" start="2026-06-18T00:18:19.634496" elapsed="0.053799"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:19.332925" elapsed="0.355545"/>
+</test>
+<test id="s1-t5" name="CT05 - Deve validar divergência entre senhas (R4 = N)" line="42">
+<kw name="Preencher cadastro">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.689588" elapsed="0.029243"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${INPUT_NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.719141" elapsed="0.013738"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.733394" level="INFO">Typing text 'João Silva' into text field 'id=nome'.</msg>
+<arg>${INPUT_NOME}</arg>
+<arg>${nome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.733102" elapsed="0.055836"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.789524" level="INFO">Typing text 'joao@email.com' into text field 'id=email'.</msg>
+<arg>${INPUT_EMAIL}</arg>
+<arg>${email}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.789161" elapsed="0.055610"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.845369" level="INFO">Typing password into text field 'id=senha'.</msg>
+<msg time="2026-06-18T00:18:19.867942" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_SENHA}</arg>
+<arg>${senha}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.844974" elapsed="0.054397"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.899867" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:18:19.921770" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${INPUT_CONFIRMAR}</arg>
+<arg>${confirmar}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.899584" elapsed="0.053942"/>
+</kw>
+<arg>João Silva</arg>
+<arg>joao@email.com</arg>
+<arg>12345678</arg>
+<arg>87654321</arg>
+<status status="PASS" start="2026-06-18T00:18:19.689250" elapsed="0.264379"/>
+</kw>
+<kw name="Solicitar o cadastro">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:19.954347" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO_CADASTRAR}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.954060" elapsed="0.040543"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:19.953811" elapsed="0.040922"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:18:19.995192" elapsed="0.010862"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:18:20.049107" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-5.png"&gt;&lt;img src="selenium-screenshot-5.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:18:20.006255" elapsed="0.042967"/>
+</kw>
+<arg>Senhas diferentes</arg>
+<status status="PASS" start="2026-06-18T00:18:19.994931" elapsed="0.054407"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:19.688752" elapsed="0.360694"/>
+</test>
+<kw name="Fechar o navegador" type="TEARDOWN">
+<kw name="Close Browser" owner="SeleniumLibrary">
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-06-18T00:18:20.050169" elapsed="2.108038"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:18:20.049994" elapsed="2.108351"/>
+</kw>
+<doc>Teste automatizado de interface web — Cadastro de Usuário (Baluarte).
+Técnica de modelagem: Tabela de Decisão
+(R1 nome preenchido, R2 e-mail válido, R3 senha &gt;= 8, R4 confirmação igual à senha).</doc>
+<status status="PASS" start="2026-06-18T00:18:15.767128" elapsed="6.391273"/>
+</suite>
+<statistics>
+<total>
+<stat pass="5" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="Cadastro de Usuario" id="s1" pass="5" fail="0" skip="0">Cadastro de Usuario</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>

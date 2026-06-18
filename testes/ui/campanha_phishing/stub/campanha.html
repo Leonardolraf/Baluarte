@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baluarte — Nova Campanha de Phishing</title>
+  <style>
+    :root{--brand:#2563eb;--brand-h:#1d4ed8;--bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--ink:#0f172a;--muted:#64748b;--err:#dc2626;--ok:#16a34a}
+    *{box-sizing:border-box}
+    body{font-family:Segoe UI,Inter,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 30px;width:420px;box-shadow:0 8px 30px rgba(15,23,42,.06)}
+    .brand{font-weight:700;font-size:18px;margin-bottom:2px}.brand span{color:var(--brand)}
+    h1{font-size:18px;margin:0 0 4px}.sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+    label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+    input,select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+    input:focus,select:focus{outline:2px solid var(--brand);border-color:var(--brand)}
+    button{margin-top:18px;width:100%;background:var(--brand);color:#fff;border:0;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer}
+    button:hover{background:var(--brand-h)}
+    #mensagem{margin-top:14px;font-size:14px;min-height:20px;font-weight:600}
+    #mensagem.ok{color:var(--ok)}#mensagem.err{color:var(--err)}
+    .hint{font-size:12px;color:var(--muted);margin-top:4px}
+  </style>
+</head>
+<body>
+  <form class="card" id="formCampanha" novalidate>
+    <div class="brand">🛡️ Bal<span>uarte</span></div>
+    <h1>Nova Campanha de Phishing</h1>
+    <p class="sub">Apenas destinatários internos (<code>@empresa.com</code>) são permitidos.</p>
+
+    <label for="nomeCampanha">Nome da campanha</label>
+    <input id="nomeCampanha" name="nomeCampanha" type="text" autocomplete="off">
+
+    <label for="destinatario">Destinatário</label>
+    <input id="destinatario" name="destinatario" type="text" autocomplete="off">
+
+    <label for="template">Template</label>
+    <select id="template" name="template">
+      <option value="" selected>Selecione um template…</option>
+      <option value="urgencia">Urgência</option>
+      <option value="autoridade">Autoridade</option>
+      <option value="curiosidade">Curiosidade</option>
+    </select>
+
+    <button id="btnCriar" type="submit">Criar campanha</button>
+    <div id="mensagem" role="status" aria-live="polite"></div>
+  </form>
+
+  <script>
+    // Validação em ordem (Partição de Equivalência): nome -> formato do e-mail -> interno/externo -> template.
+    var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    var DOMINIO_INTERNO = '@empresa.com';
+    function validar(nome, destinatario, template) {
+      if (!nome.trim())                         return 'Nome da campanha é obrigatório';
+      if (!EMAIL_RE.test(destinatario.trim()))  return 'Formato de e-mail inválido';
+      if (!destinatario.trim().toLowerCase().endsWith(DOMINIO_INTERNO))
+                                                return 'Destinatário não autorizado: apenas e-mails internos';
+      if (!template)                            return 'Template é obrigatório';
+      return 'Campanha criada com sucesso';
+    }
+    document.getElementById('formCampanha').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var msg = validar(
+        document.getElementById('nomeCampanha').value,
+        document.getElementById('destinatario').value,
+        document.getElementById('template').value
+      );
+      var el = document.getElementById('mensagem');
+      el.textContent = msg;
+      el.className = (msg === 'Campanha criada com sucesso') ? 'ok' : 'err';
+    });
+  </script>
+</body>
+</html>

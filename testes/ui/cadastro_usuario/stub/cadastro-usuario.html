@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baluarte — Cadastro de Usuário</title>
+  <style>
+    :root{--brand:#2563eb;--brand-h:#1d4ed8;--bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--ink:#0f172a;--muted:#64748b;--err:#dc2626;--ok:#16a34a}
+    *{box-sizing:border-box}
+    body{font-family:Segoe UI,Inter,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 30px;width:380px;box-shadow:0 8px 30px rgba(15,23,42,.06)}
+    .brand{font-weight:700;font-size:18px;margin-bottom:2px}.brand span{color:var(--brand)}
+    h1{font-size:18px;margin:0 0 18px}
+    label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+    input,select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+    input:focus,select:focus{outline:2px solid var(--brand);border-color:var(--brand)}
+    button{margin-top:18px;width:100%;background:var(--brand);color:#fff;border:0;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer}
+    button:hover{background:var(--brand-h)}
+    #mensagem{margin-top:14px;font-size:14px;min-height:20px;font-weight:600}
+    #mensagem.ok{color:var(--ok)}#mensagem.err{color:var(--err)}
+  </style>
+</head>
+<body>
+  <form class="card" id="formCadastro" novalidate>
+    <div class="brand">🛡️ Bal<span>uarte</span></div>
+    <h1>Cadastro de Usuário</h1>
+
+    <label for="nome">Nome</label>
+    <input id="nome" name="nome" type="text" autocomplete="off">
+
+    <label for="email">E-mail</label>
+    <input id="email" name="email" type="text" autocomplete="off">
+
+    <label for="perfil">Perfil</label>
+    <select id="perfil" name="perfil">
+      <option value="Administrador">Administrador</option>
+      <option value="Analista" selected>Analista</option>
+      <option value="Colaborador">Colaborador</option>
+    </select>
+
+    <label for="senha">Senha</label>
+    <input id="senha" name="senha" type="password" autocomplete="off">
+
+    <label for="confirmarSenha">Confirmar Senha</label>
+    <input id="confirmarSenha" name="confirmarSenha" type="password" autocomplete="off">
+
+    <button id="btnCadastrar" type="submit">Cadastrar</button>
+    <div id="mensagem" role="status" aria-live="polite"></div>
+  </form>
+
+  <script>
+    // Validação em ordem (Tabela de Decisão): R1 nome -> R2 email -> R3 senha>=8 -> R4 confirmação.
+    var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    function validar(nome, email, senha, confirmar) {
+      if (!nome.trim())              return 'Nome obrigatório';
+      if (!EMAIL_RE.test(email.trim())) return 'Email inválido';
+      if (senha.length < 8)          return 'Senha inválida';
+      if (senha !== confirmar)       return 'Senhas diferentes';
+      return 'Cadastro realizado com sucesso';
+    }
+    document.getElementById('formCadastro').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var msg = validar(
+        document.getElementById('nome').value,
+        document.getElementById('email').value,
+        document.getElementById('senha').value,
+        document.getElementById('confirmarSenha').value
+      );
+      var el = document.getElementById('mensagem');
+      el.textContent = msg;
+      el.className = (msg === 'Cadastro realizado com sucesso') ? 'ok' : 'err';
+    });
+  </script>
+</body>
+</html>

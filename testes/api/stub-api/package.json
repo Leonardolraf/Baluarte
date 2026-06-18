@@ -1,0 +1,10 @@
+{
+  "name": "baluarte-stub-api",
+  "version": "1.0.0",
+  "description": "Stub mínimo da API Baluarte para os Testes de API (N2 AT1 — Teste de Software). Sem dependências.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "private": true
+}
