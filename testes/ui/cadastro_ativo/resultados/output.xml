@@ -1,0 +1,392 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.14.5 on win32)" generated="2026-06-18T00:57:58.215276" rpa="false" schemaversion="5">
+<suite id="s1" name="cadastro_ativo" source="C:\Users\Leo\Desktop\Baluarte-Geral\Teste de Software\N2-AT1-Testes-API\ui-tests\robot\cadastro_ativo.robot">
+<kw name="Abrir o navegador na tela de cadastro de ativo" type="SETUP">
+<kw name="Open Browser" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:58.587006" level="INFO">Opening browser 'chrome' to base url 'http://localhost:3000/cadastro-ativo.html'.</msg>
+<arg>${URL}</arg>
+<arg>${BROWSER}</arg>
+<arg>options=${OPCOES}</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="PASS" start="2026-06-18T00:57:58.586748" elapsed="0.703830"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:58.586246" elapsed="0.704498"/>
+</kw>
+<test id="s1-t1" name="CT01 - Deve cadastrar ativo válido (CE1)" line="19">
+<kw name="Preencher ativo">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.291902" elapsed="0.028012"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.320088" elapsed="0.015914"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.336384" level="INFO">Typing text 'Firewall Borda' into text field 'id=nome'.</msg>
+<arg>${NOME}</arg>
+<arg>${vNome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.336149" elapsed="0.072420"/>
+</kw>
+<if>
+<branch type="IF" condition="'${vTipo}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.409301" level="INFO">Selecting options from selection list 'id=tipo' by value Rede.</msg>
+<arg>${TIPO}</arg>
+<arg>${vTipo}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.409023" elapsed="0.057420"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:59.408737" elapsed="0.057803"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:57:59.408699" elapsed="0.057904"/>
+</if>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.467024" level="INFO">Typing text '10.0.0.5' into text field 'id=host'.</msg>
+<arg>${HOST}</arg>
+<arg>${vHost}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.466729" elapsed="0.056426"/>
+</kw>
+<arg>Firewall Borda</arg>
+<arg>Rede</arg>
+<arg>10.0.0.5</arg>
+<status status="PASS" start="2026-06-18T00:57:59.291455" elapsed="0.231813"/>
+</kw>
+<kw name="Cadastrar">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.523807" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.523625" elapsed="0.048564"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:59.523428" elapsed="0.048880"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.572755" elapsed="0.015948"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.633997" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-6.png"&gt;&lt;img src="selenium-screenshot-6.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.588868" elapsed="0.045223"/>
+</kw>
+<arg>Ativo cadastrado com sucesso</arg>
+<status status="PASS" start="2026-06-18T00:57:59.572489" elapsed="0.061686"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:59.290833" elapsed="0.343446"/>
+</test>
+<test id="s1-t2" name="CT02 - Deve exigir nome (CE2)" line="24">
+<kw name="Preencher ativo">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.635259" elapsed="0.029500"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.664921" elapsed="0.013912"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.679321" level="INFO">Typing text '' into text field 'id=nome'.</msg>
+<arg>${NOME}</arg>
+<arg>${vNome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.678998" elapsed="0.048772"/>
+</kw>
+<if>
+<branch type="IF" condition="'${vTipo}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.728392" level="INFO">Selecting options from selection list 'id=tipo' by value Rede.</msg>
+<arg>${TIPO}</arg>
+<arg>${vTipo}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.728151" elapsed="0.042334"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:59.727919" elapsed="0.042655"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:57:59.727889" elapsed="0.042741"/>
+</if>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.771036" level="INFO">Typing text '10.0.0.6' into text field 'id=host'.</msg>
+<arg>${HOST}</arg>
+<arg>${vHost}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.770745" elapsed="0.054360"/>
+</kw>
+<arg>${EMPTY}</arg>
+<arg>Rede</arg>
+<arg>10.0.0.6</arg>
+<status status="PASS" start="2026-06-18T00:57:59.634817" elapsed="0.190444"/>
+</kw>
+<kw name="Cadastrar">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.826109" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.825899" elapsed="0.041301"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:59.825586" elapsed="0.041734"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.867772" elapsed="0.011022"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.916357" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-7.png"&gt;&lt;img src="selenium-screenshot-7.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.878934" elapsed="0.037514"/>
+</kw>
+<arg>Nome do ativo é obrigatório</arg>
+<status status="PASS" start="2026-06-18T00:57:59.867498" elapsed="0.049030"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:59.634485" elapsed="0.282145"/>
+</test>
+<test id="s1-t3" name="CT03 - Deve exigir tipo (CE3)" line="29">
+<kw name="Preencher ativo">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.917551" elapsed="0.029293"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.947022" elapsed="0.014003"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:57:59.961451" level="INFO">Typing text 'Firewall Borda' into text field 'id=nome'.</msg>
+<arg>${NOME}</arg>
+<arg>${vNome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:57:59.961218" elapsed="0.059089"/>
+</kw>
+<if>
+<branch type="IF" condition="'${vTipo}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<arg>${TIPO}</arg>
+<arg>${vTipo}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="NOT RUN" start="2026-06-18T00:58:00.020655" elapsed="0.000027"/>
+</kw>
+<status status="NOT RUN" start="2026-06-18T00:58:00.020445" elapsed="0.000272"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:58:00.020419" elapsed="0.000329"/>
+</if>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.021267" level="INFO">Typing text '10.0.0.7' into text field 'id=host'.</msg>
+<arg>${HOST}</arg>
+<arg>${vHost}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.020805" elapsed="0.053730"/>
+</kw>
+<arg>Firewall Borda</arg>
+<arg>${EMPTY}</arg>
+<arg>10.0.0.7</arg>
+<status status="PASS" start="2026-06-18T00:57:59.917137" elapsed="0.157512"/>
+</kw>
+<kw name="Cadastrar">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.075255" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.075048" elapsed="0.040690"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.074820" elapsed="0.041017"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.116229" elapsed="0.011822"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.166469" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-8.png"&gt;&lt;img src="selenium-screenshot-8.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.128234" elapsed="0.038324"/>
+</kw>
+<arg>Tipo é obrigatório</arg>
+<status status="PASS" start="2026-06-18T00:58:00.115995" elapsed="0.050644"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:57:59.916816" elapsed="0.249915"/>
+</test>
+<test id="s1-t4" name="CT04 - Deve validar host inválido (CE4)" line="34">
+<kw name="Preencher ativo">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.167465" elapsed="0.028716"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.196381" elapsed="0.014646"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.211445" level="INFO">Typing text 'Firewall Borda' into text field 'id=nome'.</msg>
+<arg>${NOME}</arg>
+<arg>${vNome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.211182" elapsed="0.056552"/>
+</kw>
+<if>
+<branch type="IF" condition="'${vTipo}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.268349" level="INFO">Selecting options from selection list 'id=tipo' by value Rede.</msg>
+<arg>${TIPO}</arg>
+<arg>${vTipo}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.268100" elapsed="0.040920"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.267875" elapsed="0.041226"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:58:00.267847" elapsed="0.041297"/>
+</if>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.309657" level="INFO">Typing text '999.1.1.1' into text field 'id=host'.</msg>
+<arg>${HOST}</arg>
+<arg>${vHost}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.309302" elapsed="0.053554"/>
+</kw>
+<arg>Firewall Borda</arg>
+<arg>Rede</arg>
+<arg>999.1.1.1</arg>
+<status status="PASS" start="2026-06-18T00:58:00.167247" elapsed="0.195714"/>
+</kw>
+<kw name="Cadastrar">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.363518" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.363326" elapsed="0.039367"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.363112" elapsed="0.039683"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.403166" elapsed="0.010615"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.454510" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-9.png"&gt;&lt;img src="selenium-screenshot-9.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.413941" elapsed="0.040686"/>
+</kw>
+<arg>Host inválido</arg>
+<status status="PASS" start="2026-06-18T00:58:00.402944" elapsed="0.051800"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.166893" elapsed="0.287977"/>
+</test>
+<test id="s1-t5" name="CT05 - Deve bloquear host duplicado (CE5)" line="39">
+<kw name="Preencher ativo">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.455747" elapsed="0.026550"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${NOME}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.482478" elapsed="0.014033"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.496913" level="INFO">Typing text 'Firewall Borda' into text field 'id=nome'.</msg>
+<arg>${NOME}</arg>
+<arg>${vNome}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.496665" elapsed="0.054179"/>
+</kw>
+<if>
+<branch type="IF" condition="'${vTipo}' != ''">
+<kw name="Select From List By Value" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.551541" level="INFO">Selecting options from selection list 'id=tipo' by value Rede.</msg>
+<arg>${TIPO}</arg>
+<arg>${vTipo}</arg>
+<doc>Selects options from selection list ``locator`` by ``values``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.551265" elapsed="0.041251"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.551015" elapsed="0.041606"/>
+</branch>
+<status status="PASS" start="2026-06-18T00:58:00.550981" elapsed="0.041690"/>
+</if>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.593030" level="INFO">Typing text '192.168.0.10' into text field 'id=host'.</msg>
+<arg>${HOST}</arg>
+<arg>${vHost}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.592776" elapsed="0.053093"/>
+</kw>
+<arg>Firewall Borda</arg>
+<arg>Rede</arg>
+<arg>192.168.0.10</arg>
+<status status="PASS" start="2026-06-18T00:58:00.455517" elapsed="0.190487"/>
+</kw>
+<kw name="Cadastrar">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.646541" level="INFO">Clicking element 'id=btnCadastrar'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.646361" elapsed="0.038771"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.646157" elapsed="0.039093"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.685674" elapsed="0.010439"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:00.734021" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-10.png"&gt;&lt;img src="selenium-screenshot-10.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.696257" elapsed="0.037864"/>
+</kw>
+<arg>Ativo já cadastrado</arg>
+<status status="PASS" start="2026-06-18T00:58:00.685418" elapsed="0.048799"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.455102" elapsed="0.279223"/>
+</test>
+<kw name="Fechar o navegador" type="TEARDOWN">
+<kw name="Close Browser" owner="SeleniumLibrary">
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-06-18T00:58:00.734992" elapsed="2.103346"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:00.734817" elapsed="2.103649"/>
+</kw>
+<doc>Teste automatizado de interface web — Cadastro de Ativo (Baluarte).
+Técnica de modelagem: Partição de Equivalência (nome, tipo e host em classes válidas/inválidas).</doc>
+<status status="PASS" start="2026-06-18T00:57:58.216734" elapsed="4.621775"/>
+</suite>
+<statistics>
+<total>
+<stat pass="5" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="cadastro_ativo" id="s1" pass="5" fail="0" skip="0">cadastro_ativo</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>

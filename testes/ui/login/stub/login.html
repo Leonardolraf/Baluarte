@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baluarte — Login</title>
+  <style>
+    :root{--brand:#2563eb;--bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--ink:#0f172a;--muted:#64748b;--err:#dc2626;--ok:#16a34a}
+    *{box-sizing:border-box} body{font-family:Segoe UI,Inter,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;width:360px}
+    h1{font-size:26px;margin:0 0 18px} .brand{color:var(--brand)}
+    label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+    input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+    button{margin-top:18px;width:100%;background:var(--brand);color:#fff;border:0;border-radius:8px;padding:11px;font-weight:600;cursor:pointer}
+    #mensagem{margin-top:14px;font-size:14px;min-height:20px;font-weight:600} #mensagem.ok{color:var(--ok)} #mensagem.err{color:var(--err)}
+  </style>
+</head>
+<body>
+  <form class="card" id="formLogin" novalidate>
+    <h1>🛡️ Bal<span class="brand">uarte</span></h1>
+    <label for="email">E-mail</label>
+    <input id="email" type="text" autocomplete="off">
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" autocomplete="off">
+    <button id="btnEntrar" type="submit">Entrar</button>
+    <div id="mensagem" role="status" aria-live="polite"></div>
+  </form>
+  <script>
+    var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    var USUARIO = { email: 'analista@empresa.com', senha: 'Senha@123' };
+    function validar(email, senha) {
+      if (!email.trim())                 return 'E-mail é obrigatório';
+      if (!EMAIL_RE.test(email.trim()))  return 'Formato de e-mail inválido';
+      if (!senha)                        return 'Senha é obrigatória';
+      if (email.trim() !== USUARIO.email || senha !== USUARIO.senha) return 'E-mail ou senha inválidos';
+      return 'Login realizado com sucesso';
+    }
+    document.getElementById('formLogin').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var msg = validar(document.getElementById('email').value, document.getElementById('senha').value);
+      var el = document.getElementById('mensagem');
+      el.textContent = msg; el.className = (msg === 'Login realizado com sucesso') ? 'ok' : 'err';
+    });
+  </script>
+</body>
+</html>

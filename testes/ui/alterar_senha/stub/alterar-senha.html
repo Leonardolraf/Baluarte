@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baluarte — Alterar Senha</title>
+  <style>
+    :root{--brand:#2563eb;--bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--ink:#0f172a;--muted:#64748b;--err:#dc2626;--ok:#16a34a}
+    *{box-sizing:border-box} body{font-family:Segoe UI,Inter,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;width:380px}
+    h1{font-size:24px;margin:0 0 4px} .sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+    label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
+    input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+    button{margin-top:18px;width:100%;background:var(--brand);color:#fff;border:0;border-radius:8px;padding:11px;font-weight:600;cursor:pointer}
+    #mensagem{margin-top:14px;font-size:14px;min-height:20px;font-weight:600} #mensagem.ok{color:var(--ok)} #mensagem.err{color:var(--err)}
+  </style>
+</head>
+<body>
+  <form class="card" id="formSenha" novalidate>
+    <h1>Configurações — Alterar Senha</h1>
+    <p class="sub">A nova senha deve ter entre 8 e 64 caracteres.</p>
+    <label for="senhaAtual">Senha atual</label>
+    <input id="senhaAtual" type="password" autocomplete="off">
+    <label for="novaSenha">Nova senha</label>
+    <input id="novaSenha" type="password" autocomplete="off">
+    <label for="confirmarSenha">Confirmar nova senha</label>
+    <input id="confirmarSenha" type="password" autocomplete="off">
+    <button id="btnAlterar" type="submit">Alterar senha</button>
+    <div id="mensagem" role="status" aria-live="polite"></div>
+  </form>
+  <script>
+    var SENHA_ATUAL = 'Senha@123', MIN = 8, MAX = 64;
+    function validar(atual, nova, confirmar) {
+      if (atual !== SENHA_ATUAL)      return 'Senha atual incorreta';
+      if (nova.length < MIN)          return 'A nova senha deve ter no mínimo 8 caracteres';
+      if (nova.length > MAX)          return 'A nova senha deve ter no máximo 64 caracteres';
+      if (nova !== confirmar)         return 'As senhas não conferem';
+      return 'Senha alterada com sucesso';
+    }
+    document.getElementById('formSenha').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var msg = validar(document.getElementById('senhaAtual').value, document.getElementById('novaSenha').value, document.getElementById('confirmarSenha').value);
+      var el = document.getElementById('mensagem');
+      el.textContent = msg; el.className = (msg === 'Senha alterada com sucesso') ? 'ok' : 'err';
+    });
+  </script>
+</body>
+</html>

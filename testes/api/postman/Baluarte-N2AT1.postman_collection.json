@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "Baluarte — N2 AT1 Testes de API (Login + Varredura)",
-    "_postman_id": "baluarte-n2at1-login-varredura",
-    "description": "Testes de API do projeto Baluarte (Teste de Software / N2 AT1). Dois testes de API por Partição de Equivalência: POST /api/login e POST /api/scans. Pré-requisito: subir o stub local (node stub-api/server.js) em http://localhost:8080. Rode a collection inteira (Login antes de Varredura): a CT-S* reutiliza o token capturado na CT-L1.",
+    "name": "Baluarte — N2 AT1 Testes de API",
+    "_postman_id": "baluarte-n2at1-api",
+    "description": "Testes de API do projeto Baluarte (Teste de Software / N2 AT1). 6 endpoints: Login e Varredura (Leonardo), Gestão de Ativos e Gestão de Usuários (Edson), Campanhas e Classificação CVSS (André). Pré-requisito: subir o stub local (node stub-api/server.js) em http://localhost:8080. Rode a coleção inteira: a pasta Login (CT-L1) captura o token usado pelas demais.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -20,15 +20,13 @@
                   "pm.test(\"Status code deve ser 200\", function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test(\"Retorna token e perfil do usuário\", function () {",
-                  "    var json = pm.response.json();",
-                  "    pm.expect(json.status).to.eql(\"sucesso\");",
-                  "    pm.expect(json.dados).to.have.property(\"token\");",
-                  "    pm.expect(json.dados.perfil).to.eql(\"Analista\");",
+                  "pm.test(\"Retorna token e perfil\", function () {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j.dados).to.have.property(\"token\");",
+                  "    pm.expect(j.dados.perfil).to.eql(\"Analista\");",
                   "});",
-                  "// Captura o token para reutilizar nos testes de Varredura",
-                  "var dados = pm.response.json().dados;",
-                  "if (dados && dados.token) { pm.collectionVariables.set(\"token\", dados.token); }"
+                  "var d = pm.response.json().dados;",
+                  "if (d && d.token) { pm.collectionVariables.set(\"token\", d.token); }"
                 ]
               }
             }
@@ -63,7 +61,7 @@
           }
         },
         {
-          "name": "CT-L2 — CE2 e-mail com formato inválido → 400",
+          "name": "CT-L2 — CE2 e-mail mal formatado → 400",
           "event": [
             {
               "listen": "test",
@@ -73,10 +71,8 @@
                   "pm.test(\"Status code deve ser 400\", function () {",
                   "    pm.response.to.have.status(400);",
                   "});",
-                  "pm.test(\"Mensagem de formato de e-mail inválido\", function () {",
-                  "    var json = pm.response.json();",
-                  "    pm.expect(json.codigoErro).to.eql(\"EMAIL_INVALIDO\");",
-                  "    pm.expect(json.mensagem).to.eql(\"Formato de e-mail inválido\");",
+                  "pm.test(\"Código de erro EMAIL_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_INVALIDO\");",
                   "});"
                 ]
               }
@@ -122,7 +118,7 @@
                   "pm.test(\"Status code deve ser 401\", function () {",
                   "    pm.response.to.have.status(401);",
                   "});",
-                  "pm.test(\"Credenciais inválidas\", function () {",
+                  "pm.test(\"Código de erro CREDENCIAIS_INVALIDAS\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
                   "});"
                 ]
@@ -169,7 +165,7 @@
                   "pm.test(\"Status code deve ser 400\", function () {",
                   "    pm.response.to.have.status(400);",
                   "});",
-                  "pm.test(\"E-mail é obrigatório\", function () {",
+                  "pm.test(\"Código de erro EMAIL_OBRIGATORIO\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_OBRIGATORIO\");",
                   "});"
                 ]
@@ -216,7 +212,7 @@
                   "pm.test(\"Status code deve ser 401\", function () {",
                   "    pm.response.to.have.status(401);",
                   "});",
-                  "pm.test(\"Credenciais inválidas\", function () {",
+                  "pm.test(\"Código de erro CREDENCIAIS_INVALIDAS\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"CREDENCIAIS_INVALIDAS\");",
                   "});"
                 ]
@@ -263,7 +259,7 @@
                   "pm.test(\"Status code deve ser 400\", function () {",
                   "    pm.response.to.have.status(400);",
                   "});",
-                  "pm.test(\"Senha é obrigatória\", function () {",
+                  "pm.test(\"Código de erro SENHA_OBRIGATORIA\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"SENHA_OBRIGATORIA\");",
                   "});"
                 ]
@@ -305,7 +301,7 @@
       "name": "2. Varredura — Partição de Equivalência (POST /api/scans)",
       "item": [
         {
-          "name": "CT-S1 — CE1 ativo com status Ativo → 201",
+          "name": "CT-S1 — CE1 ativo Ativo → 201",
           "event": [
             {
               "listen": "test",
@@ -316,9 +312,7 @@
                   "    pm.response.to.have.status(201);",
                   "});",
                   "pm.test(\"Varredura enfileirada (EM_FILA)\", function () {",
-                  "    var json = pm.response.json();",
-                  "    pm.expect(json.status).to.eql(\"sucesso\");",
-                  "    pm.expect(json.dados.statusVarredura).to.eql(\"EM_FILA\");",
+                  "    pm.expect(pm.response.json().dados.statusVarredura).to.eql(\"EM_FILA\");",
                   "});"
                 ]
               }
@@ -368,7 +362,7 @@
                   "pm.test(\"Status code deve ser 422\", function () {",
                   "    pm.response.to.have.status(422);",
                   "});",
-                  "pm.test(\"Ativo inativo bloqueia a varredura\", function () {",
+                  "pm.test(\"Código de erro ATIVO_INATIVO\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_INATIVO\");",
                   "});"
                 ]
@@ -419,7 +413,7 @@
                   "pm.test(\"Status code deve ser 404\", function () {",
                   "    pm.response.to.have.status(404);",
                   "});",
-                  "pm.test(\"Ativo não encontrado\", function () {",
+                  "pm.test(\"Código de erro ATIVO_NAO_ENCONTRADO\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_NAO_ENCONTRADO\");",
                   "});"
                 ]
@@ -460,7 +454,7 @@
           }
         },
         {
-          "name": "CT-S4 — CE4 requisição sem token → 401",
+          "name": "CT-S4 — CE4 sem token → 401",
           "event": [
             {
               "listen": "test",
@@ -470,7 +464,7 @@
                   "pm.test(\"Status code deve ser 401\", function () {",
                   "    pm.response.to.have.status(401);",
                   "});",
-                  "pm.test(\"Token não fornecido\", function () {",
+                  "pm.test(\"Código de erro TOKEN_AUSENTE\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"TOKEN_AUSENTE\");",
                   "});"
                 ]
@@ -517,7 +511,7 @@
                   "pm.test(\"Status code deve ser 400\", function () {",
                   "    pm.response.to.have.status(400);",
                   "});",
-                  "pm.test(\"ativoId é obrigatório\", function () {",
+                  "pm.test(\"Código de erro ATIVO_OBRIGATORIO\", function () {",
                   "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_OBRIGATORIO\");",
                   "});"
                 ]
@@ -553,6 +547,1151 @@
               "path": [
                 "api",
                 "scans"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Gestão de Ativos — Partição de Equivalência (POST /api/assets)",
+      "item": [
+        {
+          "name": "CT-A1 — P1 ativo válido → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Ativo cadastrado com status Ativo\", function () {",
+                  "    pm.expect(pm.response.json().dados.status).to.eql(\"Ativo\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"API Gateway\",\n  \"tipo\": \"Aplicacao\",\n  \"host\": \"10.0.0.5\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assets"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-A2 — P2 nome vazio → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro NOME_OBRIGATORIO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"NOME_OBRIGATORIO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"\",\n  \"tipo\": \"Servidor\",\n  \"host\": \"10.0.0.6\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assets"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-A3 — P3 tipo inválido → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro TIPO_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"TIPO_INVALIDO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Roteador\",\n  \"tipo\": \"Foo\",\n  \"host\": \"10.0.0.7\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assets"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-A4 — P4 host inválido → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro HOST_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"HOST_INVALIDO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Roteador\",\n  \"tipo\": \"Rede\",\n  \"host\": \"999.1.1.1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assets"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-A5 — P5 host duplicado → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "pm.test(\"Código de erro ATIVO_DUPLICADO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"ATIVO_DUPLICADO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Duplicado\",\n  \"tipo\": \"Servidor\",\n  \"host\": \"192.168.0.10\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assets"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Gestão de Usuários — Tabela de Decisão (POST /api/users)",
+      "item": [
+        {
+          "name": "CT-U1 — R1..R4 = S usuário válido → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Perfil retornado\", function () {",
+                  "    pm.expect(pm.response.json().dados.perfil).to.eql(\"Analista\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria Souza\",\n  \"email\": \"maria@empresa.com\",\n  \"perfil\": \"Analista\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-U2 — R1 = N nome vazio → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro NOME_OBRIGATORIO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"NOME_OBRIGATORIO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"\",\n  \"email\": \"maria@empresa.com\",\n  \"perfil\": \"Analista\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-U3 — R2 = N e-mail inválido → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro EMAIL_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_INVALIDO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria\",\n  \"email\": \"maria-empresa.com\",\n  \"perfil\": \"Analista\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-U4 — R3 = N perfil inválido → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro PERFIL_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"PERFIL_INVALIDO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria\",\n  \"email\": \"maria@empresa.com\",\n  \"perfil\": \"Root\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-U5 — R4 = N e-mail duplicado → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 409\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "pm.test(\"Código de erro EMAIL_DUPLICADO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_DUPLICADO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Maria\",\n  \"email\": \"analista@empresa.com\",\n  \"perfil\": \"Analista\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Campanhas de Phishing — Partição de Equivalência (POST /api/campaigns)",
+      "item": [
+        {
+          "name": "CT-C1 — CE1 destinatário interno → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Campanha agendada\", function () {",
+                  "    pm.expect(pm.response.json().dados.status).to.eql(\"AGENDADA\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Phishing Q2\",\n  \"destinatario\": \"colaborador@empresa.com\",\n  \"template\": \"urgencia\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campaigns"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-C2 — CE2 destinatário externo → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test(\"Código de erro DESTINATARIO_EXTERNO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"DESTINATARIO_EXTERNO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Phishing Q2\",\n  \"destinatario\": \"colaborador@gmail.com\",\n  \"template\": \"urgencia\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campaigns"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-C3 — CE3 formato inválido → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro EMAIL_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"EMAIL_INVALIDO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Phishing Q2\",\n  \"destinatario\": \"emailinvalido\",\n  \"template\": \"urgencia\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campaigns"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-C4 — CE4 template ausente → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro TEMPLATE_OBRIGATORIO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"TEMPLATE_OBRIGATORIO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Phishing Q2\",\n  \"destinatario\": \"colaborador@empresa.com\",\n  \"template\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campaigns"
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-C5 — CE5 nome vazio → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro NOME_OBRIGATORIO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"NOME_OBRIGATORIO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"\",\n  \"destinatario\": \"colaborador@empresa.com\",\n  \"template\": \"urgencia\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campaigns"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Classificação CVSS — Análise de Valor de Borda (GET /api/findings/classificacao)",
+      "item": [
+        {
+          "name": "CT-F: cvss=3.9 → Baixo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Faixa Baixo\", function () {",
+                  "    pm.expect(pm.response.json().dados.faixa).to.eql(\"Baixo\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=3.9",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "3.9"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=4.0 → Médio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Faixa Médio\", function () {",
+                  "    pm.expect(pm.response.json().dados.faixa).to.eql(\"Médio\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=4.0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "4.0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=6.9 → Médio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Faixa Médio\", function () {",
+                  "    pm.expect(pm.response.json().dados.faixa).to.eql(\"Médio\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=6.9",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "6.9"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=7.0 → Alto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Faixa Alto\", function () {",
+                  "    pm.expect(pm.response.json().dados.faixa).to.eql(\"Alto\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=7.0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "7.0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=8.9 → Alto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Faixa Alto\", function () {",
+                  "    pm.expect(pm.response.json().dados.faixa).to.eql(\"Alto\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=8.9",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "8.9"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=9.0 → Crítico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Faixa Crítico\", function () {",
+                  "    pm.expect(pm.response.json().dados.faixa).to.eql(\"Crítico\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=9.0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "9.0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=10.0 → Crítico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Faixa Crítico\", function () {",
+                  "    pm.expect(pm.response.json().dados.faixa).to.eql(\"Crítico\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=10.0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "10.0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=10.1 (acima do máximo) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro CVSS_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"CVSS_INVALIDO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=10.1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "10.1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CT-F: cvss=-0.1 (abaixo do mínimo) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code deve ser 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Código de erro CVSS_INVALIDO\", function () {",
+                  "    pm.expect(pm.response.json().codigoErro).to.eql(\"CVSS_INVALIDO\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/findings/classificacao?cvss=-0.1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "findings",
+                "classificacao"
+              ],
+              "query": [
+                {
+                  "key": "cvss",
+                  "value": "-0.1"
+                }
               ]
             }
           }

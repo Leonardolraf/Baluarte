@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.4.2 (Python 3.14.5 on win32)" generated="2026-06-18T00:58:03.480339" rpa="false" schemaversion="5">
+<suite id="s1" name="reset_senha" source="C:\Users\Leo\Desktop\Baluarte-Geral\Teste de Software\N2-AT1-Testes-API\ui-tests\robot\reset_senha.robot">
+<kw name="Abrir o navegador na tela de redefinir senha" type="SETUP">
+<kw name="Open Browser" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:03.847394" level="INFO">Opening browser 'chrome' to base url 'http://localhost:3000/reset-senha.html'.</msg>
+<arg>${URL}</arg>
+<arg>${BROWSER}</arg>
+<arg>options=${OPCOES}</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="PASS" start="2026-06-18T00:58:03.847093" elapsed="0.735526"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:03.846513" elapsed="0.736269"/>
+</kw>
+<test id="s1-t1" name="CT01 - R1..R3 = S deve redefinir a senha" line="19">
+<kw name="Preencher">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.583695" elapsed="0.028929"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${TOKEN}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.612790" elapsed="0.019110"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:04.632357" level="INFO">Typing text 'TOKEN-VALIDO-123' into text field 'id=token'.</msg>
+<arg>${TOKEN}</arg>
+<arg>${vToken}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.632071" elapsed="0.071175"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:04.703671" level="INFO">Typing password into text field 'id=novaSenha'.</msg>
+<msg time="2026-06-18T00:58:04.728733" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${NOVA}</arg>
+<arg>${vNova}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.703407" elapsed="0.059136"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:04.762942" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:58:04.786925" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${CONFIRMA}</arg>
+<arg>${vConfirma}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.762709" elapsed="0.056577"/>
+</kw>
+<arg>TOKEN-VALIDO-123</arg>
+<arg>NovaSenha1</arg>
+<arg>NovaSenha1</arg>
+<status status="PASS" start="2026-06-18T00:58:04.583418" elapsed="0.235977"/>
+</kw>
+<kw name="Redefinir">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:04.819943" level="INFO">Clicking element 'id=btnRedefinir'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.819745" elapsed="0.064771"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:04.819550" elapsed="0.065084"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.885083" elapsed="0.016059"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:04.938395" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-5.png"&gt;&lt;img src="selenium-screenshot-5.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.901276" elapsed="0.037231"/>
+</kw>
+<arg>Senha redefinida com sucesso</arg>
+<status status="PASS" start="2026-06-18T00:58:04.884818" elapsed="0.053785"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:04.582876" elapsed="0.355853"/>
+</test>
+<test id="s1-t2" name="CT02 - R1 = N token inválido" line="24">
+<kw name="Preencher">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.939596" elapsed="0.027106"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${TOKEN}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.966875" elapsed="0.014333"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:04.981591" level="INFO">Typing text 'TOKEN-ERRADO' into text field 'id=token'.</msg>
+<arg>${TOKEN}</arg>
+<arg>${vToken}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:04.981355" elapsed="0.056262"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.038020" level="INFO">Typing password into text field 'id=novaSenha'.</msg>
+<msg time="2026-06-18T00:58:05.059123" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${NOVA}</arg>
+<arg>${vNova}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.037775" elapsed="0.053103"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.091337" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:58:05.113023" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${CONFIRMA}</arg>
+<arg>${vConfirma}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.091090" elapsed="0.054176"/>
+</kw>
+<arg>TOKEN-ERRADO</arg>
+<arg>NovaSenha1</arg>
+<arg>NovaSenha1</arg>
+<status status="PASS" start="2026-06-18T00:58:04.939339" elapsed="0.206027"/>
+</kw>
+<kw name="Redefinir">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.145897" level="INFO">Clicking element 'id=btnRedefinir'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.145712" elapsed="0.045118"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:05.145515" elapsed="0.045424"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.191310" elapsed="0.010801"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.242515" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-6.png"&gt;&lt;img src="selenium-screenshot-6.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.202247" elapsed="0.040366"/>
+</kw>
+<arg>Token inválido ou expirado</arg>
+<status status="PASS" start="2026-06-18T00:58:05.191094" elapsed="0.051606"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:04.938971" elapsed="0.303902"/>
+</test>
+<test id="s1-t3" name="CT03 - R2 = N senha curta" line="29">
+<kw name="Preencher">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.243604" elapsed="0.027797"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${TOKEN}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.271560" elapsed="0.013976"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.285973" level="INFO">Typing text 'TOKEN-VALIDO-123' into text field 'id=token'.</msg>
+<arg>${TOKEN}</arg>
+<arg>${vToken}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.285728" elapsed="0.058685"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.344847" level="INFO">Typing password into text field 'id=novaSenha'.</msg>
+<msg time="2026-06-18T00:58:05.366987" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${NOVA}</arg>
+<arg>${vNova}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.344585" elapsed="0.050926"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.395903" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:58:05.417297" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${CONFIRMA}</arg>
+<arg>${vConfirma}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.395669" elapsed="0.051039"/>
+</kw>
+<arg>TOKEN-VALIDO-123</arg>
+<arg>123</arg>
+<arg>123</arg>
+<status status="PASS" start="2026-06-18T00:58:05.243403" elapsed="0.203403"/>
+</kw>
+<kw name="Redefinir">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.447704" level="INFO">Clicking element 'id=btnRedefinir'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.447450" elapsed="0.058987"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:05.446966" elapsed="0.059594"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.507004" elapsed="0.011052"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.555632" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-7.png"&gt;&lt;img src="selenium-screenshot-7.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.518217" elapsed="0.037513"/>
+</kw>
+<arg>A senha deve ter no mínimo 8 caracteres</arg>
+<status status="PASS" start="2026-06-18T00:58:05.506738" elapsed="0.049090"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:05.243104" elapsed="0.312820"/>
+</test>
+<test id="s1-t4" name="CT04 - R3 = N confirmação divergente" line="34">
+<kw name="Preencher">
+<kw name="Reload Page" owner="SeleniumLibrary">
+<doc>Simulates user reloading page.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.556578" elapsed="0.027298"/>
+</kw>
+<kw name="Wait Until Element Is Visible" owner="SeleniumLibrary">
+<arg>${TOKEN}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` is visible.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.584029" elapsed="0.014448"/>
+</kw>
+<kw name="Input Text" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.598859" level="INFO">Typing text 'TOKEN-VALIDO-123' into text field 'id=token'.</msg>
+<arg>${TOKEN}</arg>
+<arg>${vToken}</arg>
+<doc>Types the given ``text`` into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.598624" elapsed="0.057070"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.656197" level="INFO">Typing password into text field 'id=novaSenha'.</msg>
+<msg time="2026-06-18T00:58:05.677759" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${NOVA}</arg>
+<arg>${vNova}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.655915" elapsed="0.054185"/>
+</kw>
+<kw name="Input Password" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.710477" level="INFO">Typing password into text field 'id=confirmarSenha'.</msg>
+<msg time="2026-06-18T00:58:05.731463" level="INFO">Temporally setting log level to: NONE</msg>
+<arg>${CONFIRMA}</arg>
+<arg>${vConfirma}</arg>
+<doc>Types the given password into the text field identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.710250" elapsed="0.051596"/>
+</kw>
+<arg>TOKEN-VALIDO-123</arg>
+<arg>NovaSenha1</arg>
+<arg>Outra123</arg>
+<status status="PASS" start="2026-06-18T00:58:05.556369" elapsed="0.205574"/>
+</kw>
+<kw name="Redefinir">
+<kw name="Click Element" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.762460" level="INFO">Clicking element 'id=btnRedefinir'.</msg>
+<arg>${BOTAO}</arg>
+<doc>Click the element identified by ``locator``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.762279" elapsed="0.055788"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:05.762084" elapsed="0.056097"/>
+</kw>
+<kw name="A mensagem exibida deve ser">
+<kw name="Wait Until Element Contains" owner="SeleniumLibrary">
+<arg>${MENSAGEM}</arg>
+<arg>${esperado}</arg>
+<arg>timeout=5s</arg>
+<doc>Waits until the element ``locator`` contains ``text``.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.818666" elapsed="0.010741"/>
+</kw>
+<kw name="Capture Page Screenshot" owner="SeleniumLibrary">
+<msg time="2026-06-18T00:58:05.867849" level="INFO" html="true">&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan="3"&gt;&lt;a href="selenium-screenshot-8.png"&gt;&lt;img src="selenium-screenshot-8.png" width="800px"&gt;&lt;/a&gt;</msg>
+<doc>Takes a screenshot of the current page and embeds it into a log file.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.829513" elapsed="0.038422"/>
+</kw>
+<arg>As senhas não conferem</arg>
+<status status="PASS" start="2026-06-18T00:58:05.818383" elapsed="0.049633"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:05.556087" elapsed="0.312018"/>
+</test>
+<kw name="Fechar o navegador" type="TEARDOWN">
+<kw name="Close Browser" owner="SeleniumLibrary">
+<doc>Closes the current browser.</doc>
+<status status="PASS" start="2026-06-18T00:58:05.868847" elapsed="2.106801"/>
+</kw>
+<status status="PASS" start="2026-06-18T00:58:05.868681" elapsed="2.107089"/>
+</kw>
+<doc>Teste automatizado de interface web — Redefinir Senha (Baluarte).
+Técnica de modelagem: Tabela de Decisão (R1 token válido, R2 senha &gt;= 8, R3 confirmação igual).</doc>
+<status status="PASS" start="2026-06-18T00:58:03.481644" elapsed="4.494168"/>
+</suite>
+<statistics>
+<total>
+<stat pass="4" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="reset_senha" id="s1" pass="4" fail="0" skip="0">reset_senha</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>
