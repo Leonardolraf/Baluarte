@@ -1,0 +1,8 @@
+# Saida automatica do Robot Framework (report.html, log.html, output.xml e
+# capturas do Selenium). Nao e codigo-fonte escrito a mao.
+#
+# Sem esta marcacao o GitHub Linguist soma ~3 MB desses relatorios e rotula o
+# repositorio inteiro como "HTML" (94,5%), escondendo o TypeScript do frontend
+# (React/Vite) e do backend (Express/Prisma). Os stubs de tela em
+# testes/ui/*/stub/ NAO entram aqui: aqueles foram escritos a mao.
+testes/ui/*/resultados/** linguist-generated=true
