@@ -1,7 +1,7 @@
-import type { Router, Request, Response } from 'express';
+import type { Router, Request } from 'express';
 import { prisma } from '../db.js';
 import { exigeToken } from '../auth.js';
-import { enviar, erro } from '../util.js';
+import { enviar, erro, wrap, POLITICA_SENHA, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../util.js';
 
 // -----------------------------------------------------------------------------
 // Endpoints de LEITURA/AGREGACAO que alimentam as telas do frontend.
@@ -9,16 +9,11 @@ import { enviar, erro } from '../util.js';
 // altera as rotas testadas pela collection do Postman.
 // -----------------------------------------------------------------------------
 
-function wrap(fn: (req: Request, res: Response) => Promise<unknown>) {
-  return (req: Request, res: Response) => {
-    fn(req, res).catch((e) => {
-      console.error('[erro interno]', e);
-      if (!res.headersSent) erro(res, 500, 'Erro interno no servidor', 'ERRO_INTERNO');
-    });
-  };
-}
-
 type FindingComScan = { id: string; categoriaOwasp: string; cvss: number; severidade: string; descricao: string; evidencia: string; status: string; criadoEm: Date; scan: { asset: { host: string; nome: string } } };
+
+function encerrado(f: { status: string }): boolean {
+  return STATUS_FINDING_ENCERRADO.includes(f.status);
+}
 
 function mapFinding(f: FindingComScan) {
   return {
@@ -65,23 +60,52 @@ function mapCampaign(c: { id: string; nome: string; template: string; status: st
   };
 }
 
+// Conteudo do treinamento pos-clique por template de campanha.
+const CONTEUDO_TREINAMENTO: Record<string, { tipoAtaque: string; titulo: string; codigoModulo: string; duracaoMin: number; sinaisAlerta: string[]; boasPraticas: string[] }> = {
+  urgencia: {
+    tipoAtaque: 'Phishing por Urgência',
+    titulo: 'Como reconhecer urgência artificial',
+    codigoModulo: 'US-005',
+    duracaoMin: 8,
+    sinaisAlerta: ['Pressão por ação imediata', 'Remetente desconhecido ou disfarçado', 'Links que não batem com o domínio oficial'],
+    boasPraticas: ['Confira o remetente real', 'Passe o mouse sobre os links antes de clicar', 'Na dúvida, reporte ao time de TI'],
+  },
+  autoridade: {
+    tipoAtaque: 'Phishing por Autoridade',
+    titulo: 'Quando o "chefe" pede algo fora do processo',
+    codigoModulo: 'US-006',
+    duracaoMin: 7,
+    sinaisAlerta: ['Pedido sigiloso vindo de uma chefia', 'Fuga dos canais e aprovações habituais', 'Tom que desencoraja perguntas'],
+    boasPraticas: ['Confirme o pedido por outro canal (telefone, chat corporativo)', 'Siga o processo de aprovação mesmo sob pressão', 'Reporte tentativas ao time de segurança'],
+  },
+  curiosidade: {
+    tipoAtaque: 'Phishing por Curiosidade',
+    titulo: 'Anexos e links que despertam curiosidade',
+    codigoModulo: 'US-007',
+    duracaoMin: 6,
+    sinaisAlerta: ['Assunto vago ou intrigante ("veja isso", "documento pendente")', 'Anexo inesperado, sem contexto', 'Link encurtado ou domínio parecido com o oficial'],
+    boasPraticas: ['Não abra anexos que você não estava esperando', 'Verifique o domínio completo antes de clicar', 'Pergunte ao remetente por um canal confiável'],
+  },
+};
+
 export function registerReadRoutes(r: Router) {
   // ---- Usuario logado ----
   r.get('/me', exigeToken, wrap(async (req, res) => {
     const u = (req as Request & { usuario?: { idUsuario: string } }).usuario!;
     const user = await prisma.user.findUnique({ where: { id: u.idUsuario }, select: { id: true, nome: true, email: true, perfil: true, status: true } });
+    if (!user) return erro(res, 401, 'Usuário não existe mais', 'USUARIO_REMOVIDO');
     enviar(res, 200, { status: 'sucesso', dados: user });
   }));
 
   // ---- Dashboard agregado ----
   r.get('/dashboard', exigeToken, wrap(async (_req, res) => {
     const findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
-    const abertas = findings.filter((f) => f.status !== 'Resolvida').length;
-    const criticas = findings.filter((f) => f.cvss >= 9.0 && f.status !== 'Resolvida').length;
+    const abertas = findings.filter((f) => !encerrado(f)).length;
+    const criticas = findings.filter((f) => f.cvss >= 9.0 && !encerrado(f)).length;
     const ativos = await prisma.asset.count();
 
     const sev: Record<string, number> = { 'Crítico': 0, 'Alto': 0, 'Médio': 0, 'Baixo': 0 };
-    for (const f of findings) if (f.status !== 'Resolvida') sev[f.severidade] = (sev[f.severidade] || 0) + 1;
+    for (const f of findings) if (!encerrado(f)) sev[f.severidade] = (sev[f.severidade] || 0) + 1;
 
     const campanhas = await prisma.campaign.findMany({ include: { eventos: true }, orderBy: { criadoEm: 'desc' } });
     const totalEnviados = campanhas.reduce((a, c) => a + c.eventos.filter((e) => e.enviadoEm).length, 0);
@@ -137,11 +161,10 @@ export function registerReadRoutes(r: Router) {
     enviar(res, 200, { status: 'sucesso', dados: mapFinding(f) });
   }));
 
-  // ---- Alterar status da vulnerabilidade ----
+  // ---- Alterar status da vulnerabilidade ("Risco aceito" incluso) ----
   r.patch('/vulnerabilidades/:id', exigeToken, wrap(async (req, res) => {
     const { status } = req.body ?? {};
-    const PERMITIDOS = ['Aberta', 'Em revisão', 'Em remediação', 'Resolvida'];
-    if (!PERMITIDOS.includes(status)) return erro(res, 400, 'Status inválido', 'STATUS_INVALIDO');
+    if (!STATUS_FINDING.includes(status)) return erro(res, 400, 'Status inválido', 'STATUS_INVALIDO');
     const existe = await prisma.finding.findUnique({ where: { id: req.params.id } });
     if (!existe) return erro(res, 404, 'Vulnerabilidade não encontrada', 'FINDING_NAO_ENCONTRADO');
     const f = await prisma.finding.update({ where: { id: req.params.id }, data: { status }, include: { scan: { include: { asset: true } } } }) as unknown as FindingComScan;
@@ -177,7 +200,7 @@ export function registerReadRoutes(r: Router) {
         id: c.id, nome: c.nome, template: c.template, status: c.status, criadoEm: c.criadoEm,
         destinatarios: c.eventos.length,
         funil: funilDe(c.eventos),
-        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ destinatario: e.destinatario, concluido: e.treinou })),
+        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, concluido: e.treinou, concluidoEm: e.treinouEm })),
       },
     });
   }));
@@ -199,7 +222,7 @@ export function registerReadRoutes(r: Router) {
     enviar(res, 200, {
       status: 'sucesso',
       dados: {
-        politicaSenha: { comprimentoMinimo: 8, exigirMaiusculaMinuscula: true, exigirNumeroEspecial: true },
+        politicaSenha: { ...POLITICA_SENHA },
         sessao: { algoritmoToken: 'JWT HS256', expiracaoMinutos: 30, limiteTentativasLogin: 5, doisFatores: false },
         auditoria: { logImutavel: true, retencaoMeses: 12 },
       },
@@ -207,19 +230,20 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Treinamento pos-clique (publico, acessado pelo link da campanha) ----
+  // O token e o id do evento de campanha; o conteudo segue o template da campanha.
   r.get('/treinamentos/:token', wrap(async (req, res) => {
     const evento = await prisma.campaignEvent.findUnique({ where: { id: req.params.token }, include: { campaign: true } });
+    if (!evento) return erro(res, 404, 'Treinamento não encontrado', 'TREINAMENTO_NAO_ENCONTRADO');
+    const conteudo = CONTEUDO_TREINAMENTO[evento.campaign.template] ?? CONTEUDO_TREINAMENTO.urgencia;
     enviar(res, 200, {
       status: 'sucesso',
       dados: {
-        tipoAtaque: 'Phishing por Urgência',
-        titulo: 'Como reconhecer urgência artificial',
-        codigoModulo: 'US-005',
-        duracaoMin: 8,
-        progresso: evento?.treinou ? 100 : 0,
-        campanha: evento?.campaign?.nome ?? null,
-        sinaisAlerta: ['Pressão por ação imediata', 'Remetente desconhecido ou disfarçado', 'Links que não batem com o domínio oficial'],
-        boasPraticas: ['Confira o remetente real', 'Passe o mouse sobre os links antes de clicar', 'Na dúvida, reporte ao time de TI'],
+        ...conteudo,
+        template: evento.campaign.template,
+        progresso: evento.treinou ? 100 : 0,
+        concluidoEm: evento.treinouEm,
+        campanha: evento.campaign.nome,
+        idCampanha: evento.campaign.id,
       },
     });
   }));

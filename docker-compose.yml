@@ -1,16 +1,30 @@
-# Baluarte V2 — backend (API + SQLite) + frontend (Vite).
+# Baluarte V2 — backend (API + SQLite) + frontends.
 # Subir tudo:  docker compose up --build
-# Depois: frontend em http://localhost:3000  ·  API em http://localhost:8080
+#   frontend (SPA, produto)      http://localhost:5173   (baluarte-frontend/, build + Nginx)
+#   frontend legado (Robot)      http://localhost:3000   (frontend/, Vite dev server)
+#   API                          http://localhost:8080
+# Para subir só o produto:  docker compose up --build backend app
 services:
   backend:
     build: ./backend
     environment:
       - DATABASE_URL=file:./dev.db
+      # Troque em qualquer ambiente que não seja o seu computador (ver backend/.env.example).
       - JWT_SECRET=baluarte-v2-docker-secret-troque
       - PORT=8080
     ports:
       - "8080:8080"
 
+  # SPA React (baluarte-frontend/): build de produção servido por Nginx, com /api
+  # encaminhado ao serviço backend (ver baluarte-frontend/nginx.conf).
+  app:
+    build: ./baluarte-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  # Frontend legado (telas do Figma): alvo das suítes Robot Framework da N2 AT1 (e2e/*.robot).
   frontend:
     build: ./frontend
     environment:

@@ -1,0 +1,19 @@
+# dependências
+node_modules/
+
+# build e cobertura
+dist/
+coverage/
+
+# ambiente local (nunca commitar segredos — use .env.example como modelo)
+.env
+.env.local
+.env.*.local
+
+# logs e artefatos
+*.log
+.vite/
+
+# Playwright
+test-results/
+playwright-report/

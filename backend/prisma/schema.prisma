@@ -19,6 +19,32 @@ model User {
   perfil    String   @default("Analista") // Administrador | Analista | Colaborador
   status    String   @default("Ativo")    // Ativo | Inativo | Pendente
   criadoEm  DateTime @default(now())
+  preferencias NotificationPreference?
+  resetTokens  PasswordResetToken[]
+}
+
+// Preferencias de notificacao por e-mail (uma linha por usuario; criada sob demanda
+// com os padroes abaixo quando o usuario abre Configuracoes pela primeira vez).
+model NotificationPreference {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertasEmail       Boolean  @default(true)
+  somenteCriticas    Boolean  @default(false)
+  resumoSemanal      Boolean  @default(true)
+  relatoriosCampanha Boolean  @default(true)
+  atualizadoEm       DateTime @updatedAt
+}
+
+// Token de redefinicao de senha. Guarda-se apenas o hash SHA-256; o token em claro
+// e entregue ao usuario (em dev, impresso no console do servidor — nao ha e-mail).
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime  @default(now())
 }
 
 model Asset {
@@ -50,7 +76,7 @@ model Finding {
   severidade     String // Baixo | Medio | Alto | Critico
   descricao      String
   evidencia      String
-  status         String   @default("Aberta") // Aberta | Em revisao | Resolvida
+  status         String   @default("Aberta") // Aberta | Em revisao | Em remediacao | Resolvida | Risco aceito
   criadoEm       DateTime @default(now())
 }
 
@@ -74,6 +100,7 @@ model CampaignEvent {
   submeteuEm   DateTime? // submeteu credenciais no formulario falso
   reportouEm   DateTime? // reportou o e-mail suspeito ao time de TI
   treinou      Boolean   @default(false)
+  treinouEm    DateTime? // quando concluiu o treinamento pos-clique
 }
 
 model AuditLog {

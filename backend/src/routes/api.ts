@@ -1,12 +1,13 @@
 import { Router } from 'express';
-import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
 import { gerarToken, exigeToken } from '../auth.js';
 import { registerReadRoutes } from './read.js';
+import { registerManageRoutes } from './manage.js';
 import {
   erro,
   enviar,
+  wrap,
   vazio,
   emailFormatoValido,
   hostValido,
@@ -18,16 +19,6 @@ import {
 } from '../util.js';
 
 export const apiRouter = Router();
-
-// Captura erros assincronos e devolve 500 padronizado.
-function wrap(fn: (req: Request, res: Response) => Promise<unknown>) {
-  return (req: Request, res: Response) => {
-    fn(req, res).catch((e) => {
-      console.error('[erro interno]', e);
-      if (!res.headersSent) erro(res, 500, 'Erro interno no servidor', 'ERRO_INTERNO');
-    });
-  };
-}
 
 // Catalogo de achados simulados para gerar evidencias realistas numa varredura.
 const CATALOGO_FINDINGS = [
@@ -129,21 +120,43 @@ apiRouter.post('/users', exigeToken, wrap(async (req, res) => {
 }));
 
 // ---- POST /api/campaigns (protegido) ----------------------------------------
+// Contrato original: um `destinatario`. Extensao compativel: `destinatarios[]`
+// (o frontend novo envia os dois; o Postman/Robot continuam enviando so o primeiro).
 apiRouter.post('/campaigns', exigeToken, wrap(async (req, res) => {
-  const { nome, destinatario, template } = req.body ?? {};
+  const { nome, destinatario, destinatarios, template } = req.body ?? {};
   if (vazio(nome)) return erro(res, 400, 'Nome da campanha é obrigatório', 'NOME_OBRIGATORIO');
-  if (!emailFormatoValido(destinatario)) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
-  if (!String(destinatario).trim().toLowerCase().endsWith(DOMINIO_INTERNO))
-    return erro(res, 422, 'Destinatário não autorizado: apenas e-mails internos', 'DESTINATARIO_EXTERNO');
+
+  const brutos: unknown[] = Array.isArray(destinatarios) && destinatarios.length > 0 ? destinatarios : [destinatario];
+  const lista: string[] = [];
+  for (const item of brutos) {
+    if (!emailFormatoValido(item)) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
+    const email = String(item).trim();
+    if (!email.toLowerCase().endsWith(DOMINIO_INTERNO))
+      return erro(res, 422, 'Destinatário não autorizado: apenas e-mails internos', 'DESTINATARIO_EXTERNO');
+    if (!lista.some((e) => e.toLowerCase() === email.toLowerCase())) lista.push(email);
+  }
   if (!TEMPLATES.includes(template)) return erro(res, 400, 'Template é obrigatório', 'TEMPLATE_OBRIGATORIO');
 
-  const campanha = await prisma.campaign.create({ data: { nome, template, status: 'AGENDADA' } });
-  await prisma.campaignEvent.create({ data: { campaignId: campanha.id, destinatario: String(destinatario).trim() } });
+  const campanha = await prisma.campaign.create({
+    data: {
+      nome,
+      template,
+      status: 'AGENDADA',
+      eventos: { create: lista.map((email) => ({ destinatario: email })) },
+    },
+  });
 
   return enviar(res, 201, {
     status: 'sucesso',
     mensagem: 'Campanha criada com sucesso',
-    dados: { idCampanha: campanha.id, nome: campanha.nome, destinatario: String(destinatario).trim(), template: campanha.template, status: campanha.status },
+    dados: {
+      idCampanha: campanha.id,
+      nome: campanha.nome,
+      destinatario: lista[0],
+      destinatarios: lista,
+      template: campanha.template,
+      status: campanha.status,
+    },
   });
 }));
 
@@ -158,3 +171,5 @@ apiRouter.get('/findings/classificacao', wrap(async (req, res) => {
 
 // Endpoints de leitura/agregacao que alimentam as telas do frontend.
 registerReadRoutes(apiRouter);
+// Endpoints de escrita adicionais (conta, treinamento, gestao de usuarios).
+registerManageRoutes(apiRouter);
