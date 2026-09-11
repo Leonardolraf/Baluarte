@@ -6,3 +6,6 @@
 # (React/Vite) e do backend (Express/Prisma). Os stubs de tela em
 # testes/ui/*/stub/ NAO entram aqui: aqueles foram escritos a mao.
 testes/ui/*/resultados/** linguist-generated=true
+
+# Scripts de shell rodam dentro de containers Linux: sempre LF, mesmo em checkout no Windows.
+*.sh text eol=lf

@@ -9,7 +9,7 @@ Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia
 | Camada | Pasta | Stack | Porta |
 |---|---|---|---|
 | **API** | `backend/` | Node + Express + TypeScript + Prisma + SQLite · JWT (HS256) + bcrypt · RBAC · AuditLog | `8080` |
-| **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` |
+| **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailwindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` |
 | **Frontend legado** | `frontend/` | React 18 + Vite (telas geradas do Figma) — mantido **só** como alvo das suítes Robot da N2 AT1 | `3000` |
 
 Os dois frontends fazem proxy de `/api` → `http://localhost:8080`. Novas telas e funcionalidades vão em `baluarte-frontend/`; `frontend/` não evolui (as suítes Robot dependem das rotas e ids dele).
@@ -100,11 +100,17 @@ O cliente Supabase está configurado em `frontend/src/supabase.ts` (lê `VITE_SU
 
 ## Docker
 
+Com o Docker Desktop no ar (pare os `npm run dev` antes — as portas são as mesmas):
 ```bash
-docker compose up --build                 # API :8080 + frontend do produto :5173 (Nginx) + legado :3000
-docker compose up --build backend app     # só API + frontend do produto
+cp .env.example .env                       # opcional: JWT_SECRET e SEED_DEMO
+docker compose up --build -d backend app   # API :8080 + frontend do produto :5173 (Nginx)
+docker compose up --build -d               # idem + frontend legado :3000 (para as suítes Robot)
+docker compose logs -f backend             # aqui aparecem os tokens de redefinição de senha
+docker compose down                        # -v também apaga o banco (volume backend-data)
 ```
-O serviço `app` faz o build de produção de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o serviço `backend` (`baluarte-frontend/nginx.conf`). *(Compose e Dockerfiles incluídos; não testados neste ambiente por ausência do daemon Docker.)*
+- O SQLite da API vive no volume `backend-data` (`/data/dev.db`): sobrevive a `down`/`up` e a rebuilds. Na **primeira** subida o entrypoint aplica o schema, roda o seed de contrato e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes só reaplica o schema e o seed de contrato (idempotente), sem apagar o que foi criado pela interface.
+- `app` faz o build de produção de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o serviço `backend` (`baluarte-frontend/nginx.conf`); só sobe depois do healthcheck da API.
+- Para as suítes Newman/Robot contra o Docker, suba com um banco limpo: `docker compose down -v && SEED_DEMO=0 docker compose up --build -d`.
 
 ## Estrutura
 

@@ -1,19 +1,32 @@
-# Baluarte V2 — backend (API + SQLite) + frontends.
-# Subir tudo:  docker compose up --build
-#   frontend (SPA, produto)      http://localhost:5173   (baluarte-frontend/, build + Nginx)
-#   frontend legado (Robot)      http://localhost:3000   (frontend/, Vite dev server)
-#   API                          http://localhost:8080
-# Para subir só o produto:  docker compose up --build backend app
+# Baluarte V2 — API (Express + SQLite) + frontends.
+#   docker compose up --build -d              -> tudo
+#   docker compose up --build -d backend app  -> só API + frontend do produto
+#
+#   frontend do produto   http://localhost:5173   (baluarte-frontend/, build + Nginx)
+#   API                   http://localhost:8080   (SQLite persistido no volume backend-data)
+#   frontend legado       http://localhost:3000   (frontend/, alvo das suítes Robot)
+#
+# Variáveis opcionais num `.env` na raiz (ver .env.example): JWT_SECRET, SEED_DEMO.
+# Os mesmos hosts/portas do modo de desenvolvimento: pare `npm run dev` antes de subir.
 services:
   backend:
     build: ./backend
     environment:
-      - DATABASE_URL=file:./dev.db
-      # Troque em qualquer ambiente que não seja o seu computador (ver backend/.env.example).
-      - JWT_SECRET=baluarte-v2-docker-secret-troque
+      - DATABASE_URL=file:/data/dev.db
+      - JWT_SECRET=${JWT_SECRET:-baluarte-v2-docker-secret-troque}
       - PORT=8080
+      # 1 = carrega dados de demonstração na primeira subida (0 = só o seed de contrato)
+      - SEED_DEMO=${SEED_DEMO:-1}
+    volumes:
+      - backend-data:/data
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
 
   # SPA React (baluarte-frontend/): build de produção servido por Nginx, com /api
   # encaminhado ao serviço backend (ver baluarte-frontend/nginx.conf).
@@ -22,7 +35,8 @@ services:
     ports:
       - "5173:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   # Frontend legado (telas do Figma): alvo das suítes Robot Framework da N2 AT1 (e2e/*.robot).
   frontend:
@@ -33,4 +47,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-data:

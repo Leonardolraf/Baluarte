@@ -106,7 +106,7 @@ VITE_USE_MOCKS=
 
 ## Docker
 
-`Dockerfile` faz o build de produção e o serve com Nginx (`nginx.conf`: fallback de SPA e proxy `/api` → `backend:8080`). Na raiz do repositório, `docker compose up --build backend app` sobe API + este frontend em http://localhost:5173.
+`Dockerfile` faz o build de produção (sem mocks) e o serve com Nginx (`nginx.conf`: fallback de SPA, cache dos assets com hash e proxy `/api` → `backend:8080`). Na raiz do repositório, `docker compose up --build -d backend app` sobe API + este frontend em http://localhost:5173 (pare o `npm run dev` antes: mesma porta). Para validar a stack com os testes de modo real: `E2E_REAL=1 E2E_BASE_URL=http://localhost:5173 npx playwright test e2e/real-backend.spec.ts`.
 
 ## Estrutura
 
