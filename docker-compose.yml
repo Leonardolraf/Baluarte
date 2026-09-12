@@ -2,19 +2,32 @@
 #   docker compose up --build -d              -> tudo
 #   docker compose up --build -d backend app  -> só API + frontend do produto
 #
-#   frontend do produto   http://localhost:5173   (baluarte-frontend/, build + Nginx)
+#   frontend do produto   http://localhost:8081   (baluarte-frontend/, build + Nginx)
 #   API                   http://localhost:8080   (SQLite persistido no volume backend-data)
 #   frontend legado       http://localhost:3000   (frontend/, alvo das suítes Robot)
 #
-# Variáveis opcionais num `.env` na raiz (ver .env.example): JWT_SECRET, SEED_DEMO.
-# Os mesmos hosts/portas do modo de desenvolvimento: pare `npm run dev` antes de subir.
+# A porta 8081 (e não 5173) é de propósito: 5173 é o dev server do Vite, que o
+# Playwright reutiliza se estiver ocupada — a stack Docker e o modo mock convivem.
+# Variáveis num `.env` na raiz (ver .env.example): JWT_SECRET, NODE_ENV,
+# RESET_TOKEN_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
 services:
   backend:
     build: ./backend
     environment:
       - DATABASE_URL=file:/data/dev.db
-      - JWT_SECRET=${JWT_SECRET:-baluarte-v2-docker-secret-troque}
+      # Vazio = o entrypoint gera um segredo aleatório e o guarda no volume (/data/jwt.secret).
+      # Nunca há segredo fixo versionado; em NODE_ENV=production a API exige um segredo forte.
+      - JWT_SECRET=${JWT_SECRET:-}
       - PORT=8080
+      - NODE_ENV=${NODE_ENV:-development}
+      # 1 = imprime o token de redefinição de senha no log (único canal de entrega nesta
+      # demonstração — não há serviço de e-mail). Use 0 em qualquer ambiente compartilhado;
+      # em NODE_ENV=production o token nunca é impresso, independente deste valor.
+      - RESET_TOKEN_CONSOLE=${RESET_TOKEN_CONSOLE:-1}
+      # Base usada para montar o link de redefinição impresso no log.
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
+      # Origens permitidas no CORS (os frontends falam por proxy/mesma origem; isto é para chamadas diretas).
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8081,http://localhost:5173,http://localhost:5174,http://localhost:3000}
       # 1 = carrega dados de demonstração na primeira subida (0 = só o seed de contrato)
       - SEED_DEMO=${SEED_DEMO:-1}
     volumes:
@@ -33,7 +46,7 @@ services:
   app:
     build: ./baluarte-frontend
     ports:
-      - "5173:80"
+      - "8081:80"
     depends_on:
       backend:
         condition: service_healthy

@@ -112,7 +112,13 @@ export interface BackendCampaignReport {
   criadoEm: string;
   destinatarios: number;
   funil: BackendFunnel;
-  treinamentos: Array<{ destinatario: string; concluido: boolean }>;
+  treinamentos: Array<{
+    destinatario: string;
+    concluido: boolean;
+    /** Id do evento de campanha: é o `:token` de /treinamentos/:token. */
+    token?: string;
+    concluidoEm?: string | null;
+  }>;
 }
 
 export interface BackendDashboard {
@@ -447,7 +453,7 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
     metrics,
   };
   const recipients: CampaignRecipient[] = raw.treinamentos.map((t, i) => ({
-    id: `${raw.id}-r${i}`,
+    id: t.token ?? `${raw.id}-r${i}`,
     campaignId: raw.id,
     name: t.destinatario.split('@')[0] ?? t.destinatario,
     email: t.destinatario,
@@ -458,7 +464,8 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
     submittedAt: null,
     reportedAt: null,
     trainingCompleted: t.concluido,
-    trainingId: null,
+    // O treinamento pós-clique é acessado pelo id do evento (token) de cada destinatário.
+    trainingId: t.token ?? null,
   }));
   const funnel: FunnelStage[] = [
     { key: 'sent', label: RECIPIENT_STAGE_LABEL.sent, value: metrics.sent, pct: metrics.sent > 0 ? 100 : 0 },

@@ -19,6 +19,8 @@ model User {
   perfil    String   @default("Analista") // Administrador | Analista | Colaborador
   status    String   @default("Ativo")    // Ativo | Inativo | Pendente
   criadoEm  DateTime @default(now())
+  // Marca a ultima redefinicao de senha: tokens JWT emitidos antes disso deixam de valer.
+  senhaAlteradaEm DateTime?
   preferencias NotificationPreference?
   resetTokens  PasswordResetToken[]
 }

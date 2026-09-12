@@ -1,13 +1,17 @@
-import type { Router, Request } from 'express';
+import type { Router } from 'express';
 import { prisma } from '../db.js';
-import { exigeToken } from '../auth.js';
+import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { enviar, erro, wrap, POLITICA_SENHA, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../util.js';
 
 // -----------------------------------------------------------------------------
 // Endpoints de LEITURA/AGREGACAO que alimentam as telas do frontend.
 // Sao adicionais ao contrato da N2 AT1 (que vive em api.ts) — nenhum deles
 // altera as rotas testadas pela collection do Postman.
+// RBAC: Colaborador so ve o proprio dashboard (indices/KPIs), a politica de
+// seguranca e o treinamento; listas tecnicas ficam com Administrador/Analista.
 // -----------------------------------------------------------------------------
+
+const OPERADORES = ['Administrador', 'Analista'];
 
 type FindingComScan = { id: string; categoriaOwasp: string; cvss: number; severidade: string; descricao: string; evidencia: string; status: string; criadoEm: Date; scan: { asset: { host: string; nome: string } } };
 
@@ -91,17 +95,19 @@ const CONTEUDO_TREINAMENTO: Record<string, { tipoAtaque: string; titulo: string;
 export function registerReadRoutes(r: Router) {
   // ---- Usuario logado ----
   r.get('/me', exigeToken, wrap(async (req, res) => {
-    const u = (req as Request & { usuario?: { idUsuario: string } }).usuario!;
-    const user = await prisma.user.findUnique({ where: { id: u.idUsuario }, select: { id: true, nome: true, email: true, perfil: true, status: true } });
-    if (!user) return erro(res, 401, 'Usuário não existe mais', 'USUARIO_REMOVIDO');
-    enviar(res, 200, { status: 'sucesso', dados: user });
+    const u = usuarioDe(req);
+    enviar(res, 200, { status: 'sucesso', dados: { id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, status: u.status } });
   }));
 
   // ---- Dashboard agregado ----
-  r.get('/dashboard', exigeToken, wrap(async (_req, res) => {
+  r.get('/dashboard', exigeToken, wrap(async (req, res) => {
+    // Colaborador recebe so indices e KPIs; a lista tecnica de achados fica com Administrador/Analista.
+    const operador = OPERADORES.includes(usuarioDe(req).perfil);
     const findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
-    const abertas = findings.filter((f) => !encerrado(f)).length;
-    const criticas = findings.filter((f) => f.cvss >= 9.0 && !encerrado(f)).length;
+    // "Resolvida" e "Risco aceito" saem dos KPIs, dos alertas e da lista de recentes.
+    const emAberto = findings.filter((f) => !encerrado(f));
+    const abertas = emAberto.length;
+    const criticas = emAberto.filter((f) => f.cvss >= 9.0).length;
     const ativos = await prisma.asset.count();
 
     const sev: Record<string, number> = { 'Crítico': 0, 'Alto': 0, 'Médio': 0, 'Baixo': 0 };
@@ -118,8 +124,8 @@ export function registerReadRoutes(r: Router) {
       dados: {
         kpis: { vulnerabilidadesAbertas: abertas, criticas, resilienciaPhishing: resiliencia, ativosMonitorados: ativos },
         distribuicaoSeveridade: sev,
-        vulnerabilidadesRecentes: findings.slice(0, 5).map(mapFinding),
-        alertas: findings.slice(0, 3).map((f) => ({ id: f.id, severidade: f.severidade, texto: `${f.categoriaOwasp} em ${f.scan.asset.host}`, cvss: f.cvss, quando: f.criadoEm })),
+        vulnerabilidadesRecentes: operador ? emAberto.slice(0, 5).map(mapFinding) : [],
+        alertas: operador ? emAberto.slice(0, 3).map((f) => ({ id: f.id, severidade: f.severidade, texto: `${f.categoriaOwasp} em ${f.scan.asset.host}`, cvss: f.cvss, quando: f.criadoEm })) : [],
         campanhas: campanhas.map(mapCampaign),
         funil: ativa ? funilDe(ativa.eventos) : null,
         campanhaAtiva: ativa ? ativa.nome : null,
@@ -128,7 +134,7 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Ativos ----
-  r.get('/assets', exigeToken, wrap(async (_req, res) => {
+  r.get('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
     const assets = await prisma.asset.findMany({ include: { _count: { select: { scans: true } } }, orderBy: { criadoEm: 'desc' } });
     enviar(res, 200, { status: 'sucesso', dados: assets });
   }));
@@ -140,7 +146,7 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Vulnerabilidades (findings achatados) com filtros ?severidade= ?status= ?q= ----
-  r.get('/vulnerabilidades', exigeToken, wrap(async (req, res) => {
+  r.get('/vulnerabilidades', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
     let findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
     const { severidade, status, q } = req.query as Record<string, string>;
     if (severidade) findings = findings.filter((f) => f.severidade.toLowerCase() === severidade.toLowerCase());
@@ -155,14 +161,14 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Detalhe de vulnerabilidade ----
-  r.get('/vulnerabilidades/:id', exigeToken, wrap(async (req, res) => {
+  r.get('/vulnerabilidades/:id', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
     const f = await prisma.finding.findUnique({ where: { id: req.params.id }, include: { scan: { include: { asset: true } } } }) as unknown as FindingComScan | null;
     if (!f) return erro(res, 404, 'Vulnerabilidade não encontrada', 'FINDING_NAO_ENCONTRADO');
     enviar(res, 200, { status: 'sucesso', dados: mapFinding(f) });
   }));
 
   // ---- Alterar status da vulnerabilidade ("Risco aceito" incluso) ----
-  r.patch('/vulnerabilidades/:id', exigeToken, wrap(async (req, res) => {
+  r.patch('/vulnerabilidades/:id', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
     const { status } = req.body ?? {};
     if (!STATUS_FINDING.includes(status)) return erro(res, 400, 'Status inválido', 'STATUS_INVALIDO');
     const existe = await prisma.finding.findUnique({ where: { id: req.params.id } });
@@ -172,7 +178,7 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Campanhas (lista com metricas) ----
-  r.get('/campanhas', exigeToken, wrap(async (_req, res) => {
+  r.get('/campanhas', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
     const campanhas = await prisma.campaign.findMany({ include: { eventos: true }, orderBy: { criadoEm: 'desc' } });
     const ativas = campanhas.filter((c) => c.status === 'ATIVA').length;
     const totalEnviados = campanhas.reduce((a, c) => a + c.eventos.filter((e) => e.enviadoEm).length, 0);
@@ -191,7 +197,7 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Relatorio de campanha (funil + treinamentos) ----
-  r.get('/campanhas/:id', exigeToken, wrap(async (req, res) => {
+  r.get('/campanhas/:id', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
     const c = await prisma.campaign.findUnique({ where: { id: req.params.id }, include: { eventos: true } });
     if (!c) return erro(res, 404, 'Campanha não encontrada', 'CAMPANHA_NAO_ENCONTRADA');
     enviar(res, 200, {
@@ -206,7 +212,7 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Usuarios (RBAC) ----
-  r.get('/usuarios', exigeToken, wrap(async (_req, res) => {
+  r.get('/usuarios', exigeToken, exigePerfil('Administrador'), wrap(async (_req, res) => {
     const usuarios = await prisma.user.findMany({ select: { id: true, nome: true, email: true, perfil: true, status: true, criadoEm: true }, orderBy: { criadoEm: 'asc' } });
     const resumo = {
       total: usuarios.length,

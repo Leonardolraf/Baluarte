@@ -7,5 +7,9 @@
 # testes/ui/*/stub/ NAO entram aqui: aqueles foram escritos a mao.
 testes/ui/*/resultados/** linguist-generated=true
 
-# Scripts de shell rodam dentro de containers Linux: sempre LF, mesmo em checkout no Windows.
+# Arquivos consumidos dentro de containers Linux: sempre LF, mesmo em checkout no Windows
+# (CRLF quebra shebang, continuação de linha em RUN e diretivas do nginx).
 *.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
+*.yml text eol=lf

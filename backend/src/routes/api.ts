@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
-import { gerarToken, exigeToken } from '../auth.js';
+import { gerarToken, exigeToken, exigePerfil, usuarioDe } from '../auth.js';
+import { emailEmUso, localizarPorEmail, normalizarEmail } from '../usuarios.js';
 import { registerReadRoutes } from './read.js';
 import { registerManageRoutes } from './manage.js';
 import {
@@ -19,6 +20,38 @@ import {
 } from '../util.js';
 
 export const apiRouter = Router();
+
+// Perfis que operam a plataforma (varreduras, ativos, campanhas, cadastro de usuarios).
+const OPERADORES = ['Administrador', 'Analista'];
+
+// ---- Limite de tentativas de login (politica publicada em /configuracoes/seguranca) ----
+const LOGIN_JANELA_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FALHAS = 5;
+const falhasLogin = new Map<string, number[]>();
+// Hash de sacrificio: mantem o custo do bcrypt igual quando o e-mail nao existe
+// (sem isso o tempo de resposta revelaria quais e-mails estao cadastrados).
+const HASH_SACRIFICIO = bcrypt.hashSync('baluarte-sem-usuario', 10);
+
+function falhasRecentes(chave: string): number[] {
+  const agora = Date.now();
+  const recentes = (falhasLogin.get(chave) ?? []).filter((t) => agora - t < LOGIN_JANELA_MS);
+  if (recentes.length) falhasLogin.set(chave, recentes);
+  else falhasLogin.delete(chave);
+  return recentes;
+}
+
+function registrarFalhaLogin(chave: string): void {
+  const recentes = falhasRecentes(chave);
+  recentes.push(Date.now());
+  falhasLogin.set(chave, recentes);
+  // Poda periodica: o mapa nunca cresce sem limite (endpoint publico).
+  if (falhasLogin.size > 1000) for (const k of falhasLogin.keys()) falhasRecentes(k);
+}
+
+/** Zera o limitador de login (usado pelos testes). */
+export function limparLimiteLogin(): void {
+  falhasLogin.clear();
+}
 
 // Catalogo de achados simulados para gerar evidencias realistas numa varredura.
 const CATALOGO_FINDINGS = [
@@ -47,9 +80,19 @@ apiRouter.post('/login', wrap(async (req, res) => {
   if (vazio(senha)) return erro(res, 400, 'Senha é obrigatória', 'SENHA_OBRIGATORIA');
   if (!emailFormatoValido(email)) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
 
-  const usuario = await prisma.user.findUnique({ where: { email } });
-  const ok = usuario ? await bcrypt.compare(String(senha), usuario.senhaHash) : false;
-  if (!usuario || !ok) return erro(res, 401, 'E-mail ou senha inválidos', 'CREDENCIAIS_INVALIDAS');
+  const chave = normalizarEmail(email);
+  if (falhasRecentes(chave).length >= LOGIN_MAX_FALHAS)
+    return erro(res, 429, 'Muitas tentativas de login. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
+
+  const usuario = await localizarPorEmail(String(email));
+  const ok = await bcrypt.compare(String(senha), usuario ? usuario.senhaHash : HASH_SACRIFICIO);
+  if (!usuario || !ok) {
+    registrarFalhaLogin(chave);
+    return erro(res, 401, 'E-mail ou senha inválidos', 'CREDENCIAIS_INVALIDAS');
+  }
+  if (usuario.status === 'Inativo')
+    return erro(res, 403, 'Usuário inativo. Contate o administrador.', 'USUARIO_INATIVO');
+  falhasLogin.delete(chave);
 
   const token = gerarToken({ idUsuario: usuario.id, email: usuario.email, perfil: usuario.perfil });
   return enviar(res, 200, {
@@ -59,8 +102,8 @@ apiRouter.post('/login', wrap(async (req, res) => {
   });
 }));
 
-// ---- POST /api/scans (protegido) --------------------------------------------
-apiRouter.post('/scans', exigeToken, wrap(async (req, res) => {
+// ---- POST /api/scans (Administrador/Analista) --------------------------------
+apiRouter.post('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
   const { ativoId } = req.body ?? {};
   if (vazio(ativoId)) return erro(res, 400, 'ativoId é obrigatório', 'ATIVO_OBRIGATORIO');
 
@@ -81,8 +124,8 @@ apiRouter.post('/scans', exigeToken, wrap(async (req, res) => {
   });
 }));
 
-// ---- POST /api/assets (protegido) -------------------------------------------
-apiRouter.post('/assets', exigeToken, wrap(async (req, res) => {
+// ---- POST /api/assets (Administrador/Analista) -------------------------------
+apiRouter.post('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
   const { nome, tipo, host } = req.body ?? {};
   if (vazio(nome)) return erro(res, 400, 'Nome do ativo é obrigatório', 'NOME_OBRIGATORIO');
   if (!TIPOS_ATIVO.includes(tipo)) return erro(res, 400, 'Tipo de ativo inválido', 'TIPO_INVALIDO');
@@ -100,18 +143,20 @@ apiRouter.post('/assets', exigeToken, wrap(async (req, res) => {
   });
 }));
 
-// ---- POST /api/users (protegido) --------------------------------------------
-apiRouter.post('/users', exigeToken, wrap(async (req, res) => {
+// ---- POST /api/users (Administrador/Analista; so Administrador cria Administrador) ----
+apiRouter.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
   const { nome, email, perfil } = req.body ?? {};
   if (vazio(nome)) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
   if (!emailFormatoValido(email)) return erro(res, 400, 'Email inválido', 'EMAIL_INVALIDO');
   if (!PERFIS.includes(perfil)) return erro(res, 400, 'Perfil inválido', 'PERFIL_INVALIDO');
+  if (perfil === 'Administrador' && usuarioDe(req).perfil !== 'Administrador')
+    return erro(res, 403, 'Acesso negado para o seu perfil', 'PERFIL_SEM_PERMISSAO');
 
-  const dup = await prisma.user.findUnique({ where: { email } });
-  if (dup) return erro(res, 409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
+  const emailNorm = normalizarEmail(email);
+  if (await emailEmUso(emailNorm)) return erro(res, 409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
 
   const senhaHash = await bcrypt.hash('Mudar@123', 10);
-  const usuario = await prisma.user.create({ data: { nome, email, perfil, senhaHash, status: 'Pendente' } });
+  const usuario = await prisma.user.create({ data: { nome, email: emailNorm, perfil, senhaHash, status: 'Pendente' } });
   return enviar(res, 201, {
     status: 'sucesso',
     mensagem: 'Usuário cadastrado com sucesso',
@@ -119,10 +164,10 @@ apiRouter.post('/users', exigeToken, wrap(async (req, res) => {
   });
 }));
 
-// ---- POST /api/campaigns (protegido) ----------------------------------------
+// ---- POST /api/campaigns (Administrador/Analista) ----------------------------
 // Contrato original: um `destinatario`. Extensao compativel: `destinatarios[]`
 // (o frontend novo envia os dois; o Postman/Robot continuam enviando so o primeiro).
-apiRouter.post('/campaigns', exigeToken, wrap(async (req, res) => {
+apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
   const { nome, destinatario, destinatarios, template } = req.body ?? {};
   if (vazio(nome)) return erro(res, 400, 'Nome da campanha é obrigatório', 'NOME_OBRIGATORIO');
 

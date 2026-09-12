@@ -2,11 +2,13 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { toast } from './helpers';
 
 // Integração com o backend Express REAL (../backend em :8080), sem mocks.
-// Só roda com E2E_REAL=1 e o frontend servido com VITE_USE_MOCKS=false, por exemplo:
-//   VITE_USE_MOCKS=false npx vite --port 5174   (em outro terminal, com o backend no ar)
-//   E2E_REAL=1 E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/real-backend.spec.ts
+// Só roda com E2E_REAL=1 e um frontend servido contra a API real, por exemplo:
+//   dev:    VITE_USE_MOCKS=false npx vite --port 5174
+//           E2E_REAL=1 E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/real-backend.spec.ts
+//   docker: docker compose up --build -d backend app
+//           E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts
 // Credenciais do seed do backend: analista@empresa.com / Senha@123 e admin@empresa.com / Admin@123.
-// Tudo que os testes criam recebe nome/e-mail únicos e é desfeito ao final (ida e volta).
+// Tudo que os testes criam recebe nome/e-mail únicos e é removido no fim (ida e volta).
 
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8080/api';
 const ADMIN = { email: 'admin@empresa.com', password: 'Admin@123' };
@@ -51,10 +53,8 @@ async function apiCreateUser(
   return { id: body.dados.idUsuario, email };
 }
 
-async function apiDeleteUser(request: APIRequestContext, token: string, id: string): Promise<void> {
-  await request.delete(`${API_URL}/users/${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+async function apiDelete(request: APIRequestContext, token: string, path: string): Promise<void> {
+  await request.delete(`${API_URL}${path}`, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 test.describe('Modo real (backend Express)', () => {
@@ -88,6 +88,8 @@ test.describe('Modo real (backend Express)', () => {
 
     const select = page.locator('#status');
     const original = await select.inputValue();
+    // "Risco aceito" é justamente o status que o backend passou a aceitar; se a
+    // primeira linha já estiver nele, o ida e volta parte de "Aberta".
     const restoreTo = original === 'accepted' ? 'open' : original;
     await select.selectOption('accepted');
     await page.getByRole('button', { name: 'Atualizar status' }).click();
@@ -97,6 +99,8 @@ test.describe('Modo real (backend Express)', () => {
 
     await page.locator('#status').selectOption(restoreTo);
     await page.getByRole('button', { name: 'Atualizar status' }).click();
+    // Espera a confirmação antes do reload: recarregar aborta o PATCH em voo.
+    await expect(toast(page, 'Status atualizado')).toBeVisible();
     await page.reload();
     await expect(page.locator('#status')).toHaveValue(restoreTo);
   });
@@ -111,26 +115,32 @@ test.describe('Modo real (backend Express)', () => {
     await expect(page.getByText('Funil da campanha')).toBeVisible();
 
     const name = `Campanha E2E ${unique('real')}`;
-    await page.goto('/campaigns/new');
-    await page.locator('#nome').fill(name);
-    await page.getByRole('radio', { name: /Curiosidade/ }).check();
-    await page.locator('#grupo').selectOption({ label: 'TI' });
-    await page.locator('#destinatarios').fill('ana.souza@empresa.com\nbruno.lima@empresa.com');
-    await expect(page.getByText('2 destinatários válidos')).toBeVisible();
-    await page.getByRole('button', { name: 'Agendar campanha' }).click();
-    await expect(toast(page, 'Campanha agendada com sucesso')).toBeVisible();
-    await expect(page).toHaveURL(/\/campaigns\/[^/]+$/);
-    await expect(page.getByRole('heading', { name })).toBeVisible();
-
-    // O backend registrou os dois destinatários (um evento por e-mail).
-    const id = page.url().split('/').pop() ?? '';
     const token = await apiToken(request, ANALYST.email, ANALYST.password);
-    const report = await request.get(`${API_URL}/campanhas/${encodeURIComponent(id)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(report.ok()).toBeTruthy();
-    const body = (await report.json()) as { dados: { destinatarios: number } };
-    expect(body.dados.destinatarios).toBe(2);
+    let createdId = '';
+    try {
+      await page.goto('/campaigns/new');
+      await page.locator('#nome').fill(name);
+      await page.getByRole('radio', { name: /Curiosidade/ }).check();
+      await page.locator('#grupo').selectOption({ label: 'TI' });
+      await page.locator('#destinatarios').fill('ana.souza@empresa.com\nbruno.lima@empresa.com');
+      await expect(page.getByText('2 destinatários válidos')).toBeVisible();
+      await page.getByRole('button', { name: 'Agendar campanha' }).click();
+      await expect(toast(page, 'Campanha agendada com sucesso')).toBeVisible();
+      await expect(page).toHaveURL(/\/campaigns\/[^/]+$/);
+      await expect(page.getByRole('heading', { name })).toBeVisible();
+
+      // O backend registrou os dois destinatários (um evento por e-mail).
+      createdId = page.url().split('/').pop() ?? '';
+      const report = await request.get(`${API_URL}/campanhas/${encodeURIComponent(createdId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(report.ok()).toBeTruthy();
+      const body = (await report.json()) as { dados: { destinatarios: number } };
+      expect(body.dados.destinatarios).toBe(2);
+    } finally {
+      // Não deixa simulação de teste no banco de demonstração.
+      if (createdId) await apiDelete(request, token, `/campanhas/${encodeURIComponent(createdId)}`);
+    }
   });
 
   test('administrador cria, edita e exclui um usuário pelo backend', async ({ page }) => {
@@ -185,7 +195,33 @@ test.describe('Modo real (backend Express)', () => {
 
       await signIn(page, account.email, 'Nova@1234');
     } finally {
-      await apiDeleteUser(request, admin, account.id);
+      await apiDelete(request, admin, `/users/${encodeURIComponent(account.id)}`);
+    }
+  });
+
+  test('conta inativada pelo administrador perde o acesso', async ({ page, request }) => {
+    const admin = await apiToken(request, ADMIN.email, ADMIN.password);
+    const account = await apiCreateUser(request, admin, 'Colaborador');
+    try {
+      await signIn(page, account.email, PROVISIONAL_PASSWORD);
+
+      const patch = await request.patch(`${API_URL}/users/${encodeURIComponent(account.id)}`, {
+        headers: { Authorization: `Bearer ${admin}` },
+        data: { status: 'Inativo' },
+      });
+      expect(patch.ok()).toBeTruthy();
+
+      // A sessão aberta cai na primeira requisição (401) e a tela volta para o login.
+      await page.goto('/vulnerabilities');
+      await expect(page).toHaveURL(/\/login/);
+
+      // E o login deixa de ser aceito.
+      await page.locator('#email').fill(account.email);
+      await page.locator('#senha').fill(PROVISIONAL_PASSWORD);
+      await page.locator('#btnEntrar').click();
+      await expect(page.locator('#mensagem')).toContainText(/inativo/i);
+    } finally {
+      await apiDelete(request, admin, `/users/${encodeURIComponent(account.id)}`);
     }
   });
 
@@ -227,5 +263,35 @@ test.describe('Modo real (backend Express)', () => {
     await page.locator('#confirmarSenha').fill('Nova@1234');
     await page.locator('#btnRedefinir').click();
     await expect(page.locator('#mensagem')).toContainText(/inválido ou expirou/);
+  });
+
+  test('colaborador não vê as telas técnicas (RBAC do backend, não só da interface)', async ({
+    page,
+    request,
+  }) => {
+    const admin = await apiToken(request, ADMIN.email, ADMIN.password);
+    const account = await apiCreateUser(request, admin, 'Colaborador');
+    try {
+      await signIn(page, account.email, PROVISIONAL_PASSWORD);
+      const token = await apiToken(request, account.email, PROVISIONAL_PASSWORD);
+      for (const path of ['/vulnerabilidades', '/campanhas', '/usuarios', '/assets']) {
+        const response = await request.get(`${API_URL}${path}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        expect(response.status(), `GET ${path} para colaborador`).toBe(403);
+      }
+      // O dashboard é liberado, mas sem a lista técnica de achados.
+      const dashboard = await request.get(`${API_URL}/dashboard`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(dashboard.ok()).toBeTruthy();
+      const body = (await dashboard.json()) as { dados: { vulnerabilidadesRecentes: unknown[] } };
+      expect(body.dados.vulnerabilidadesRecentes).toHaveLength(0);
+
+      await page.goto('/vulnerabilities');
+      await expect(page.getByText(/Acesso negado/i)).toBeVisible();
+    } finally {
+      await apiDelete(request, admin, `/users/${encodeURIComponent(account.id)}`);
+    }
   });
 });

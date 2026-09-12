@@ -9,7 +9,7 @@ Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia
 | Camada | Pasta | Stack | Porta |
 |---|---|---|---|
 | **API** | `backend/` | Node + Express + TypeScript + Prisma + SQLite · JWT (HS256) + bcrypt · RBAC · AuditLog | `8080` |
-| **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailwindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` |
+| **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailwindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` (dev) · `8081` (Docker) |
 | **Frontend legado** | `frontend/` | React 18 + Vite (telas geradas do Figma) — mantido **só** como alvo das suítes Robot da N2 AT1 | `3000` |
 
 Os dois frontends fazem proxy de `/api` → `http://localhost:8080`. Novas telas e funcionalidades vão em `baluarte-frontend/`; `frontend/` não evolui (as suítes Robot dependem das rotas e ids dele).
@@ -54,12 +54,12 @@ npm run dev
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração** (node:test, SQLite isolado `test.db`) | `backend/tests/` | `cd backend && npm test` | 27 testes: contrato (smoke), senha, redefinição, notificações, treinamento, usuários, "Risco aceito", campanhas com vários destinatários |
+| **API — integração** (node:test, SQLite isolado `test.db`) | `backend/tests/` | `cd backend && npm test` | 38 testes: contrato (smoke), RBAC por perfil, conta inativada, limite de tentativas de login, senha, redefinição (token de uso único, expiração, sessões encerradas), notificações, treinamento, usuários, "Risco aceito", campanhas com vários destinatários e exclusão |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
-| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 320+ testes |
+| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 321 testes |
 | **Frontend — ponta a ponta** (Playwright, modo mock, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 32 testes |
-| **Frontend — ponta a ponta em modo real** | `baluarte-frontend/e2e/real-backend.spec.ts` | `E2E_REAL=1 E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/real-backend.spec.ts` (frontend em `VITE_USE_MOCKS=false`, backend no ar) | 8 testes |
+| **Frontend — ponta a ponta em modo real** | `baluarte-frontend/e2e/real-backend.spec.ts` | `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; em dev use `:5174` com `VITE_USE_MOCKS=false`) | 10 testes |
 
 ### API — Postman/Newman (contra o backend real)
 A collection da N2 AT1 (`testes-api/`) roda **35 requisições / 70 asserções** sobre os 6 endpoints do contrato. Rode com a base de contrato (sem dados de demo) para garantir o verde:
@@ -83,9 +83,27 @@ Relatórios em `e2e/resultados/report.html` e `log.html`.
 
 **Leitura (alimentam as telas):** `GET /me` · `GET /dashboard` · `GET /assets` · `GET /scans` · `GET /vulnerabilidades[/:id]` (+ `PATCH`, inclusive status `Risco aceito`) · `GET /campanhas[/:id]` · `GET /usuarios` · `GET /configuracoes/seguranca` · `GET /treinamentos/:token`
 
-**Conta e administração:** `POST /auth/change-password` · `POST /auth/reset-password` (+ `/confirm`, token de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo)
+**Conta e administração:** `POST /auth/change-password` · `POST /auth/reset-password` (+ `/confirm`, token de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min; redefinir encerra as sessões abertas antes) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo) · `DELETE /campanhas/:id` (Administrador/Analista)
 
 Erros seguem o envelope `{ status: "erro", mensagem, codigoErro, timestamp }`; sucessos, `{ status: "sucesso", mensagem?, dados, resumo? }`. Toda rota de escrita fora do contrato registra em `AuditLog`.
+
+### RBAC efetivo (verificado no servidor, não só na interface)
+
+| Perfil | Pode |
+|---|---|
+| **Administrador** | tudo, inclusive `GET /usuarios` e `PATCH/DELETE /users/:id` |
+| **Analista** | operar a plataforma (varreduras, ativos, campanhas, status de vulnerabilidade, criar Analista/Colaborador) e ler as listas técnicas; **não** lista nem edita usuários |
+| **Colaborador** | `GET /me`, `GET /dashboard` (só índices e KPIs, sem a lista de achados), `GET /configuracoes/seguranca`, as próprias notificações e o próprio treinamento |
+
+O perfil vem do banco a cada requisição (um token emitido antes de um rebaixamento deixa de valer), contas `Inativo` perdem o acesso na hora (401 `USUARIO_INATIVO`) e o login de conta inativa é recusado (403 `USUARIO_INATIVO`). O login bloqueia após 5 falhas por conta em 15 minutos (429 `MUITAS_TENTATIVAS`), como a política de `GET /configuracoes/seguranca` anuncia.
+
+> Efeito colateral no frontend legado: a tela `/usuarios` dele agora precisa de um token de **Administrador** (com o analista do seed ela mostra "Erro ao carregar usuários"). As 6 suítes Robot não passam por essa tela — os formulários que elas exercitam validam no próprio navegador.
+
+### Limitações conhecidas (decisões conscientes de escopo)
+
+- **Sem serviço de e-mail.** O link de redefinição de senha só aparece no log do servidor, e apenas com `RESET_TOKEN_CONSOLE=1` (nunca em `NODE_ENV=production`). Em produção o fluxo exige plugar MailHog/SendGrid.
+- **Senha provisória fixa** (`Mudar@123`) para contas criadas por um administrador, e a conta `Pendente` pode usar o sistema antes de trocá-la (trocar a senha a ativa). Sem canal de e-mail não há como entregar uma senha aleatória.
+- **Trocar a própria senha** (`/auth/change-password`) não derruba as outras sessões do mesmo usuário; a redefinição por token, sim. Todo token expira em 30 minutos.
 
 ## Supabase (opcional)
 
@@ -103,14 +121,16 @@ O cliente Supabase está configurado em `frontend/src/supabase.ts` (lê `VITE_SU
 Com o Docker Desktop no ar (pare os `npm run dev` antes — as portas são as mesmas):
 ```bash
 cp .env.example .env                       # opcional: JWT_SECRET e SEED_DEMO
-docker compose up --build -d backend app   # API :8080 + frontend do produto :5173 (Nginx)
-docker compose up --build -d               # idem + frontend legado :3000 (para as suítes Robot)
-docker compose logs -f backend             # aqui aparecem os tokens de redefinição de senha
-docker compose down                        # -v também apaga o banco (volume backend-data)
+docker compose up --build -d backend app   # API :8080 + frontend do produto :8081 (Nginx)
+docker compose up --build -d               # idem + frontend legado :3000 (para as suites Robot)
+docker compose logs -f backend             # com RESET_TOKEN_CONSOLE=1, o link de redefinicao aparece aqui
+docker compose down                        # -v tambem apaga o banco (volume backend-data)
 ```
-- O SQLite da API vive no volume `backend-data` (`/data/dev.db`): sobrevive a `down`/`up` e a rebuilds. Na **primeira** subida o entrypoint aplica o schema, roda o seed de contrato e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes só reaplica o schema e o seed de contrato (idempotente), sem apagar o que foi criado pela interface.
-- `app` faz o build de produção de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o serviço `backend` (`baluarte-frontend/nginx.conf`); só sobe depois do healthcheck da API.
-- Para as suítes Newman/Robot contra o Docker, suba com um banco limpo: `docker compose down -v && SEED_DEMO=0 docker compose up --build -d`.
+- O frontend do produto fica em **:8081** no Docker, e nao em 5173: a 5173 e do dev server do Vite (que o Playwright reutiliza quando esta ocupada), entao os dois modos convivem sem se confundir.
+- O SQLite da API vive no volume `backend-data` (`/data/dev.db`): sobrevive a `down`/`up` e a rebuilds. Na **primeira** subida o entrypoint aplica o schema, roda o seed de contrato e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes so reaplica o schema e o seed de contrato (idempotente), sem apagar o que foi criado pela interface.
+- **Sem segredo no repositorio:** se `JWT_SECRET` nao vier do `.env`, o entrypoint gera um aleatorio e o guarda no volume (`/data/jwt.secret`), entao as sessoes sobrevivem a reinicios sem nenhum valor fixo versionado. Com `NODE_ENV=production` a API se recusa a subir sem um segredo forte.
+- `app` faz o build de producao de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o servico `backend` (`baluarte-frontend/nginx.conf`); so sobe depois do healthcheck da API. A API roda como usuario `node`, nao como root.
+- Para as suites Newman/Robot contra o Docker, suba com um banco limpo: `docker compose down -v && SEED_DEMO=0 docker compose up --build -d`.
 
 ## Estrutura
 

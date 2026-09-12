@@ -33,7 +33,8 @@ export function vazio(v: unknown): boolean {
 }
 
 export function emailFormatoValido(email: unknown): boolean {
-  return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  // 254 e o limite pratico de um endereco (RFC 5321); tambem impede chaves gigantes nos limitadores.
+  return typeof email === 'string' && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 export function hostValido(host: unknown): boolean {

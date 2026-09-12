@@ -69,6 +69,7 @@ async function main() {
           submeteuEm: i < submeteram ? new Date() : null,
           reportouEm: i < reportaram ? new Date() : null,
           treinou: i < clicados,
+          treinouEm: i < clicados ? new Date() : null,
         },
       });
     }

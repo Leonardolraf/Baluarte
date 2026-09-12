@@ -27,6 +27,8 @@ const STATUS_OPCOES = [
   { value: 'Em revisão',      label: 'Em revisão' },
   { value: 'Em remediação',   label: 'Em remediação' },
   { value: 'Resolvida',       label: 'Resolvida' },
+  // Mesma lista de STATUS_FINDING em backend/src/util.ts.
+  { value: 'Risco aceito',    label: 'Risco aceito' },
 ];
 
 export function VulnerabilidadeDetalhe() {

@@ -64,6 +64,8 @@ A única porta de entrada das telas é `src/services/api.ts`, que exporta `api: 
 
 Todas estão implementadas em `../backend` (testes em `../backend/tests`). `src/services/api.ts` exporta `FEATURES`, um mapa de capacidades hoje todo ligado; as telas continuam consultando-o para esconder uma ação (em vez de mostrar um 404 genérico) caso uma implantação desligue alguma capacidade. Se uma rota não existir no servidor, a camada real converte o 404 `ROTA_NAO_ENCONTRADA` em **501 `NAO_IMPLEMENTADO`**.
 
+O RBAC é do servidor, não só da interface: em modo real o colaborador recebe 403 nas listas técnicas e um dashboard sem a lista de achados, o analista não lista usuários, um token emitido antes de um rebaixamento deixa de valer e uma conta inativada cai na primeira requisição (401 e volta ao login).
+
 ### Redefinição de senha
 
 Fluxo em duas etapas na mesma rota: `/reset-password` pede o e-mail (resposta genérica, sem revelar se ele existe) e `/reset-password?token=…` define a nova senha. **Não há serviço de e-mail neste projeto**: no backend real o token aparece no console do servidor (`[reset-senha] token para …`), válido por 30 minutos e de uso único; na camada mock ele volta na própria resposta (`demoToken`) e a tela oferece o link "Continuar para a redefinição".
@@ -87,7 +89,7 @@ VITE_USE_MOCKS=
 | Unitários e de componentes (Vitest + RTL) | `src/__tests__/*.test.ts(x)` | `ProtectedRoute`, RBAC por rota e por navegação, `SeverityBadge`, `DashboardPage`, `LoginPage`, hooks (`useAsync`, `useSort`, `usePagination`), bibliotecas (`format`, `severity`, `roles`, `jwt`, `storage`, `errors`), API mock (autenticação, redefinição de senha, RBAC por endpoint, validações, métricas), adapters e invariantes dos dados fictícios |
 | Acessibilidade (axe-core) | `src/__tests__/a11y.test.tsx` | Todas as páginas renderizadas com dados do mock, sem violações (a regra de contraste é auditada manualmente — o jsdom não calcula layout) |
 | Ponta a ponta (Playwright, Chrome do sistema) | `e2e/*.spec.ts` | Login/logout/redirecionamento, redefinição de senha (fluxo completo com token), RBAC, vulnerabilidades (filtros, busca global, detalhe, status), campanhas (lista, relatório, criação), usuários (criar/editar/excluir com diálogo), configurações (senha, notificações, tema), treinamento, layout mobile (gaveta com foco preso, sem rolagem horizontal) |
-| Ponta a ponta em modo real | `e2e/real-backend.spec.ts` | Com o backend em `:8080` e o frontend em `VITE_USE_MOCKS=false`: login, sessão, "Risco aceito" (ida e volta), campanha com dois destinatários, criar/editar/excluir usuário, troca de senha, preferências de notificação e redefinição de senha. `E2E_REAL=1 E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/real-backend.spec.ts` (`E2E_API_URL` muda a API, padrão `http://localhost:8080/api`) |
+| Ponta a ponta em modo real | `e2e/real-backend.spec.ts` | Contra a API real: login, sessão, “Risco aceito” (ida e volta), campanha com dois destinatários (removida no fim), criar/editar/excluir usuário, troca de senha, conta inativada perdendo acesso, RBAC de colaborador conferido na própria API, preferências de notificação e redefinição de senha. `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; `:5174` em dev com `VITE_USE_MOCKS=false`; `E2E_API_URL` muda a API, padrão `http://localhost:8080/api`) |
 
 ## Rotas e RBAC
 
@@ -106,7 +108,7 @@ VITE_USE_MOCKS=
 
 ## Docker
 
-`Dockerfile` faz o build de produção (sem mocks) e o serve com Nginx (`nginx.conf`: fallback de SPA, cache dos assets com hash e proxy `/api` → `backend:8080`). Na raiz do repositório, `docker compose up --build -d backend app` sobe API + este frontend em http://localhost:5173 (pare o `npm run dev` antes: mesma porta). Para validar a stack com os testes de modo real: `E2E_REAL=1 E2E_BASE_URL=http://localhost:5173 npx playwright test e2e/real-backend.spec.ts`.
+`Dockerfile` faz o build de produção (sem mocks) e o serve com Nginx (`nginx.conf`: fallback de SPA, cache longo só nos assets com hash, `no-cache` no index e proxy `/api` → `backend:8080`). Na raiz do repositório, `docker compose up --build -d backend app` sobe API + este frontend em **http://localhost:8081** — porta diferente da 5173 de propósito, para a stack Docker não ser confundida com o dev server nas suítes do Playwright. Para validar a stack: `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts`.
 
 ## Estrutura
 
