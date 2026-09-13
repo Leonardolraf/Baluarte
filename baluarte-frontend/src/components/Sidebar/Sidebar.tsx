@@ -5,7 +5,8 @@ import { initials } from '@/lib/format';
 import { ROLE_LABEL } from '@/lib/roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUiStore } from '@/store/uiStore';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, LogOutIcon, ShieldIcon } from '@/components/icons';
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, LogOutIcon } from '@/components/icons';
+import { BaluarteMark, Wordmark } from '@/components/Brand/BaluarteMark';
 import { navGroupsForRole } from '@/components/Sidebar/navigation';
 
 interface SidebarContentProps {
@@ -21,23 +22,15 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse, onClose }: Si
 
   return (
     <div className="flex h-full flex-col bg-ink text-slate-300">
+      {/* Mesma altura da barra superior (56 px): a linha horizontal atravessa a tela inteira. */}
       <div
         className={cn(
-          'flex items-center gap-3 border-b border-white/10 px-4 py-4',
+          'flex h-14 shrink-0 items-center gap-3 border-b border-white/10 px-4',
           collapsed && 'justify-center px-2',
         )}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand text-white">
-          <ShieldIcon size={20} />
-        </span>
-        {!collapsed && (
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-semibold text-white">Baluarte</div>
-            <div className="text-[10px] uppercase tracking-widest text-slate-400">
-              Plataforma de cibersegurança
-            </div>
-          </div>
-        )}
+        <BaluarteMark size={32} tone="inverse" />
+        {!collapsed && <Wordmark className="text-white" tagline="Cibersegurança" />}
         {onClose && (
           <button
             type="button"
@@ -52,8 +45,8 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse, onClose }: Si
 
       <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Navegação principal">
         {groups.map((group) => (
-          <div key={group.title} className="mb-4">
-            {!collapsed && <div className="label-caps px-3 pb-1 !text-slate-400">{group.title}</div>}
+          <div key={group.title} className="mb-5">
+            {!collapsed && <div className="label-caps px-3 pb-1.5 !text-slate-400">{group.title}</div>}
             <ul className="space-y-0.5">
               {group.items.map((item) => (
                 <li key={item.to}>
@@ -64,14 +57,26 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse, onClose }: Si
                     title={collapsed ? item.label : undefined}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                        'relative flex h-9 items-center gap-3 rounded-lg px-3 text-sm transition-colors',
                         collapsed && 'justify-center px-2',
-                        isActive ? 'bg-brand text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white',
+                        isActive
+                          ? 'bg-white/10 font-medium text-white'
+                          : 'text-slate-300 hover:bg-white/5 hover:text-white',
                       )
                     }
                   >
-                    <span className="shrink-0">{item.icon}</span>
-                    {!collapsed && <span className="truncate">{item.label}</span>}
+                    {({ isActive }) => (
+                      <>
+                        {isActive && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-white"
+                          />
+                        )}
+                        <span className="shrink-0">{item.icon}</span>
+                        {!collapsed && <span className="truncate">{item.label}</span>}
+                      </>
+                    )}
                   </NavLink>
                 </li>
               ))}

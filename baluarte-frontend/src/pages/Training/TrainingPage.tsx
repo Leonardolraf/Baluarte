@@ -65,9 +65,9 @@ function BulletList({
   iconClass: string;
 }) {
   return (
-    <ul className="space-y-2.5">
+    <ul className="space-y-3">
       {items.map((item, index) => (
-        <li key={index} className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300">
+        <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
           <Icon size={16} className={cn('mt-0.5 shrink-0', iconClass)} />
           <span>{item}</span>
         </li>
@@ -173,7 +173,7 @@ export default function TrainingPage() {
           <div
             className={cn(
               'h-full rounded-full transition-all',
-              training.completed ? SEVERITY_DOT_CLASS.low : 'bg-brand',
+              training.completed ? SEVERITY_DOT_CLASS.low : 'bg-ink dark:bg-white',
             )}
             style={{ width: `${progress}%` }}
           />
@@ -210,7 +210,7 @@ export default function TrainingPage() {
                 <div
                   role="status"
                   className={cn(
-                    'flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm ring-1 ring-inset',
+                    'flex items-start gap-2 rounded-lg px-4 py-3 text-sm ring-1 ring-inset',
                     SEVERITY_BADGE_CLASS.low,
                   )}
                 >
@@ -222,13 +222,13 @@ export default function TrainingPage() {
                   </p>
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
                   Leia todo o conteúdo e marque como concluído. A conclusão fica registrada no seu histórico
                   e, quando vinculada a uma campanha, entra no relatório de resiliência.
                 </p>
               )}
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 {FEATURES.completeTraining ? (
                   <Button
                     variant="primary"

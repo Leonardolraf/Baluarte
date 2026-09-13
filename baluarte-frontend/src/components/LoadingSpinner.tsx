@@ -43,7 +43,7 @@ export function LoadingSpinner({
     >
       <span
         className={cn(
-          'animate-spin rounded-full border-slate-200 border-t-brand dark:border-slate-700 dark:border-t-blue-400',
+          'animate-spin rounded-full border-slate-200 border-t-ink dark:border-slate-700 dark:border-t-white',
           SIZE[size],
         )}
         aria-hidden="true"

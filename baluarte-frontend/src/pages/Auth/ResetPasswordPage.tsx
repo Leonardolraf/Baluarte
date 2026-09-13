@@ -25,7 +25,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-10">
-      <div className="surface w-full max-w-md p-8">{content}</div>
+      <div className="surface w-full max-w-md p-6 sm:p-8">{content}</div>
     </div>
   );
 }
@@ -35,11 +35,11 @@ export default function ResetPasswordPage() {
 function StepHeader({ title, description }: { title: string; description?: string }) {
   return (
     <header className="flex flex-col items-center text-center">
-      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-white">
+      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-ink text-white dark:bg-white dark:text-ink">
         <LockIcon size={24} />
       </span>
-      <h1 className="mt-4 text-xl font-semibold text-ink dark:text-white">{title}</h1>
-      {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
+      <h1 className="display mt-4 text-2xl text-ink dark:text-white">{title}</h1>
+      {description && <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
     </header>
   );
 }
@@ -57,10 +57,10 @@ function SuccessPanel({
 }) {
   return (
     <div className="flex flex-col items-center text-center" id="mensagem" role="status">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-soft text-brand dark:bg-slate-800 dark:text-blue-400">
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-200 text-ink dark:bg-slate-700 dark:text-white">
         <CheckCircleIcon size={30} />
       </span>
-      <h1 className="mt-4 text-xl font-semibold text-ink dark:text-white">{title}</h1>
+      <h1 className="display mt-4 text-2xl text-ink dark:text-white">{title}</h1>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{message}</p>
       {hint && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{hint}</p>}
       <LinkButton to={action.to} className="mt-6 w-full" leftIcon={<ArrowLeftIcon size={16} />}>
@@ -75,7 +75,7 @@ function BackToLogin() {
     <div className="text-center">
       <Link
         to="/login"
-        className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline dark:text-blue-400"
+        className="inline-flex items-center gap-1 text-sm font-medium text-ink underline-offset-4 hover:underline dark:text-white"
       >
         <ArrowLeftIcon size={14} />
         Voltar ao login
@@ -153,7 +153,7 @@ function RequestStep() {
         title="Redefinir senha"
         description="Informe o e-mail cadastrado. Se ele existir, enviaremos um link para criar uma nova senha."
       />
-      <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form className="mt-6 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormField label="E-mail" htmlFor="email" error={emailError} required>
           <Input
             id="email"
@@ -242,7 +242,7 @@ function ConfirmStep({ token }: { token: string }) {
         title="Criar nova senha"
         description={`Mínimo de ${PASSWORD_MIN} caracteres, com letras maiúsculas e minúsculas, um número e um símbolo.`}
       />
-      <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form className="mt-6 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormField label="Nova senha" htmlFor="novaSenha" error={newPasswordError} required>
           <Input
             id="novaSenha"
@@ -289,7 +289,7 @@ function ConfirmStep({ token }: { token: string }) {
           <div className="text-center">
             <Link
               to="/reset-password"
-              className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline dark:text-blue-400"
+              className="inline-flex items-center gap-1 text-sm font-medium text-ink underline-offset-4 hover:underline dark:text-white"
             >
               Solicitar um novo link
             </Link>
@@ -308,7 +308,7 @@ function UnavailableStep() {
   return (
     <>
       <StepHeader title="Redefinir senha" />
-      <div className="mt-8 space-y-5">
+      <div className="mt-6 space-y-5">
         <div
           role="note"
           className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300"

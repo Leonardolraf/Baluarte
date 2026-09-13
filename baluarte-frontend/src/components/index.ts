@@ -15,8 +15,11 @@ export { Sidebar } from '@/components/Sidebar/Sidebar';
 export { NAV_GROUPS, navGroupsForRole } from '@/components/Sidebar/navigation';
 export type { NavGroup, NavItem } from '@/components/Sidebar/navigation';
 
-export { Card, StatCard, KeyValueList } from '@/components/Card/Card';
-export type { CardProps, StatCardProps, StatTone, KeyValueProps } from '@/components/Card/Card';
+export { Card, Plate, StatCard, KeyValueList } from '@/components/Card/Card';
+export type { CardProps, PlateProps, StatCardProps, StatTone, KeyValueProps } from '@/components/Card/Card';
+
+export { BaluarteMark, Wordmark } from '@/components/Brand/BaluarteMark';
+export type { BaluarteMarkProps, WordmarkProps } from '@/components/Brand/BaluarteMark';
 
 export { Tabs } from '@/components/Tabs/Tabs';
 export type { TabsProps, TabItem } from '@/components/Tabs/Tabs';
@@ -66,6 +69,6 @@ export {
   Pagination,
   TableEmptyRow,
 } from '@/components/ui/Table';
-export type { ThProps, TdProps, TableRowProps, PaginationProps } from '@/components/ui/Table';
+export type { TableProps, ThProps, TdProps, TableRowProps, PaginationProps } from '@/components/ui/Table';
 
 export * as Icons from '@/components/icons';

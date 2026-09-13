@@ -73,7 +73,7 @@ export function Topbar() {
       {user && (
         <div className="hidden items-center gap-2 sm:flex" data-testid="topbar-user">
           <span
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand dark:bg-blue-950 dark:text-blue-300"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-ink dark:bg-slate-700 dark:text-white"
             aria-hidden="true"
           >
             {initials(user.name)}

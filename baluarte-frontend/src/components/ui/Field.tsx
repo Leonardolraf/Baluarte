@@ -82,7 +82,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   return (
     <textarea
       ref={ref}
-      className={cn('input-base min-h-[96px] resize-y', invalid && 'input-error', className)}
+      className={cn('input-base h-auto min-h-[96px] resize-y py-2', invalid && 'input-error', className)}
       aria-invalid={invalid || undefined}
       {...rest}
     />
@@ -106,7 +106,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         ref={ref}
         id={inputId}
         type="checkbox"
-        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand focus:ring-brand dark:border-slate-600 dark:bg-slate-900"
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-ink focus:ring-ink dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-white"
         {...rest}
       />
       <label htmlFor={inputId} className="cursor-pointer select-none">
@@ -149,12 +149,12 @@ export function Switch({ id, checked, onChange, label, description, disabled }: 
         onClick={() => onChange(!checked)}
         className={cn(
           'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-          checked ? 'bg-brand' : 'bg-slate-300 dark:bg-slate-700',
+          checked ? 'bg-ink dark:bg-slate-200' : 'bg-slate-300 dark:bg-slate-700',
         )}
       >
         <span
           className={cn(
-            'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+            'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform dark:bg-slate-900',
             checked ? 'translate-x-5' : 'translate-x-0.5',
           )}
         />

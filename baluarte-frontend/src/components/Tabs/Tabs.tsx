@@ -104,7 +104,7 @@ export function Tabs({
               className={cn(
                 'inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 selected
-                  ? 'border-brand text-brand dark:border-blue-400 dark:text-blue-400'
+                  ? 'border-ink text-ink dark:border-white dark:text-white'
                   : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-ink dark:text-slate-400 dark:hover:text-white',
               )}
             >
@@ -114,7 +114,7 @@ export function Tabs({
                   className={cn(
                     'rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
                     selected
-                      ? 'bg-brand-soft text-brand dark:bg-blue-950 dark:text-blue-300'
+                      ? 'bg-ink text-white dark:bg-white dark:text-ink'
                       : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
                   )}
                 >

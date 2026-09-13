@@ -25,9 +25,22 @@ export function TableContainer({ bare = false, className, children, ...rest }: T
   );
 }
 
-export function Table({ className, children, ...rest }: HTMLAttributes<HTMLTableElement>) {
+export interface TableProps extends HTMLAttributes<HTMLTableElement> {
+  /** Tabela pequena (poucas colunas) que cabe num cartão estreito: sem largura mínima. */
+  dense?: boolean;
+}
+
+export function Table({ dense = false, className, children, ...rest }: TableProps) {
   return (
-    <table className={cn('w-full min-w-[640px] border-collapse text-left text-sm', className)} {...rest}>
+    <table
+      className={cn(
+        // Ritmo: células a 16 px; primeira e última a 20 px, no mesmo inset do cabeçalho do cartão.
+        'w-full border-collapse text-left text-sm [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5',
+        dense ? 'min-w-0' : 'min-w-[640px]',
+        className,
+      )}
+      {...rest}
+    >
       {children}
     </table>
   );
@@ -173,7 +186,7 @@ export function Pagination({
     <nav
       aria-label="Paginação"
       className={cn(
-        'flex flex-col gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300 sm:flex-row sm:items-center sm:justify-between',
+        'flex flex-col gap-3 border-t border-slate-100 px-5 py-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300 sm:flex-row sm:items-center sm:justify-between',
         className,
       )}
     >
@@ -235,7 +248,7 @@ export function Pagination({
 export function TableEmptyRow({ colSpan, children }: { colSpan: number; children: ReactNode }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+      <td colSpan={colSpan} className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
         {children}
       </td>
     </tr>

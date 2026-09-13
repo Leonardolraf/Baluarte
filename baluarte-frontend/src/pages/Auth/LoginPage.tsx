@@ -8,7 +8,8 @@ import { errorMessage } from '@/lib/errors';
 import { ROLE_LABEL } from '@/lib/roles';
 import { notify } from '@/store/uiStore';
 import { Button, FormErrorBanner, FormField, Input, describedBy } from '@/components';
-import { EyeIcon, ShieldIcon, type IconProps } from '@/components/icons';
+import { BaluarteMark } from '@/components/Brand/BaluarteMark';
+import { EyeIcon, type IconProps } from '@/components/icons';
 
 interface LoginFormValues {
   email: string;
@@ -120,18 +121,16 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-10">
-      <div className="surface w-full max-w-md p-8">
+      <div className="surface w-full max-w-md p-6 sm:p-8">
         <header className="flex flex-col items-center text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand text-white">
-            <ShieldIcon size={26} />
-          </span>
-          <h1 className="mt-4 text-xl font-semibold text-ink dark:text-white">Entrar no Baluarte</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <BaluarteMark size={48} />
+          <h1 className="display mt-4 text-2xl text-ink dark:text-white">Entrar no Baluarte</h1>
+          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
             Acesse o painel unificado de risco técnico e humano da sua empresa.
           </p>
         </header>
 
-        <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <form className="mt-6 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
           <FormField label="E-mail" htmlFor="email" error={emailError} required>
             <Input
               id="email"
@@ -182,7 +181,7 @@ export default function LoginPage() {
           <div className="text-center">
             <Link
               to="/reset-password"
-              className="text-sm font-medium text-brand hover:underline dark:text-blue-400"
+              className="text-sm font-medium text-ink underline-offset-4 hover:underline dark:text-white"
             >
               Esqueci minha senha
             </Link>
@@ -192,7 +191,7 @@ export default function LoginPage() {
         {demo.length > 0 && (
           <aside
             aria-labelledby="demo-title"
-            className="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50"
+            className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50"
           >
             <p id="demo-title" className="label-caps">
               Ambiente de demonstração
@@ -202,9 +201,9 @@ export default function LoginPage() {
             </p>
             <ul className="mt-3 divide-y divide-slate-200 dark:divide-slate-700">
               {demo.map((credential) => (
-                <li key={credential.email} className="flex items-center justify-between gap-3 py-2">
+                <li key={credential.email} className="flex items-center justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-xs text-ink dark:text-slate-100">
+                    <p className="break-words font-mono text-xs text-ink dark:text-slate-100">
                       {credential.email}
                       <span className="text-slate-400 dark:text-slate-500"> / </span>
                       {credential.password}

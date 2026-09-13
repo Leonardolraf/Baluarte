@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Baluarte: planta pentagonal de um bastião sobre a tinta da marca. -->
+  <rect width="32" height="32" rx="8" fill="#0B1220"/>
+  <path d="M16 5.5 26.5 12.6 22.6 25.5H9.4L5.5 12.6Z" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M12.2 17.2 15 20l4.9-5.2" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

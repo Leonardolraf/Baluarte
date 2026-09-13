@@ -31,8 +31,13 @@ export default defineConfig(({ mode }) => {
       port: 4173,
     },
     build: {
+      // Produção não emite source maps: o DevTools do navegador só vê o bundle
+      // minificado, sem o TypeScript/JSX original nem a árvore de pastas de `src/`.
+      // (No `npm run dev` o Vite serve os fontes com map — isso é o servidor de
+      // desenvolvimento local, não o app publicado.)
       sourcemap: mode !== 'production',
       target: 'es2020',
+      minify: 'esbuild',
       rollupOptions: {
         output: {
           manualChunks: {
@@ -41,6 +46,11 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+    },
+    // Remove console.* e debugger do bundle de produção (menos ruído e menos
+    // pistas no DevTools); em dev continuam disponíveis.
+    esbuild: {
+      drop: mode === 'production' ? ['console', 'debugger'] : [],
     },
   };
 });

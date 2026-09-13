@@ -84,8 +84,9 @@ function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   const active = hasActiveFilters(filters);
 
   return (
-    <div className="border-b border-slate-200 p-4 dark:border-slate-800">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem_11rem_auto] lg:items-end">
+    // Ritmo (DESIGN.md): inset de 20 px como o cabeçalho do cartão e a primeira célula; campos a 20 px.
+    <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem_11rem_auto] lg:items-end">
         <FormField label="Buscar" htmlFor={queryId} className="sm:col-span-2 lg:col-span-1">
           <div className="relative">
             <SearchIcon
@@ -144,9 +145,10 @@ function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
           </Select>
         </FormField>
 
+        {/* 38 px = altura do `.input-base` (py-2 + 20 de linha + bordas); o botão md (40 px) sairia 2 px do alinhamento. */}
         <Button
           variant="outline"
-          className="h-[38px]"
+
           leftIcon={<CloseIcon size={14} />}
           disabled={!active}
           onClick={() => onFiltersChange(EMPTY_FILTERS)}
@@ -172,7 +174,7 @@ function SkeletonRow() {
         <Skeleton className="h-4 w-28" />
         <Skeleton className="mt-1.5 h-3 w-36" />
       </Td>
-      <Td>
+      <Td className="hidden 2xl:table-cell">
         <Skeleton className="h-4 w-40" />
       </Td>
       <Td align="right">
@@ -218,7 +220,7 @@ function VulnRow({ vuln, onClick }: VulnRowProps) {
         <div className="text-slate-700 dark:text-slate-200">{vuln.assetName}</div>
         <div className="mt-0.5 font-mono text-xs text-slate-500 dark:text-slate-400">{vuln.assetHost}</div>
       </Td>
-      <Td className="min-w-[12rem]">
+      <Td className="hidden min-w-[12rem] 2xl:table-cell">
         <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{vuln.owaspId}</span>
         <span className="ml-1.5 text-slate-700 dark:text-slate-200">{vuln.owaspCategory}</span>
       </Td>
@@ -306,7 +308,10 @@ export function VulnTable({
                 Título
               </Th>
               <Th>Ativo</Th>
-              <Th>Categoria OWASP</Th>
+              {/* Prioridade de colunas: com a barra lateral aberta, as 7 colunas só cabem a partir de 2xl
+                  (o `main` é limitado a max-w-7xl; em 1280 px sobram 976 px para ~1084 px de conteúdo mínimo).
+                  A categoria OWASP é a menos usada na varredura visual e já aparece no detalhe. */}
+              <Th className="hidden 2xl:table-cell">Categoria OWASP</Th>
               <Th align="right" sortable sorted={directionOf('cvss')} onSort={() => toggle('cvss')}>
                 CVSS
               </Th>

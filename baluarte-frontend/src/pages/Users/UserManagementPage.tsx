@@ -101,7 +101,7 @@ function ConfirmDeleteDialog({ user, busy, onCancel, onConfirm }: ConfirmDeleteD
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="surface w-full max-w-md animate-fade-in p-6"
+        className="surface w-full max-w-md animate-fade-in p-5"
       >
         <div className="flex items-start gap-4">
           <span
@@ -287,7 +287,7 @@ export default function UserManagementPage() {
             />
           ) : (
             <>
-              <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full sm:max-w-xs">
                   <label htmlFor="user-search" className="sr-only">
                     Buscar por nome ou e-mail
@@ -315,7 +315,7 @@ export default function UserManagementPage() {
               </div>
 
               {!showActions && (
-                <p className="border-b border-slate-100 px-4 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                <p className="border-b border-slate-100 px-5 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
                   Edição e exclusão de usuários ainda não estão disponíveis nesta API.
                 </p>
               )}
@@ -334,10 +334,15 @@ export default function UserManagementPage() {
                       <Th sortable sorted={directionOf('status')} onSort={() => toggle('status')}>
                         Status
                       </Th>
-                      <Th sortable sorted={directionOf('createdAt')} onSort={() => toggle('createdAt')}>
+                      <Th
+                        sortable
+                        sorted={directionOf('createdAt')}
+                        onSort={() => toggle('createdAt')}
+                        className="hidden 2xl:table-cell"
+                      >
                         Criado em
                       </Th>
-                      <Th>Último acesso</Th>
+                      <Th className="hidden xl:table-cell">Último acesso</Th>
                       {showActions && <Th align="right">Ações</Th>}
                     </tr>
                   </THead>
@@ -383,12 +388,12 @@ export default function UserManagementPage() {
                                 colorClass={USER_STATUS_CLASS[user.status]}
                               />
                             </Td>
-                            <Td className="whitespace-nowrap">
+                            <Td className="hidden whitespace-nowrap 2xl:table-cell">
                               <time dateTime={user.createdAt} title={formatDateTime(user.createdAt)}>
                                 {formatDate(user.createdAt)}
                               </time>
                             </Td>
-                            <Td className="whitespace-nowrap">
+                            <Td className="hidden whitespace-nowrap xl:table-cell">
                               {user.lastLoginAt ? (
                                 <time dateTime={user.lastLoginAt} title={formatDateTime(user.lastLoginAt)}>
                                   {formatRelative(user.lastLoginAt)}

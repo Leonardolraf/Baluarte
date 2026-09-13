@@ -25,6 +25,9 @@
     "test:all": "npm run typecheck && npm run typecheck:e2e && npm run lint && npm test && npm run build && npm run test:e2e"
   },
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/ibm-plex-sans": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "axios": "^1.7.9",
     "clsx": "^2.1.1",
     "jwt-decode": "^4.0.0",

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   VULNERABILITY_STATUSES,
@@ -64,6 +64,25 @@ function Mono({ children, breakAll = false }: { children: ReactNode; breakAll?: 
   return <span className={breakAll ? 'break-all font-mono text-xs' : 'font-mono text-xs'}>{children}</span>;
 }
 
+/** Vetor CVSS em mono, quebrando só depois de cada "/" (nunca no meio de uma métrica). */
+function CvssVector({ vector }: { vector: string }) {
+  const metrics = vector.split('/');
+  return (
+    <span className="break-words font-mono text-xs">
+      {metrics.map((metric, index) => (
+        <Fragment key={index}>
+          {index > 0 && (
+            <>
+              /<wbr />
+            </>
+          )}
+          {metric}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
 function SectionLabel({ children }: { children: ReactNode }) {
   return <h3 className="label-caps mb-2">{children}</h3>;
 }
@@ -95,7 +114,7 @@ function OverviewTab({ vuln }: { vuln: Vulnerability }) {
                     href={url}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="inline-flex items-start gap-1.5 break-all font-mono text-xs text-brand hover:underline dark:text-blue-400"
+                    className="inline-flex items-start gap-1.5 break-all font-mono text-xs text-ink underline-offset-4 hover:underline dark:text-white"
                   >
                     <span>{url}</span>
                     <ExternalLinkIcon size={12} className="mt-0.5 shrink-0" />
@@ -118,7 +137,8 @@ function OverviewTab({ vuln }: { vuln: Vulnerability }) {
 function EvidenceBlock({ evidence }: { evidence: Evidence }) {
   return (
     <article className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+      {/* Bloco aninhado: inset de 16 px (mesmo dos passos de remediação), não os 20 px do cartão. */}
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
         <div className="flex min-w-0 items-center gap-2">
           <StatusPill label={EVIDENCE_KIND_LABEL[evidence.kind]} colorClass={NEUTRAL_PILL_CLASS} />
           <span className="truncate text-sm font-medium text-ink dark:text-white">{evidence.label}</span>
@@ -127,11 +147,9 @@ function EvidenceBlock({ evidence }: { evidence: Evidence }) {
           {formatDateTime(evidence.capturedAt)}
         </time>
       </header>
-      <div className="p-3">
-        <pre className="overflow-x-auto rounded-md bg-slate-50 p-3 font-mono text-xs text-slate-800 dark:bg-slate-950 dark:text-slate-200">
-          {evidence.content}
-        </pre>
-      </div>
+      <pre className="overflow-x-auto bg-slate-50 p-4 font-mono text-xs text-slate-800 dark:bg-slate-950 dark:text-slate-200">
+        {evidence.content}
+      </pre>
     </article>
   );
 }
@@ -179,7 +197,7 @@ function RemediationTab({ vuln }: { vuln: Vulnerability }) {
           <Mono>{vuln.fixedVersion}</Mono>
         </div>
       )}
-      <ol className="space-y-3">
+      <ol className="space-y-4">
         {steps.map((step) => (
           <li
             key={step.order}
@@ -352,9 +370,9 @@ export default function VulnDetailPage() {
     {
       label: 'CVSS v3.1',
       value: (
-        <span className="flex flex-col gap-0.5">
-          <span className="font-mono text-base font-semibold tabular-nums">{formatCvss(vuln.cvss.base)}</span>
-          <Mono breakAll>{vuln.cvss.vector}</Mono>
+        <span className="flex flex-col gap-1">
+          <span className="numeral text-xl leading-7">{formatCvss(vuln.cvss.base)}</span>
+          <CvssVector vector={vuln.cvss.vector} />
         </span>
       ),
     },
@@ -364,19 +382,21 @@ export default function VulnDetailPage() {
     {
       label: 'Hash do artefato',
       value: vuln.artifactHash ? (
-        <span className="flex items-start gap-1">
-          <Mono breakAll>{vuln.artifactHash}</Mono>
+        // Hex não tem ponto natural de quebra: o hash usa a largura toda (sem coluna reservada ao botão)
+        // e o "copiar" segue em linha, logo depois do último caractere.
+        <Mono breakAll>
+          {vuln.artifactHash}
           <Button
             variant="ghost"
             size="sm"
             aria-label="Copiar hash"
             title="Copiar hash"
-            className="-my-1.5 shrink-0"
+            className="-my-1.5 ml-1 align-middle"
             onClick={() => copyToClipboard(vuln.artifactHash ?? '', 'Hash copiado')}
           >
             <CopyIcon size={14} />
           </Button>
-        </span>
+        </Mono>
       ) : (
         EMPTY
       ),
@@ -435,9 +455,9 @@ export default function VulnDetailPage() {
         actions={
           <form
             onSubmit={(event) => void handleStatusSubmit(event)}
-            className="flex flex-wrap items-end gap-2"
+            className="flex flex-wrap items-end gap-3"
           >
-            <FormField label="Status" htmlFor="status" className="min-w-[180px]">
+            <FormField label="Status" htmlFor="status" className="min-w-[11rem]">
               <Select
                 id="status"
                 name="status"
@@ -469,8 +489,15 @@ export default function VulnDetailPage() {
         <Card title="Resumo" className="lg:col-span-1">
           <KeyValueList items={summaryItems} columns={1} />
         </Card>
-        <Card className="lg:col-span-2">
-          <Tabs items={tabs} aria-label="Detalhes da vulnerabilidade" />
+        <Card flush className="lg:col-span-2">
+          {/* As abas fazem o papel de cabeçalho do cartão: a barra vai de borda a borda e termina na mesma
+              altura da linha do cabeçalho de "Resumo" (py-4 + 20 de texto = 52 px); o primeiro rótulo
+              (px-3 do botão) cai no inset de 20 px, e o painel segue o corpo do cartão (p-5). */}
+          <Tabs
+            items={tabs}
+            aria-label="Detalhes da vulnerabilidade"
+            className="[&>[role=tablist]]:px-2 [&>[role=tablist]]:pt-2.5 [&>[role=tabpanel]]:p-5"
+          />
         </Card>
       </div>
     </div>

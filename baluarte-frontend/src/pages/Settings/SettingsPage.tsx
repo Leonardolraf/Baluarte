@@ -158,10 +158,10 @@ function ChangePasswordForm({ policy }: { policy: SecurityPolicy | null }) {
         </div>
       }
     >
-      <form id={CHANGE_PASSWORD_FORM_ID} noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form id={CHANGE_PASSWORD_FORM_ID} noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         <FormErrorBanner message={formError} />
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-5 sm:grid-cols-2">
           <FormField
             label="Senha atual"
             htmlFor="senhaAtual"
@@ -404,9 +404,9 @@ function SecurityPolicySection({
     body = <LoadingSpinner label="Carregando política de segurança…" />;
   } else if (loading && policy) {
     body = (
-      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2" aria-busy="true">
+      <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2" aria-busy="true">
         {Array.from({ length: 9 }, (_, index) => (
-          <div key={index} className="space-y-1.5">
+          <div key={index} className="space-y-1">
             <Skeleton className="h-3 w-32" />
             <Skeleton className="h-4 w-20" />
           </div>

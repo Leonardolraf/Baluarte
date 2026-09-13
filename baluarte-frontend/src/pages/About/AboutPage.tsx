@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_DESCRIPTION, ROLE_LABEL, ROLE_SEVERITY, ROUTE_ROLES, hasAnyRole } from '@/lib/roles';
 import { initials } from '@/lib/format';
 import {
+  BaluarteMark,
   Card,
   KeyValueList,
   LinkButton,
@@ -16,7 +17,7 @@ import {
   THead,
   Tr,
 } from '@/components';
-import { BugIcon, DashboardIcon, InfoIcon, MailIcon, ShieldIcon, type IconProps } from '@/components/icons';
+import { BugIcon, DashboardIcon, InfoIcon, MailIcon, type IconProps } from '@/components/icons';
 
 interface ModuleInfo {
   icon: ComponentType<IconProps>;
@@ -119,17 +120,12 @@ export default function AboutPage() {
   const ctaLabel = isAuthenticated ? 'Ir ao dashboard' : 'Entrar';
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8 px-4 py-10">
+    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6 lg:p-8">
       <section aria-labelledby="about-title" className="flex flex-col items-start gap-6 sm:flex-row">
-        <span
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-brand text-white"
-          aria-hidden="true"
-        >
-          <ShieldIcon size={34} />
-        </span>
+        <BaluarteMark size={64} />
         <div className="min-w-0">
           <p className="label-caps">Sobre o projeto</p>
-          <h1 id="about-title" className="mt-1 text-3xl font-bold tracking-tight text-ink dark:text-white">
+          <h1 id="about-title" className="display mt-1 text-[28px] leading-8 text-ink dark:text-white">
             Baluarte
           </h1>
           <p className="mt-3 text-base text-slate-600 dark:text-slate-300">
@@ -151,20 +147,20 @@ export default function AboutPage() {
         <h2 id="modules-title" className="text-lg font-semibold text-ink dark:text-white">
           O que o Baluarte faz
         </h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {MODULES.map((module) => {
             const Icon = module.icon;
             return (
               <Card key={module.title} as="article">
                 <span
-                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-soft text-brand dark:bg-slate-800 dark:text-blue-400"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-200 text-ink dark:bg-slate-700 dark:text-white"
                   aria-hidden="true"
                 >
                   <Icon size={20} />
                 </span>
                 <h3 className="mt-4 text-sm font-semibold text-ink dark:text-white">{module.title}</h3>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{module.description}</p>
-                <ul className="mt-3 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+                <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                   {module.highlights.map((item) => (
                     <li key={item} className="flex gap-2">
                       <span
@@ -210,7 +206,7 @@ export default function AboutPage() {
         </TableContainer>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title="Equipe" subtitle="Responsabilidades no projeto">
           <ul className="space-y-4">
             {TEAM.map((member) => (
@@ -242,7 +238,7 @@ export default function AboutPage() {
       <section
         role="note"
         aria-labelledby="scope-title"
-        className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-900"
+        className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm dark:border-slate-800 dark:bg-slate-900"
       >
         <span className="mt-0.5 shrink-0 text-slate-500 dark:text-slate-400" aria-hidden="true">
           <InfoIcon size={18} />

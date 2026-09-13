@@ -234,6 +234,8 @@ function FunnelCard({ funnel }: { funnel: FunnelStage[] }) {
 
 // ---- Por departamento -------------------------------------------------------
 
+// Cartão de meia largura: a taxa de clique é a coluna que importa; os contadores entram
+// conforme a largura ("Destinatários" a partir de xl, "Clicaram" a partir de 2xl).
 function DepartmentCard({ rows }: { rows: CampaignReport['byDepartment'] }) {
   return (
     <Card title="Por departamento" subtitle="Amostra dos destinatários listados" flush>
@@ -245,12 +247,16 @@ function DepartmentCard({ rows }: { rows: CampaignReport['byDepartment'] }) {
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-sm">
+          <Table dense>
             <THead>
               <tr>
                 <Th>Departamento</Th>
-                <Th align="right">Destinatários</Th>
-                <Th align="right">Clicaram</Th>
+                <Th align="right" className="hidden xl:table-cell">
+                  Destinatários
+                </Th>
+                <Th align="right" className="hidden 2xl:table-cell">
+                  Clicaram
+                </Th>
                 <Th>Taxa de clique</Th>
               </tr>
             </THead>
@@ -261,10 +267,10 @@ function DepartmentCard({ rows }: { rows: CampaignReport['byDepartment'] }) {
                 return (
                   <Tr key={row.department}>
                     <Td className="font-medium text-ink dark:text-white">{row.department}</Td>
-                    <Td align="right" className="tabular-nums">
+                    <Td align="right" className="hidden tabular-nums xl:table-cell">
                       {formatNumber(row.recipients)}
                     </Td>
-                    <Td align="right" className="tabular-nums">
+                    <Td align="right" className="hidden tabular-nums 2xl:table-cell">
                       {formatNumber(row.clicked)}
                     </Td>
                     <Td>
@@ -287,7 +293,7 @@ function DepartmentCard({ rows }: { rows: CampaignReport['byDepartment'] }) {
                 );
               })}
             </TBody>
-          </table>
+          </Table>
         </div>
       )}
     </Card>
@@ -302,11 +308,7 @@ function TimelineCard({ events }: { events: CampaignTimelineEvent[] }) {
     [events],
   );
   return (
-    <Card
-      title="Linha do tempo"
-      subtitle="Eventos da campanha, do mais recente ao mais antigo"
-      className="lg:col-span-2"
-    >
+    <Card title="Linha do tempo" subtitle="Eventos da campanha, do mais recente ao mais antigo">
       {ordered.length === 0 ? (
         <EmptyState
           compact
@@ -390,7 +392,7 @@ function RecipientsCard({
       subtitle={`${formatNumber(filtered.length)} de ${formatNumber(recipients.length)} destinatários listados`}
       flush
     >
-      <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+      <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
         <FormField label="Buscar destinatário" htmlFor="recipient-search" className="max-w-sm">
           <div className="relative">
             <SearchIcon
@@ -419,7 +421,7 @@ function RecipientsCard({
             <tr>
               <Th>Nome</Th>
               <Th>E-mail</Th>
-              <Th>Departamento</Th>
+              <Th className="hidden xl:table-cell">Departamento</Th>
               <Th>Etapa</Th>
               <Th>Treinamento</Th>
               <Th align="right">Ações</Th>
@@ -436,7 +438,7 @@ function RecipientsCard({
                   <Tr key={recipient.id}>
                     <Td className="font-medium text-ink dark:text-white">{recipient.name}</Td>
                     <Td mono>{recipient.email}</Td>
-                    <Td>{recipient.department}</Td>
+                    <Td className="hidden xl:table-cell">{recipient.department}</Td>
                     <Td>
                       <StagePill recipient={recipient} />
                     </Td>
@@ -515,7 +517,7 @@ export default function CampaignDetailPage() {
   const trainingId = campaign.trainingId ?? null;
 
   return (
-    <div className="space-y-6">
+    <>
       <PageHeader
         breadcrumbs={[{ label: 'Campanhas', to: '/campaigns' }, { label: campaign.name }]}
         title={campaign.name}
@@ -547,20 +549,23 @@ export default function CampaignDetailPage() {
         }
       />
 
-      <KpiRow metrics={campaign.metrics} />
+      <div className="space-y-6">
+        <KpiRow metrics={campaign.metrics} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <SummaryCard campaign={campaign} />
-        <ClickRateCard metrics={campaign.metrics} />
-        <FunnelCard funnel={report.funnel} />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <SummaryCard campaign={campaign} />
+          <ClickRateCard metrics={campaign.metrics} />
+          <FunnelCard funnel={report.funnel} />
+        </div>
+
+        {/* Meio a meio: a tabela por departamento não cabe em 1/3 nem escondendo colunas. */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <DepartmentCard rows={report.byDepartment} />
+          <TimelineCard events={report.timeline} />
+        </div>
+
+        <RecipientsCard recipients={report.recipients} trainingId={trainingId} />
       </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <DepartmentCard rows={report.byDepartment} />
-        <TimelineCard events={report.timeline} />
-      </div>
-
-      <RecipientsCard recipients={report.recipients} trainingId={trainingId} />
-    </div>
+    </>
   );
 }

@@ -41,6 +41,7 @@ import {
   LinkButton,
   LoadingSpinner,
   PageHeader,
+  Plate,
   SeverityBadge,
   StatCard,
   StatusPill,
@@ -386,83 +387,82 @@ export default function DashboardPage() {
       {/* Colaborador: o treinamento pendente é a ação principal — vem antes dos índices */}
       {isCollaborator && trainingCard}
 
-      {/* Linha 1 — gauges de risco */}
-      <div data-testid="risk-gauges" className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <div className="flex flex-col items-center gap-3 py-2 text-center">
-            <CircularGauge
-              value={data.technicalRisk}
-              label="Risco técnico"
-              colorScheme="tech"
-              size={200}
-              sublabel={`${formatNumber(kpis.openVulnerabilities)} vulnerabilidades abertas · ${formatNumber(kpis.criticalVulnerabilities)} críticas`}
+      {/* Placa de comando — os dois índices de risco e os seis indicadores num só bloco */}
+      <Plate data-testid="risk-gauges" aria-label="Índices de risco e indicadores">
+        <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:gap-8">
+          <CircularGauge
+            value={data.technicalRisk}
+            label="Risco técnico"
+            colorScheme="tech"
+            onDark
+            size={188}
+            sublabel={`${formatNumber(kpis.openVulnerabilities)} vulnerabilidades abertas · ${formatNumber(kpis.criticalVulnerabilities)} críticas`}
+          />
+          {/* Entre os dois medidores sobram ~490 px em 1280: duas colunas; três só em telas largas. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <StatCard
+              variant="plate"
+              label="Vulnerabilidades abertas"
+              value={formatNumber(kpis.openVulnerabilities)}
+              tone={kpis.openVulnerabilities > 0 ? 'critical' : 'neutral'}
+              icon={<BugIcon size={16} />}
+              href={manageHref('/vulnerabilities')}
             />
-            <p className="max-w-sm text-xs text-slate-500 dark:text-slate-400">
-              Índice calculado pela severidade ponderada das vulnerabilidades abertas por ativo monitorado.
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex flex-col items-center gap-3 py-2 text-center">
-            <CircularGauge
-              value={data.humanRisk}
-              label="Risco humano"
-              colorScheme="human"
-              size={200}
-              sublabel={
-                kpis.phishingResilience === null
-                  ? 'Resiliência a phishing: não medida'
-                  : `Resiliência a phishing: ${formatPercent(kpis.phishingResilience)}`
-              }
+            <StatCard
+              variant="plate"
+              label="Críticas"
+              value={formatNumber(kpis.criticalVulnerabilities)}
+              tone="critical"
+              icon={<XCircleIcon size={16} />}
+              href={manageHref('/vulnerabilities')}
             />
-            <p className="max-w-sm text-xs text-slate-500 dark:text-slate-400">
-              Índice calculado pelas taxas de clique e de submissão de credenciais nas simulações de phishing.
-            </p>
+            <StatCard
+              variant="plate"
+              label="Ativos monitorados"
+              value={formatNumber(kpis.monitoredAssets)}
+              icon={<ServerIcon size={16} />}
+            />
+            <StatCard
+              variant="plate"
+              label="Campanhas ativas"
+              value={formatNumber(kpis.activeCampaigns)}
+              icon={<MailIcon size={16} />}
+              href={manageHref('/campaigns')}
+            />
+            <StatCard
+              variant="plate"
+              label="Colaboradores treinados"
+              value={formatNumber(kpis.trainedCollaborators)}
+              icon={<GraduationIcon size={16} />}
+            />
+            <StatCard
+              variant="plate"
+              label="Resiliência a phishing"
+              value={kpis.phishingResilience === null ? '—' : formatPercent(kpis.phishingResilience)}
+              tone={resilienceMeasured ? resilienceSeverity(kpis.phishingResilience) : 'neutral'}
+              hint={resilienceMeasured ? undefined : 'Sem campanhas disparadas'}
+              icon={<ShieldIcon size={16} />}
+              href={manageHref('/campaigns')}
+            />
           </div>
-        </Card>
-      </div>
-
-      {/* Linha 2 — indicadores */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-        <StatCard
-          label="Vulnerabilidades abertas"
-          value={formatNumber(kpis.openVulnerabilities)}
-          tone={kpis.openVulnerabilities > 0 ? 'critical' : 'neutral'}
-          icon={<BugIcon size={18} />}
-          href={manageHref('/vulnerabilities')}
-        />
-        <StatCard
-          label="Críticas"
-          value={formatNumber(kpis.criticalVulnerabilities)}
-          tone="critical"
-          icon={<XCircleIcon size={18} />}
-          href={manageHref('/vulnerabilities')}
-        />
-        <StatCard
-          label="Ativos monitorados"
-          value={formatNumber(kpis.monitoredAssets)}
-          icon={<ServerIcon size={18} />}
-        />
-        <StatCard
-          label="Campanhas ativas"
-          value={formatNumber(kpis.activeCampaigns)}
-          icon={<MailIcon size={18} />}
-          href={manageHref('/campaigns')}
-        />
-        <StatCard
-          label="Colaboradores treinados"
-          value={formatNumber(kpis.trainedCollaborators)}
-          icon={<GraduationIcon size={18} />}
-        />
-        <StatCard
-          label="Resiliência a phishing"
-          value={kpis.phishingResilience === null ? '—' : formatPercent(kpis.phishingResilience)}
-          tone={resilienceMeasured ? resilienceSeverity(kpis.phishingResilience) : 'neutral'}
-          hint={resilienceMeasured ? undefined : 'Sem campanhas disparadas'}
-          icon={<ShieldIcon size={18} />}
-          href={manageHref('/campaigns')}
-        />
-      </div>
+          <CircularGauge
+            value={data.humanRisk}
+            label="Risco humano"
+            colorScheme="human"
+            onDark
+            size={188}
+            sublabel={
+              kpis.phishingResilience === null
+                ? 'Resiliência a phishing: não medida'
+                : `Resiliência a phishing: ${formatPercent(kpis.phishingResilience)}`
+            }
+          />
+        </div>
+        <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-relaxed text-slate-400">
+          Risco técnico: severidade ponderada das vulnerabilidades abertas por ativo monitorado. Risco humano:
+          taxas de clique e de submissão de credenciais nas simulações de phishing, medidas pessoa a pessoa.
+        </p>
+      </Plate>
 
       {/* Gestores: o treinamento pendente (se houver) vem depois dos indicadores */}
       {!isCollaborator && trainingCard}

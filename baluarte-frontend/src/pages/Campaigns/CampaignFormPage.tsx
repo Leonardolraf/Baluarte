@@ -239,10 +239,10 @@ export default function CampaignFormPage() {
               </div>
             }
           >
-            <div className="space-y-4">
+            <div className="space-y-5">
               <FormErrorBanner message={submitError} />
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-5 sm:grid-cols-2">
                 <FormField
                   label="Nome da campanha"
                   htmlFor="nome"
@@ -280,7 +280,7 @@ export default function CampaignFormPage() {
                       *
                     </span>
                   </legend>
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-3">
                     {CAMPAIGN_TEMPLATES.map((template) => {
                       const inputId = `template-${template}`;
                       const selected = selectedTemplate === template;
@@ -289,9 +289,9 @@ export default function CampaignFormPage() {
                           key={template}
                           htmlFor={inputId}
                           className={cn(
-                            'flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors',
+                            'flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-sm transition-colors',
                             selected
-                              ? 'border-brand bg-brand-soft/40 ring-1 ring-brand dark:bg-brand/10'
+                              ? 'border-ink bg-slate-50 ring-1 ring-ink dark:border-white dark:bg-white/5 dark:ring-white'
                               : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800',
                             templateError && !selected && 'border-severity-critical',
                           )}
@@ -300,7 +300,7 @@ export default function CampaignFormPage() {
                             id={inputId}
                             type="radio"
                             value={template}
-                            className="mt-0.5 h-4 w-4 shrink-0 border-slate-300 text-brand focus:ring-brand dark:border-slate-600 dark:bg-slate-900"
+                            className="mt-0.5 h-4 w-4 shrink-0 border-slate-300 text-ink focus:ring-ink dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:focus:ring-white"
                             {...register('template', {
                               validate: (value) => isCampaignTemplate(value) || 'Selecione um modelo.',
                             })}

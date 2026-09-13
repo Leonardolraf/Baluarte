@@ -3,6 +3,11 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from '@/App';
 import { AuthProvider } from '@/contexts/AuthContext';
+// Fontes servidas do próprio bundle (sem chamadas ao Google Fonts): ver DESIGN.md.
+import '@fontsource-variable/archivo/wdth.css';
+import '@fontsource-variable/ibm-plex-sans/standard.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
 import '@/styles/tailwind.css';
 
 const container = document.getElementById('root');

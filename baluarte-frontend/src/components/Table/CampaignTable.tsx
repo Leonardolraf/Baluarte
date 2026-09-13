@@ -42,6 +42,8 @@ import {
 
 // Tabela de campanhas de phishing: densa e neutra; a única cor de acento é a taxa de clique
 // (régua de severidade) — verde/laranja/vermelho vêm exclusivamente de `@/lib/severity`.
+// Prioridade de colunas: "Treinados" só a partir de xl e "Abertos" só a partir de 2xl — a 1280 px
+// as sete colunas não cabem no cartão e a "Agendada para" ficava cortada.
 
 export interface CampaignTableProps {
   items: Campaign[];
@@ -120,9 +122,9 @@ function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   const active = hasActiveFilters(filters);
 
   return (
-    <div className="border-b border-slate-200 p-4 dark:border-slate-800">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_10rem_10rem_10rem_auto] lg:items-end">
-        <FormField label="Buscar" htmlFor={queryId} className="sm:col-span-2 lg:col-span-1">
+    <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(0,1fr)_10rem_10rem_10rem_auto]">
+        <FormField label="Buscar" htmlFor={queryId} className="sm:col-span-2 xl:col-span-1">
           <div className="relative">
             <SearchIcon
               size={16}
@@ -180,7 +182,7 @@ function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
 
         <Button
           variant="outline"
-          className="h-[38px]"
+          className="justify-self-start"
           leftIcon={<CloseIcon size={14} />}
           disabled={!active}
           onClick={() => onFiltersChange(EMPTY_FILTERS)}
@@ -201,6 +203,8 @@ interface RateCellProps {
   textClass?: string;
   /** Classe de cor do preenchimento da barra (padrão neutro). */
   barClass?: string;
+  /** Classes extras da célula (ex.: visibilidade por breakpoint, igual ao `Th`). */
+  className?: string;
 }
 
 /** Percentual com mini barra de progresso horizontal. */
@@ -209,17 +213,18 @@ function RateCell({
   available,
   textClass = 'text-slate-700 dark:text-slate-200',
   barClass = 'bg-slate-500 dark:bg-slate-400',
+  className,
 }: RateCellProps) {
   if (!available) {
     return (
-      <Td align="right" className="text-slate-500 dark:text-slate-400">
+      <Td align="right" className={cn('text-slate-500 dark:text-slate-400', className)}>
         —
       </Td>
     );
   }
   const width = Math.max(0, Math.min(100, value));
   return (
-    <Td align="right">
+    <Td align="right" className={className}>
       <div className="flex items-center justify-end gap-2">
         <div
           className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
@@ -248,13 +253,13 @@ function SkeletonRow() {
       <Td align="right">
         <Skeleton className="ml-auto h-4 w-10" />
       </Td>
-      <Td align="right">
+      <Td align="right" className="hidden 2xl:table-cell">
         <Skeleton className="ml-auto h-4 w-28" />
       </Td>
       <Td align="right">
         <Skeleton className="ml-auto h-4 w-28" />
       </Td>
-      <Td align="right">
+      <Td align="right" className="hidden xl:table-cell">
         <Skeleton className="ml-auto h-4 w-28" />
       </Td>
       <Td>
@@ -277,7 +282,7 @@ function CampaignRow({ campaign, onClick }: CampaignRowProps) {
 
   return (
     <Tr interactive onClick={onClick} data-testid="campaign-row" data-id={campaign.id}>
-      <Td className="min-w-[16rem]">
+      <Td className="min-w-[12rem]">
         <div>
           {/* O link dá nome, papel e destino ao teclado/leitor de tela; o clique na linha fica para o mouse. */}
           <Link
@@ -306,14 +311,18 @@ function CampaignRow({ campaign, onClick }: CampaignRowProps) {
           de {formatNumber(metrics.recipients)}
         </div>
       </Td>
-      <RateCell value={metrics.openRate} available={sent} />
+      <RateCell value={metrics.openRate} available={sent} className="hidden 2xl:table-cell" />
       <RateCell
         value={metrics.clickRate}
         available={sent}
         textClass={SEVERITY_TEXT_CLASS[clickTone]}
         barClass={SEVERITY_DOT_CLASS[clickTone]}
       />
-      <RateCell value={metrics.trainedRate} available={hasClicks(campaign)} />
+      <RateCell
+        value={metrics.trainedRate}
+        available={hasClicks(campaign)}
+        className="hidden xl:table-cell"
+      />
       <Td className="whitespace-nowrap">
         <time dateTime={campaign.scheduledAt} title={formatRelative(campaign.scheduledAt)}>
           {formatDateTime(campaign.scheduledAt)}
@@ -391,7 +400,13 @@ export function CampaignTable({
               <Th align="right" sortable sorted={directionOf('sent')} onSort={() => toggle('sent')}>
                 Enviados
               </Th>
-              <Th align="right" sortable sorted={directionOf('openRate')} onSort={() => toggle('openRate')}>
+              <Th
+                align="right"
+                sortable
+                sorted={directionOf('openRate')}
+                onSort={() => toggle('openRate')}
+                className="hidden 2xl:table-cell"
+              >
                 Abertos
               </Th>
               <Th align="right" sortable sorted={directionOf('clickRate')} onSort={() => toggle('clickRate')}>
@@ -402,6 +417,7 @@ export function CampaignTable({
                 sortable
                 sorted={directionOf('trainedRate')}
                 onSort={() => toggle('trainedRate')}
+                className="hidden xl:table-cell"
               >
                 Treinados
               </Th>
