@@ -1,7 +1,7 @@
 import type { Router } from 'express';
 import { prisma } from '../db.js';
 import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
-import { enviar, erro, wrap, POLITICA_SENHA, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../util.js';
+import { enviar, erro, wrap, queryString, POLITICA_SENHA, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../util.js';
 
 // -----------------------------------------------------------------------------
 // Endpoints de LEITURA/AGREGACAO que alimentam as telas do frontend.
@@ -126,9 +126,12 @@ export function registerReadRoutes(r: Router) {
         distribuicaoSeveridade: sev,
         vulnerabilidadesRecentes: operador ? emAberto.slice(0, 5).map(mapFinding) : [],
         alertas: operador ? emAberto.slice(0, 3).map((f) => ({ id: f.id, severidade: f.severidade, texto: `${f.categoriaOwasp} em ${f.scan.asset.host}`, cvss: f.cvss, quando: f.criadoEm })) : [],
-        campanhas: campanhas.map(mapCampaign),
-        funil: ativa ? funilDe(ativa.eventos) : null,
-        campanhaAtiva: ativa ? ativa.nome : null,
+        // Metricas por campanha (nomes, taxa de clique, funil) sao dado de acesso
+        // restrito (RN-006): so Administrador/Analista. Colaborador ve apenas os
+        // indices agregados nos KPIs, nunca campanha a campanha.
+        campanhas: operador ? campanhas.map(mapCampaign) : [],
+        funil: operador && ativa ? funilDe(ativa.eventos) : null,
+        campanhaAtiva: operador && ativa ? ativa.nome : null,
       },
     });
   }));
@@ -148,7 +151,10 @@ export function registerReadRoutes(r: Router) {
   // ---- Vulnerabilidades (findings achatados) com filtros ?severidade= ?status= ?q= ----
   r.get('/vulnerabilidades', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
     let findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
-    const { severidade, status, q } = req.query as Record<string, string>;
+    // Coage a string: `?severidade[]=x` / `?q[$ne]=x` viram objeto/array no parser do Express.
+    const severidade = queryString(req.query.severidade);
+    const status = queryString(req.query.status);
+    const q = queryString(req.query.q);
     if (severidade) findings = findings.filter((f) => f.severidade.toLowerCase() === severidade.toLowerCase());
     if (status) findings = findings.filter((f) => f.status.toLowerCase() === status.toLowerCase());
     if (q) {

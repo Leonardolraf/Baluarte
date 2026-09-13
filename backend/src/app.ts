@@ -21,8 +21,13 @@ app.use(express.json({ limit: '64kb' }));
 
 // Erro de JSON malformado no corpo (espelha o contrato do stub: 400 JSON_INVALIDO).
 app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-  if (err && typeof err === 'object' && (err as { type?: string }).type === 'entity.parse.failed') {
+  const tipo = err && typeof err === 'object' ? (err as { type?: string }).type : undefined;
+  if (tipo === 'entity.parse.failed') {
     return erro(res, 400, 'JSON inválido no corpo da requisição', 'JSON_INVALIDO');
+  }
+  // Corpo acima do limite (express.json 64kb): 413 padronizado, sem HTML/stack do Express.
+  if (tipo === 'entity.too.large') {
+    return erro(res, 413, 'Corpo da requisição excede o limite permitido', 'CORPO_MUITO_GRANDE');
   }
   next(err);
 });

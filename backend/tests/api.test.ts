@@ -1,26 +1,25 @@
 // Testes de integracao da API (node:test + fetch) contra um SQLite ISOLADO
-// (prisma/test.db, recriado e semeado a cada execucao). Cobre as rotas adicionais
-// ao contrato da N2 AT1, o RBAC e as regras de conta. Rode com `npm test`.
+// (prisma/test-api.db, recriado e semeado a cada execucao — ver helpers.ts).
+// Cobre as rotas adicionais ao contrato da N2 AT1, o RBAC e as regras de conta.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import {
+  ADMIN,
+  ANALISTA,
+  SENHA_PROVISORIA,
+  chamar,
+  criarUsuario,
+  emailUnico,
+  encerrarServidor,
+  esperaErro,
+  iniciarServidor,
+  login,
+  prepararBanco,
+  type Resposta,
+} from './helpers.js';
 
-process.env.DATABASE_URL = 'file:./test.db';
-process.env.JWT_SECRET = 'segredo-somente-para-testes';
-process.env.NODE_ENV = 'test';
-// O canal de entrega do token de redefinicao em dev/demo e o log (opt-in).
-process.env.RESET_TOKEN_CONSOLE = '1';
-process.env.FRONTEND_URL = 'http://localhost:5173';
-
-function npx(args: string): void {
-  const r = spawnSync(`npx ${args}`, { shell: true, encoding: 'utf8', env: process.env });
-  if (r.status !== 0) throw new Error(`falha em "npx ${args}":\n${r.stdout}\n${r.stderr}`);
-}
-npx('prisma db push --force-reset --accept-data-loss --skip-generate');
-npx('tsx prisma/seed.ts');
+prepararBanco(import.meta.url);
 
 // Importados so depois de apontar DATABASE_URL para o banco de teste.
 const { app } = await import('../src/app.js');
@@ -28,65 +27,12 @@ const { prisma } = await import('../src/db.js');
 const { limparLimiteReset } = await import('../src/routes/manage.js');
 const { limparLimiteLogin } = await import('../src/routes/api.js');
 
-let server: Server;
-let base = '';
-
-type Resposta = { status: number; body: any; headers: Headers };
-
-async function chamar(
-  method: string,
-  path: string,
-  opts: { body?: unknown; token?: string } = {},
-): Promise<Resposta> {
-  const res = await fetch(base + path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
-    },
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-  });
-  const body = await res.json().catch(() => ({}));
-  return { status: res.status, body, headers: res.headers };
-}
-
-async function login(email: string, senha: string): Promise<string> {
-  const r = await chamar('POST', '/login', { body: { email, senha } });
-  assert.equal(r.status, 200, `login de ${email} falhou: ${JSON.stringify(r.body)}`);
-  return r.body.dados.token as string;
-}
-
-function esperaErro(r: Resposta, status: number, codigo: string): void {
-  assert.equal(r.status, status, `esperava ${status} ${codigo}, veio ${r.status} ${JSON.stringify(r.body)}`);
-  assert.equal(r.body.status, 'erro');
-  assert.equal(r.body.codigoErro, codigo);
-}
-
-let seq = 0;
-function emailUnico(prefixo: string): string {
-  seq += 1;
-  return `${prefixo}.${Date.now()}.${seq}@empresa.com`;
-}
-
-/** Cria um usuario pelo contrato (senha provisoria Mudar@123, status Pendente). */
-async function criarUsuario(token: string, perfil: string, prefixo = 'teste'): Promise<{ id: string; email: string }> {
-  const email = emailUnico(prefixo);
-  const r = await chamar('POST', '/users', { token, body: { nome: `Usuário ${prefixo}`, email, perfil } });
-  assert.equal(r.status, 201, JSON.stringify(r.body));
-  return { id: r.body.dados.idUsuario as string, email };
-}
-
-const SENHA_PROVISORIA = 'Mudar@123';
-
 before(async () => {
-  await new Promise<void>((resolve) => {
-    server = app.listen(0, '127.0.0.1', () => resolve());
-  });
-  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
+  await iniciarServidor(app);
 });
 
 after(async () => {
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await encerrarServidor();
   await prisma.$disconnect();
 });
 
@@ -94,14 +40,14 @@ after(async () => {
 
 describe('contrato N2 AT1 (smoke)', () => {
   it('login com credenciais do seed devolve token e perfil', async () => {
-    const r = await chamar('POST', '/login', { body: { email: 'analista@empresa.com', senha: 'Senha@123' } });
+    const r = await chamar('POST', '/login', { body: { email: ANALISTA.email, senha: ANALISTA.senha } });
     assert.equal(r.status, 200);
     assert.equal(r.body.dados.perfil, 'Analista');
     assert.match(r.body.dados.token, /^[\w-]+\.[\w-]+\.[\w-]+$/);
   });
 
   it('login com senha errada -> 401 CREDENCIAIS_INVALIDAS', async () => {
-    esperaErro(await chamar('POST', '/login', { body: { email: 'analista@empresa.com', senha: 'x' } }), 401, 'CREDENCIAIS_INVALIDAS');
+    esperaErro(await chamar('POST', '/login', { body: { email: ANALISTA.email, senha: 'x' } }), 401, 'CREDENCIAIS_INVALIDAS');
     limparLimiteLogin();
   });
 
@@ -127,13 +73,12 @@ describe('RBAC das rotas de escrita e leitura', () => {
   let admin: string;
   let analista: string;
   let colaborador: string;
-  let contaColaborador: { id: string; email: string };
 
   before(async () => {
-    admin = await login('admin@empresa.com', 'Admin@123');
-    analista = await login('analista@empresa.com', 'Senha@123');
-    contaColaborador = await criarUsuario(admin, 'Colaborador', 'rbac');
-    colaborador = await login(contaColaborador.email, SENHA_PROVISORIA);
+    admin = await login(ADMIN.email, ADMIN.senha);
+    analista = await login(ANALISTA.email, ANALISTA.senha);
+    const conta = await criarUsuario(admin, 'Colaborador', 'rbac');
+    colaborador = await login(conta.email, SENHA_PROVISORIA);
   });
 
   it('colaborador não opera a plataforma (varredura, ativo, campanha, usuário)', async () => {
@@ -181,7 +126,7 @@ describe('conta inativada perde o acesso', () => {
   let token: string;
 
   before(async () => {
-    admin = await login('admin@empresa.com', 'Admin@123');
+    admin = await login(ADMIN.email, ADMIN.senha);
     conta = await criarUsuario(admin, 'Analista', 'inativo');
     token = await login(conta.email, SENHA_PROVISORIA);
   });
@@ -214,21 +159,21 @@ describe('limite de tentativas de login', () => {
 
   it('bloqueia com 429 após 5 falhas na mesma conta e libera após um login válido', async () => {
     for (let i = 0; i < 5; i++) {
-      esperaErro(await chamar('POST', '/login', { body: { email: 'admin@empresa.com', senha: 'errada' } }), 401, 'CREDENCIAIS_INVALIDAS');
+      esperaErro(await chamar('POST', '/login', { body: { email: ADMIN.email, senha: 'errada' } }), 401, 'CREDENCIAIS_INVALIDAS');
     }
-    esperaErro(await chamar('POST', '/login', { body: { email: 'admin@empresa.com', senha: 'errada' } }), 429, 'MUITAS_TENTATIVAS');
+    esperaErro(await chamar('POST', '/login', { body: { email: ADMIN.email, senha: 'errada' } }), 429, 'MUITAS_TENTATIVAS');
     // Mesmo com a senha correta, a conta segue bloqueada na janela.
-    esperaErro(await chamar('POST', '/login', { body: { email: 'admin@empresa.com', senha: 'Admin@123' } }), 429, 'MUITAS_TENTATIVAS');
+    esperaErro(await chamar('POST', '/login', { body: { email: ADMIN.email, senha: ADMIN.senha } }), 429, 'MUITAS_TENTATIVAS');
     // Outra conta não é afetada (o limite é por e-mail).
-    assert.equal((await chamar('POST', '/login', { body: { email: 'analista@empresa.com', senha: 'Senha@123' } })).status, 200);
+    assert.equal((await chamar('POST', '/login', { body: { email: ANALISTA.email, senha: ANALISTA.senha } })).status, 200);
 
     limparLimiteLogin();
-    assert.equal((await chamar('POST', '/login', { body: { email: 'admin@empresa.com', senha: 'Admin@123' } })).status, 200);
+    assert.equal((await chamar('POST', '/login', { body: { email: ADMIN.email, senha: ADMIN.senha } })).status, 200);
   });
 
   it('e-mail inexistente responde igual a senha errada (sem revelar cadastro)', async () => {
     const a = await chamar('POST', '/login', { body: { email: 'ninguem@empresa.com', senha: 'Qualquer@1' } });
-    const b = await chamar('POST', '/login', { body: { email: 'admin@empresa.com', senha: 'Errada@1' } });
+    const b = await chamar('POST', '/login', { body: { email: ADMIN.email, senha: 'Errada@1' } });
     assert.equal(a.status, b.status);
     assert.equal(a.body.mensagem, b.body.mensagem);
     assert.equal(a.body.codigoErro, b.body.codigoErro);
@@ -242,7 +187,7 @@ describe('POST /auth/change-password', () => {
   let token: string;
 
   before(async () => {
-    admin = await login('admin@empresa.com', 'Admin@123');
+    admin = await login(ADMIN.email, ADMIN.senha);
     conta = await criarUsuario(admin, 'Colaborador', 'senha');
     token = await login(conta.email, SENHA_PROVISORIA);
   });
@@ -292,7 +237,7 @@ describe('POST /auth/reset-password (+ /confirm)', () => {
   let conta: { id: string; email: string };
 
   before(async () => {
-    admin = await login('admin@empresa.com', 'Admin@123');
+    admin = await login(ADMIN.email, ADMIN.senha);
     conta = await criarUsuario(admin, 'Analista', 'reset');
     limparLimiteReset();
   });
@@ -385,7 +330,7 @@ describe('GET/PUT /configuracoes/notificacoes', () => {
   let token: string;
 
   before(async () => {
-    admin = await login('admin@empresa.com', 'Admin@123');
+    admin = await login(ADMIN.email, ADMIN.senha);
     const conta = await criarUsuario(admin, 'Colaborador', 'prefs');
     token = await login(conta.email, SENHA_PROVISORIA);
   });
@@ -432,8 +377,8 @@ describe('treinamento pós-clique', () => {
   let intruso: string;
 
   before(async () => {
-    admin = await login('admin@empresa.com', 'Admin@123');
-    analista = await login('analista@empresa.com', 'Senha@123');
+    admin = await login(ADMIN.email, ADMIN.senha);
+    analista = await login(ANALISTA.email, ANALISTA.senha);
     colaborador = await criarUsuario(admin, 'Colaborador', 'treino');
     tokenColaborador = await login(colaborador.email, SENHA_PROVISORIA);
     const outroColab = await criarUsuario(admin, 'Colaborador', 'intruso');
@@ -490,8 +435,8 @@ describe('PATCH/DELETE /users/:id (Administrador)', () => {
   let alvo: { id: string; email: string };
 
   before(async () => {
-    admin = await login('admin@empresa.com', 'Admin@123');
-    analista = await login('analista@empresa.com', 'Senha@123');
+    admin = await login(ADMIN.email, ADMIN.senha);
+    analista = await login(ANALISTA.email, ANALISTA.senha);
     alvo = await criarUsuario(admin, 'Colaborador', 'alvo');
   });
 
@@ -504,7 +449,7 @@ describe('PATCH/DELETE /users/:id (Administrador)', () => {
     esperaErro(await chamar('PATCH', '/users/nao-existe', { token: admin, body: { nome: 'X' } }), 404, 'USUARIO_NAO_ENCONTRADO');
     esperaErro(await chamar('PATCH', `/users/${alvo.id}`, { token: admin, body: { nome: '  ' } }), 400, 'NOME_OBRIGATORIO');
     esperaErro(await chamar('PATCH', `/users/${alvo.id}`, { token: admin, body: { email: 'invalido' } }), 400, 'EMAIL_INVALIDO');
-    esperaErro(await chamar('PATCH', `/users/${alvo.id}`, { token: admin, body: { email: 'analista@empresa.com' } }), 409, 'EMAIL_DUPLICADO');
+    esperaErro(await chamar('PATCH', `/users/${alvo.id}`, { token: admin, body: { email: ANALISTA.email } }), 409, 'EMAIL_DUPLICADO');
     // Duplicidade ignora maiúsculas: senão nasceriam duas contas para o mesmo e-mail.
     esperaErro(await chamar('PATCH', `/users/${alvo.id}`, { token: admin, body: { email: 'Analista@Empresa.com' } }), 409, 'EMAIL_DUPLICADO');
     esperaErro(await chamar('PATCH', `/users/${alvo.id}`, { token: admin, body: { perfil: 'Root' } }), 400, 'PERFIL_INVALIDO');
@@ -540,7 +485,7 @@ describe('PATCH/DELETE /users/:id (Administrador)', () => {
     // O segundo administrador restaura u-000; depois u-000 remove o segundo.
     const tokenSegundo = await login(segundo.email, SENHA_PROVISORIA);
     assert.equal((await chamar('PATCH', '/users/u-000', { token: tokenSegundo, body: { perfil: 'Administrador' } })).status, 200);
-    admin = await login('admin@empresa.com', 'Admin@123');
+    admin = await login(ADMIN.email, ADMIN.senha);
     assert.equal((await chamar('DELETE', `/users/${segundo.id}`, { token: admin })).status, 200);
   });
 
@@ -564,7 +509,7 @@ describe('vulnerabilidades: status "Risco aceito"', () => {
   let findingId: string;
 
   before(async () => {
-    analista = await login('analista@empresa.com', 'Senha@123');
+    analista = await login(ANALISTA.email, ANALISTA.senha);
     const scan = await prisma.scan.create({ data: { assetId: 'ativo-001', status: 'CONCLUIDA', concluidoEm: new Date() } });
     const finding = await prisma.finding.create({
       data: { scanId: scan.id, categoriaOwasp: 'A03:2021 - Injection', cvss: 9.8, severidade: 'Crítico', descricao: 'Teste', evidencia: 'Teste', status: 'Aberta' },
@@ -603,8 +548,8 @@ describe('campanhas: destinatarios[] e exclusão', () => {
   let colaborador: string;
 
   before(async () => {
-    analista = await login('analista@empresa.com', 'Senha@123');
-    const admin = await login('admin@empresa.com', 'Admin@123');
+    analista = await login(ANALISTA.email, ANALISTA.senha);
+    const admin = await login(ADMIN.email, ADMIN.senha);
     const conta = await criarUsuario(admin, 'Colaborador', 'campanha');
     colaborador = await login(conta.email, SENHA_PROVISORIA);
   });

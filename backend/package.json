@@ -8,12 +8,13 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/api.test.ts",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
     "db:push": "prisma db push",
     "db:reset": "prisma db push --force-reset",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "test:seguranca": "node --import tsx --test \"tests/seguranca/**/*.test.ts\""
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

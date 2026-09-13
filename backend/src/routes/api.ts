@@ -10,6 +10,7 @@ import {
   enviar,
   wrap,
   vazio,
+  textoPreenchido,
   emailFormatoValido,
   hostValido,
   faixaCvss,
@@ -77,7 +78,7 @@ function gerarFindings(): typeof CATALOGO_FINDINGS {
 apiRouter.post('/login', wrap(async (req, res) => {
   const { email, senha } = req.body ?? {};
   if (vazio(email)) return erro(res, 400, 'E-mail é obrigatório', 'EMAIL_OBRIGATORIO');
-  if (vazio(senha)) return erro(res, 400, 'Senha é obrigatória', 'SENHA_OBRIGATORIA');
+  if (typeof senha !== 'string' || vazio(senha)) return erro(res, 400, 'Senha é obrigatória', 'SENHA_OBRIGATORIA');
   if (!emailFormatoValido(email)) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
 
   const chave = normalizarEmail(email);
@@ -127,7 +128,7 @@ apiRouter.post('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
 // ---- POST /api/assets (Administrador/Analista) -------------------------------
 apiRouter.post('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
   const { nome, tipo, host } = req.body ?? {};
-  if (vazio(nome)) return erro(res, 400, 'Nome do ativo é obrigatório', 'NOME_OBRIGATORIO');
+  if (!textoPreenchido(nome)) return erro(res, 400, 'Nome do ativo é obrigatório', 'NOME_OBRIGATORIO');
   if (!TIPOS_ATIVO.includes(tipo)) return erro(res, 400, 'Tipo de ativo inválido', 'TIPO_INVALIDO');
   if (!hostValido(host)) return erro(res, 400, 'Host inválido', 'HOST_INVALIDO');
 
@@ -146,7 +147,7 @@ apiRouter.post('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(async (re
 // ---- POST /api/users (Administrador/Analista; so Administrador cria Administrador) ----
 apiRouter.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
   const { nome, email, perfil } = req.body ?? {};
-  if (vazio(nome)) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
+  if (!textoPreenchido(nome)) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
   if (!emailFormatoValido(email)) return erro(res, 400, 'Email inválido', 'EMAIL_INVALIDO');
   if (!PERFIS.includes(perfil)) return erro(res, 400, 'Perfil inválido', 'PERFIL_INVALIDO');
   if (perfil === 'Administrador' && usuarioDe(req).perfil !== 'Administrador')
@@ -169,7 +170,7 @@ apiRouter.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
 // (o frontend novo envia os dois; o Postman/Robot continuam enviando so o primeiro).
 apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
   const { nome, destinatario, destinatarios, template } = req.body ?? {};
-  if (vazio(nome)) return erro(res, 400, 'Nome da campanha é obrigatório', 'NOME_OBRIGATORIO');
+  if (!textoPreenchido(nome)) return erro(res, 400, 'Nome da campanha é obrigatório', 'NOME_OBRIGATORIO');
 
   const brutos: unknown[] = Array.isArray(destinatarios) && destinatarios.length > 0 ? destinatarios : [destinatario];
   const lista: string[] = [];

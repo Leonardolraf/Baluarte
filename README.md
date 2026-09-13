@@ -54,7 +54,7 @@ npm run dev
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração** (node:test, SQLite isolado `test.db`) | `backend/tests/` | `cd backend && npm test` | 38 testes: contrato (smoke), RBAC por perfil, conta inativada, limite de tentativas de login, senha, redefinição (token de uso único, expiração, sessões encerradas), notificações, treinamento, usuários, "Risco aceito", campanhas com vários destinatários e exclusão |
+| **API — integração + pentest** (node:test, SQLite isolado por arquivo) | `backend/tests/` | `cd backend && npm test` | 144 testes. Integração (38): contrato, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento, usuários, "Risco aceito", campanhas. Segurança (106, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
 | **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 321 testes |
@@ -86,6 +86,8 @@ Relatórios em `e2e/resultados/report.html` e `log.html`.
 **Conta e administração:** `POST /auth/change-password` · `POST /auth/reset-password` (+ `/confirm`, token de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min; redefinir encerra as sessões abertas antes) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo) · `DELETE /campanhas/:id` (Administrador/Analista)
 
 Erros seguem o envelope `{ status: "erro", mensagem, codigoErro, timestamp }`; sucessos, `{ status: "sucesso", mensagem?, dados, resumo? }`. Toda rota de escrita fora do contrato registra em `AuditLog`.
+
+As suítes de segurança em `backend/tests/seguranca/` exercitam a API com payloads reais (injeção, tokens adulterados, força bruta, corpos malformados); os achados que elas revelaram foram corrigidos no backend (coerção de query string, validação de tipo em campos obrigatórios, senha só como string, corpo grande com envelope 413, e o dashboard do colaborador sem métricas por campanha — RN-006).
 
 ### RBAC efetivo (verificado no servidor, não só na interface)
 
