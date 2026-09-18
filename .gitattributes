@@ -23,6 +23,7 @@ Dockerfile text eol=lf
 *.yml text eol=lf
 
 # Precisa vir DEPOIS da regra global (em .gitattributes a última regra vence):
-# a evidência gerada pelo Robot é versionada byte a byte e fica fora da
-# normalização, que reescreveria ~3 MB sem mudar conteúdo algum.
+# a evidência gerada pelo Robot é versionada byte a byte, então o git nunca
+# converte a terminação de linha desses artefatos — nem no commit, nem no
+# checkout. Não é código para o Prettier/ESLint olharem.
 testes/ui/*/resultados/** -text
