@@ -21,7 +21,9 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse, onClose }: Si
   const groups = navGroupsForRole(user?.role);
 
   return (
-    <div className="flex h-full flex-col bg-ink text-slate-300">
+    // `ink` e `slate-950` são a mesma cor: no tema escuro a barra sobe para slate-900
+    // (superfície da barra superior) para não se fundir com o fundo da página.
+    <div className="flex h-full flex-col bg-ink text-slate-300 dark:border-r dark:border-slate-800 dark:bg-slate-900">
       {/* Mesma altura da barra superior (56 px): a linha horizontal atravessa a tela inteira. */}
       <div
         className={cn(

@@ -14,11 +14,13 @@ const AboutPage = lazy(() => import('@/pages/About/AboutPage'));
 const DashboardPage = lazy(() => import('@/pages/Dashboard/DashboardPage'));
 const VulnListPage = lazy(() => import('@/pages/Vulnerabilities/VulnListPage'));
 const VulnDetailPage = lazy(() => import('@/pages/Vulnerabilities/VulnDetailPage'));
+const AssetListPage = lazy(() => import('@/pages/Assets/AssetListPage'));
 const AssetFormPage = lazy(() => import('@/pages/Assets/AssetFormPage'));
 const CampaignListPage = lazy(() => import('@/pages/Campaigns/CampaignListPage'));
 const CampaignFormPage = lazy(() => import('@/pages/Campaigns/CampaignFormPage'));
 const CampaignDetailPage = lazy(() => import('@/pages/Campaigns/CampaignDetailPage'));
 const TrainingPage = lazy(() => import('@/pages/Training/TrainingPage'));
+const TrainedCollaboratorsPage = lazy(() => import('@/pages/Training/TrainedCollaboratorsPage'));
 const UserManagementPage = lazy(() => import('@/pages/Users/UserManagementPage'));
 const UserFormPage = lazy(() => import('@/pages/Users/UserFormPage'));
 const SettingsPage = lazy(() => import('@/pages/Settings/SettingsPage'));
@@ -42,7 +44,7 @@ function NotFound() {
  * Hierarquia de rotas.
  *  - Públicas: /login, /reset-password, /about
  *  - Protegidas (qualquer perfil): /dashboard, /training/:id, /settings
- *  - Admin + Analista: /vulnerabilities, /vulnerabilities/:id, /assets/new, /campaigns, /campaigns/new, /campaigns/:id
+ *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /trainings, /campaigns[/new|/:id]
  *  - Admin: /users, /users/new, /users/:id/edit
  */
 export const routes: RouteObject[] = [
@@ -68,7 +70,9 @@ export const routes: RouteObject[] = [
             children: [
               { path: '/vulnerabilities', element: page(<VulnListPage />) },
               { path: '/vulnerabilities/:id', element: page(<VulnDetailPage />) },
+              { path: '/assets', element: page(<AssetListPage />) },
               { path: '/assets/new', element: page(<AssetFormPage />) },
+              { path: '/trainings', element: page(<TrainedCollaboratorsPage />) },
               { path: '/campaigns', element: page(<CampaignListPage />) },
               { path: '/campaigns/new', element: page(<CampaignFormPage />) },
               { path: '/campaigns/:id', element: page(<CampaignDetailPage />) },

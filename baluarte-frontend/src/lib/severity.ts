@@ -232,6 +232,13 @@ export const ASSET_STATUS_LABEL: Record<AssetStatus, string> = {
   inactive: 'Inativo',
 };
 
+export const ASSET_STATUS_CLASS: Record<AssetStatus, string> = {
+  active:
+    'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-950/60 dark:text-green-300 dark:ring-green-500/30',
+  inactive:
+    'bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-500/30',
+};
+
 export const USER_STATUS_LABEL: Record<UserStatus, string> = {
   active: 'Ativo',
   inactive: 'Inativo',

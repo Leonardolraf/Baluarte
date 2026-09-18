@@ -4,6 +4,7 @@ import { ROUTE_ROLES } from '@/lib/roles';
 import {
   BugIcon,
   DashboardIcon,
+  GraduationIcon,
   MailIcon,
   PlusIcon,
   ServerIcon,
@@ -42,7 +43,8 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: <BugIcon />,
         roles: ROUTE_ROLES.vulnerabilities,
       },
-      { to: '/assets/new', label: 'Cadastrar ativo', icon: <ServerIcon />, roles: ROUTE_ROLES.assets },
+      { to: '/assets', label: 'Ativos', icon: <ServerIcon />, roles: ROUTE_ROLES.assets, end: true },
+      { to: '/assets/new', label: 'Cadastrar ativo', icon: <PlusIcon />, roles: ROUTE_ROLES.assets },
     ],
   },
   {
@@ -50,6 +52,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/campaigns', label: 'Campanhas', icon: <MailIcon />, roles: ROUTE_ROLES.campaigns, end: true },
       { to: '/campaigns/new', label: 'Nova campanha', icon: <PlusIcon />, roles: ROUTE_ROLES.campaigns },
+      {
+        to: '/trainings',
+        label: 'Treinamentos',
+        icon: <GraduationIcon />,
+        roles: ROUTE_ROLES.trainings,
+        end: true,
+      },
     ],
   },
   {

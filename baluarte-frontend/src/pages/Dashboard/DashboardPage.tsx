@@ -421,6 +421,7 @@ export default function DashboardPage() {
               label="Ativos monitorados"
               value={formatNumber(kpis.monitoredAssets)}
               icon={<ServerIcon size={16} />}
+              href={manageHref('/assets')}
             />
             <StatCard
               variant="plate"
@@ -434,6 +435,7 @@ export default function DashboardPage() {
               label="Colaboradores treinados"
               value={formatNumber(kpis.trainedCollaborators)}
               icon={<GraduationIcon size={16} />}
+              href={manageHref('/trainings')}
             />
             <StatCard
               variant="plate"

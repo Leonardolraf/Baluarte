@@ -92,7 +92,8 @@ const AREA_LABEL: Record<Area, string> = {
   vulnerabilities: 'Vulnerabilidades',
   assets: 'Ativos',
   campaigns: 'Campanhas',
-  training: 'Treinamentos',
+  training: 'Treinamento próprio',
+  trainings: 'Colaboradores treinados',
   users: 'Usuários',
   settings: 'Configurações',
 };
@@ -103,6 +104,7 @@ const AREAS: readonly Area[] = [
   'assets',
   'campaigns',
   'training',
+  'trainings',
   'users',
   'settings',
 ];
