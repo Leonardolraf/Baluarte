@@ -7,8 +7,16 @@
 # testes/ui/*/stub/ NAO entram aqui: aqueles foram escritos a mao.
 testes/ui/*/resultados/** linguist-generated=true
 
-# Arquivos consumidos dentro de containers Linux: sempre LF, mesmo em checkout no Windows
-# (CRLF quebra shebang, continuação de linha em RUN e diretivas do nginx).
+# Todo arquivo de texto fica LF também no working tree, em qualquer sistema.
+# O repositório já guarda LF, mas com core.autocrlf=true o checkout no Windows
+# entrega CRLF — e o Prettier (endOfLine: "lf") marca cada linha de cada arquivo,
+# o que torna `npm run lint --max-warnings=0` impossível de passar localmente.
+# Binários (PNG etc.) são detectados por `text=auto` e não são tocados.
+* text=auto eol=lf
+
+# Redundante com a linha acima, mas mantido explícito: estes arquivos são
+# consumidos dentro de containers Linux e CRLF quebra shebang, continuação de
+# linha em RUN e diretivas do nginx.
 *.sh text eol=lf
 Dockerfile text eol=lf
 *.conf text eol=lf
