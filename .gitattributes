@@ -21,3 +21,8 @@ testes/ui/*/resultados/** linguist-generated=true
 Dockerfile text eol=lf
 *.conf text eol=lf
 *.yml text eol=lf
+
+# Precisa vir DEPOIS da regra global (em .gitattributes a última regra vence):
+# a evidência gerada pelo Robot é versionada byte a byte e fica fora da
+# normalização, que reescreveria ~3 MB sem mudar conteúdo algum.
+testes/ui/*/resultados/** -text
