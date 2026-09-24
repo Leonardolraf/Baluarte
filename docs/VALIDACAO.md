@@ -39,6 +39,22 @@ Versões: Expo SDK 57 (`expo 57.0.24`), React Native 0.86.3, React 19.2.3, React
 - **Testes sem depender da data:** o "hoje" dos testes é fixo (23/09/2026); as suítes passaram 82/82 também com o relógio deslocado para 01/11/2026 e 15/01/2027.
 - **Fluxo no navegador (375×812, Chrome headless):** login com `admin@empresa.com` → Home (Total 5) → Detalhes da "Simulação Q3 – Financeiro" → Ver material de treinamento → voltar → Nova campanha → modelo Autoridade → lista de grupos → RH → nome da campanha → Agendar campanha → aviso "Campanha agendada com sucesso" → Detalhes da campanha nova ("Grupo-alvo: RH · Modelo: Autoridade", destinatários "Não recebeu") → Home com a campanha nova e "Total 6". A validação do formulário também foi exercitada (sem nome: "Informe o nome da campanha."). Nenhum erro de página ou de console. As telas foram comparadas com as capturas do Figma em `docs/referencias/`.
 
+## Independência (repositório sozinho)
+
+O commit `0af8181` foi clonado numa pasta isolada, fora da pasta onde os dois apps foram desenvolvidos, e testado do zero:
+
+| Passo | Resultado |
+|---|---|
+| `git clone` | 162 arquivos versionados, sem `node_modules` |
+| `npm ci` | 794 pacotes instalados |
+| `npm run typecheck` | ok |
+| `npx jest --ci` | 14 suítes, 82 testes |
+| `npx expo export --platform web` | ok |
+| `npx expo-doctor` | 21/21 |
+| fluxo completo no navegador, usando o `dist/` gerado no clone | ok, sem erros de página ou de console |
+
+Nenhum import ou asset aponta para fora da pasta do app (318 imports relativos conferidos), e os dados vêm de cópias locais em `src/data/` — o app não lê nada do repositório do produto web em tempo de execução. O Baluarte Mobile não depende do [GamePlay-App](https://github.com/Leonardolraf/GamePlay-App), e os dois podem rodar ao mesmo tempo: os scripts fixam o Metro na porta 8083 (Baluarte) e 8082 (GamePlay), fora da 8081 usada pelo Docker do Baluarte.
+
 ## Limites
 
 - O app não foi aberto num aparelho com o Expo Go (não havia aparelho no ambiente). O lado nativo está coberto pelos testes (jest-expo) e pela compilação do bundle Hermes; a primeira abertura no celular é a prova final.
