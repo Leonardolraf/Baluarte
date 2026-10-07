@@ -176,7 +176,7 @@ test.describe('Modo real (backend Express)', () => {
     await page.locator('#email').fill(email);
     await page.locator('#perfil').selectOption('collaborator');
     await page.getByRole('button', { name: 'Salvar' }).click();
-    await expect(toast(page, 'Usuário cadastrado com sucesso')).toBeVisible();
+    await expect(toast(page, 'Usuário cadastrado e convite enviado')).toBeVisible();
     await expect(page).toHaveURL(/\/users$/);
 
     const row = page.getByRole('row').filter({ hasText: email });
@@ -284,11 +284,11 @@ test.describe('Modo real (backend Express)', () => {
     await expect(page.getByText(/Se o e-mail estiver cadastrado/)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Continuar para a redefinição' })).toHaveCount(0);
 
+    // A página confere o link na API (/auth/link/verificar) antes de mostrar o formulário.
     await page.goto('/reset-password?token=nao-existe');
-    await page.locator('#novaSenha').fill('Nova@1234');
-    await page.locator('#confirmarSenha').fill('Nova@1234');
-    await page.locator('#btnRedefinir').click();
+    await expect(page.getByRole('heading', { name: 'Link inválido ou expirado' })).toBeVisible();
     await expect(page.locator('#mensagem')).toContainText(/inválido ou expirou/);
+    await expect(page.locator('#novaSenha')).toHaveCount(0);
   });
 
   test('colaborador não vê as telas técnicas (RBAC do backend, não só da interface)', async ({
