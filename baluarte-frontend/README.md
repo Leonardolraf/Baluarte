@@ -103,6 +103,7 @@ VITE_USE_MOCKS=
 | `/dashboard` | Visão geral de risco (2 gauges, KPIs, vulnerabilidades e campanhas recentes, linha do tempo, treinamento pendente) | todos |
 | `/vulnerabilities`, `/vulnerabilities/:id` | Lista com filtros/ordenação/paginação; detalhe com abas Visão geral · Evidências · Remediação · Histórico | Admin, Analista |
 | `/assets/new` | Cadastro de ativo | Admin, Analista |
+| `/scans` | Varreduras: iniciar por ativo e acompanhar o status (Em fila → Em andamento → Concluída), com consulta automática a cada 3 s enquanto houver varredura em curso | Admin, Analista |
 | `/campaigns`, `/campaigns/new`, `/campaigns/:id` | Campanhas de phishing: lista, criação, relatório (KPIs, funil, gauge de cliques, destinatários) | Admin, Analista |
 | `/training/:id` | Treinamento contextual pós-clique (marcar como concluído) | todos |
 | `/users`, `/users/new`, `/users/:id/edit` | Gestão de usuários e perfis | Admin |

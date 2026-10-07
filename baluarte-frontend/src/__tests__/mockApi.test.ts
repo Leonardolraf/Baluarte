@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configureMocks, getMockConfig, mockApi, resetMockState } from '@/mocks/api';
 import { MOCK_CAMPAIGNS, MOCK_CREDENTIALS, MOCK_USERS } from '@/mocks/data';
 import { tokenStorage, userStorage } from '@/lib/storage';
@@ -294,6 +294,58 @@ describe('mockApi — ativos e varreduras', () => {
     expect(scan).toMatchObject({ assetId: active.id, status: 'queued', findingsCount: 0 });
     const scans = await mockApi.listScans();
     expect(scans[0]?.id).toBe(scan.id);
+  });
+
+  describe('ciclo da varredura (B21)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('avança Em fila → Em andamento → Concluída pelo tempo e só então gera os achados', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-07T12:00:00Z'));
+      await loginAs('analyst');
+      const active = (await mockApi.listAssets()).find((a) => a.status === 'active' && a.id !== 'asset-005')!;
+      const before = (await mockApi.listVulnerabilities()).items.filter(
+        (v) => v.assetId === active.id,
+      ).length;
+      const scan = await mockApi.startScan(active.id);
+      const find = async () => (await mockApi.listScans()).find((s) => s.id === scan.id)!;
+
+      expect((await find()).status).toBe('queued');
+      vi.setSystemTime(new Date('2026-10-07T12:00:06Z'));
+      expect((await find()).status).toBe('running');
+      expect((await mockApi.listVulnerabilities()).items.filter((v) => v.assetId === active.id)).toHaveLength(
+        before,
+      );
+
+      vi.setSystemTime(new Date('2026-10-07T12:00:30Z'));
+      const done = await find();
+      expect(done).toMatchObject({
+        status: 'completed',
+        durationSec: 20,
+        finishedAt: '2026-10-07T12:00:20.000Z',
+      });
+      expect(done.findingsCount).toBeGreaterThanOrEqual(2);
+      const after = (await mockApi.listVulnerabilities()).items.filter((v) => v.assetId === active.id);
+      expect(after).toHaveLength(before + done.findingsCount);
+      // Leituras seguintes não geram achados de novo.
+      await mockApi.listScans();
+      expect((await mockApi.listVulnerabilities()).items.filter((v) => v.assetId === active.id)).toHaveLength(
+        after.length,
+      );
+    });
+
+    it('recusa segunda varredura no mesmo ativo enquanto a primeira não conclui (RN-003)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-07T12:00:00Z'));
+      await loginAs('analyst');
+      const active = (await mockApi.listAssets()).find((a) => a.status === 'active' && a.id !== 'asset-005')!;
+      await mockApi.startScan(active.id);
+      await expectHttp(mockApi.startScan(active.id), 409, 'VARREDURA_EM_ANDAMENTO');
+      vi.setSystemTime(new Date('2026-10-07T12:00:21Z'));
+      await expect(mockApi.startScan(active.id)).resolves.toMatchObject({ status: 'queued' });
+    });
   });
 });
 

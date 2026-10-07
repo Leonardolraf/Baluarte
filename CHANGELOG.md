@@ -113,6 +113,17 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 - **B02** (commit anterior) — `GET /scans` só para Administrador/Analista; a política de segurança deixa de afirmar log imutável e retenção de 12 meses.
 - **Testes** — 200 no backend (7 banco + 80 integração + 113 pentest).
 
+## 2026-10-07 — Varredura com status que anda (B21)
+
+A varredura continua **simulada**, mas deixa de ficar "na fila" para sempre.
+
+- **Status pelo tempo decorrido** — `EM_FILA` nos primeiros 5 s, `EM_ANDAMENTO` até 20 s, `CONCLUIDA` depois (`backend/src/varredura.ts`). Não há timer depois da resposta: a API também roda como função serverless na Vercel, que congela ao responder. A transição é calculada e **gravada na leitura** (`GET /scans`, `/dashboard`, `/vulnerabilidades` e antes de criar uma varredura), com `concluidoEm` = criação + 20 s.
+- **Achados só na conclusão** — antes eram gravados no `POST /scans`, junto com a varredura em fila. Agora nascem quando a varredura conclui, dentro de uma transação que só uma leitura concorrente vence (sem achado duplicado); varredura antiga que já tinha achados conclui sem ganhar outros. Assim nenhuma lista nem indicador precisa filtrar "achado de varredura não concluída".
+- **Uma varredura por vez no ativo (RN-003)** — `POST /scans` recusa com `409 VARREDURA_EM_ANDAMENTO` enquanto a anterior não conclui; a linha do ativo é travada na criação (`SELECT … FOR UPDATE`), então pedidos simultâneos criam uma só. As validações do contrato (400/404/422) vêm antes. A collection do Newman e as suítes Robot foram conferidas: o Newman cria uma única varredura com sucesso (`ativo-001`) por execução e o Robot não cria nenhuma, então o contrato segue igual (`dados.statusVarredura === 'EM_FILA'`). Rodar o Newman duas vezes em menos de 20 s no mesmo banco daria 409 no CT-S1 — o README já exige banco limpo a cada execução.
+- **Frontend** — tela nova **Varreduras** (`/scans`, Administrador/Analista, na barra lateral): inicia a varredura de um ativo ativo (o que já está em curso aparece desabilitado), mostra status, duração e achados (só na conclusão, com link para as vulnerabilidades do host) e consulta de novo a cada 3 s, sem piscar a tela, enquanto houver varredura em curso. A camada mock espelha o ciclo, os achados na conclusão e o 409.
+- **Sem mudança de schema** — o `CHECK` já aceitava os três status.
+- **Testes** — 205 no backend (eram 194): `tests/varredura.test.ts` (transições com `criadoEm` recuado no banco, sem dormir; concluir direto da fila; leituras simultâneas; bloqueio, simultaneidade e ordem das validações). 329 no frontend (eram 324): ciclo e 409 na camada mock, tela com consulta automática, auditoria axe de `/scans`.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -120,7 +131,7 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 200 no backend (7 banco + 80 integração + 113 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 211 no backend (7 banco + 91 integração + 113 pentest) · 329 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

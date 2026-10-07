@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { RBACRole } from '@/types';
 import { ROUTE_ROLES } from '@/lib/roles';
 import {
+  ActivityIcon,
   BugIcon,
   DashboardIcon,
   GraduationIcon,
@@ -45,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       { to: '/assets', label: 'Ativos', icon: <ServerIcon />, roles: ROUTE_ROLES.assets, end: true },
       { to: '/assets/new', label: 'Cadastrar ativo', icon: <PlusIcon />, roles: ROUTE_ROLES.assets },
+      { to: '/scans', label: 'Varreduras', icon: <ActivityIcon />, roles: ROUTE_ROLES.scans, end: true },
     ],
   },
   {

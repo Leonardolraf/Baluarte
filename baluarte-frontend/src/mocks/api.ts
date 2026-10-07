@@ -123,6 +123,8 @@ interface MockState {
   sequence: number;
   /** Campanhas criadas nesta sessão: só elas têm métricas derivadas dos próprios destinatários. */
   runtimeCampaigns: Set<string>;
+  /** Varreduras iniciadas nesta sessão: só elas avançam de status pelo tempo (as do seed ficam como estão). */
+  runtimeScans: Set<string>;
 }
 
 function clone<T>(value: T): T {
@@ -152,6 +154,7 @@ function createState(): MockState {
     resetTokens: new Map<string, string>([['demo-reset-1', 'colaborador@empresa.com']]),
     sequence: 1000,
     runtimeCampaigns: new Set<string>(),
+    runtimeScans: new Set<string>(),
   };
 }
 
@@ -245,6 +248,69 @@ function emptySeverityMap(): Record<Severity, number> {
 
 function isOpen(v: Vulnerability): boolean {
   return v.status !== 'resolved' && v.status !== 'accepted';
+}
+
+// ---- Varredura simulada (espelha backend/src/varredura.ts) ------------------
+// O status sai do tempo decorrido desde o início, avaliado na leitura: em fila nos
+// primeiros 5 s, em andamento até 20 s, concluída depois. Os achados nascem na conclusão.
+export const SCAN_QUEUE_MS = 5_000;
+export const SCAN_DURATION_MS = 20_000;
+
+function scanStatusByTime(startedAt: string, now: number): ScanReport['status'] {
+  const elapsed = now - new Date(startedAt).getTime();
+  if (elapsed >= SCAN_DURATION_MS) return 'completed';
+  if (elapsed >= SCAN_QUEUE_MS) return 'running';
+  return 'queued';
+}
+
+/** Achados da varredura concluída: 2 ou 3 tipos distintos do catálogo de demonstração, no ativo varrido. */
+function generateScanFindings(scan: ScanReport, at: string): Vulnerability[] {
+  const pool = MOCK_VULNERABILITIES.filter((v, i, all) => all.findIndex((x) => x.title === v.title) === i);
+  const count = Math.min(pool.length, 2 + Math.floor(Math.random() * 2));
+  const picked: Vulnerability[] = [];
+  for (let i = 0; i < count; i++) picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]!);
+  return picked.map((template) => {
+    const id = nextId('vuln');
+    return {
+      ...clone(template),
+      id,
+      status: 'open',
+      assetId: scan.assetId,
+      assetName: scan.assetName,
+      assetHost: scan.assetHost,
+      detectedAt: at,
+      updatedAt: at,
+      evidence: template.evidence.map((e, n) => ({ ...clone(e), id: `${id}-e${n}`, capturedAt: at })),
+      history: [{ id: `${id}-h1`, at, actor: scan.scanner, action: 'detected' }],
+    };
+  });
+}
+
+/** Grava o status que o tempo já determinou (e os achados de quem concluiu). */
+function advanceScans(now = Date.now()): void {
+  for (const scan of state.scans) {
+    if (!state.runtimeScans.has(scan.id) || scan.status === 'completed') continue;
+    const status = scanStatusByTime(scan.startedAt, now);
+    if (status !== 'completed') {
+      scan.status = status;
+      continue;
+    }
+    const finishedAt = new Date(new Date(scan.startedAt).getTime() + SCAN_DURATION_MS).toISOString();
+    const findings = generateScanFindings(scan, finishedAt);
+    state.vulnerabilities.unshift(...findings);
+    const bySeverity = emptySeverityMap();
+    for (const f of findings) bySeverity[f.severity] += 1;
+    scan.status = status;
+    scan.finishedAt = finishedAt;
+    scan.durationSec = SCAN_DURATION_MS / 1000;
+    scan.findingsCount = findings.length;
+    scan.findingsBySeverity = bySeverity;
+    pushTimeline({
+      kind: 'scan',
+      title: 'Varredura concluída',
+      description: `${scan.assetName} (${scan.assetHost}) · ${findings.length} achados`,
+    });
+  }
 }
 
 const SEVERITY_WEIGHT: Record<Severity, number> = { critical: 10, high: 6, medium: 3, low: 1, info: 0 };
@@ -491,6 +557,7 @@ export const mockApi: BaluarteApi = {
       // Colaboradores veem os índices e KPIs, mas não a lista técnica de achados nem as
       // métricas por campanha — mesma fronteira que /vulnerabilidades e /campanhas impõem.
       const manager = user.role === 'admin' || user.role === 'analyst';
+      advanceScans();
       const vulns = state.vulnerabilities;
       const open = vulns.filter(isOpen);
       const severityDistribution = emptySeverityMap();
@@ -568,6 +635,7 @@ export const mockApi: BaluarteApi = {
   async listAssets(): Promise<Asset[]> {
     return simulate(() => {
       requireUser();
+      advanceScans();
       return state.assets.map((a) => ({
         ...a,
         openFindings: state.vulnerabilities.filter((v) => v.assetId === a.id && isOpen(v)).length,
@@ -616,6 +684,7 @@ export const mockApi: BaluarteApi = {
   async listScans(): Promise<ScanReport[]> {
     return simulate(() => {
       requireUser();
+      advanceScans();
       return [...state.scans].sort(
         (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
       );
@@ -630,6 +699,14 @@ export const mockApi: BaluarteApi = {
     if (!asset) throw new HttpError(404, 'ATIVO_NAO_ENCONTRADO', 'Ativo não encontrado');
     if (asset.status !== 'active')
       throw new HttpError(422, 'ATIVO_INATIVO', 'Varredura não permitida: ativo está inativo');
+    // RN-003: uma varredura por vez no mesmo ativo.
+    advanceScans();
+    if (state.scans.some((s) => s.assetId === asset.id && (s.status === 'queued' || s.status === 'running')))
+      throw new HttpError(
+        409,
+        'VARREDURA_EM_ANDAMENTO',
+        'Já existe uma varredura em andamento para este ativo',
+      );
     const scan: ScanReport = {
       id: nextId('scan'),
       assetId: asset.id,
@@ -644,6 +721,7 @@ export const mockApi: BaluarteApi = {
       findingsBySeverity: emptySeverityMap(),
     };
     state.scans.unshift(scan);
+    state.runtimeScans.add(scan.id);
     asset.lastScanAt = scan.startedAt;
     pushTimeline({
       kind: 'scan',
@@ -658,6 +736,7 @@ export const mockApi: BaluarteApi = {
     return simulate(() => {
       const user = requireUser();
       requireRole(user, ['admin', 'analyst']);
+      advanceScans();
       let items = [...state.vulnerabilities];
       if (filters.severity && filters.severity !== 'all')
         items = items.filter((v) => v.severity === filters.severity);

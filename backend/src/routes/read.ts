@@ -4,6 +4,7 @@ import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { lerRemediacao } from '../catalogo.js';
 import { mapUsuario, SELECT_USUARIO } from '../usuarios.js';
 import { enviar, erro, wrap, queryString, POLITICA_SENHA, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../util.js';
+import { avancarVarreduras } from '../varredura.js';
 
 // -----------------------------------------------------------------------------
 // Endpoints de LEITURA/AGREGACAO que alimentam as telas do frontend.
@@ -111,6 +112,7 @@ export function registerReadRoutes(r: Router) {
   r.get('/dashboard', exigeToken, wrap(async (req, res) => {
     // Colaborador recebe so indices e KPIs; a lista tecnica de achados fica com Administrador/Analista.
     const operador = OPERADORES.includes(usuarioDe(req).perfil);
+    await avancarVarreduras();
     const findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
     // "Resolvida" e "Risco aceito" saem dos KPIs, dos alertas e da lista de recentes.
     const emAberto = findings.filter((f) => !encerrado(f));
@@ -152,13 +154,16 @@ export function registerReadRoutes(r: Router) {
 
   // ---- Varreduras ----
   // Lista tecnica (nome e endereco dos ativos): so quem opera a plataforma (RN-006).
+  // O status (e os achados) avancam pelo tempo decorrido, gravados aqui na leitura (src/varredura.ts).
   r.get('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
+    await avancarVarreduras();
     const scans = await prisma.scan.findMany({ include: { asset: true, _count: { select: { findings: true } } }, orderBy: { criadoEm: 'desc' } });
     enviar(res, 200, { status: 'sucesso', dados: scans });
   }));
 
   // ---- Vulnerabilidades (findings achatados) com filtros ?severidade= ?status= ?q= ----
   r.get('/vulnerabilidades', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
+    await avancarVarreduras();
     let findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
     // Coage a string: `?severidade[]=x` / `?q[$ne]=x` viram objeto/array no parser do Express.
     const severidade = queryString(req.query.severidade);

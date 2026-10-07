@@ -16,6 +16,7 @@ const VulnListPage = lazy(() => import('@/pages/Vulnerabilities/VulnListPage'));
 const VulnDetailPage = lazy(() => import('@/pages/Vulnerabilities/VulnDetailPage'));
 const AssetListPage = lazy(() => import('@/pages/Assets/AssetListPage'));
 const AssetFormPage = lazy(() => import('@/pages/Assets/AssetFormPage'));
+const ScanListPage = lazy(() => import('@/pages/Scans/ScanListPage'));
 const CampaignListPage = lazy(() => import('@/pages/Campaigns/CampaignListPage'));
 const CampaignFormPage = lazy(() => import('@/pages/Campaigns/CampaignFormPage'));
 const CampaignDetailPage = lazy(() => import('@/pages/Campaigns/CampaignDetailPage'));
@@ -44,7 +45,7 @@ function NotFound() {
  * Hierarquia de rotas.
  *  - Públicas: /login, /reset-password, /definir-senha, /about
  *  - Protegidas (qualquer perfil): /dashboard, /training/:id, /settings
- *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /trainings, /campaigns[/new|/:id]
+ *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /scans, /trainings, /campaigns[/new|/:id]
  *  - Admin: /users, /users/new, /users/:id/edit
  */
 export const routes: RouteObject[] = [
@@ -74,6 +75,7 @@ export const routes: RouteObject[] = [
               { path: '/vulnerabilities/:id', element: page(<VulnDetailPage />) },
               { path: '/assets', element: page(<AssetListPage />) },
               { path: '/assets/new', element: page(<AssetFormPage />) },
+              { path: '/scans', element: page(<ScanListPage />) },
               { path: '/trainings', element: page(<TrainedCollaboratorsPage />) },
               { path: '/campaigns', element: page(<CampaignListPage />) },
               { path: '/campaigns/new', element: page(<CampaignFormPage />) },

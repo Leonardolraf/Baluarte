@@ -6,7 +6,7 @@ import { emailEmUso, localizarPorEmail, normalizarEmail, resolverDepartamento } 
 import { gerarTokenLink, hashToken } from '../tokens.js';
 import { emitirLinkConta, hashSemSenha } from '../conta.js';
 import { registrarAuditoria } from '../audit.js';
-import { CATALOGO_ACHADOS, dadosAchado, type ChaveAchado } from '../catalogo.js';
+import { avancarVarreduras } from '../varredura.js';
 import { registerReadRoutes } from './read.js';
 import { registerManageRoutes } from './manage.js';
 import {
@@ -59,17 +59,6 @@ export async function limparLimiteLogin(): Promise<void> {
   await prisma.loginFailure.deleteMany();
 }
 
-// Varredura simulada: sorteia de 2 a 4 tipos distintos do catalogo (src/catalogo.ts).
-function gerarFindings() {
-  const qtd = 2 + Math.floor(Math.random() * 3);
-  const chaves = Object.keys(CATALOGO_ACHADOS) as ChaveAchado[];
-  const escolhidos: ChaveAchado[] = [];
-  for (let i = 0; i < qtd && chaves.length; i++) {
-    escolhidos.push(chaves.splice(Math.floor(Math.random() * chaves.length), 1)[0]);
-  }
-  return escolhidos.map(dadosAchado);
-}
-
 // ---- POST /api/login --------------------------------------------------------
 apiRouter.post('/login', wrap(async (req, res) => {
   const { email, senha } = req.body ?? {};
@@ -115,11 +104,19 @@ apiRouter.post('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
   if (!ativo) return erro(res, 404, 'Ativo não encontrado', 'ATIVO_NAO_ENCONTRADO');
   if (ativo.status !== 'Ativo') return erro(res, 422, 'Varredura não permitida: ativo está inativo', 'ATIVO_INATIVO');
 
-  const scan = await prisma.scan.create({ data: { assetId: ativo.id, status: 'EM_FILA' } });
-  // Varredura simulada: gera achados realistas ligados ao scan.
-  await prisma.finding.createMany({
-    data: gerarFindings().map((f) => ({ ...f, scanId: scan.id })),
+  // RN-003: uma varredura por vez no mesmo ativo. Antes de checar, grava o status que o
+  // tempo ja determinou (a anterior pode ter concluido sem ninguem ter lido).
+  await avancarVarreduras();
+  const scan = await prisma.$transaction(async (tx) => {
+    // Trava a linha do ativo: duas criacoes simultaneas no mesmo ativo ficam em fila aqui.
+    await tx.$queryRaw`SELECT id FROM "Asset" WHERE id = ${ativo.id} FOR UPDATE`;
+    const emCurso = await tx.scan.findFirst({ where: { assetId: ativo.id, status: { not: 'CONCLUIDA' } } });
+    if (emCurso) return null;
+    // Varredura simulada: os achados so nascem na conclusao (src/varredura.ts).
+    return tx.scan.create({ data: { assetId: ativo.id, status: 'EM_FILA' } });
   });
+  if (!scan)
+    return erro(res, 409, 'Já existe uma varredura em andamento para este ativo', 'VARREDURA_EM_ANDAMENTO');
 
   return enviar(res, 201, {
     status: 'sucesso',

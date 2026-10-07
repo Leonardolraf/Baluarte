@@ -60,6 +60,7 @@ const PAGES: Array<{ path: string; role: RBACRole | null; ready: string | RegExp
   { path: '/vulnerabilities/vuln-001', role: 'analyst', ready: /CVE-|A0\d:2021/ },
   { path: '/assets', role: 'analyst', ready: 'Ativos monitorados' },
   { path: '/assets/new', role: 'analyst', ready: /Cadastrar ativo/ },
+  { path: '/scans', role: 'analyst', ready: 'Histórico' },
   { path: '/trainings', role: 'analyst', ready: 'Colaboradores treinados' },
   { path: '/campaigns', role: 'analyst', ready: 'Campanhas de phishing' },
   { path: '/campaigns/camp-001', role: 'analyst', ready: 'Simulação Q3 – Financeiro' },

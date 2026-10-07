@@ -91,6 +91,7 @@ const AREA_LABEL: Record<Area, string> = {
   dashboard: 'Dashboard',
   vulnerabilities: 'Vulnerabilidades',
   assets: 'Ativos',
+  scans: 'Varreduras',
   campaigns: 'Campanhas',
   training: 'Treinamento próprio',
   trainings: 'Colaboradores treinados',
