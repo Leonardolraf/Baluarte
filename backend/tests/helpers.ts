@@ -41,7 +41,9 @@ export function prepararBanco(testFileUrl: string): void {
   const url = new URL(base);
   if (!HOSTS_LOCAIS.has(url.hostname))
     throw new Error(`os testes recriam bancos: recusando o servidor nao local "${url.hostname}" (use TEST_DATABASE_URL local)`);
-  url.pathname = `/baluarte_test_${nome}`;
+  // TEST_DB_PREFIXO separa execucoes simultaneas (ex.: dois worktrees rodando a suite ao mesmo tempo).
+  const prefixo = (process.env.TEST_DB_PREFIXO ?? '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
+  url.pathname = `/baluarte_test_${prefixo}${nome}`;
   process.env.DATABASE_URL = url.toString();
   process.env.DIRECT_URL = url.toString();
   process.env.JWT_SECRET = 'segredo-somente-para-testes';
