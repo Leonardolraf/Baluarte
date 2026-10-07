@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { RBACRole, User, UserInput, UserStatus } from '@/types';
 import { RBAC_ROLES } from '@/types';
-import { api, FEATURES, USE_MOCKS } from '@/services/api';
+import { api, FEATURES } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { useAuth } from '@/contexts/AuthContext';
 import { notify, trackOperation } from '@/store/uiStore';
@@ -120,8 +120,16 @@ export default function UserFormPage() {
 
     try {
       if (id) await trackOperation(api.updateUser(id, input));
-      else await trackOperation(api.createUser(input));
-      notify.success(editing ? 'Usuário atualizado' : 'Usuário cadastrado com sucesso');
+      else {
+        const criado = await trackOperation(api.createUser(input));
+        // O cadastro vale mesmo se o e-mail falhar: avisa para reenviar pela lista.
+        if (!criado.inviteSent) {
+          notify.error('Usuário cadastrado, mas o convite não pôde ser enviado. Reenvie pela lista.');
+          navigate('/users');
+          return;
+        }
+      }
+      notify.success(editing ? 'Usuário atualizado' : 'Usuário cadastrado e convite enviado');
       navigate('/users');
     } catch (err) {
       const apiError = toApiError(err);
@@ -229,16 +237,12 @@ export default function UserFormPage() {
             {!editing && (
               <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                 <Icons.InfoIcon size={16} className="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500" />
-                {USE_MOCKS ? (
-                  <p>
-                    Ambiente de demonstração: a senha inicial é{' '}
-                    <code className="font-mono text-xs">Mudar@123</code> e o usuário fica{' '}
-                    <strong className="font-medium text-ink dark:text-white">Pendente</strong> até o primeiro
-                    acesso.
-                  </p>
-                ) : (
-                  <p>O usuário receberá as instruções de acesso pelo administrador.</p>
-                )}
+                <p>
+                  A conta é criada como{' '}
+                  <strong className="font-medium text-ink dark:text-white">Pendente</strong> e recebe um
+                  convite por e-mail para criar a própria senha. Não existe senha provisória; enquanto o
+                  convite não for aceito, o acesso fica bloqueado.
+                </p>
               </div>
             )}
 

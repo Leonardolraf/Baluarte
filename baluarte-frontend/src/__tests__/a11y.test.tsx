@@ -52,6 +52,7 @@ const PAGES: Array<{ path: string; role: RBACRole | null; ready: string | RegExp
   { path: '/login', role: null, ready: 'Entrar no Baluarte' },
   { path: '/reset-password', role: null, ready: /Redefinir|senha/i },
   { path: '/reset-password?token=demo-reset-1', role: null, ready: 'Criar nova senha' },
+  { path: '/definir-senha?token=nao-existe', role: null, ready: 'Link inválido ou expirado' },
   { path: '/about', role: null, ready: /Baluarte/ },
   { path: '/dashboard', role: 'admin', ready: 'Visão geral de risco' },
   { path: '/dashboard', role: 'collaborator', ready: 'Visão geral de risco' },

@@ -42,7 +42,7 @@ function NotFound() {
 
 /**
  * Hierarquia de rotas.
- *  - Públicas: /login, /reset-password, /about
+ *  - Públicas: /login, /reset-password, /definir-senha, /about
  *  - Protegidas (qualquer perfil): /dashboard, /training/:id, /settings
  *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /trainings, /campaigns[/new|/:id]
  *  - Admin: /users, /users/new, /users/:id/edit
@@ -53,6 +53,8 @@ export const routes: RouteObject[] = [
     children: [
       { path: '/login', element: page(<LoginPage />) },
       { path: '/reset-password', element: page(<ResetPasswordPage />) },
+      // Link do convite por e-mail: mesma tela, com o texto de primeira senha.
+      { path: '/definir-senha', element: page(<ResetPasswordPage />) },
       { path: '/about', element: page(<AboutPage />) },
     ],
   },

@@ -403,8 +403,12 @@ describe('mockApi — usuários', () => {
       department: 'TI',
     });
     expect(created).toMatchObject({ email: 'novo@empresa.com', status: 'pending', department: 'TI' });
-    // Senha temporária documentada funciona.
-    await expect(mockApi.login({ email: 'novo@empresa.com', password: 'Mudar@123' })).resolves.toBeTruthy();
+    // Não existe mais senha provisória: a conta nasce Pendente e só o convite dá senha.
+    expect(created.inviteSent).toBe(true);
+    await expect(mockApi.login({ email: 'novo@empresa.com', password: 'Mudar@123' })).rejects.toMatchObject({
+      status: 401,
+      code: 'CREDENCIAIS_INVALIDAS',
+    });
 
     const updated = await mockApi.updateUser(created.id, {
       name: 'Novo Nome',

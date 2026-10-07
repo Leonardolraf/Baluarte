@@ -1,4 +1,5 @@
 import type {
+  AccountLink,
   Asset,
   AssetInput,
   AssetType,
@@ -182,10 +183,11 @@ export interface BackendSecurityPolicy {
   sessao: {
     algoritmoToken: string;
     expiracaoMinutos: number;
+    sessaoMaximaHoras: number;
     limiteTentativasLogin: number;
     doisFatores: boolean;
   };
-  auditoria: { logImutavel: boolean; retencaoMeses: number };
+  auditoria: { registraAcoes: boolean; logImutavel: boolean; retencaoMeses: number | null };
 }
 
 // ---- Mapas de valores -------------------------------------------------------
@@ -611,10 +613,28 @@ export function toSecurityPolicy(raw: BackendSecurityPolicy): SecurityPolicy {
     requireNumberAndSymbol: raw.politicaSenha.exigirNumeroEspecial,
     tokenAlgorithm: raw.sessao.algoritmoToken,
     sessionExpirationMinutes: raw.sessao.expiracaoMinutos,
+    sessionMaxHours: raw.sessao.sessaoMaximaHoras,
     loginAttemptLimit: raw.sessao.limiteTentativasLogin,
     twoFactorEnabled: raw.sessao.doisFatores,
+    auditRegistersActions: raw.auditoria.registraAcoes,
     auditLogImmutable: raw.auditoria.logImutavel,
-    auditRetentionMonths: raw.auditoria.retencaoMeses,
+    auditRetentionMonths: raw.auditoria.retencaoMeses ?? null,
+  };
+}
+
+export interface BackendAccountLink {
+  tipo: string;
+  nome: string;
+  email: string;
+  expiraEm: string;
+}
+
+export function toAccountLink(raw: BackendAccountLink): AccountLink {
+  return {
+    kind: String(raw.tipo).toUpperCase() === 'CONVITE' ? 'invite' : 'reset',
+    name: raw.nome,
+    email: raw.email,
+    expiresAt: raw.expiraEm,
   };
 }
 

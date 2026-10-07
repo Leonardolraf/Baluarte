@@ -12,6 +12,9 @@ import { AuthContext, useAuth, type AuthContextValue, type AuthStatus } from '@/
 export { useAuth };
 export type { AuthContextValue, AuthStatus };
 
+/** Intervalo de renovacao do token enquanto a pessoa usa o sistema. */
+const RENOVACAO_MS = 10 * 60 * 1000;
+
 interface SessionState {
   status: AuthStatus;
   token: string | null;
@@ -56,9 +59,20 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
   });
 
   const logout = useCallback((reason?: string) => {
+    // Sair encerra a sessao no servidor: todo token emitido antes disso deixa de valer,
+    // em qualquer dispositivo. Se a chamada falhar (token ja invalido, rede fora), sair
+    // localmente continua valendo — por isso o catch silencioso.
+    if (tokenStorage.get()) void api.logout().catch(() => undefined);
     clearSession();
     setSession({ status: 'anonymous', token: null, user: null });
     if (reason) notify.info(reason);
+  }, []);
+
+  /** Guarda um token novo sem recriar a sessao (troca de senha e renovacao). */
+  const replaceToken = useCallback((token: string) => {
+    if (!token) return;
+    tokenStorage.set(token);
+    setSession((current) => (current.status === 'authenticated' ? { ...current, token } : current));
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials): Promise<AuthUser> => {
@@ -136,6 +150,33 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
     return () => window.removeEventListener(FORBIDDEN_EVENT, handler);
   }, []);
 
+  // Renovação enquanto há uso: a sessão expira com 30 min parada, então renovar a cada
+  // 10 min de atividade basta. Sessão parada não é renovada de propósito — é o que a
+  // política publicada em /configuracoes/seguranca promete. O teto de 8 h desde o login
+  // é do servidor: lá a renovação falha com 401 e o efeito acima derruba a sessão.
+  useEffect(() => {
+    if (session.status !== 'authenticated') return;
+    let houveUso = false;
+    const marcar = () => {
+      houveUso = true;
+    };
+    window.addEventListener('pointerdown', marcar);
+    window.addEventListener('keydown', marcar);
+    const interval = window.setInterval(() => {
+      if (!houveUso) return;
+      houveUso = false;
+      api
+        .renewSession()
+        .then(replaceToken)
+        .catch(() => undefined);
+    }, RENOVACAO_MS);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('pointerdown', marcar);
+      window.removeEventListener('keydown', marcar);
+    };
+  }, [session.status, replaceToken]);
+
   // Expiração do token em tempo real (checa a cada 30 s).
   useEffect(() => {
     if (session.status !== 'authenticated' || !session.token) return;
@@ -154,10 +195,11 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
       isAuthenticated: session.status === 'authenticated',
       login,
       logout,
+      replaceToken,
       updateUser,
       hasRole: (...roles: RBACRole[]) => hasAnyRole(session.user?.role, roles),
     }),
-    [session, login, logout, updateUser],
+    [session, login, logout, replaceToken, updateUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

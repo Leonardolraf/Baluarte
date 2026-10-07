@@ -1,5 +1,6 @@
-import type { BaluarteApi, MessageResponse } from '@/services/contract';
+import type { BaluarteApi, ChangePasswordResult, MessageResponse } from '@/services/contract';
 import type {
+  AccountLink,
   Asset,
   AssetInput,
   AuthUser,
@@ -11,11 +12,13 @@ import type {
   CampaignReport,
   CampaignTimelineEvent,
   ChangePasswordInput,
+  CreatedUser,
   DashboardMetrics,
   FunnelStage,
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
+  RBACRole,
   ScanReport,
   SecurityPolicy,
   Severity,
@@ -144,7 +147,9 @@ function createState(): MockState {
     timeline: clone(MOCK_TIMELINE),
     notificationPreferences: clone(MOCK_NOTIFICATION_PREFERENCES),
     securityPolicy: clone(MOCK_SECURITY_POLICY),
-    resetTokens: new Map<string, string>(),
+    // Link de demonstração sempre válido: a tela de criar senha confere o token na API
+    // antes de pedir a senha, então sem um token conhecido não há como mostrar o fluxo.
+    resetTokens: new Map<string, string>([['demo-reset-1', 'colaborador@empresa.com']]),
     sequence: 1000,
     runtimeCampaigns: new Set<string>(),
   };
@@ -360,6 +365,11 @@ function pushTimeline(event: Omit<TimelineEvent, 'id' | 'at'>): void {
 
 // ---- Implementação ----------------------------------------------------------
 
+/** Token da sessao mock, usado pelo login, pela renovacao e pela troca de senha. */
+function emitirToken(user: { id: string; email: string; name: string; role: RBACRole }): string {
+  return buildMockToken({ sub: user.id, email: user.email, name: user.name, role: user.role });
+}
+
 export const mockApi: BaluarteApi = {
   // ---- Autenticação ----
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
@@ -376,6 +386,13 @@ export const mockApi: BaluarteApi = {
     }
     if (user.status === 'inactive') {
       throw new HttpError(403, 'USUARIO_INATIVO', 'Usuário inativo. Contate o administrador.');
+    }
+    if (user.status === 'pending') {
+      throw new HttpError(
+        403,
+        'CONTA_PENDENTE',
+        'Conta ainda não ativada. Crie sua senha pelo link do convite.',
+      );
     }
     user.lastLoginAt = nowIso();
     const token = buildMockToken({ sub: user.id, email: user.email, name: user.name, role: user.role });
@@ -427,7 +444,7 @@ export const mockApi: BaluarteApi = {
     return { message: 'Senha redefinida com sucesso.' };
   },
 
-  async changePassword(input: ChangePasswordInput): Promise<MessageResponse> {
+  async changePassword(input: ChangePasswordInput): Promise<ChangePasswordResult> {
     await delay();
     const user = requireUser();
     const current = state.passwords.get(user.email.toLowerCase());
@@ -440,7 +457,31 @@ export const mockApi: BaluarteApi = {
       throw new HttpError(400, 'SENHA_REPETIDA', 'A nova senha deve ser diferente da atual.');
     }
     state.passwords.set(user.email.toLowerCase(), input.newPassword);
-    return { message: 'Senha alterada com sucesso.' };
+    // Como na API real: o token anterior morre e quem chama precisa guardar este.
+    return { message: 'Senha alterada com sucesso.', token: emitirToken(user) };
+  },
+
+  async verifyAccountLink(token: string): Promise<AccountLink> {
+    await delay();
+    const email = state.resetTokens.get(token.trim());
+    const user = email ? state.users.find((u) => u.email.toLowerCase() === email) : undefined;
+    if (!email || !user) throw new HttpError(400, 'TOKEN_RESET_INVALIDO', 'Token inválido ou expirado');
+    return {
+      kind: user.status === 'pending' ? 'invite' : 'reset',
+      name: user.name,
+      email: user.email,
+      expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+    };
+  },
+
+  async logout(): Promise<void> {
+    await delay();
+    requireUser();
+  },
+
+  async renewSession(): Promise<string> {
+    await delay();
+    return emitirToken(requireUser());
   },
 
   // ---- Dashboard ----
@@ -909,7 +950,7 @@ export const mockApi: BaluarteApi = {
     });
   },
 
-  async createUser(input: UserInput): Promise<User> {
+  async createUser(input: UserInput): Promise<CreatedUser> {
     await delay();
     const actor = requireUser();
     requireRole(actor, ['admin']);
@@ -932,14 +973,35 @@ export const mockApi: BaluarteApi = {
       lastLoginAt: null,
     };
     state.users.push(user);
-    state.passwords.set(email, 'Mudar@123');
+    // Nao existe senha provisoria: a conta nasce Pendente e so ganha senha pelo convite.
+    const convite = nextId('convite');
+    state.resetTokens.set(convite, email);
     pushTimeline({
       kind: 'user',
       title: 'Usuário cadastrado',
       description: `${user.name} (${user.email})`,
       href: '/users',
     });
-    return clone(user);
+    return { ...clone(user), inviteSent: true };
+  },
+
+  async resendInvite(id: string): Promise<MessageResponse> {
+    await delay();
+    const actor = requireUser();
+    requireRole(actor, ['admin', 'analyst']);
+    const alvo = state.users.find((u) => u.id === id);
+    if (!alvo) throw new HttpError(404, 'USUARIO_NAO_ENCONTRADO', 'Usuário não encontrado');
+    if (alvo.role === 'admin' && actor.role !== 'admin')
+      throw new HttpError(403, 'PERFIL_SEM_PERMISSAO', 'Acesso negado para o seu perfil');
+    if (alvo.status !== 'pending')
+      throw new HttpError(
+        409,
+        'USUARIO_NAO_PENDENTE',
+        'O convite só pode ser reenviado para contas pendentes',
+      );
+    const convite = nextId('convite');
+    state.resetTokens.set(convite, alvo.email.toLowerCase());
+    return { message: `Convite reenviado para ${alvo.email}` };
   },
 
   async updateUser(id: string, input: Partial<UserInput>): Promise<User> {

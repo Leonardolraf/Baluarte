@@ -1792,16 +1792,20 @@ export const MOCK_TIMELINE: TimelineEvent[] = [
 // Configurações — política de segurança e preferências de notificação.
 // -----------------------------------------------------------------------------
 
+// Espelha o que a API publica em /configuracoes/seguranca: so o que existe de fato.
+// O log e registrado, mas ainda nao e imutavel nem tem retencao definida (B29).
 export const MOCK_SECURITY_POLICY: SecurityPolicy = {
   passwordMinLength: 8,
   requireMixedCase: true,
   requireNumberAndSymbol: true,
-  tokenAlgorithm: 'JWT RS256',
+  tokenAlgorithm: 'JWT HS256',
   sessionExpirationMinutes: 30,
+  sessionMaxHours: 8,
   loginAttemptLimit: 5,
   twoFactorEnabled: false,
-  auditLogImmutable: true,
-  auditRetentionMonths: 12,
+  auditRegistersActions: true,
+  auditLogImmutable: false,
+  auditRetentionMonths: null,
 };
 
 export const MOCK_NOTIFICATION_PREFERENCES: NotificationPreferences = {

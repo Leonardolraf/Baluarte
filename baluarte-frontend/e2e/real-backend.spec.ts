@@ -13,8 +13,10 @@ import { toast } from './helpers';
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8080/api';
 const ADMIN = { email: 'admin@empresa.com', password: 'Admin@123' };
 const ANALYST = { email: 'analista@empresa.com', password: 'Senha@123' };
-/** Senha provisória que `POST /users` atribui a contas novas. */
-const PROVISIONAL_PASSWORD = 'Mudar@123';
+/** Senha que a conta nova ganha ao aceitar o convite (não existe senha provisória). */
+const SENHA_CONTA = 'Conta@1234';
+/** Mailpit do Compose: é por onde o convite chega em desenvolvimento. */
+const MAILPIT_URL = process.env.E2E_MAILPIT_URL ?? 'http://localhost:8025';
 
 function unique(prefix: string): string {
   return `${prefix}.${Date.now()}.${Math.floor(Math.random() * 10_000)}`;
@@ -51,6 +53,28 @@ async function apiCreateUser(
   expect(response.status()).toBe(201);
   const body = (await response.json()) as { dados: { idUsuario: string } };
   return { id: body.dados.idUsuario, email };
+}
+
+/**
+ * Aceita o convite da conta recém-criada: lê o e-mail no Mailpit, extrai o token do link
+ * e define a senha. Sem isso a conta fica `Pendente` e o login é recusado (CONTA_PENDENTE).
+ */
+async function aceitarConvite(request: APIRequestContext, email: string): Promise<void> {
+  const busca = await request.get(`${MAILPIT_URL}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`);
+  expect(busca.ok(), `Mailpit respondeu a busca do convite de ${email}`).toBeTruthy();
+  const { messages } = (await busca.json()) as { messages: Array<{ ID: string }> };
+  expect(messages.length, `convite de ${email} no Mailpit`).toBeGreaterThan(0);
+
+  const mensagem = await request.get(`${MAILPIT_URL}/api/v1/message/${messages[0]!.ID}`);
+  expect(mensagem.ok()).toBeTruthy();
+  const { Text } = (await mensagem.json()) as { Text: string };
+  const token = /definir-senha\?token=([\w-]+)/.exec(Text)?.[1];
+  expect(token, `token no corpo do convite de ${email}`).toBeTruthy();
+
+  const confirma = await request.post(`${API_URL}/auth/reset-password/confirm`, {
+    data: { token, novaSenha: SENHA_CONTA },
+  });
+  expect(confirma.ok(), `aceite do convite de ${email}`).toBeTruthy();
 }
 
 async function apiDelete(request: APIRequestContext, token: string, path: string): Promise<void> {
@@ -181,7 +205,8 @@ test.describe('Modo real (backend Express)', () => {
     const admin = await apiToken(request, ADMIN.email, ADMIN.password);
     const account = await apiCreateUser(request, admin, 'Colaborador');
     try {
-      await signIn(page, account.email, PROVISIONAL_PASSWORD);
+      await aceitarConvite(request, account.email);
+      await signIn(page, account.email, SENHA_CONTA);
       await page.goto('/settings');
       await page.locator('#senhaAtual').fill('Errada@123');
       await page.locator('#novaSenha').fill('Nova@1234');
@@ -189,7 +214,7 @@ test.describe('Modo real (backend Express)', () => {
       await page.getByRole('button', { name: 'Alterar senha' }).click();
       await expect(page.getByText('A senha atual está incorreta')).toBeVisible();
 
-      await page.locator('#senhaAtual').fill(PROVISIONAL_PASSWORD);
+      await page.locator('#senhaAtual').fill(SENHA_CONTA);
       await page.getByRole('button', { name: 'Alterar senha' }).click();
       await expect(toast(page, 'Senha alterada com sucesso')).toBeVisible();
 
@@ -203,7 +228,8 @@ test.describe('Modo real (backend Express)', () => {
     const admin = await apiToken(request, ADMIN.email, ADMIN.password);
     const account = await apiCreateUser(request, admin, 'Colaborador');
     try {
-      await signIn(page, account.email, PROVISIONAL_PASSWORD);
+      await aceitarConvite(request, account.email);
+      await signIn(page, account.email, SENHA_CONTA);
 
       const patch = await request.patch(`${API_URL}/users/${encodeURIComponent(account.id)}`, {
         headers: { Authorization: `Bearer ${admin}` },
@@ -217,7 +243,7 @@ test.describe('Modo real (backend Express)', () => {
 
       // E o login deixa de ser aceito.
       await page.locator('#email').fill(account.email);
-      await page.locator('#senha').fill(PROVISIONAL_PASSWORD);
+      await page.locator('#senha').fill(SENHA_CONTA);
       await page.locator('#btnEntrar').click();
       await expect(page.locator('#mensagem')).toContainText(/inativo/i);
     } finally {
@@ -272,8 +298,9 @@ test.describe('Modo real (backend Express)', () => {
     const admin = await apiToken(request, ADMIN.email, ADMIN.password);
     const account = await apiCreateUser(request, admin, 'Colaborador');
     try {
-      await signIn(page, account.email, PROVISIONAL_PASSWORD);
-      const token = await apiToken(request, account.email, PROVISIONAL_PASSWORD);
+      await aceitarConvite(request, account.email);
+      await signIn(page, account.email, SENHA_CONTA);
+      const token = await apiToken(request, account.email, SENHA_CONTA);
       for (const path of ['/vulnerabilidades', '/campanhas', '/usuarios', '/assets']) {
         const response = await request.get(`${API_URL}${path}`, {
           headers: { Authorization: `Bearer ${token}` },

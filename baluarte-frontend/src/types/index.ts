@@ -409,11 +409,29 @@ export interface SecurityPolicy {
   requireMixedCase: boolean;
   requireNumberAndSymbol: boolean;
   tokenAlgorithm: string;
+  /** Tempo de inatividade que encerra a sessão; o app renova o token enquanto há uso. */
   sessionExpirationMinutes: number;
+  /** Teto absoluto da sessão, contado do login: nenhuma renovação passa disso. */
+  sessionMaxHours: number;
   loginAttemptLimit: number;
   twoFactorEnabled: boolean;
+  auditRegistersActions: boolean;
   auditLogImmutable: boolean;
-  auditRetentionMonths: number;
+  /** Nulo quando ainda não há política de retenção definida. */
+  auditRetentionMonths: number | null;
+}
+
+/** Link de conta recebido por e-mail (convite novo ou redefinição de senha). */
+export interface AccountLink {
+  kind: 'invite' | 'reset';
+  name: string;
+  email: string;
+  expiresAt: string;
+}
+
+/** Usuário recém-criado: `inviteSent` diz se o convite saiu por e-mail. */
+export interface CreatedUser extends User {
+  inviteSent: boolean;
 }
 
 // ---- Infra / API ------------------------------------------------------------

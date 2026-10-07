@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
-import type { BaluarteApi, MessageResponse } from '@/services/contract';
+import type { BaluarteApi, ChangePasswordResult, MessageResponse } from '@/services/contract';
 import type {
+  AccountLink,
   ApiEnvelope,
   Asset,
   AssetInput,
@@ -10,6 +11,7 @@ import type {
   CampaignInput,
   CampaignReport,
   ChangePasswordInput,
+  CreatedUser,
   DashboardMetrics,
   LoginCredentials,
   LoginResponse,
@@ -28,12 +30,14 @@ import type {
 import { HttpError, isHttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { localDayRange } from '@/lib/format';
+import { userFromToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
 import {
   fromAssetInput,
   fromCampaignInput,
   fromNotificationPreferences,
   fromUserInput,
+  toAccountLink,
   toAsset,
   toAuthUser,
   toAuthUserFromLogin,
@@ -47,6 +51,7 @@ import {
   toUser,
   toVulnerability,
   VULN_STATUS_TO_LABEL,
+  type BackendAccountLink,
   type BackendAsset,
   type BackendCampaign,
   type BackendCampaignReport,
@@ -243,23 +248,52 @@ export const realApi: BaluarteApi = {
     }
   },
 
-  async changePassword(input: ChangePasswordInput): Promise<MessageResponse> {
+  async verifyAccountLink(token: string): Promise<AccountLink> {
+    return toAccountLink(
+      await request<BackendAccountLink>({
+        method: 'POST',
+        url: '/auth/link/verificar',
+        data: { token: token.trim() },
+      }),
+    );
+  },
+
+  // A troca de senha invalida o token anterior (SENHA_REDEFINIDA): quem chama precisa
+  // guardar o token devolvido aqui, senao a propria sessao cai na requisicao seguinte.
+  async changePassword(input: ChangePasswordInput): Promise<ChangePasswordResult> {
     try {
-      const raw = await request<{ mensagem?: string; message?: string } | undefined>({
+      const raw = await request<{ mensagem?: string; message?: string; token?: string } | undefined>({
         method: 'POST',
         url: '/auth/change-password',
         data: { senhaAtual: input.currentPassword, novaSenha: input.newPassword },
       });
-      return { message: raw?.mensagem || raw?.message || 'Senha alterada com sucesso.' };
+      return {
+        message: raw?.mensagem || raw?.message || 'Senha alterada com sucesso.',
+        token: raw?.token ?? '',
+      };
     } catch (error) {
       rethrowAsNotImplemented(error);
     }
   },
 
+  async logout(): Promise<void> {
+    await request<unknown>({ method: 'POST', url: '/auth/logout' });
+  },
+
+  async renewSession(): Promise<string> {
+    const raw = await request<{ token: string }>({ method: 'POST', url: '/auth/renovar' });
+    return raw.token;
+  },
+
   async getDashboard(): Promise<DashboardMetrics> {
+    // /scans é restrito a Administrador/Analista. Pedir como Colaborador devolveria 403
+    // e dispararia a ressincronização com /me a cada visita ao dashboard, à toa.
+    const operador = ['admin', 'analyst'].includes(userFromToken(tokenStorage.get() ?? '')?.role ?? '');
     const [dashboard, scans] = await Promise.all([
       request<BackendDashboard>({ method: 'GET', url: '/dashboard' }),
-      request<BackendScan[]>({ method: 'GET', url: '/scans' }).catch(() => [] as BackendScan[]),
+      operador
+        ? request<BackendScan[]>({ method: 'GET', url: '/scans' }).catch(() => [] as BackendScan[])
+        : Promise.resolve([] as BackendScan[]),
     ]);
     return toDashboard(dashboard, scans.map(toScan));
   },
@@ -445,27 +479,40 @@ export const realApi: BaluarteApi = {
     return found;
   },
 
-  async createUser(input: UserInput): Promise<User> {
+  async createUser(input: UserInput): Promise<CreatedUser> {
     const raw = await request<{
       idUsuario: string;
       nome: string;
       email: string;
       perfil: string;
       departamento?: string | null;
+      conviteEnviado?: boolean;
     }>({
       method: 'POST',
       url: '/users',
       data: fromUserInput(input),
     });
-    return toUser({
-      id: raw.idUsuario,
-      nome: raw.nome,
-      email: raw.email,
-      perfil: raw.perfil,
-      status: 'Pendente',
-      criadoEm: new Date().toISOString(),
-      departamento: raw.departamento ?? null,
+    // A conta nasce Pendente e so vira Ativo quando a pessoa cria a senha pelo convite.
+    return {
+      ...toUser({
+        id: raw.idUsuario,
+        nome: raw.nome,
+        email: raw.email,
+        perfil: raw.perfil,
+        status: 'Pendente',
+        criadoEm: new Date().toISOString(),
+        departamento: raw.departamento ?? null,
+      }),
+      inviteSent: raw.conviteEnviado !== false,
+    };
+  },
+
+  async resendInvite(id: string): Promise<MessageResponse> {
+    const raw = await request<{ mensagem?: string } | undefined>({
+      method: 'POST',
+      url: `/users/${encodeURIComponent(id)}/convite`,
     });
+    return { message: raw?.mensagem || 'Convite reenviado.' };
   },
 
   async updateUser(id: string, input: Partial<UserInput>): Promise<User> {

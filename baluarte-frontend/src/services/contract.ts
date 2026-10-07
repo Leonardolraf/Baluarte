@@ -1,4 +1,5 @@
 import type {
+  AccountLink,
   Asset,
   AssetInput,
   AuthUser,
@@ -7,6 +8,7 @@ import type {
   CampaignInput,
   CampaignReport,
   ChangePasswordInput,
+  CreatedUser,
   DashboardMetrics,
   LoginCredentials,
   LoginResponse,
@@ -21,6 +23,11 @@ import type {
   VulnerabilityListResponse,
   VulnerabilityStatus,
 } from '@/types';
+
+export interface ChangePasswordResult extends MessageResponse {
+  /** Token novo: o anterior deixa de valer assim que a senha muda. */
+  token: string;
+}
 
 export interface MessageResponse {
   message: string;
@@ -43,7 +50,14 @@ export interface BaluarteApi {
   requestPasswordReset(email: string): Promise<MessageResponse>;
   /** Conclui a redefinição com o token recebido (link do e-mail ou, em dev, console do servidor). */
   confirmPasswordReset(token: string, newPassword: string): Promise<MessageResponse>;
-  changePassword(input: ChangePasswordInput): Promise<MessageResponse>;
+  /** Confere o link do e-mail antes de pedir a senha; rejeita token inválido ou expirado. */
+  verifyAccountLink(token: string): Promise<AccountLink>;
+  /** Troca a senha da sessão atual. O token anterior morre: use o devolvido aqui. */
+  changePassword(input: ChangePasswordInput): Promise<ChangePasswordResult>;
+  /** Encerra a sessão no servidor (invalida os tokens em todos os dispositivos). */
+  logout(): Promise<void>;
+  /** Estende a sessão enquanto há uso; falha com SESSAO_EXPIRADA no teto de horas. */
+  renewSession(): Promise<string>;
 
   // Dashboard
   getDashboard(): Promise<DashboardMetrics>;
@@ -71,7 +85,9 @@ export interface BaluarteApi {
   // Usuários (RBAC)
   listUsers(): Promise<User[]>;
   getUser(id: string): Promise<User>;
-  createUser(input: UserInput): Promise<User>;
+  createUser(input: UserInput): Promise<CreatedUser>;
+  /** Reenvia o convite de uma conta Pendente. */
+  resendInvite(id: string): Promise<MessageResponse>;
   updateUser(id: string, input: Partial<UserInput>): Promise<User>;
   deleteUser(id: string): Promise<void>;
   /** Nomes dos departamentos cadastrados (opções do cadastro de usuário). */

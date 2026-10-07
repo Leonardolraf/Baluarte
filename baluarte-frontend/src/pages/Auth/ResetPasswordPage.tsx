@@ -1,14 +1,27 @@
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router-dom';
+import type { AccountLink } from '@/types';
 import { FEATURES, api } from '@/services/api';
 import { errorMessage, toApiError } from '@/lib/errors';
-import { Button, FormErrorBanner, FormField, Input, LinkButton, describedBy } from '@/components';
+import { formatDateTime } from '@/lib/format';
+import {
+  Button,
+  FormErrorBanner,
+  FormField,
+  Input,
+  LinkButton,
+  LoadingSpinner,
+  describedBy,
+} from '@/components';
 import { ArrowLeftIcon, CheckCircleIcon, InfoIcon, LockIcon } from '@/components/icons';
 
-// Fluxo em duas etapas na mesma rota:
-//  1. /reset-password            -> informa o e-mail; a API envia (ou, em dev, imprime) o link com o token.
-//  2. /reset-password?token=...  -> define a nova senha com o token recebido.
+// Duas rotas, o mesmo componente:
+//  - /reset-password            -> informa o e-mail e a API envia o link com o token.
+//  - /reset-password?token=...  -> define a nova senha com o token recebido.
+//  - /definir-senha?token=...   -> link do convite: a pessoa cria a primeira senha.
+// Com token, o link é conferido na API ANTES de pedir a senha: quem chega com link
+// vencido descobre na hora, em vez de digitar a senha para só então ser recusado.
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN = 8;
@@ -194,6 +207,29 @@ function ConfirmStep({ token }: { token: string }) {
   const [done, setDone] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [tokenRejected, setTokenRejected] = useState(false);
+  const [link, setLink] = useState<AccountLink | null>(null);
+  const [verificando, setVerificando] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    setVerificando(true);
+    api
+      .verifyAccountLink(token)
+      .then((dados) => {
+        if (!cancelado) setLink(dados);
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setTokenRejected(true);
+        setFormError('Este link é inválido ou expirou. Solicite um novo.');
+      })
+      .finally(() => {
+        if (!cancelado) setVerificando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [token]);
 
   const {
     register,
@@ -225,7 +261,7 @@ function ConfirmStep({ token }: { token: string }) {
   if (done) {
     return (
       <SuccessPanel
-        title="Senha redefinida"
+        title="Senha definida"
         message={done}
         hint="Entre com a nova senha para continuar."
         action={{ to: '/login', label: 'Ir para o login' }}
@@ -233,15 +269,47 @@ function ConfirmStep({ token }: { token: string }) {
     );
   }
 
+  if (verificando) return <LoadingSpinner label="Conferindo o link…" />;
+
+  // Link recusado e sem formulário para mostrar: não faz sentido pedir senha.
+  if (!link) {
+    return (
+      <>
+        <StepHeader
+          title="Link inválido ou expirado"
+          description="Peça um link novo para criar ou redefinir sua senha."
+        />
+        <div className="mt-6 space-y-4">
+          <FormErrorBanner id="mensagem" message={formError} />
+          <LinkButton to="/reset-password" className="w-full">
+            Solicitar um novo link
+          </LinkButton>
+          <BackToLogin />
+        </div>
+      </>
+    );
+  }
+
+  const convite = link.kind === 'invite';
   const newPasswordError = errors.newPassword?.message;
   const confirmError = errors.confirmPassword?.message;
 
   return (
     <>
       <StepHeader
-        title="Criar nova senha"
+        title={convite ? 'Criar sua senha' : 'Criar nova senha'}
         description={`Mínimo de ${PASSWORD_MIN} caracteres, com letras maiúsculas e minúsculas, um número e um símbolo.`}
       />
+      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-800/60">
+        <p className="text-ink dark:text-white">
+          {convite ? 'Convite para ' : 'Redefinição da conta de '}
+          <strong className="font-medium">{link.name}</strong>
+        </p>
+        <p className="mt-0.5 font-mono text-xs text-slate-500 dark:text-slate-400">{link.email}</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Link válido até {formatDateTime(link.expiresAt)}
+        </p>
+      </div>
       <form className="mt-6 space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormField label="Nova senha" htmlFor="novaSenha" error={newPasswordError} required>
           <Input
@@ -282,7 +350,7 @@ function ConfirmStep({ token }: { token: string }) {
         <FormErrorBanner id="mensagem" message={formError} />
 
         <Button id="btnRedefinir" type="submit" className="w-full" loading={isSubmitting}>
-          Redefinir senha
+          {convite ? 'Criar senha e ativar conta' : 'Redefinir senha'}
         </Button>
 
         {tokenRejected ? (
