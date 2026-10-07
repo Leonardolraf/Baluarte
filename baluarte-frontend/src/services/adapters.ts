@@ -14,6 +14,7 @@ import type {
   FunnelStage,
   NotificationPreferences,
   RBACRole,
+  RemediationStep,
   ScanReport,
   ScanStatus,
   SecurityPolicy,
@@ -51,6 +52,8 @@ export interface BackendUser {
   perfil: string;
   status?: string;
   criadoEm?: string;
+  /** Nome do departamento (ou null quando sem departamento). */
+  departamento?: string | null;
 }
 
 export interface BackendAsset {
@@ -84,6 +87,10 @@ export interface BackendFinding {
   descricao: string;
   evidencia: string;
   detectadoEm: string;
+  cwe?: string | null;
+  cve?: string | null;
+  cvssVetor?: string | null;
+  remediacao?: Array<{ ordem: number; titulo: string; descricao: string; esforco: string }>;
 }
 
 export interface BackendCampaign {
@@ -114,10 +121,18 @@ export interface BackendCampaignReport {
   funil: BackendFunnel;
   treinamentos: Array<{
     destinatario: string;
+    /** Departamento atual do destinatário ("Sem departamento" quando não há). */
+    departamento?: string;
     concluido: boolean;
     /** Id do evento de campanha: é o `:token` de /treinamentos/:token. */
     token?: string;
     concluidoEm?: string | null;
+  }>;
+  porDepartamento?: Array<{
+    departamento: string;
+    destinatarios: number;
+    clicados: number;
+    taxaClique: number;
   }>;
 }
 
@@ -271,10 +286,11 @@ function owaspParts(categoria: string): { owaspId: string; owaspCategory: string
   return { owaspId: 'OWASP', owaspCategory: categoria };
 }
 
-function cveFrom(text: string): string | null {
-  const m = text.match(/CVE-\d{4}-\d{4,7}/i);
-  return m ? m[0].toUpperCase() : null;
-}
+const EFFORT_FROM_LABEL: Record<string, RemediationStep['effort']> = {
+  baixo: 'low',
+  medio: 'medium',
+  alto: 'high',
+};
 
 function emptySeverityMap(): Record<Severity, number> {
   return { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
@@ -302,6 +318,7 @@ export function toUser(raw: BackendUser): User {
     email: raw.email,
     role: roleFromLabel(raw.perfil),
     status: USER_STATUS_FROM_LABEL[norm(raw.status)] ?? 'active',
+    department: raw.departamento ?? undefined,
     createdAt: raw.criadoEm ?? new Date(0).toISOString(),
     lastLoginAt: null,
   };
@@ -347,10 +364,11 @@ export function toVulnerability(raw: BackendFinding): Vulnerability {
   return {
     id: raw.id,
     title: raw.descricao,
-    cve: cveFrom(`${raw.descricao} ${raw.evidencia}`),
+    cve: raw.cve ?? null,
+    cwe: raw.cwe ?? null,
     owaspId,
     owaspCategory,
-    cvss: { version: '3.1', vector: '', base: raw.cvss },
+    cvss: { version: '3.1', vector: raw.cvssVetor ?? '', base: raw.cvss },
     severity,
     status,
     assetId: raw.ativo,
@@ -370,7 +388,12 @@ export function toVulnerability(raw: BackendFinding): Vulnerability {
         capturedAt: raw.detectadoEm,
       },
     ],
-    remediation: [],
+    remediation: (raw.remediacao ?? []).map((p) => ({
+      order: p.ordem,
+      title: p.titulo,
+      description: p.descricao,
+      effort: EFFORT_FROM_LABEL[norm(p.esforco)] ?? 'medium',
+    })),
     references: [],
     detectedAt: raw.detectadoEm,
     updatedAt: raw.detectadoEm,
@@ -457,7 +480,7 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
     campaignId: raw.id,
     name: t.destinatario.split('@')[0] ?? t.destinatario,
     email: t.destinatario,
-    department: 'Colaboradores internos',
+    department: t.departamento ?? 'Sem departamento',
     sentAt: raw.criadoEm,
     openedAt: raw.criadoEm,
     clickedAt: raw.criadoEm,
@@ -496,14 +519,12 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
         description: `Campanha "${raw.nome}" criada.`,
       },
     ],
-    byDepartment: [
-      {
-        department: 'Colaboradores internos',
-        recipients: metrics.recipients,
-        clicked: metrics.clicked,
-        clickRate: metrics.clickRate,
-      },
-    ],
+    byDepartment: (raw.porDepartamento ?? []).map((d) => ({
+      department: d.departamento,
+      recipients: d.destinatarios,
+      clicked: d.clicados,
+      clickRate: d.taxaClique,
+    })),
   };
 }
 
@@ -623,11 +644,18 @@ export function fromAssetInput(input: AssetInput): { nome: string; tipo: string;
   return { nome: input.name.trim(), tipo: ASSET_TYPE_TO_LABEL[input.type], host: input.host.trim() };
 }
 
-export function fromUserInput(input: UserInput): { nome: string; email: string; perfil: string } {
+export function fromUserInput(input: UserInput): {
+  nome: string;
+  email: string;
+  perfil: string;
+  departamento?: string | null;
+} {
   return {
     nome: input.name.trim(),
     email: input.email.trim().toLowerCase(),
     perfil: ROLE_TO_LABEL[input.role],
+    // '' no formulário = "Sem departamento".
+    ...(input.department !== undefined ? { departamento: input.department.trim() || null } : {}),
   };
 }
 

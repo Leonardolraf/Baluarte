@@ -882,6 +882,14 @@ export const mockApi: BaluarteApi = {
     return clone(training);
   },
 
+  // ---- Departamentos (mesma lista do seed do backend) ----
+  async listDepartments(): Promise<string[]> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin', 'analyst']);
+      return ['Comercial', 'Diretoria', 'Financeiro', 'Operações', 'RH', 'TI'];
+    });
+  },
+
   // ---- Usuários ----
   async listUsers(): Promise<User[]> {
     return simulate(() => {

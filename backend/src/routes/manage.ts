@@ -1,10 +1,11 @@
 import type { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { createHash, randomBytes } from 'node:crypto';
 import { prisma } from '../db.js';
 import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { registrarAuditoria } from '../audit.js';
-import { emailEmUso, localizarPorEmail, normalizarEmail } from '../usuarios.js';
+import { dadosTreinamento, podeVerTreinamento } from './read.js';
+import { gerarTokenLink, hashToken } from '../tokens.js';
+import { emailEmUso, localizarPorEmail, mapUsuario, normalizarEmail, resolverDepartamento, SELECT_USUARIO } from '../usuarios.js';
 import { enviar, erro, wrap, vazio, emailFormatoValido, validarSenha, PERFIS, STATUS_USUARIO } from '../util.js';
 
 // -----------------------------------------------------------------------------
@@ -13,8 +14,6 @@ import { enviar, erro, wrap, vazio, emailFormatoValido, validarSenha, PERFIS, ST
 // Nenhuma delas altera as rotas testadas pela collection do Postman (api.ts).
 // `exigeToken` ja carrega o usuario do banco (existencia + status) em req.usuarioAtual.
 // -----------------------------------------------------------------------------
-
-const SELECT_USUARIO = { id: true, nome: true, email: true, perfil: true, status: true, criadoEm: true } as const;
 
 type ErroHttp = { status: number; mensagem: string; codigo: string };
 function falha(status: number, mensagem: string, codigo: string): { falha: ErroHttp } {
@@ -58,10 +57,6 @@ function excedeuLimiteReset(chave: string): boolean {
 /** Zera o limitador de solicitacoes de redefinicao (usado pelos testes). */
 export function limparLimiteReset(): void {
   tentativasReset.clear();
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
 }
 
 // ---- Preferencias de notificacao --------------------------------------------
@@ -118,7 +113,7 @@ export function registerManageRoutes(r: Router) {
 
     const usuario = await localizarPorEmail(String(email));
     if (usuario && usuario.status !== 'Inativo') {
-      const token = randomBytes(32).toString('hex');
+      const token = gerarTokenLink();
       await prisma.passwordResetToken.create({
         data: { userId: usuario.id, tokenHash: hashToken(token), expiraEm: new Date(Date.now() + RESET_VALIDADE_MS) },
       });
@@ -214,8 +209,7 @@ export function registerManageRoutes(r: Router) {
     });
     if (!evento) return erro(res, 404, 'Treinamento não encontrado', 'TREINAMENTO_NAO_ENCONTRADO');
 
-    const proprio = evento.destinatario.toLowerCase() === usuario.email.toLowerCase();
-    if (!proprio && usuario.perfil === 'Colaborador')
+    if (!podeVerTreinamento(usuario, evento))
       return erro(res, 403, 'Este treinamento pertence a outro colaborador', 'TREINAMENTO_DE_OUTRO_USUARIO');
 
     const atualizado = evento.treinou
@@ -228,6 +222,73 @@ export function registerManageRoutes(r: Router) {
       mensagem: 'Treinamento concluído',
       dados: { token: evento.id, concluido: true, concluidoEm: atualizado.treinouEm },
     });
+  }));
+
+  // ---- Link do e-mail de phishing (publico, sem login) -----------------------
+  // O destinatario chega pelo link `/t/<token>` do e-mail. O token e aleatorio (256
+  // bits) e no banco fica so o hash, como na redefinicao de senha. Abrir o link
+  // registra a abertura e o clique (uma vez) e entrega o treinamento contextual; a
+  // resposta nao expoe ids nem o nome da campanha.
+  async function eventoPeloLink(token: string) {
+    return prisma.campaignEvent.findUnique({ where: { tokenHash: hashToken(token.trim()) }, include: { campaign: true } });
+  }
+
+  r.get('/treinamentos/link/:token', wrap(async (req, res) => {
+    const evento = await eventoPeloLink(req.params.token);
+    if (!evento) return erro(res, 404, 'Treinamento não encontrado', 'TREINAMENTO_NAO_ENCONTRADO');
+    if (!evento.clicadoEm) {
+      const agora = new Date();
+      await prisma.campaignEvent.update({
+        where: { id: evento.id },
+        data: { clicadoEm: agora, abertoEm: evento.abertoEm ?? agora },
+      });
+      await registrarAuditoria(evento.userId, 'CLIQUE_LINK_PHISHING', `${evento.campaign.nome} / ${evento.destinatario}`);
+    }
+    return enviar(res, 200, { status: 'sucesso', dados: dadosTreinamento(evento) });
+  }));
+
+  r.post('/treinamentos/link/:token/concluir', wrap(async (req, res) => {
+    const evento = await eventoPeloLink(req.params.token);
+    if (!evento) return erro(res, 404, 'Treinamento não encontrado', 'TREINAMENTO_NAO_ENCONTRADO');
+    // Concluir sem ter aberto o link nao existe: o clique e pre-requisito do treinamento.
+    if (!evento.clicadoEm) return erro(res, 409, 'Abra o treinamento antes de concluí-lo', 'TREINAMENTO_NAO_INICIADO');
+    const atualizado = evento.treinou
+      ? evento
+      : await prisma.campaignEvent.update({ where: { id: evento.id }, data: { treinou: true, treinouEm: new Date() } });
+    if (!evento.treinou)
+      await registrarAuditoria(evento.userId, 'CONCLUIR_TREINAMENTO', `${evento.campaign.nome} / ${evento.destinatario}`);
+    return enviar(res, 200, {
+      status: 'sucesso',
+      mensagem: 'Treinamento concluído',
+      dados: { concluido: true, concluidoEm: atualizado.treinouEm },
+    });
+  }));
+
+  // ---- Departamentos (Administrador) ------------------------------------------
+  r.post('/departamentos', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
+    const ator = usuarioDe(req);
+    const { nome } = req.body ?? {};
+    if (typeof nome !== 'string' || vazio(nome.trim()))
+      return erro(res, 400, 'Nome do departamento é obrigatório', 'NOME_OBRIGATORIO');
+    const limpo = nome.trim();
+    if (limpo.length > 60) return erro(res, 400, 'Nome do departamento deve ter até 60 caracteres', 'NOME_INVALIDO');
+    if ((await resolverDepartamento(limpo)) !== 'invalido')
+      return erro(res, 409, 'Departamento já cadastrado', 'DEPARTAMENTO_DUPLICADO');
+    const dep = await prisma.department.create({ data: { name: limpo } });
+    await registrarAuditoria(ator.id, 'CRIAR_DEPARTAMENTO', dep.name);
+    return enviar(res, 201, { status: 'sucesso', mensagem: 'Departamento cadastrado', dados: { id: dep.id, nome: dep.name, usuarios: 0 } });
+  }));
+
+  // Departamento com usuarios nao e excluido: quem decide para onde eles vao e o administrador.
+  r.delete('/departamentos/:id', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
+    const ator = usuarioDe(req);
+    const dep = await prisma.department.findUnique({ where: { id: req.params.id }, include: { _count: { select: { users: true } } } });
+    if (!dep) return erro(res, 404, 'Departamento não encontrado', 'DEPARTAMENTO_NAO_ENCONTRADO');
+    if (dep._count.users > 0)
+      return erro(res, 409, 'Departamento com usuários: mova-os antes de excluir', 'DEPARTAMENTO_EM_USO');
+    await prisma.department.delete({ where: { id: dep.id } });
+    await registrarAuditoria(ator.id, 'EXCLUIR_DEPARTAMENTO', dep.name);
+    return enviar(res, 200, { status: 'sucesso', mensagem: 'Departamento excluído' });
   }));
 
   // ---- DELETE /campanhas/:id (Administrador/Analista) -----------------------
@@ -247,10 +308,10 @@ export function registerManageRoutes(r: Router) {
   // ---- PATCH /users/:id (Administrador) --------------------------------------
   r.patch('/users/:id', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
     const ator = usuarioDe(req);
-    const { nome, email, perfil, status } = req.body ?? {};
+    const { nome, email, perfil, status, departamento } = req.body ?? {};
 
     // Validacoes de formato (nao dependem do banco).
-    const dados: { nome?: string; email?: string; perfil?: string; status?: string } = {};
+    const dados: { nome?: string; email?: string; perfil?: string; status?: string; departmentId?: string | null } = {};
     if (nome !== undefined) {
       if (typeof nome !== 'string' || vazio(nome.trim())) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
       dados.nome = nome.trim();
@@ -269,6 +330,9 @@ export function registerManageRoutes(r: Router) {
         return erro(res, 422, 'Você não pode inativar a própria conta', 'AUTO_INATIVACAO');
       dados.status = status;
     }
+    const departmentId = await resolverDepartamento(departamento);
+    if (departmentId === 'invalido') return erro(res, 400, 'Departamento inválido', 'DEPARTAMENTO_INVALIDO');
+    if (departmentId !== undefined) dados.departmentId = departmentId;
     if (Object.keys(dados).length === 0)
       return erro(res, 400, 'Nenhum campo para atualizar', 'NADA_A_ATUALIZAR');
 
@@ -277,9 +341,8 @@ export function registerManageRoutes(r: Router) {
       const alvo = await tx.user.findUnique({ where: { id: req.params.id } });
       if (!alvo) return falha(404, 'Usuário não encontrado', 'USUARIO_NAO_ENCONTRADO');
       if (dados.email !== undefined) {
-        const outros = await tx.user.findMany({ select: { id: true, email: true } });
-        if (outros.some((u) => u.id !== alvo.id && u.email.toLowerCase() === dados.email))
-          return falha(409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
+        const dono = await tx.user.findUnique({ where: { email: dados.email }, select: { id: true } });
+        if (dono && dono.id !== alvo.id) return falha(409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
       }
       const eraAdminAtivo = alvo.perfil === 'Administrador' && alvo.status !== 'Inativo';
       const deixaDeSerAdminAtivo =
@@ -297,7 +360,7 @@ export function registerManageRoutes(r: Router) {
     if ('falha' in resultado) return erro(res, resultado.falha.status, resultado.falha.mensagem, resultado.falha.codigo);
 
     await registrarAuditoria(ator.id, 'ATUALIZAR_USUARIO', `${req.params.id}: ${Object.keys(dados).join(', ')}`);
-    return enviar(res, 200, { status: 'sucesso', mensagem: 'Usuário atualizado', dados: resultado.atualizado });
+    return enviar(res, 200, { status: 'sucesso', mensagem: 'Usuário atualizado', dados: mapUsuario(resultado.atualizado) });
   }));
 
   // ---- DELETE /users/:id (Administrador) -------------------------------------
@@ -315,6 +378,10 @@ export function registerManageRoutes(r: Router) {
         if (outrosAdmins === 0)
           return falha(409, 'Não é possível excluir o único administrador ativo', 'ULTIMO_ADMIN');
       }
+      // Quem ja participou de campanha nao e excluido (onDelete: Restrict): apagar
+      // distorceria as metricas historicas. Inativar a conta tem o mesmo efeito de acesso.
+      if (await tx.campaignEvent.count({ where: { userId: alvo.id } }))
+        return falha(409, 'Usuário com histórico em campanhas de phishing: inative a conta em vez de excluir', 'USUARIO_COM_HISTORICO');
       // Preferencias e tokens de redefinicao caem em cascata (onDelete: Cascade).
       await tx.user.delete({ where: { id: alvo.id } });
       return { email: alvo.email };

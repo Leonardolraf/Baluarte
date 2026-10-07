@@ -14,9 +14,9 @@ RUN npx prisma generate
 # o entrypoint roda no sh do Alpine: garante LF mesmo se o checkout veio com CRLF
 RUN sed -i 's/\r$//' docker-entrypoint.sh
 
-# O SQLite fica em /data (volume no docker-compose.yml) para sobreviver a
-# reinícios e rebuilds da imagem. NODE_ENV vem do compose (development por padrão).
-ENV DATABASE_URL=file:/data/dev.db
+# Os dados ficam no PostgreSQL (serviço db do compose; DATABASE_URL vem do ambiente).
+# /data (volume) guarda só o JWT_SECRET gerado e o marcador do seed:demo.
+# NODE_ENV vem do compose (development por padrão).
 ENV PORT=8080
 
 # A API não precisa de root. /data já nasce do usuário `node` para que o volume
@@ -27,5 +27,5 @@ USER node
 
 EXPOSE 8080
 
-# Aplica o schema, semeia (demo só na primeira subida) e inicia a API.
+# Aplica as migrations, semeia (demo só na primeira subida) e inicia a API.
 CMD ["sh", "./docker-entrypoint.sh"]

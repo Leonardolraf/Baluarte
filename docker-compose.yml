@@ -1,20 +1,41 @@
-# Baluarte V2 — API (Express + SQLite) + frontends.
+# Baluarte V2 — PostgreSQL + API (Express + Prisma) + frontends.
 #   docker compose up --build -d              -> tudo
-#   docker compose up --build -d backend app  -> só API + frontend do produto
+#   docker compose up --build -d backend app  -> só banco + API + frontend do produto
+#   docker compose up -d db                   -> só o Postgres (desenvolvimento e testes fora do Docker)
 #
 #   frontend do produto   http://localhost:8081   (baluarte-frontend/, build + Nginx)
-#   API                   http://localhost:8080   (SQLite persistido no volume backend-data)
+#   API                   http://localhost:8080
+#   PostgreSQL            127.0.0.1:5432          (só na máquina local; dados no volume db-data)
 #   frontend legado       http://localhost:3000   (frontend/, alvo das suítes Robot)
 #
 # A porta 8081 (e não 5173) é de propósito: 5173 é o dev server do Vite, que o
 # Playwright reutiliza se estiver ocupada — a stack Docker e o modo mock convivem.
-# Variáveis num `.env` na raiz (ver .env.example): JWT_SECRET, NODE_ENV,
-# RESET_TOKEN_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
+# Variáveis num `.env` na raiz (ver .env.example): POSTGRES_PASSWORD (obrigatória), JWT_SECRET, NODE_ENV,
+# RESET_TOKEN_CONSOLE, TREINAMENTO_LINK_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
 services:
+  # PostgreSQL local. A senha vem do .env da raiz (nunca versionada); sem ela o compose
+  # recusa subir. A porta só é publicada em 127.0.0.1: nada de fora da máquina alcança o banco.
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=baluarte
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env da raiz (ver .env.example)}
+      - POSTGRES_DB=baluarte
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U baluarte -d baluarte"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
   backend:
     build: ./backend
     environment:
-      - DATABASE_URL=file:/data/dev.db
+      - DATABASE_URL=postgresql://baluarte:${POSTGRES_PASSWORD}@db:5432/baluarte?schema=public
+      - DIRECT_URL=postgresql://baluarte:${POSTGRES_PASSWORD}@db:5432/baluarte?schema=public
       # Vazio = o entrypoint gera um segredo aleatório e o guarda no volume (/data/jwt.secret).
       # Nunca há segredo fixo versionado; em NODE_ENV=production a API exige um segredo forte.
       - JWT_SECRET=${JWT_SECRET:-}
@@ -24,14 +45,21 @@ services:
       # demonstração — não há serviço de e-mail). Use 0 em qualquer ambiente compartilhado;
       # em NODE_ENV=production o token nunca é impresso, independente deste valor.
       - RESET_TOKEN_CONSOLE=${RESET_TOKEN_CONSOLE:-1}
+      # 1 = imprime no log o link de treinamento de cada destinatário ao criar uma campanha
+      # (mesma regra: nunca em NODE_ENV=production).
+      - TREINAMENTO_LINK_CONSOLE=${TREINAMENTO_LINK_CONSOLE:-1}
       # Base usada para montar o link de redefinição impresso no log.
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       # Origens permitidas no CORS (os frontends falam por proxy/mesma origem; isto é para chamadas diretas).
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8081,http://localhost:5173,http://localhost:5174,http://localhost:3000}
       # 1 = carrega dados de demonstração na primeira subida (0 = só o seed de contrato)
       - SEED_DEMO=${SEED_DEMO:-1}
+    # /data guarda só o JWT_SECRET gerado e o marcador do seed:demo (os dados ficam no Postgres).
     volumes:
       - backend-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8080:8080"
     healthcheck:
@@ -64,4 +92,5 @@ services:
         condition: service_healthy
 
 volumes:
+  db-data:
   backend-data:

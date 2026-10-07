@@ -1,5 +1,5 @@
-// Testes de integracao da API (node:test + fetch) contra um SQLite ISOLADO
-// (prisma/test-api.db, recriado e semeado a cada execucao — ver helpers.ts).
+// Testes de integracao da API (node:test + fetch) contra um Postgres ISOLADO
+// (banco baluarte_test_api, recriado e semeado a cada execucao — ver helpers.ts).
 // Cobre as rotas adicionais ao contrato da N2 AT1, o RBAC e as regras de conta.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,6 +26,7 @@ const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/db.js');
 const { limparLimiteReset } = await import('../src/routes/manage.js');
 const { limparLimiteLogin } = await import('../src/routes/api.js');
+const { hashToken } = await import('../src/tokens.js');
 
 before(async () => {
   await iniciarServidor(app);
@@ -388,16 +389,19 @@ describe('treinamento pós-clique', () => {
         nome: 'Campanha de teste (autoridade)',
         template: 'autoridade',
         status: 'ATIVA',
-        eventos: { create: [{ destinatario: colaborador.email, enviadoEm: new Date(), abertoEm: new Date(), clicadoEm: new Date() }] },
+        eventos: { create: [{ userId: colaborador.id, destinatario: colaborador.email, enviadoEm: new Date(), abertoEm: new Date(), clicadoEm: new Date() }] },
       },
       include: { eventos: true },
     });
     evento = campanha.eventos[0];
   });
 
-  it('GET /treinamentos/:token -> 404 para token desconhecido e conteúdo por template para conhecido', async () => {
-    esperaErro(await chamar('GET', '/treinamentos/nao-existe'), 404, 'TREINAMENTO_NAO_ENCONTRADO');
-    const r = await chamar('GET', `/treinamentos/${evento.id}`);
+  it('GET /treinamentos/:token exige login, é do destinatário e traz o conteúdo do template', async () => {
+    esperaErro(await chamar('GET', `/treinamentos/${evento.id}`), 401, 'TOKEN_AUSENTE');
+    esperaErro(await chamar('GET', `/treinamentos/${evento.id}`, { token: intruso }), 403, 'TREINAMENTO_DE_OUTRO_USUARIO');
+    esperaErro(await chamar('GET', '/treinamentos/nao-existe', { token: tokenColaborador }), 404, 'TREINAMENTO_NAO_ENCONTRADO');
+    assert.equal((await chamar('GET', `/treinamentos/${evento.id}`, { token: analista })).status, 200);
+    const r = await chamar('GET', `/treinamentos/${evento.id}`, { token: tokenColaborador });
     assert.equal(r.status, 200);
     assert.equal(r.body.dados.tipoAtaque, 'Phishing por Autoridade');
     assert.equal(r.body.dados.template, 'autoridade');
@@ -415,7 +419,7 @@ describe('treinamento pós-clique', () => {
     assert.equal(ok.body.dados.concluido, true);
     assert.ok(ok.body.dados.concluidoEm);
 
-    const lido = await chamar('GET', `/treinamentos/${evento.id}`);
+    const lido = await chamar('GET', `/treinamentos/${evento.id}`, { token: tokenColaborador });
     assert.equal(lido.body.dados.progresso, 100);
 
     // Idempotente e visível no relatório da campanha, com o token do destinatário.
@@ -552,6 +556,11 @@ describe('campanhas: destinatarios[] e exclusão', () => {
     const admin = await login(ADMIN.email, ADMIN.senha);
     const conta = await criarUsuario(admin, 'Colaborador', 'campanha');
     colaborador = await login(conta.email, SENHA_PROVISORIA);
+    // Campanha so aceita destinatario cadastrado.
+    for (const [nome, email] of [['Ana', 'ana@empresa.com'], ['Bruno', 'bruno@empresa.com']]) {
+      const r = await chamar('POST', '/users', { token: admin, body: { nome, email, perfil: 'Colaborador' } });
+      assert.equal(r.status, 201);
+    }
   });
 
   it('contrato original (um destinatário) continua igual', async () => {
@@ -581,6 +590,49 @@ describe('campanhas: destinatarios[] e exclusão', () => {
     esperaErro(await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatarios: [], template: 'urgencia' } }), 400, 'EMAIL_INVALIDO');
   });
 
+  it('recusa destinatário interno não cadastrado ou inativo (depois das validações de formato e domínio)', async () => {
+    esperaErro(await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatario: 'ninguem@empresa.com', template: 'urgencia' } }), 422, 'DESTINATARIO_NAO_CADASTRADO');
+    esperaErro(await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatarios: ['ana@empresa.com', 'ninguem@empresa.com'], template: 'urgencia' } }), 422, 'DESTINATARIO_NAO_CADASTRADO');
+    // Domínio externo continua respondendo como antes, mesmo misturado com um não cadastrado.
+    esperaErro(await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatarios: ['ninguem@empresa.com', 'fora@gmail.com'], template: 'urgencia' } }), 422, 'DESTINATARIO_EXTERNO');
+
+    const admin = await login(ADMIN.email, ADMIN.senha);
+    const inativo = await criarUsuario(admin, 'Colaborador', 'inativo');
+    assert.equal((await chamar('PATCH', `/users/${inativo.id}`, { token: admin, body: { status: 'Inativo' } })).status, 200);
+    esperaErro(await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatario: inativo.email, template: 'urgencia' } }), 422, 'DESTINATARIO_NAO_CADASTRADO');
+  });
+
+  it('cada evento fica ligado ao usuário e guarda só o hash do token do link', async () => {
+    const r = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Vínculo', destinatarios: ['ANA@empresa.com', 'bruno@empresa.com'], template: 'urgencia' } });
+    assert.equal(r.status, 201);
+    assert.ok(!JSON.stringify(r.body).includes('token'), 'a resposta não pode carregar token de link');
+    const eventos = await prisma.campaignEvent.findMany({ where: { campaignId: r.body.dados.idCampanha }, include: { user: true } });
+    assert.equal(eventos.length, 2);
+    for (const e of eventos) {
+      assert.equal(e.user.email, e.destinatario);
+      assert.match(e.tokenHash ?? '', /^[0-9a-f]{64}$/);
+    }
+    assert.notEqual(eventos[0].tokenHash, eventos[1].tokenHash);
+  });
+
+  it('o banco recusa a mesma pessoa duas vezes na mesma campanha', async () => {
+    const r = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Unicidade', destinatario: 'ana@empresa.com', template: 'urgencia' } });
+    const ana = await prisma.user.findUniqueOrThrow({ where: { email: 'ana@empresa.com' } });
+    await assert.rejects(
+      prisma.campaignEvent.create({ data: { campaignId: r.body.dados.idCampanha, userId: ana.id, destinatario: ana.email } }),
+      (e: { code?: string }) => e.code === 'P2002',
+    );
+  });
+
+  it('usuário com histórico de campanha não é excluído (409); a saída é inativar', async () => {
+    const admin = await login(ADMIN.email, ADMIN.senha);
+    const alvo = await criarUsuario(admin, 'Colaborador', 'historico');
+    assert.equal((await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Histórico', destinatario: alvo.email, template: 'urgencia' } })).status, 201);
+    esperaErro(await chamar('DELETE', `/users/${alvo.id}`, { token: admin }), 409, 'USUARIO_COM_HISTORICO');
+    assert.equal((await chamar('PATCH', `/users/${alvo.id}`, { token: admin, body: { status: 'Inativo' } })).status, 200);
+    assert.ok(await prisma.user.findUnique({ where: { id: alvo.id } }));
+  });
+
   it('DELETE /campanhas/:id remove a campanha e seus eventos (Administrador/Analista)', async () => {
     const criada = await chamar('POST', '/campaigns', {
       token: analista,
@@ -597,5 +649,59 @@ describe('campanhas: destinatarios[] e exclusão', () => {
     assert.equal(r.body.mensagem, 'Campanha excluída');
     esperaErro(await chamar('GET', `/campanhas/${id}`, { token: analista }), 404, 'CAMPANHA_NAO_ENCONTRADA');
     assert.equal(await prisma.campaignEvent.count({ where: { campaignId: id } }), 0);
+  });
+});
+
+describe('link do e-mail de phishing (público, token com hash)', () => {
+  const tokenLink = 'a'.repeat(64);
+  let eventoId: string;
+
+  before(async () => {
+    const colab = await prisma.user.findUniqueOrThrow({ where: { email: 'colaborador@empresa.com' } });
+    const campanha = await prisma.campaign.create({
+      data: {
+        nome: 'Campanha do link',
+        template: 'curiosidade',
+        status: 'ATIVA',
+        eventos: { create: [{ userId: colab.id, destinatario: colab.email, enviadoEm: new Date(), tokenHash: hashToken(tokenLink) }] },
+      },
+      include: { eventos: true },
+    });
+    eventoId = campanha.eventos[0].id;
+  });
+
+  it('token desconhecido, ou o id do evento no lugar do token, dá 404', async () => {
+    esperaErro(await chamar('GET', `/treinamentos/link/${'b'.repeat(64)}`), 404, 'TREINAMENTO_NAO_ENCONTRADO');
+    esperaErro(await chamar('GET', `/treinamentos/link/${eventoId}`), 404, 'TREINAMENTO_NAO_ENCONTRADO');
+    esperaErro(await chamar('POST', `/treinamentos/link/${eventoId}/concluir`), 404, 'TREINAMENTO_NAO_ENCONTRADO');
+  });
+
+  it('não conclui antes de abrir o link', async () => {
+    esperaErro(await chamar('POST', `/treinamentos/link/${tokenLink}/concluir`), 409, 'TREINAMENTO_NAO_INICIADO');
+  });
+
+  it('abrir registra abertura e clique uma única vez e não expõe ids nem a campanha', async () => {
+    const r = await chamar('GET', `/treinamentos/link/${tokenLink}`);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.dados.template, 'curiosidade');
+    assert.equal(r.body.dados.progresso, 0);
+    assert.equal(r.body.dados.campanha, undefined);
+    assert.equal(r.body.dados.idCampanha, undefined);
+    const e1 = await prisma.campaignEvent.findUniqueOrThrow({ where: { id: eventoId } });
+    assert.ok(e1.clicadoEm && e1.abertoEm);
+
+    await sleep(5);
+    await chamar('GET', `/treinamentos/link/${tokenLink}`);
+    const e2 = await prisma.campaignEvent.findUniqueOrThrow({ where: { id: eventoId } });
+    assert.equal(e2.clicadoEm!.getTime(), e1.clicadoEm!.getTime(), 'o segundo acesso não pode mover o clique');
+  });
+
+  it('conclui pelo link, de forma idempotente', async () => {
+    const r = await chamar('POST', `/treinamentos/link/${tokenLink}/concluir`);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.dados.concluido, true);
+    const denovo = await chamar('POST', `/treinamentos/link/${tokenLink}/concluir`);
+    assert.equal(denovo.body.dados.concluidoEm, r.body.dados.concluidoEm);
+    assert.equal((await chamar('GET', `/treinamentos/link/${tokenLink}`)).body.dados.progresso, 100);
   });
 });

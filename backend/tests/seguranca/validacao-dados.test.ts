@@ -141,6 +141,9 @@ describe('POST /campaigns — destinatários e template', () => {
     );
     esperaErro(await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Vazia', destinatarios: [], template: 'urgencia' } }), 400, 'EMAIL_INVALIDO');
 
+    // Campanha so aceita destinatario cadastrado.
+    for (const [nome, email] of [['Ana', 'ana@empresa.com'], ['Bruno', 'bruno@empresa.com']])
+      assert.equal((await chamar('POST', '/users', { token: admin, body: { nome, email, perfil: 'Colaborador' } })).status, 201);
     const ok = await chamar('POST', '/campaigns', {
       token: analista,
       body: { nome: 'Dedup', destinatarios: ['Ana@empresa.com', 'ana@empresa.com', 'bruno@empresa.com'], template: 'curiosidade' },

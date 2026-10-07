@@ -359,6 +359,7 @@ export default function VulnDetailPage() {
       ),
     },
     { label: 'CVE', value: vuln.cve ? <Mono>{vuln.cve}</Mono> : EMPTY },
+    { label: 'CWE', value: vuln.cwe ? <Mono>{vuln.cwe}</Mono> : EMPTY },
     {
       label: 'Categoria OWASP',
       value: (

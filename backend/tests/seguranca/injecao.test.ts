@@ -104,6 +104,16 @@ describe('SQLi no login', () => {
       assert.equal(r.body.status, 'erro');
     }
   });
+
+  it('NUL byte no corpo, na query ou no caminho é barrado na borda (400), nunca chega ao banco', async () => {
+    const analista = await login(ANALISTA.email, ANALISTA.senha);
+    esperaErro(await chamar('POST', '/login', { body: { email: 'admin@empresa.com\u0000', senha: 'x' } }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('POST', '/assets', { token: analista, body: { nome: 'a\u0000b', tipo: 'Rede', host: '10.9.9.9' } }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('POST', '/users', { token: analista, body: { nome: 'X', email: 'x@empresa.com', perfil: 'Colaborador', extra: { 'chave\u0000': 1 } } }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('GET', '/vulnerabilidades?q=a%00b', { token: analista }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('GET', '/vulnerabilidades/abc%00', { token: analista }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('GET', '/treinamentos/link/abc%00'), 400, 'CARACTERE_INVALIDO');
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -178,11 +188,17 @@ describe('SQLi em path params', () => {
     'null',
   ];
 
-  it('GET /treinamentos/:token (publico) -> 404, nunca 500/vazamento', async () => {
+  it('GET /treinamentos/:token (protegido) e /treinamentos/link/:token (publico) -> 404, nunca 500/vazamento', async () => {
     for (const p of PAYLOADS) {
-      const r = await chamar('GET', `/treinamentos/${encodeURIComponent(p)}`);
+      const r = await chamar('GET', `/treinamentos/${encodeURIComponent(p)}`, { token: analista });
       nunca500(r, `treinamento ${p}`);
       esperaErro(r, 404, 'TREINAMENTO_NAO_ENCONTRADO');
+      const rl = await chamar('GET', `/treinamentos/link/${encodeURIComponent(p)}`);
+      nunca500(rl, `link de treinamento ${p}`);
+      esperaErro(rl, 404, 'TREINAMENTO_NAO_ENCONTRADO');
+      const rc = await chamar('POST', `/treinamentos/link/${encodeURIComponent(p)}/concluir`);
+      nunca500(rc, `conclusao por link ${p}`);
+      esperaErro(rc, 404, 'TREINAMENTO_NAO_ENCONTRADO');
     }
   });
 

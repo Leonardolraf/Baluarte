@@ -446,7 +446,13 @@ export const realApi: BaluarteApi = {
   },
 
   async createUser(input: UserInput): Promise<User> {
-    const raw = await request<{ idUsuario: string; nome: string; email: string; perfil: string }>({
+    const raw = await request<{
+      idUsuario: string;
+      nome: string;
+      email: string;
+      perfil: string;
+      departamento?: string | null;
+    }>({
       method: 'POST',
       url: '/users',
       data: fromUserInput(input),
@@ -458,11 +464,12 @@ export const realApi: BaluarteApi = {
       perfil: raw.perfil,
       status: 'Pendente',
       criadoEm: new Date().toISOString(),
+      departamento: raw.departamento ?? null,
     });
   },
 
   async updateUser(id: string, input: Partial<UserInput>): Promise<User> {
-    const data: Record<string, string> = {};
+    const data: Record<string, string | null> = {};
     if (input.name !== undefined) data.nome = input.name.trim();
     if (input.email !== undefined) data.email = input.email.trim().toLowerCase();
     if (input.role !== undefined)
@@ -470,6 +477,7 @@ export const realApi: BaluarteApi = {
     if (input.status !== undefined)
       data.status =
         input.status === 'active' ? 'Ativo' : input.status === 'inactive' ? 'Inativo' : 'Pendente';
+    if (input.department !== undefined) data.departamento = input.department.trim() || null;
     try {
       const raw = await request<BackendUser>({
         method: 'PATCH',
@@ -488,6 +496,11 @@ export const realApi: BaluarteApi = {
     } catch (error) {
       rethrowAsNotImplemented(error);
     }
+  },
+
+  async listDepartments(): Promise<string[]> {
+    const raw = await request<Array<{ id: string; nome: string }>>({ method: 'GET', url: '/departamentos' });
+    return raw.map((d) => d.nome);
   },
 
   async getNotificationPreferences(): Promise<NotificationPreferences> {

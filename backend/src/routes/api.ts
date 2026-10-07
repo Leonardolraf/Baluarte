@@ -2,7 +2,9 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
 import { gerarToken, exigeToken, exigePerfil, usuarioDe } from '../auth.js';
-import { emailEmUso, localizarPorEmail, normalizarEmail } from '../usuarios.js';
+import { emailEmUso, localizarPorEmail, normalizarEmail, resolverDepartamento } from '../usuarios.js';
+import { gerarTokenLink, hashToken } from '../tokens.js';
+import { CATALOGO_ACHADOS, dadosAchado, type ChaveAchado } from '../catalogo.js';
 import { registerReadRoutes } from './read.js';
 import { registerManageRoutes } from './manage.js';
 import {
@@ -54,24 +56,15 @@ export function limparLimiteLogin(): void {
   falhasLogin.clear();
 }
 
-// Catalogo de achados simulados para gerar evidencias realistas numa varredura.
-const CATALOGO_FINDINGS = [
-  { categoriaOwasp: 'A01:2021 - Broken Access Control', cvss: 8.2, descricao: 'Endpoint administrativo acessivel sem verificacao de perfil.', evidencia: 'GET /api/admin/users -> 200 com token de Colaborador.' },
-  { categoriaOwasp: 'A03:2021 - Injection', cvss: 9.8, descricao: 'Parametro de busca concatenado diretamente na query SQL.', evidencia: "GET /buscar?q=' OR '1'='1 retornou todos os registros." },
-  { categoriaOwasp: 'A02:2021 - Cryptographic Failures', cvss: 6.5, descricao: 'Cookie de sessao sem atributo Secure/HttpOnly.', evidencia: 'Set-Cookie: sid=...; sem flags Secure e HttpOnly.' },
-  { categoriaOwasp: 'A05:2021 - Security Misconfiguration', cvss: 5.3, descricao: 'Cabecalho X-Powered-By expoe versao do servidor.', evidencia: 'Response header: X-Powered-By: Express 4.x.' },
-  { categoriaOwasp: 'A07:2021 - Identification and Authentication Failures', cvss: 7.4, descricao: 'Ausencia de bloqueio apos multiplas tentativas de login.', evidencia: '100 tentativas em 10s sem rate limit.' },
-  { categoriaOwasp: 'A06:2021 - Vulnerable and Outdated Components', cvss: 4.2, descricao: 'Dependencia com CVE conhecido em uso.', evidencia: 'lodash@4.17.11 (CVE-2019-10744).' },
-];
-
-function gerarFindings(): typeof CATALOGO_FINDINGS {
-  const qtd = 2 + Math.floor(Math.random() * 3); // 2 a 4 achados
-  const copia = [...CATALOGO_FINDINGS];
-  const escolhidos: typeof CATALOGO_FINDINGS = [];
-  for (let i = 0; i < qtd && copia.length; i++) {
-    escolhidos.push(copia.splice(Math.floor(Math.random() * copia.length), 1)[0]);
+// Varredura simulada: sorteia de 2 a 4 tipos distintos do catalogo (src/catalogo.ts).
+function gerarFindings() {
+  const qtd = 2 + Math.floor(Math.random() * 3);
+  const chaves = Object.keys(CATALOGO_ACHADOS) as ChaveAchado[];
+  const escolhidos: ChaveAchado[] = [];
+  for (let i = 0; i < qtd && chaves.length; i++) {
+    escolhidos.push(chaves.splice(Math.floor(Math.random() * chaves.length), 1)[0]);
   }
-  return escolhidos;
+  return escolhidos.map(dadosAchado);
 }
 
 // ---- POST /api/login --------------------------------------------------------
@@ -115,7 +108,7 @@ apiRouter.post('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
   const scan = await prisma.scan.create({ data: { assetId: ativo.id, status: 'EM_FILA' } });
   // Varredura simulada: gera achados realistas ligados ao scan.
   await prisma.finding.createMany({
-    data: gerarFindings().map((f) => ({ ...f, scanId: scan.id, severidade: faixaCvss(f.cvss) })),
+    data: gerarFindings().map((f) => ({ ...f, scanId: scan.id })),
   });
 
   return enviar(res, 201, {
@@ -146,22 +139,28 @@ apiRouter.post('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(async (re
 
 // ---- POST /api/users (Administrador/Analista; so Administrador cria Administrador) ----
 apiRouter.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
-  const { nome, email, perfil } = req.body ?? {};
+  const { nome, email, perfil, departamento } = req.body ?? {};
   if (!textoPreenchido(nome)) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
   if (!emailFormatoValido(email)) return erro(res, 400, 'Email inválido', 'EMAIL_INVALIDO');
   if (!PERFIS.includes(perfil)) return erro(res, 400, 'Perfil inválido', 'PERFIL_INVALIDO');
   if (perfil === 'Administrador' && usuarioDe(req).perfil !== 'Administrador')
     return erro(res, 403, 'Acesso negado para o seu perfil', 'PERFIL_SEM_PERMISSAO');
+  // Extensao compativel do contrato: departamento opcional, pelo nome.
+  const departmentId = await resolverDepartamento(departamento);
+  if (departmentId === 'invalido') return erro(res, 400, 'Departamento inválido', 'DEPARTAMENTO_INVALIDO');
 
   const emailNorm = normalizarEmail(email);
   if (await emailEmUso(emailNorm)) return erro(res, 409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
 
   const senhaHash = await bcrypt.hash('Mudar@123', 10);
-  const usuario = await prisma.user.create({ data: { nome, email: emailNorm, perfil, senhaHash, status: 'Pendente' } });
+  const usuario = await prisma.user.create({
+    data: { nome, email: emailNorm, perfil, senhaHash, status: 'Pendente', departmentId: departmentId ?? null },
+    include: { department: true },
+  });
   return enviar(res, 201, {
     status: 'sucesso',
     mensagem: 'Usuário cadastrado com sucesso',
-    dados: { idUsuario: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil },
+    dados: { idUsuario: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil, departamento: usuario.department?.name ?? null },
   });
 }));
 
@@ -183,14 +182,37 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
   }
   if (!TEMPLATES.includes(template)) return erro(res, 400, 'Template é obrigatório', 'TEMPLATE_OBRIGATORIO');
 
+  // So recebe campanha quem esta cadastrado e nao esta Inativo (e-mail citext: ignora maiusculas).
+  const usuarios = await prisma.user.findMany({
+    where: { email: { in: lista.map((e) => e.toLowerCase()) } },
+    select: { id: true, email: true, status: true },
+  });
+  const destinos: { userId: string; email: string }[] = [];
+  for (const email of lista) {
+    const u = usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());
+    if (!u || u.status === 'Inativo')
+      return erro(res, 422, `Destinatário não cadastrado ou inativo: ${email}`, 'DESTINATARIO_NAO_CADASTRADO');
+    destinos.push({ userId: u.id, email: u.email });
+  }
+
+  // Cada destinatario recebe um token proprio para o link do e-mail; no banco fica so o hash.
+  const tokens = destinos.map(() => gerarTokenLink());
   const campanha = await prisma.campaign.create({
     data: {
       nome,
       template,
       status: 'AGENDADA',
-      eventos: { create: lista.map((email) => ({ destinatario: email })) },
+      eventos: {
+        create: destinos.map((d, i) => ({ userId: d.userId, destinatario: d.email, tokenHash: hashToken(tokens[i]) })),
+      },
     },
   });
+  // Nao ha envio de e-mail neste projeto: fora de producao, e so com
+  // TREINAMENTO_LINK_CONSOLE=1, o link de cada destinatario vai para o log do servidor.
+  if (process.env.NODE_ENV !== 'production' && process.env.TREINAMENTO_LINK_CONSOLE === '1') {
+    const base = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+    destinos.forEach((d, i) => console.log(`[campanha] link de ${d.email}: ${base}/t/${tokens[i]}`));
+  }
 
   return enviar(res, 201, {
     status: 'sucesso',
@@ -198,8 +220,8 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
     dados: {
       idCampanha: campanha.id,
       nome: campanha.nome,
-      destinatario: lista[0],
-      destinatarios: lista,
+      destinatario: destinos[0].email,
+      destinatarios: destinos.map((d) => d.email),
       template: campanha.template,
       status: campanha.status,
     },

@@ -238,7 +238,7 @@ function FunnelCard({ funnel }: { funnel: FunnelStage[] }) {
 // conforme a largura ("Destinatários" a partir de xl, "Clicaram" a partir de 2xl).
 function DepartmentCard({ rows }: { rows: CampaignReport['byDepartment'] }) {
   return (
-    <Card title="Por departamento" subtitle="Amostra dos destinatários listados" flush>
+    <Card title="Por departamento" subtitle="Taxa de clique pelo departamento atual de cada pessoa" flush>
       {rows.length === 0 ? (
         <EmptyState
           compact

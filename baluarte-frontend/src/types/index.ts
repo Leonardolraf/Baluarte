@@ -154,6 +154,8 @@ export interface Vulnerability {
   title: string;
   /** Ex.: CVE-2021-44228 (pode não existir para achados de configuração). */
   cve?: string | null;
+  /** Tipo de falha, ex.: CWE-89 (injeção de SQL). */
+  cwe?: string | null;
   /** Ex.: A03:2021 */
   owaspId: string;
   /** Ex.: Injection */
