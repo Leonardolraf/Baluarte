@@ -2,6 +2,8 @@
 //
 // Verifica, contra a API REST real (SQLite isolado deste arquivo — ver helpers.ts):
 //  - Cabecalhos: X-Powered-By ausente; erros nao vazam stack trace / caminho de arquivo.
+//  - Cabecalhos de seguranca (helmet): nosniff, X-Frame-Options/frame-ancestors, CSP, Referrer-Policy
+//    e HSTS em toda resposta, inclusive 400/401/404.
 //  - CORS: origem permitida x origem hostil (evil.com) x sem Origin (Postman).
 //  - Segredos nunca no corpo: senhaHash (bcrypt), segredo do JWT, tokenHash de reset, senha em claro.
 //  - Metodo/rota: metodos nao suportados e rota inexistente -> 404 ROTA_NAO_ENCONTRADA padronizado.
@@ -138,6 +140,63 @@ describe('cabecalhos nao anunciam o servidor', () => {
     const r = await chamar('POST', '/login', { raw: '{"email": "a@b.com", "senha": ' });
     esperaErro(r, 400, 'JSON_INVALIDO');
     semStackTrace(r.body, 'POST /login (JSON malformado)');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Cabecalhos de seguranca (helmet) — inclusive nas respostas de erro
+// -----------------------------------------------------------------------------
+
+// Confere os cabecalhos de seguranca principais numa resposta qualquer.
+function comCabecalhosDeSeguranca(r: { headers: Headers }, contexto: string): void {
+  const h = (nome: string) => r.headers.get(nome) ?? '';
+  assert.equal(h('x-content-type-options'), 'nosniff', `${contexto}: X-Content-Type-Options`);
+  assert.equal(h('x-frame-options'), 'DENY', `${contexto}: X-Frame-Options`);
+  const csp = h('content-security-policy');
+  assert.match(csp, /default-src 'none'/, `${contexto}: CSP sem default-src 'none' ("${csp}")`);
+  assert.match(csp, /frame-ancestors 'none'/, `${contexto}: CSP sem frame-ancestors 'none' ("${csp}")`);
+  assert.equal(h('referrer-policy'), 'no-referrer', `${contexto}: Referrer-Policy`);
+  assert.match(h('strict-transport-security'), /max-age=31536000; includeSubDomains/, `${contexto}: HSTS`);
+  assert.equal(r.headers.get('x-powered-by'), null, `${contexto}: X-Powered-By presente`);
+}
+
+describe('cabecalhos de seguranca HTTP em toda resposta', () => {
+  it('rota publica com sucesso (200) traz os cabecalhos de seguranca', async () => {
+    const r = await chamar('GET', '/findings/classificacao?cvss=5');
+    assert.equal(r.status, 200);
+    comCabecalhosDeSeguranca(r, 'GET /findings/classificacao');
+  });
+
+  it('rota autenticada (200) traz os cabecalhos de seguranca', async () => {
+    const analista = await login(ANALISTA.email, ANALISTA.senha);
+    const r = await chamar('GET', '/me', { token: analista });
+    assert.equal(r.status, 200);
+    comCabecalhosDeSeguranca(r, 'GET /me');
+  });
+
+  it('404 ROTA_NAO_ENCONTRADA traz os cabecalhos de seguranca', async () => {
+    const r = await chamar('GET', '/rota-que-nao-existe');
+    esperaErro(r, 404, 'ROTA_NAO_ENCONTRADA');
+    comCabecalhosDeSeguranca(r, '404');
+  });
+
+  it('400 JSON_INVALIDO traz os cabecalhos de seguranca', async () => {
+    const r = await chamar('POST', '/login', { raw: '{"email": ' });
+    esperaErro(r, 400, 'JSON_INVALIDO');
+    comCabecalhosDeSeguranca(r, '400 JSON_INVALIDO');
+  });
+
+  it('401 sem token traz os cabecalhos de seguranca', async () => {
+    const r = await chamar('GET', '/me');
+    assert.equal(r.status, 401);
+    comCabecalhosDeSeguranca(r, '401');
+  });
+
+  it('cabecalhos de seguranca nao quebram o CORS da origem permitida', async () => {
+    const r = await chamar('GET', '/findings/classificacao?cvss=5', { headers: { Origin: 'http://localhost:5173' } });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('access-control-allow-origin'), 'http://localhost:5173');
+    comCabecalhosDeSeguranca(r, 'GET com Origin permitida');
   });
 });
 

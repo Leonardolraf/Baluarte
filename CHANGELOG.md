@@ -105,6 +105,14 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 - **Testes** — 192 no backend (eram 174): `tests/conta.test.ts` novo (convite, reenvio e RBAC, verificação do link, logout, renovação, troca de senha, bloqueio persistido, auditoria); os testes passam a criar contas pelo convite, lido da caixa de e-mail em memória.
 - **Problema conhecido** — a migration `habilita_rls` faz `ALTER TABLE "_prisma_migrations"`, tabela que não existe no banco-sombra do `prisma migrate dev`: o comando falha para qualquer migration nova. Como ela já está aplicada no Postgres local e no Supabase, o arquivo não foi alterado; migrations novas são geradas com `migrate dev --create-only` apontando para um banco descartável recém-criado, até a correção ser decidida.
 
+## 2026-10-07 — Cabeçalhos de segurança e dependências sem alerta (B11)
+
+- **`helmet` 8.3** na API, antes de tudo (os cabeçalhos saem também nos erros 400/401/404 e no preflight do CORS): CSP `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, HSTS (só vale em HTTPS). CORS e `x-powered-by` desligado sem mudança.
+- **Dependências** — `npm audit fix` sem `--force` no backend: `proxy-addr` 2.0.8 (alerta crítico), `body-parser` 1.20.8 e `qs` 6.16.0 (moderados), `express` 4.22.3. `npm audit` zerado. No frontend ficou o alerta moderado do `react-router` 6, que só sai com a versão 7 (major; um dos alertas é de SSR, que a SPA não usa).
+- **Fora:** limite de requisições por IP — em memória não funciona na API serverless da Vercel.
+- **B02** (commit anterior) — `GET /scans` só para Administrador/Analista; a política de segurança deixa de afirmar log imutável e retenção de 12 meses.
+- **Testes** — 200 no backend (7 banco + 80 integração + 113 pentest).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -112,7 +120,7 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 192 no backend (7 banco + 78 integração + 107 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 200 no backend (7 banco + 80 integração + 113 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

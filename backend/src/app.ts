@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { erro, enviar } from './util.js';
 import { apiRouter } from './routes/api.js';
 
@@ -8,6 +9,27 @@ export const app = express();
 
 // Não anunciar o servidor (o proprio catalogo de achados do scanner trata X-Powered-By como A05).
 app.disable('x-powered-by');
+
+// Cabecalhos de seguranca (helmet). Registrado antes de tudo para valer tambem nas respostas
+// de erro (400 JSON_INVALIDO, 404 ROTA_NAO_ENCONTRADA, preflight do CORS). A API so devolve
+// JSON, nunca HTML: a CSP nega qualquer recurso e qualquer moldura (frame-ancestors 'none').
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+      },
+    },
+    xFrameOptions: { action: 'deny' },
+    referrerPolicy: { policy: 'no-referrer' },
+    // HSTS: 1 ano com subdominios (padrao do helmet); navegadores so o respeitam em HTTPS.
+    strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true },
+  }),
+);
 
 // CORS restrito: os frontends chamam a API por proxy (mesma origem); esta lista existe
 // para chamadas diretas de navegador em desenvolvimento. `CORS_ORIGIN=*` libera tudo.
