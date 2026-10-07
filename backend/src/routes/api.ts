@@ -4,7 +4,7 @@ import { prisma } from '../db.js';
 import { gerarToken, exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { emailEmUso, localizarPorEmail, normalizarEmail, resolverDepartamento } from '../usuarios.js';
 import { gerarTokenLink, hashToken } from '../tokens.js';
-import { emitirLinkConta, hashSemSenha } from '../conta.js';
+import { emitirLinkConta } from '../conta.js';
 import { enviarEmailsCampanha } from '../campanhaEmail.js';
 import { registrarAuditoria } from '../audit.js';
 import { avancarVarreduras } from '../varredura.js';
@@ -29,6 +29,14 @@ export const apiRouter = Router();
 
 // Perfis que operam a plataforma (varreduras, ativos, campanhas, cadastro de usuarios).
 const OPERADORES = ['Administrador', 'Analista'];
+
+/**
+ * Senha inicial das contas criadas pelo administrador. E a MESMA para toda conta nova:
+ * quem souber dela entra em qualquer conta recem-criada antes do dono trocar. Mantida
+ * por decisao do projeto para a demonstracao; o caminho seguro e o convite por e-mail
+ * (POST /users/:id/convite), que continua funcionando.
+ */
+const SENHA_INICIAL = '123@!Teste';
 
 // ---- Limite de tentativas de login (politica publicada em /configuracoes/seguranca) ----
 // As falhas ficam no banco (tabela LoginFailure), por e-mail digitado: o bloqueio vale
@@ -160,10 +168,18 @@ apiRouter.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
   const emailNorm = normalizarEmail(email);
   if (await emailEmUso(emailNorm)) return erro(res, 409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
 
-  // Nao existe senha provisoria: a conta nasce Pendente, sem senha utilizavel, e a
-  // pessoa cria a propria senha pelo link do convite enviado por e-mail.
+  // Senha inicial padrao (decisao do projeto para a demonstracao): a conta ja nasce
+  // Ativa e entra com SENHA_INICIAL. O convite continua sendo enviado, para quem
+  // recebe poder trocar por uma senha propria.
   const usuario = await prisma.user.create({
-    data: { nome, email: emailNorm, perfil, senhaHash: await hashSemSenha(), status: 'Pendente', departmentId: departmentId ?? null },
+    data: {
+      nome,
+      email: emailNorm,
+      perfil,
+      senhaHash: await bcrypt.hash(SENHA_INICIAL, 10),
+      status: 'Ativo',
+      departmentId: departmentId ?? null,
+    },
     include: { department: true },
   });
   const ator = usuarioDe(req);
