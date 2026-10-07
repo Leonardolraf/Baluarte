@@ -74,6 +74,8 @@ export interface BaluarteApi {
   createUser(input: UserInput): Promise<User>;
   updateUser(id: string, input: Partial<UserInput>): Promise<User>;
   deleteUser(id: string): Promise<void>;
+  /** Nomes dos departamentos cadastrados (opções do cadastro de usuário). */
+  listDepartments(): Promise<string[]>;
 
   // Configurações
   getNotificationPreferences(): Promise<NotificationPreferences>;

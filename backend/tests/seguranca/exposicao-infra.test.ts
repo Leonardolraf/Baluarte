@@ -199,7 +199,7 @@ describe('nenhuma resposta vaza segredo ou dado sensivel', () => {
     const analista = await login(ANALISTA.email, ANALISTA.senha);
     const r = await chamar('GET', '/me', { token: analista });
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.body.dados).sort(), ['email', 'id', 'nome', 'perfil', 'status']);
+    assert.deepEqual(Object.keys(r.body.dados).sort(), ['departamento', 'email', 'id', 'nome', 'perfil', 'status']);
     semSegredos(r.body, 'GET /me');
   });
 

@@ -21,9 +21,20 @@ model User {
   criadoEm  DateTime @default(now())
   // Marca a ultima redefinicao de senha: tokens JWT emitidos antes disso deixam de valer.
   senhaAlteradaEm DateTime?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   preferencias NotificationPreference?
   resetTokens  PasswordResetToken[]
   eventos      CampaignEvent[]
+}
+
+// Departamento do usuario (agrupa os resultados das campanhas). Campos em ingles por
+// decisao do projeto. Restrict: departamento com usuarios nao e excluido.
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  users     User[]
 }
 
 // Preferencias de notificacao por e-mail (uma linha por usuario; criada sob demanda
@@ -79,6 +90,14 @@ model Finding {
   severidade     String // Baixo | Medio | Alto | Critico
   descricao      String
   evidencia      String
+  // Classificacao: CWE = tipo de falha; CVE = falha concreta num produto (so achado de
+  // componente); vetor CVSS 3.1 = de onde sai a nota (quando existe, a nota e calculada dele).
+  cwe            String?
+  cve            String?
+  cvssVetor      String?
+  // Passos de correcao em JSON: [{ "titulo", "descricao", "esforco": "baixo"|"medio"|"alto" }].
+  // Copiados do catalogo no momento do achado (relatorio antigo nao muda se o catalogo mudar).
+  remediacao     String?
   status         String   @default("Aberta") // Aberta | Em revisao | Em remediacao | Resolvida | Risco aceito
   criadoEm       DateTime @default(now())
 }

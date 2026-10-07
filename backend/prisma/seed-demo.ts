@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/db.js';
-import { faixaCvss } from '../src/util.js';
+import { dadosAchado, type ChaveAchado } from '../src/catalogo.js';
 import { gerarTokenLink, hashToken } from '../src/tokens.js';
 
 // Popula o banco com dados de DEMONSTRACAO para o frontend ter conteudo realista.
@@ -23,41 +23,40 @@ async function main() {
   ];
   for (const a of ativos) await prisma.asset.create({ data: a });
 
-  // ---- Varreduras + achados ----
-  const achados: Record<string, { cat: string; cvss: number; desc: string; ev: string; status: string }[]> = {
-    'ativo-003': [
-      { cat: 'A03:2021 - Injection', cvss: 9.8, desc: 'Injecao SQL no campo de busca.', ev: "GET /busca?q=' OR '1'='1", status: 'Aberta' },
-      { cat: 'A01:2021 - Broken Access Control', cvss: 8.2, desc: 'IDOR no perfil de usuario.', ev: 'GET /api/users/2 com token de outro usuario', status: 'Em revisão' },
-      { cat: 'A07:2021 - Identification and Authentication Failures', cvss: 7.4, desc: 'Sem bloqueio por tentativas.', ev: '200 logins/min sem rate limit', status: 'Aberta' },
-    ],
-    'ativo-004': [
-      { cat: 'A02:2021 - Cryptographic Failures', cvss: 6.5, desc: 'Token JWT sem expiracao.', ev: 'exp ausente no payload', status: 'Em remediação' },
-      { cat: 'A05:2021 - Security Misconfiguration', cvss: 5.3, desc: 'CORS liberado para *.', ev: 'Access-Control-Allow-Origin: *', status: 'Aberta' },
-    ],
-    'ativo-001': [
-      { cat: 'A06:2021 - Vulnerable and Outdated Components', cvss: 4.2, desc: 'Dependencia com CVE conhecido.', ev: 'lodash@4.17.11 (CVE-2019-10744)', status: 'Resolvida' },
-      { cat: 'A03:2021 - Injection', cvss: 9.1, desc: 'Command injection no upload.', ev: 'filename=; rm -rf', status: 'Aberta' },
-    ],
+  // ---- Varreduras + achados (classificacao, nota e remediacao vem do catalogo) ----
+  const achados: Record<string, [ChaveAchado, string][]> = {
+    'ativo-003': [['injecao-sql', 'Aberta'], ['idor', 'Em revisão'], ['sem-bloqueio-login', 'Aberta']],
+    'ativo-004': [['sessao-sem-expiracao', 'Em remediação'], ['cors-curinga', 'Aberta']],
+    'ativo-001': [['componente-vulneravel', 'Resolvida'], ['injecao-comando', 'Aberta']],
   };
   for (const [assetId, lista] of Object.entries(achados)) {
     const scan = await prisma.scan.create({ data: { assetId, status: 'CONCLUIDA', concluidoEm: new Date() } });
-    for (const f of lista) {
-      await prisma.finding.create({ data: { scanId: scan.id, categoriaOwasp: f.cat, cvss: f.cvss, severidade: faixaCvss(f.cvss), descricao: f.desc, evidencia: f.ev, status: f.status } });
+    for (const [chave, status] of lista) {
+      await prisma.finding.create({ data: { ...dadosAchado(chave), scanId: scan.id, status } });
     }
   }
 
   // ---- Usuarios extras (RBAC) ----
   const senha = await bcrypt.hash('Mudar@123', 10);
+  // Departamentos vem do seed de contrato (rodado antes deste).
+  const deps = new Map((await prisma.department.findMany()).map((d) => [d.name, d.id]));
+  const dep = (nome: string) => {
+    const id = deps.get(nome);
+    if (!id) throw new Error(`departamento ausente: ${nome} (rode o seed antes do seed:demo)`);
+    return id;
+  };
   const usuarios = [
-    { nome: 'Edson Marcelino', email: 'edson@empresa.com', perfil: 'Analista', status: 'Ativo' },
-    { nome: 'Ana Souza', email: 'ana.souza@empresa.com', perfil: 'Colaborador', status: 'Ativo' },
-    { nome: 'Bruno Lima', email: 'bruno.lima@empresa.com', perfil: 'Colaborador', status: 'Ativo' },
-    { nome: 'Carla Dias', email: 'carla.dias@empresa.com', perfil: 'Colaborador', status: 'Inativo' },
+    { nome: 'Edson Marcelino', email: 'edson@empresa.com', perfil: 'Analista', status: 'Ativo', departmentId: dep('TI') },
+    { nome: 'Ana Souza', email: 'ana.souza@empresa.com', perfil: 'Colaborador', status: 'Ativo', departmentId: dep('Financeiro') },
+    { nome: 'Bruno Lima', email: 'bruno.lima@empresa.com', perfil: 'Colaborador', status: 'Ativo', departmentId: dep('Comercial') },
+    { nome: 'Carla Dias', email: 'carla.dias@empresa.com', perfil: 'Colaborador', status: 'Inativo', departmentId: dep('RH') },
   ];
   for (const u of usuarios) await prisma.user.create({ data: { ...u, senhaHash: senha } });
 
   // ---- Colaboradores-alvo das campanhas (campanha so aceita usuario cadastrado) ----
   const TOTAL_COLABS = 203; // maior campanha abaixo
+  // Distribuicao realista: mais gente em Comercial/Operacoes, pouca na Diretoria.
+  const ROTACAO = ['Comercial', 'Operações', 'Comercial', 'Financeiro', 'Operações', 'TI', 'RH', 'Comercial', 'Operações', 'Diretoria'];
   await prisma.user.createMany({
     data: Array.from({ length: TOTAL_COLABS }, (_, i) => ({
       nome: `Colaborador ${i + 1}`,
@@ -65,6 +64,7 @@ async function main() {
       perfil: 'Colaborador',
       status: 'Ativo',
       senhaHash: senha,
+      departmentId: dep(ROTACAO[i % ROTACAO.length]),
     })),
   });
   const colabs = await prisma.user.findMany({ where: { email: { startsWith: 'colab', endsWith: '@empresa.com' }, perfil: 'Colaborador', id: { not: 'u-002' } } });

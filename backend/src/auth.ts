@@ -21,6 +21,7 @@ export interface UsuarioAtual {
   status: string;
   senhaHash: string;
   senhaAlteradaEm: Date | null;
+  departmentId: string | null;
 }
 
 export type RequestAutenticada = Request & { usuario?: TokenPayload; usuarioAtual?: UsuarioAtual };

@@ -5,7 +5,7 @@ import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { registrarAuditoria } from '../audit.js';
 import { dadosTreinamento, podeVerTreinamento } from './read.js';
 import { gerarTokenLink, hashToken } from '../tokens.js';
-import { emailEmUso, localizarPorEmail, normalizarEmail } from '../usuarios.js';
+import { emailEmUso, localizarPorEmail, mapUsuario, normalizarEmail, resolverDepartamento, SELECT_USUARIO } from '../usuarios.js';
 import { enviar, erro, wrap, vazio, emailFormatoValido, validarSenha, PERFIS, STATUS_USUARIO } from '../util.js';
 
 // -----------------------------------------------------------------------------
@@ -14,8 +14,6 @@ import { enviar, erro, wrap, vazio, emailFormatoValido, validarSenha, PERFIS, ST
 // Nenhuma delas altera as rotas testadas pela collection do Postman (api.ts).
 // `exigeToken` ja carrega o usuario do banco (existencia + status) em req.usuarioAtual.
 // -----------------------------------------------------------------------------
-
-const SELECT_USUARIO = { id: true, nome: true, email: true, perfil: true, status: true, criadoEm: true } as const;
 
 type ErroHttp = { status: number; mensagem: string; codigo: string };
 function falha(status: number, mensagem: string, codigo: string): { falha: ErroHttp } {
@@ -266,6 +264,33 @@ export function registerManageRoutes(r: Router) {
     });
   }));
 
+  // ---- Departamentos (Administrador) ------------------------------------------
+  r.post('/departamentos', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
+    const ator = usuarioDe(req);
+    const { nome } = req.body ?? {};
+    if (typeof nome !== 'string' || vazio(nome.trim()))
+      return erro(res, 400, 'Nome do departamento é obrigatório', 'NOME_OBRIGATORIO');
+    const limpo = nome.trim();
+    if (limpo.length > 60) return erro(res, 400, 'Nome do departamento deve ter até 60 caracteres', 'NOME_INVALIDO');
+    if ((await resolverDepartamento(limpo)) !== 'invalido')
+      return erro(res, 409, 'Departamento já cadastrado', 'DEPARTAMENTO_DUPLICADO');
+    const dep = await prisma.department.create({ data: { name: limpo } });
+    await registrarAuditoria(ator.id, 'CRIAR_DEPARTAMENTO', dep.name);
+    return enviar(res, 201, { status: 'sucesso', mensagem: 'Departamento cadastrado', dados: { id: dep.id, nome: dep.name, usuarios: 0 } });
+  }));
+
+  // Departamento com usuarios nao e excluido: quem decide para onde eles vao e o administrador.
+  r.delete('/departamentos/:id', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
+    const ator = usuarioDe(req);
+    const dep = await prisma.department.findUnique({ where: { id: req.params.id }, include: { _count: { select: { users: true } } } });
+    if (!dep) return erro(res, 404, 'Departamento não encontrado', 'DEPARTAMENTO_NAO_ENCONTRADO');
+    if (dep._count.users > 0)
+      return erro(res, 409, 'Departamento com usuários: mova-os antes de excluir', 'DEPARTAMENTO_EM_USO');
+    await prisma.department.delete({ where: { id: dep.id } });
+    await registrarAuditoria(ator.id, 'EXCLUIR_DEPARTAMENTO', dep.name);
+    return enviar(res, 200, { status: 'sucesso', mensagem: 'Departamento excluído' });
+  }));
+
   // ---- DELETE /campanhas/:id (Administrador/Analista) -----------------------
   // Fora do contrato da N2 AT1; existe para remover simulacoes de teste sem mexer no banco.
   r.delete('/campanhas/:id', exigeToken, exigePerfil('Administrador', 'Analista'), wrap(async (req, res) => {
@@ -283,10 +308,10 @@ export function registerManageRoutes(r: Router) {
   // ---- PATCH /users/:id (Administrador) --------------------------------------
   r.patch('/users/:id', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
     const ator = usuarioDe(req);
-    const { nome, email, perfil, status } = req.body ?? {};
+    const { nome, email, perfil, status, departamento } = req.body ?? {};
 
     // Validacoes de formato (nao dependem do banco).
-    const dados: { nome?: string; email?: string; perfil?: string; status?: string } = {};
+    const dados: { nome?: string; email?: string; perfil?: string; status?: string; departmentId?: string | null } = {};
     if (nome !== undefined) {
       if (typeof nome !== 'string' || vazio(nome.trim())) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
       dados.nome = nome.trim();
@@ -305,6 +330,9 @@ export function registerManageRoutes(r: Router) {
         return erro(res, 422, 'Você não pode inativar a própria conta', 'AUTO_INATIVACAO');
       dados.status = status;
     }
+    const departmentId = await resolverDepartamento(departamento);
+    if (departmentId === 'invalido') return erro(res, 400, 'Departamento inválido', 'DEPARTAMENTO_INVALIDO');
+    if (departmentId !== undefined) dados.departmentId = departmentId;
     if (Object.keys(dados).length === 0)
       return erro(res, 400, 'Nenhum campo para atualizar', 'NADA_A_ATUALIZAR');
 
@@ -333,7 +361,7 @@ export function registerManageRoutes(r: Router) {
     if ('falha' in resultado) return erro(res, resultado.falha.status, resultado.falha.mensagem, resultado.falha.codigo);
 
     await registrarAuditoria(ator.id, 'ATUALIZAR_USUARIO', `${req.params.id}: ${Object.keys(dados).join(', ')}`);
-    return enviar(res, 200, { status: 'sucesso', mensagem: 'Usuário atualizado', dados: resultado.atualizado });
+    return enviar(res, 200, { status: 'sucesso', mensagem: 'Usuário atualizado', dados: mapUsuario(resultado.atualizado) });
   }));
 
   // ---- DELETE /users/:id (Administrador) -------------------------------------

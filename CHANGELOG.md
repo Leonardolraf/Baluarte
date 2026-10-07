@@ -48,6 +48,21 @@ Três commits no mesmo dia, construindo as suítes de teste exigidas pela discip
   - **Barra lateral no tema escuro:** `ink` e `slate-950` são a mesma cor (`#0B1220`), então navegação e conteúdo ficavam indistinguíveis. A barra passou a usar `slate-900` com borda — a mesma superfície da barra superior. O tema claro não muda.
 - **[`a488663`](https://github.com/Leonardolraf/Baluarte/commit/a488663)** + **[`c068783`](https://github.com/Leonardolraf/Baluarte/commit/c068783)** + **[`137fcca`](https://github.com/Leonardolraf/Baluarte/commit/137fcca)** — **`npm run lint` era impossível de passar no Windows**: o repositório guarda LF, mas `core.autocrlf=true` entregava CRLF no checkout e o Prettier (`endOfLine: "lf"`) acusava cada linha de cada arquivo — 16.800 avisos com `--max-warnings=0`. Regra global `* text=auto eol=lf` no [`.gitattributes`](.gitattributes) resolve na origem, sem configuração por máquina e sem mudar nenhum conteúdo versionado (`git diff --ignore-cr-at-eol` ficou vazio nos 134 arquivos alinhados). A evidência gerada pelo Robot ficou como `-text`, fora de qualquer conversão. Resultado: 16.800 avisos → **0**.
 
+## 2026-10-07 — Classificação e remediação dos achados; departamentos
+
+Itens 1, 2 e 4 da revisão do banco.
+
+- **Remediação no `Finding`** — antes não existia no banco, e com o backend real a aba "Remediação" do detalhe saía sempre vazia (o adaptador montava `remediation: []`; só a demo com mocks mostrava passos). Agora cada achado guarda os passos de correção (título, descrição, esforço), copiados do catálogo no momento do achado, e a API os devolve numerados. Guardado como JSON numa coluna de texto, e não "um passo por linha" como planejado: a tela já espera título, descrição e esforço separados, e o texto por linha perderia isso.
+- **CWE, CVE e vetor CVSS** — campos opcionais `cwe`, `cve` (só em achado de componente) e `cvssVetor`. **A nota sai do vetor** (calculadora CVSS 3.1 em `src/cvss.ts`, conferida contra notas conhecidas) e a severidade sai da nota, então os três nunca se contradizem. O frontend deixou de "achar" o CVE no texto da descrição por expressão regular.
+- **Catálogo do scanner** (`src/catalogo.ts`) — 10 tipos de falha com categoria OWASP, CWE, vetor e remediação; a varredura simulada e o `seed:demo` usam o mesmo catálogo. As notas da demonstração mudaram porque agora são calculadas do vetor (ex.: o lodash do `seed:demo` passou de 4.2 para 9.1, a nota real do CVE-2019-10744).
+- **Departamentos** — tabela `Department` (campos em inglês, por decisão do projeto) e `User.departmentId`. Seed com Comercial, Diretoria, Financeiro, Operações, RH e TI; o `seed:demo` distribui os colaboradores entre eles.
+  - API (em português, como o resto): `GET /departamentos` (Administrador/Analista), `POST /departamentos` e `DELETE /departamentos/:id` (Administrador). Departamento com usuários não é excluído (`409 DEPARTAMENTO_EM_USO`).
+  - `POST /users` e `PATCH /users/:id` aceitam `departamento` pelo nome (opcional; `null` tira o departamento; nome desconhecido dá `400 DEPARTAMENTO_INVALIDO`). `GET /usuarios` e `GET /me` devolvem o departamento.
+  - O relatório da campanha traz `porDepartamento` e o departamento de cada treinamento. O agrupamento usa o departamento **atual** da pessoa (sem cópia histórica, limitação aceita).
+  - Frontend: o campo de departamento do cadastro de usuário lista a tabela (antes era uma lista fixa no código), e o valor fixo "Colaboradores internos" saiu do adaptador.
+- **Testes** — 166 no backend (eram 152): calculadora CVSS, validação de CWE/CVE/vetor, catálogo, achados da varredura, CRUD e RBAC de departamentos, usuário com departamento, relatório por departamento. Frontend 323/323 e lint limpo. Newman 70/70. Conferido no navegador com o backend real: detalhe com CVE, CWE, vetor e passos; cadastro de usuário com departamento; campanha e treinamentos agrupados por departamento.
+- **Atualizar banco existente** — mesma orientação da entrada anterior (`db:reset` + `seed` + `seed:demo`; no Docker, `docker compose down -v`).
+
 ## 2026-10-07 — Campanha ligada ao usuário e token do treinamento com hash
 
 Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudança só de backend e banco; o frontend não precisou mudar.
@@ -71,7 +86,7 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+SQLite, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-09-11 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 152 no backend (46 integração + 106 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 166 no backend (60 integração + 106 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (3 serviços) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

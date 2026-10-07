@@ -7,6 +7,9 @@ import { prisma } from '../src/db.js';
 //  - colaborador@empresa.com / Colab@123  (destinatario das campanhas do Newman e do Robot:
 //    campanha so aceita usuario cadastrado)
 //  - ativo-001 host 192.168.0.10 (Ativo)  e  ativo-002 host 192.168.0.20 (Inativo)
+//  - departamentos padrao (mesma lista que a tela de cadastro de usuario oferece)
+export const DEPARTAMENTOS_PADRAO = ['Comercial', 'Diretoria', 'Financeiro', 'Operações', 'RH', 'TI'];
+
 async function main() {
   const senhaAnalista = await bcrypt.hash('Senha@123', 10);
   const senhaAdmin = await bcrypt.hash('Admin@123', 10);
@@ -28,6 +31,10 @@ async function main() {
     create: { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', senhaHash: senhaColab, perfil: 'Colaborador', status: 'Ativo' },
   });
 
+  for (const name of DEPARTAMENTOS_PADRAO) {
+    await prisma.department.upsert({ where: { name }, update: {}, create: { name } });
+  }
+
   await prisma.asset.upsert({
     where: { host: '192.168.0.10' },
     update: {},
@@ -39,7 +46,7 @@ async function main() {
     create: { id: 'ativo-002', nome: 'Servidor Legado', host: '192.168.0.20', tipo: 'Servidor', status: 'Inativo' },
   });
 
-  console.log('[seed] usuários e ativos criados.');
+  console.log('[seed] usuários, departamentos e ativos criados.');
 }
 
 main()

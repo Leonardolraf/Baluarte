@@ -1,6 +1,8 @@
 import type { Router } from 'express';
 import { prisma } from '../db.js';
 import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
+import { lerRemediacao } from '../catalogo.js';
+import { mapUsuario, SELECT_USUARIO } from '../usuarios.js';
 import { enviar, erro, wrap, queryString, POLITICA_SENHA, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../util.js';
 
 // -----------------------------------------------------------------------------
@@ -12,8 +14,9 @@ import { enviar, erro, wrap, queryString, POLITICA_SENHA, STATUS_FINDING, STATUS
 // -----------------------------------------------------------------------------
 
 const OPERADORES = ['Administrador', 'Analista'];
+const SEM_DEPARTAMENTO = 'Sem departamento';
 
-type FindingComScan = { id: string; categoriaOwasp: string; cvss: number; severidade: string; descricao: string; evidencia: string; status: string; criadoEm: Date; scan: { asset: { host: string; nome: string } } };
+type FindingComScan = { id: string; categoriaOwasp: string; cvss: number; severidade: string; descricao: string; evidencia: string; cwe: string | null; cve: string | null; cvssVetor: string | null; remediacao: string | null; status: string; criadoEm: Date; scan: { asset: { host: string; nome: string } } };
 
 function encerrado(f: { status: string }): boolean {
   return STATUS_FINDING_ENCERRADO.includes(f.status);
@@ -26,10 +29,14 @@ function mapFinding(f: FindingComScan) {
     ativoNome: f.scan.asset.nome,
     categoria: f.categoriaOwasp,
     cvss: f.cvss,
+    cvssVetor: f.cvssVetor,
+    cwe: f.cwe,
+    cve: f.cve,
     severidade: f.severidade,
     status: f.status,
     descricao: f.descricao,
     evidencia: f.evidencia,
+    remediacao: lerRemediacao(f.remediacao),
     detectadoEm: f.criadoEm,
   };
 }
@@ -96,7 +103,8 @@ export function registerReadRoutes(r: Router) {
   // ---- Usuario logado ----
   r.get('/me', exigeToken, wrap(async (req, res) => {
     const u = usuarioDe(req);
-    enviar(res, 200, { status: 'sucesso', dados: { id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, status: u.status } });
+    const dep = u.departmentId ? await prisma.department.findUnique({ where: { id: u.departmentId } }) : null;
+    enviar(res, 200, { status: 'sucesso', dados: { id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, status: u.status, departamento: dep?.name ?? null } });
   }));
 
   // ---- Dashboard agregado ----
@@ -204,22 +212,43 @@ export function registerReadRoutes(r: Router) {
 
   // ---- Relatorio de campanha (funil + treinamentos) ----
   r.get('/campanhas/:id', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
-    const c = await prisma.campaign.findUnique({ where: { id: req.params.id }, include: { eventos: true } });
+    const c = await prisma.campaign.findUnique({
+      where: { id: req.params.id },
+      include: { eventos: { include: { user: { select: { department: { select: { name: true } } } } } } },
+    });
     if (!c) return erro(res, 404, 'Campanha não encontrada', 'CAMPANHA_NAO_ENCONTRADA');
+    const depDe = (e: (typeof c.eventos)[number]) => e.user.department?.name ?? SEM_DEPARTAMENTO;
+    // Agrupa pelo departamento ATUAL de cada pessoa (limitacao documentada: nao ha copia historica).
+    const grupos = new Map<string, { destinatarios: number; enviados: number; clicados: number }>();
+    for (const e of c.eventos) {
+      const g = grupos.get(depDe(e)) ?? { destinatarios: 0, enviados: 0, clicados: 0 };
+      g.destinatarios += 1;
+      if (e.enviadoEm) g.enviados += 1;
+      if (e.clicadoEm) g.clicados += 1;
+      grupos.set(depDe(e), g);
+    }
     enviar(res, 200, {
       status: 'sucesso',
       dados: {
         id: c.id, nome: c.nome, template: c.template, status: c.status, criadoEm: c.criadoEm,
         destinatarios: c.eventos.length,
         funil: funilDe(c.eventos),
-        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, concluido: e.treinou, concluidoEm: e.treinouEm })),
+        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, departamento: depDe(e), concluido: e.treinou, concluidoEm: e.treinouEm })),
+        porDepartamento: [...grupos.entries()]
+          .map(([departamento, g]) => ({
+            departamento,
+            destinatarios: g.destinatarios,
+            clicados: g.clicados,
+            taxaClique: g.enviados ? Math.round((g.clicados / g.enviados) * 100) : 0,
+          }))
+          .sort((a, b) => b.destinatarios - a.destinatarios || a.departamento.localeCompare(b.departamento, 'pt-BR')),
       },
     });
   }));
 
   // ---- Usuarios (RBAC) ----
   r.get('/usuarios', exigeToken, exigePerfil('Administrador'), wrap(async (_req, res) => {
-    const usuarios = await prisma.user.findMany({ select: { id: true, nome: true, email: true, perfil: true, status: true, criadoEm: true }, orderBy: { criadoEm: 'asc' } });
+    const usuarios = (await prisma.user.findMany({ select: SELECT_USUARIO, orderBy: { criadoEm: 'asc' } })).map(mapUsuario);
     const resumo = {
       total: usuarios.length,
       Administrador: usuarios.filter((u) => u.perfil === 'Administrador').length,
@@ -227,6 +256,12 @@ export function registerReadRoutes(r: Router) {
       Colaborador: usuarios.filter((u) => u.perfil === 'Colaborador').length,
     };
     enviar(res, 200, { status: 'sucesso', dados: usuarios, resumo });
+  }));
+
+  // ---- Departamentos (opcoes do cadastro de usuario) ----
+  r.get('/departamentos', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
+    const deps = await prisma.department.findMany({ include: { _count: { select: { users: true } } }, orderBy: { name: 'asc' } });
+    enviar(res, 200, { status: 'sucesso', dados: deps.map((d) => ({ id: d.id, nome: d.name, usuarios: d._count.users })) });
   }));
 
   // ---- Configuracoes de seguranca (politica documentada, leitura) ----

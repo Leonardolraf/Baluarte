@@ -64,7 +64,7 @@ Cada módulo: `routes` (Express) → `service` (regra de negócio) → `reposito
 
 ## 5. Fases (ordenadas por dependência e risco)
 
-**Fase 0 — Fundação sem mudar comportamento.** Extrair serviços/repositories dos três arquivos de rota, sem tocar rotas nem mensagens; validar entrada com um schema (zod) na borda; consolidar config de ambiente validada. *Rede de segurança:* os testes atuais do backend (152 em 07/10/2026) mais Newman/Robot devem continuar verdes a cada passo.
+**Fase 0 — Fundação sem mudar comportamento.** Extrair serviços/repositories dos três arquivos de rota, sem tocar rotas nem mensagens; validar entrada com um schema (zod) na borda; consolidar config de ambiente validada. *Rede de segurança:* os testes atuais do backend (166 em 07/10/2026) mais Newman/Robot devem continuar verdes a cada passo.
 
 **Fase 1 — PostgreSQL.** Trocar o provider do Prisma para `postgresql`, gerar migrations, subir o Postgres no Compose (rede interna, volume, sem porta externa). O código Prisma é quase agnóstico; o risco está em tipos de coluna e no seed. Rodar a suíte inteira contra Postgres em CI.
 

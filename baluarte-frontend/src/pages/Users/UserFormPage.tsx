@@ -49,11 +49,11 @@ const NAME_MIN = 3;
 const NAME_MAX = 80;
 const EMAIL_HINT = 'Usado para login e para o envio de alertas.';
 
-const DEPARTMENTS: readonly string[] = ['Financeiro', 'TI', 'RH', 'Comercial', 'Operações', 'Diretoria'];
 const USER_STATUSES: readonly UserStatus[] = ['active', 'inactive', 'pending'];
 
 /** Códigos de erro do backend que apontam para um campo específico do formulário. */
 const FIELD_BY_ERROR_CODE: Partial<Record<string, keyof UserFormValues>> = {
+  DEPARTAMENTO_INVALIDO: 'department',
   EMAIL_DUPLICADO: 'email',
   EMAIL_INVALIDO: 'email',
   NOME_OBRIGATORIO: 'name',
@@ -83,6 +83,8 @@ export default function UserFormPage() {
     () => (id ? api.getUser(id) : Promise.resolve(null)),
     [id],
   );
+  // Opções vêm da tabela de departamentos; se a lista falhar, o campo fica só com o valor atual.
+  const { data: departments } = useAsync<string[]>(() => api.listDepartments(), []);
 
   const {
     register,
@@ -101,13 +103,10 @@ export default function UserFormPage() {
   const selectedRole = watch('role');
   const roleHint = ROLE_DESCRIPTION[selectedRole];
 
-  const departmentOptions = useMemo(
-    () =>
-      data?.department && !DEPARTMENTS.includes(data.department)
-        ? [...DEPARTMENTS, data.department]
-        : DEPARTMENTS,
-    [data],
-  );
+  const departmentOptions = useMemo(() => {
+    const lista = departments ?? [];
+    return data?.department && !lista.includes(data.department) ? [...lista, data.department] : lista;
+  }, [data, departments]);
 
   const onSubmit = async (values: UserFormValues) => {
     setFormError(null);

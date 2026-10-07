@@ -248,10 +248,26 @@ describe('services/adapters', () => {
     expect(toVulnerability(backendFinding({ status: 'Resolvida' })).status).toBe('resolved');
   });
 
-  it('toVulnerability extrai CVE (normalizado) e id/categoria OWASP', () => {
-    const vuln = toVulnerability(backendFinding());
+  it('toVulnerability lê CVE/CWE/vetor/remediação dos campos do backend e separa id/categoria OWASP', () => {
+    const vuln = toVulnerability(
+      backendFinding({
+        cve: 'CVE-2021-44228',
+        cwe: 'CWE-502',
+        cvssVetor: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H',
+        remediacao: [
+          { ordem: 1, titulo: 'Atualizar o log4j', descricao: 'Subir para 2.17.1.', esforco: 'baixo' },
+          { ordem: 2, titulo: 'Bloquear JNDI', descricao: 'Desligar lookups.', esforco: 'alto' },
+        ],
+      }),
+    );
 
     expect(vuln.cve).toBe('CVE-2021-44228');
+    expect(vuln.cwe).toBe('CWE-502');
+    expect(vuln.cvss.vector).toBe('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H');
+    expect(vuln.remediation).toEqual([
+      { order: 1, title: 'Atualizar o log4j', description: 'Subir para 2.17.1.', effort: 'low' },
+      { order: 2, title: 'Bloquear JNDI', description: 'Desligar lookups.', effort: 'high' },
+    ]);
     expect(vuln.owaspId).toBe('A06:2021');
     expect(vuln.owaspCategory).toBe('Vulnerable and Outdated Components');
     expect(vuln.severity).toBe('critical');
@@ -273,7 +289,11 @@ describe('services/adapters', () => {
       }),
     );
 
+    // Sem o campo, não há CVE — mesmo que o texto da evidência cite um (o improviso por regex saiu).
     expect(vuln.cve).toBeNull();
+    expect(vuln.cwe).toBeNull();
+    expect(vuln.cvss.vector).toBe('');
+    expect(vuln.remediation).toEqual([]);
     expect(vuln.owaspId).toBe('OWASP');
     expect(vuln.owaspCategory).toBe('Cabeçalho CSP ausente');
     expect(vuln.severity).toBe('info');
