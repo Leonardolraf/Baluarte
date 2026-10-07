@@ -122,17 +122,14 @@ export default function UserFormPage() {
       if (id) await trackOperation(api.updateUser(id, input));
       else {
         const criado = await trackOperation(api.createUser(input));
-        // A conta nasce Ativa com a senha inicial padrão. O convite ainda é enviado para
-        // a pessoa trocar por uma senha própria; se o e-mail falhar, o acesso já funciona.
-        notify.success(
-          criado.inviteSent
-            ? 'Usuário cadastrado e convite enviado'
-            : 'Usuário cadastrado. O convite não pôde ser enviado: informe a senha inicial.',
-        );
-        navigate('/users');
-        return;
+        // O cadastro vale mesmo se o e-mail falhar: avisa para reenviar pela lista.
+        if (!criado.inviteSent) {
+          notify.error('Usuário cadastrado, mas o convite não pôde ser enviado. Reenvie pela lista.');
+          navigate('/users');
+          return;
+        }
       }
-      notify.success('Usuário atualizado');
+      notify.success(editing ? 'Usuário atualizado' : 'Usuário cadastrado e convite enviado');
       navigate('/users');
     } catch (err) {
       const apiError = toApiError(err);
@@ -241,10 +238,10 @@ export default function UserFormPage() {
               <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
                 <Icons.InfoIcon size={16} className="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500" />
                 <p>
-                  A conta é criada <strong className="font-medium text-ink dark:text-white">Ativa</strong> com
-                  a senha inicial <code className="font-mono text-xs">123@!Teste</code> e recebe um convite
-                  por e-mail para a pessoa trocar por uma senha própria. Oriente a troca no primeiro acesso: a
-                  senha inicial é a mesma para toda conta nova.
+                  A conta é criada como{' '}
+                  <strong className="font-medium text-ink dark:text-white">Pendente</strong> e recebe um
+                  convite por e-mail para criar a própria senha. Não existe senha provisória; enquanto o
+                  convite não for aceito, o acesso fica bloqueado.
                 </p>
               </div>
             )}
