@@ -10,6 +10,8 @@ export interface TokenPayload {
   perfil: string;
   /** Inicio da sessao (epoch em segundos): o login original, preservado nas renovacoes. */
   inicioSessao?: number;
+  /** Emissao em milissegundos: `iat` so tem segundos e nao separa um logout do login logo antes. */
+  emitidoEmMs?: number;
   /** Emissao (epoch em segundos), preenchida pelo jsonwebtoken. */
   iat?: number;
 }
@@ -60,12 +62,17 @@ export const SESSAO_MAXIMA_MS = 8 * 60 * 60 * 1000;
 export function gerarToken(payload: TokenPayload): string {
   const { idUsuario, email, perfil } = payload;
   const inicioSessao = payload.inicioSessao ?? Math.floor(Date.now() / 1000);
-  return jwt.sign({ idUsuario, email, perfil, inicioSessao }, segredo(), { expiresIn: '30m' });
+  return jwt.sign({ idUsuario, email, perfil, inicioSessao, emitidoEmMs: Date.now() }, segredo(), { expiresIn: '30m' });
 }
 
-/** Token emitido antes do instante dado (1 s de folga: `iat` tem granularidade de segundos). */
+/**
+ * Token emitido antes do instante dado. Usa a emissao em milissegundos; tokens antigos,
+ * sem ela, caem no `iat` (segundos, com 1 s de folga).
+ */
 function emitidoAntes(payload: TokenPayload, instante: Date | null): boolean {
-  return instante !== null && payload.iat !== undefined && payload.iat * 1000 < instante.getTime() - 1000;
+  if (instante === null) return false;
+  if (typeof payload.emitidoEmMs === 'number') return payload.emitidoEmMs <= instante.getTime();
+  return payload.iat !== undefined && payload.iat * 1000 < instante.getTime() - 1000;
 }
 
 /** Usuario dono do token, ja carregado do banco por `exigeToken`. */

@@ -170,8 +170,8 @@ describe('POST /auth/link/verificar', () => {
 describe('sessão: logout, renovação e troca de senha', () => {
   it('logout invalida o token no servidor e é auditado; um login novo funciona', async () => {
     const conta = await criarUsuario(admin, 'Colaborador', 'logout');
+    // Logout logo depois do login (sem espera): a emissao em milissegundos separa os dois.
     const token = await login(conta.email, SENHA_CONTA);
-    await sleep(1200); // `iat` tem granularidade de segundos
     assert.equal((await chamar('POST', '/auth/logout', { token })).status, 200);
     esperaErro(await chamar('GET', '/me', { token }), 401, 'SESSAO_ENCERRADA');
     esperaErro(await chamar('POST', '/auth/logout'), 401, 'TOKEN_AUSENTE');
