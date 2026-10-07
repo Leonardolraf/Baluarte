@@ -91,7 +91,8 @@ describe('RBAC das rotas de escrita e leitura', () => {
   });
 
   it('colaborador não lê as listas técnicas, mas lê o próprio dashboard sem os achados', async () => {
-    for (const rota of ['/vulnerabilidades', '/campanhas', '/usuarios', '/assets']) {
+    // /scans entrou com o B02: expunha nome e endereço de todos os ativos ao Colaborador.
+    for (const rota of ['/vulnerabilidades', '/campanhas', '/usuarios', '/assets', '/scans']) {
       esperaErro(await chamar('GET', rota, { token: colaborador }), 403, 'PERFIL_SEM_PERMISSAO');
     }
     const dashboard = await chamar('GET', '/dashboard', { token: colaborador });
@@ -101,6 +102,22 @@ describe('RBAC das rotas de escrita e leitura', () => {
     assert.ok(typeof dashboard.body.dados.kpis.vulnerabilidadesAbertas === 'number');
     // Politica de seguranca e treinamento continuam liberados.
     assert.equal((await chamar('GET', '/configuracoes/seguranca', { token: colaborador })).status, 200);
+  });
+
+  it('analista e administrador listam as varreduras', async () => {
+    for (const token of [analista, admin]) {
+      const r = await chamar('GET', '/scans', { token });
+      assert.equal(r.status, 200);
+      assert.ok(Array.isArray(r.body.dados));
+    }
+  });
+
+  it('a política de segurança não afirma log imutável nem retenção que não existem', async () => {
+    const r = await chamar('GET', '/configuracoes/seguranca', { token: colaborador });
+    assert.equal(r.body.dados.auditoria.logImutavel, false);
+    assert.equal(r.body.dados.auditoria.retencaoMeses, null);
+    assert.equal(r.body.dados.auditoria.registraAcoes, true);
+    assert.equal(r.body.dados.sessao.sessaoMaximaHoras, 8);
   });
 
   it('analista lê as listas técnicas mas não a lista de usuários (dado pessoal de toda a empresa)', async () => {

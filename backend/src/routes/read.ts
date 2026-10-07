@@ -151,7 +151,8 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Varreduras ----
-  r.get('/scans', exigeToken, wrap(async (_req, res) => {
+  // Lista tecnica (nome e endereco dos ativos): so quem opera a plataforma (RN-006).
+  r.get('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
     const scans = await prisma.scan.findMany({ include: { asset: true, _count: { select: { findings: true } } }, orderBy: { criadoEm: 'desc' } });
     enviar(res, 200, { status: 'sucesso', dados: scans });
   }));
@@ -270,8 +271,12 @@ export function registerReadRoutes(r: Router) {
       status: 'sucesso',
       dados: {
         politicaSenha: { ...POLITICA_SENHA },
-        sessao: { algoritmoToken: 'JWT HS256', expiracaoMinutos: 30, limiteTentativasLogin: 5, doisFatores: false },
-        auditoria: { logImutavel: true, retencaoMeses: 12 },
+        // expiracaoMinutos: sem uso por esse tempo, a sessao expira (o frontend renova
+        // enquanto ha uso); nenhuma sessao passa de sessaoMaximaHoras desde o login.
+        sessao: { algoritmoToken: 'JWT HS256', expiracaoMinutos: 30, sessaoMaximaHoras: 8, limiteTentativasLogin: 5, doisFatores: false },
+        // So o que existe: as acoes sao registradas, mas o log ainda nao e imutavel nem
+        // tem politica de retencao (B29 do backlog). Publicar o contrario seria falso.
+        auditoria: { registraAcoes: true, logImutavel: false, retencaoMeses: null },
       },
     });
   }));
