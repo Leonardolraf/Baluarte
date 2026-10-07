@@ -47,14 +47,14 @@ npm run dev
 |---|---|---|---|
 | `admin@empresa.com` | `Admin@123` | Administrador | seed do backend e mocks do frontend |
 | `analista@empresa.com` | `Senha@123` | Analista | seed do backend e mocks do frontend |
-| `colaborador@empresa.com` | `Colab@123` | Colaborador | só nos mocks do frontend |
+| `colaborador@empresa.com` | `Colab@123` | Colaborador | seed do backend e mocks do frontend (é o destinatário das campanhas do Newman e do Robot) |
 | `ana.souza@empresa.com`, `edson@empresa.com`, … | `Mudar@123` | vários | `seed:demo` do backend (senha provisória de contas criadas pelo administrador) |
 
 ## Testes
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração + pentest** (node:test, SQLite isolado por arquivo) | `backend/tests/` | `cd backend && npm test` | 144 testes. Integração (38): contrato, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento, usuários, "Risco aceito", campanhas. Segurança (106, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
+| **API — integração + pentest** (node:test, SQLite isolado por arquivo) | `backend/tests/` | `cd backend && npm test` | 152 testes. Integração (46): contrato, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico). Segurança (106, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
 | **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 321 testes |
@@ -81,9 +81,11 @@ Relatórios em `e2e/resultados/report.html` e `log.html`.
 
 **Contrato (testado pelo Postman — não muda):** `POST /login` · `POST /scans` · `POST /assets` · `POST /users` · `POST /campaigns` (aceita também `destinatarios[]`) · `GET /findings/classificacao?cvss=`
 
-**Leitura (alimentam as telas):** `GET /me` · `GET /dashboard` · `GET /assets` · `GET /scans` · `GET /vulnerabilidades[/:id]` (+ `PATCH`, inclusive status `Risco aceito`) · `GET /campanhas[/:id]` · `GET /usuarios` · `GET /configuracoes/seguranca` · `GET /treinamentos/:token`
+**Leitura (alimentam as telas):** `GET /me` · `GET /dashboard` · `GET /assets` · `GET /scans` · `GET /vulnerabilidades[/:id]` (+ `PATCH`, inclusive status `Risco aceito`) · `GET /campanhas[/:id]` · `GET /usuarios` · `GET /configuracoes/seguranca` · `GET /treinamentos/:token` (protegido: o `:token` é o id do evento; Colaborador só o próprio)
 
-**Conta e administração:** `POST /auth/change-password` · `POST /auth/reset-password` (+ `/confirm`, token de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min; redefinir encerra as sessões abertas antes) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo) · `DELETE /campanhas/:id` (Administrador/Analista)
+**Link do e-mail de phishing (público, sem login):** `GET /treinamentos/link/:token` (registra abertura e clique uma vez e entrega o treinamento, sem expor ids nem a campanha) · `POST /treinamentos/link/:token/concluir`. O token é aleatório (256 bits), gerado por destinatário ao criar a campanha, e no banco fica só o hash SHA-256. `POST /campaigns` só aceita destinatário cadastrado e não inativo (`422 DESTINATARIO_NAO_CADASTRADO`, conferido depois de formato e domínio).
+
+**Conta e administração:** `POST /auth/change-password` · `POST /auth/reset-password` (+ `/confirm`, token de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min; redefinir encerra as sessões abertas antes) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo; quem tem histórico de campanha não é excluído, só inativado) · `DELETE /campanhas/:id` (Administrador/Analista)
 
 Erros seguem o envelope `{ status: "erro", mensagem, codigoErro, timestamp }`; sucessos, `{ status: "sucesso", mensagem?, dados, resumo? }`. Toda rota de escrita fora do contrato registra em `AuditLog`.
 
@@ -103,7 +105,7 @@ O perfil vem do banco a cada requisição (um token emitido antes de um rebaixam
 
 ### Limitações conhecidas (decisões conscientes de escopo)
 
-- **Sem serviço de e-mail.** O link de redefinição de senha só aparece no log do servidor, e apenas com `RESET_TOKEN_CONSOLE=1` (nunca em `NODE_ENV=production`). Em produção o fluxo exige plugar MailHog/SendGrid.
+- **Sem serviço de e-mail.** O link de redefinição de senha só aparece no log do servidor, e apenas com `RESET_TOKEN_CONSOLE=1` (nunca em `NODE_ENV=production`). O mesmo vale para o link de treinamento de cada destinatário de campanha (`/t/<token>`), com `TREINAMENTO_LINK_CONSOLE=1`. Em produção o fluxo exige plugar MailHog/SendGrid.
 - **Senha provisória fixa** (`Mudar@123`) para contas criadas por um administrador, e a conta `Pendente` pode usar o sistema antes de trocá-la (trocar a senha a ativa). Sem canal de e-mail não há como entregar uma senha aleatória.
 - **Trocar a própria senha** (`/auth/change-password`) não derruba as outras sessões do mesmo usuário; a redefinição por token, sim. Todo token expira em 30 minutos.
 

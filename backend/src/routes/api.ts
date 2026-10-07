@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
 import { gerarToken, exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { emailEmUso, localizarPorEmail, normalizarEmail } from '../usuarios.js';
+import { gerarTokenLink, hashToken } from '../tokens.js';
 import { registerReadRoutes } from './read.js';
 import { registerManageRoutes } from './manage.js';
 import {
@@ -183,14 +184,35 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
   }
   if (!TEMPLATES.includes(template)) return erro(res, 400, 'Template é obrigatório', 'TEMPLATE_OBRIGATORIO');
 
+  // So recebe campanha quem esta cadastrado e nao esta Inativo. A comparacao ignora
+  // maiusculas (bancos antigos podem ter e-mails com caixa mista).
+  const usuarios = await prisma.user.findMany({ select: { id: true, email: true, status: true } });
+  const destinos: { userId: string; email: string }[] = [];
+  for (const email of lista) {
+    const u = usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());
+    if (!u || u.status === 'Inativo')
+      return erro(res, 422, `Destinatário não cadastrado ou inativo: ${email}`, 'DESTINATARIO_NAO_CADASTRADO');
+    destinos.push({ userId: u.id, email: u.email });
+  }
+
+  // Cada destinatario recebe um token proprio para o link do e-mail; no banco fica so o hash.
+  const tokens = destinos.map(() => gerarTokenLink());
   const campanha = await prisma.campaign.create({
     data: {
       nome,
       template,
       status: 'AGENDADA',
-      eventos: { create: lista.map((email) => ({ destinatario: email })) },
+      eventos: {
+        create: destinos.map((d, i) => ({ userId: d.userId, destinatario: d.email, tokenHash: hashToken(tokens[i]) })),
+      },
     },
   });
+  // Nao ha envio de e-mail neste projeto: fora de producao, e so com
+  // TREINAMENTO_LINK_CONSOLE=1, o link de cada destinatario vai para o log do servidor.
+  if (process.env.NODE_ENV !== 'production' && process.env.TREINAMENTO_LINK_CONSOLE === '1') {
+    const base = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+    destinos.forEach((d, i) => console.log(`[campanha] link de ${d.email}: ${base}/t/${tokens[i]}`));
+  }
 
   return enviar(res, 201, {
     status: 'sucesso',
@@ -198,8 +220,8 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
     dados: {
       idCampanha: campanha.id,
       nome: campanha.nome,
-      destinatario: lista[0],
-      destinatarios: lista,
+      destinatario: destinos[0].email,
+      destinatarios: destinos.map((d) => d.email),
       template: campanha.template,
       status: campanha.status,
     },

@@ -190,11 +190,18 @@ describe('IDOR — treinamento pós-clique pertence ao destinatário', () => {
         nome: 'IDOR treino',
         template: 'autoridade',
         status: 'ATIVA',
-        eventos: { create: [{ destinatario: dono.email, enviadoEm: new Date(), clicadoEm: new Date() }] },
+        eventos: { create: [{ userId: dono.id, destinatario: dono.email, enviadoEm: new Date(), clicadoEm: new Date() }] },
       },
       include: { eventos: true },
     });
     const tokenTreino = campanha.eventos[0].id;
+
+    // Leitura: sem token → 401; intruso → 403; o dono lê.
+    esperaErro(await chamar('GET', `/treinamentos/${tokenTreino}`), 401, 'TOKEN_AUSENTE');
+    esperaErro(await chamar('GET', `/treinamentos/${tokenTreino}`, { token: tokenIntruso }), 403, 'TREINAMENTO_DE_OUTRO_USUARIO');
+    assert.equal((await chamar('GET', `/treinamentos/${tokenTreino}`, { token: tokenDono })).status, 200);
+    // O id do evento não abre o link público do e-mail.
+    esperaErro(await chamar('GET', `/treinamentos/link/${tokenTreino}`), 404, 'TREINAMENTO_NAO_ENCONTRADO');
 
     // Sem token → 401; intruso (outro colaborador) → 403; token desconhecido → 404.
     esperaErro(await chamar('POST', `/treinamentos/${tokenTreino}/concluir`), 401, 'TOKEN_AUSENTE');

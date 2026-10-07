@@ -318,6 +318,8 @@ describe('dashboard do Colaborador nao vaza dados tecnicos no payload', () => {
     const admin = await login(ADMIN.email, ADMIN.senha);
     const conta = await criarUsuario(admin, 'Colaborador', 'expo.dash');
     colaborador = await login(conta.email, SENHA_PROVISORIA);
+    const alvo1 = await criarUsuario(admin, 'Colaborador', 'expo.alvo1');
+    const alvo2 = await criarUsuario(admin, 'Colaborador', 'expo.alvo2');
     // Semeia uma campanha COM metricas (enviados/clicados) para provar que o payload as retem.
     await prisma.campaign.create({
       data: {
@@ -326,8 +328,8 @@ describe('dashboard do Colaborador nao vaza dados tecnicos no payload', () => {
         status: 'ATIVA',
         eventos: {
           create: [
-            { destinatario: 'alvo1@empresa.com', enviadoEm: new Date(), abertoEm: new Date(), clicadoEm: new Date() },
-            { destinatario: 'alvo2@empresa.com', enviadoEm: new Date() },
+            { userId: alvo1.id, destinatario: alvo1.email, enviadoEm: new Date(), abertoEm: new Date(), clicadoEm: new Date() },
+            { userId: alvo2.id, destinatario: alvo2.email, enviadoEm: new Date() },
           ],
         },
       },

@@ -48,6 +48,22 @@ Três commits no mesmo dia, construindo as suítes de teste exigidas pela discip
   - **Barra lateral no tema escuro:** `ink` e `slate-950` são a mesma cor (`#0B1220`), então navegação e conteúdo ficavam indistinguíveis. A barra passou a usar `slate-900` com borda — a mesma superfície da barra superior. O tema claro não muda.
 - **[`a488663`](https://github.com/Leonardolraf/Baluarte/commit/a488663)** + **[`c068783`](https://github.com/Leonardolraf/Baluarte/commit/c068783)** + **[`137fcca`](https://github.com/Leonardolraf/Baluarte/commit/137fcca)** — **`npm run lint` era impossível de passar no Windows**: o repositório guarda LF, mas `core.autocrlf=true` entregava CRLF no checkout e o Prettier (`endOfLine: "lf"`) acusava cada linha de cada arquivo — 16.800 avisos com `--max-warnings=0`. Regra global `* text=auto eol=lf` no [`.gitattributes`](.gitattributes) resolve na origem, sem configuração por máquina e sem mudar nenhum conteúdo versionado (`git diff --ignore-cr-at-eol` ficou vazio nos 134 arquivos alinhados). A evidência gerada pelo Robot ficou como `-text`, fora de qualquer conversão. Resultado: 16.800 avisos → **0**.
 
+## 2026-10-07 — Campanha ligada ao usuário e token do treinamento com hash
+
+Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudança só de backend e banco; o frontend não precisou mudar.
+
+- **`CampaignEvent` ligado a `User`** — o evento de campanha deixa de apontar para o destinatário só por um e-mail em texto: `userId` obrigatório (chave estrangeira), com o e-mail mantido como cópia do momento do envio. O `CampaignEvent` já era a tabela de ligação campanha ↔ usuário, então não foi criada outra.
+  - `POST /campaigns` só aceita destinatário **cadastrado e não inativo** (`422 DESTINATARIO_NAO_CADASTRADO`). A checagem vem depois das de formato (`400`), domínio (`422 DESTINATARIO_EXTERNO`) e template, para o contrato do Newman responder exatamente como antes.
+  - **Unicidade** (`campaignId`, `userId`) no próprio banco: a mesma pessoa não entra duas vezes na mesma campanha, mesmo que um caminho futuro esqueça de deduplicar.
+  - **Usuário com histórico de campanha não é excluído** (`409 USUARIO_COM_HISTORICO`, `onDelete: Restrict`): apagar distorceria as métricas históricas; a saída é inativar.
+  - O dono do treinamento passa a ser decidido pelo `userId`, não pela comparação de e-mails.
+- **Token do treinamento separado do id do evento** — o `GET /treinamentos/:token` era público e o "token" era o id do evento, que o próprio relatório da campanha distribui. Agora são dois acessos:
+  - **Dentro do sistema:** `GET /treinamentos/:token` continua usando o id do evento (os links do frontend não mudam), mas **exige login**; Colaborador só o próprio.
+  - **Link do e-mail:** `GET /treinamentos/link/:token` (público; registra abertura e clique uma vez, entrega o treinamento sem expor ids nem a campanha) e `POST /treinamentos/link/:token/concluir`. Token aleatório de 256 bits por destinatário, gerado ao criar a campanha; no banco fica só o hash SHA-256, como no reset de senha (helpers em `src/tokens.ts`, compartilhados pelos dois fluxos). Sem serviço de e-mail, o link vai para o log com `TREINAMENTO_LINK_CONSOLE=1`, nunca em produção.
+- **Seeds** — `colaborador@empresa.com` / `Colab@123` passa a existir no seed de contrato (antes só nos mocks do frontend), porque é o destinatário das campanhas do Newman e do Robot. O `seed:demo` cria os 203 colaboradores-alvo das campanhas de demonstração.
+- **Testes** — 152 no backend (eram 144): campanha com não cadastrado/inativo, vínculo e hash por evento, unicidade, exclusão com histórico, link público (token desconhecido, id do evento no lugar do token, concluir antes de abrir, clique registrado uma vez, conclusão idempotente) e leitura protegida do treinamento. Newman: 35 requisições / 70 asserções, 0 falhas.
+- **Atenção ao atualizar um banco existente** — `userId` obrigatório não pode ser adicionado a eventos que já existem, então o `db push` pede reset. Local: `npm run db:reset && npm run seed && npm run seed:demo`. Docker: `docker compose down -v` antes de subir (o volume é recriado e semeado).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -55,7 +71,7 @@ Três commits no mesmo dia, construindo as suítes de teste exigidas pela discip
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+SQLite, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-09-11 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 144 no backend (38 integração + 106 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-09-18 |
+| Testes | 152 no backend (46 integração + 106 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (3 serviços) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

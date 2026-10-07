@@ -23,6 +23,7 @@ model User {
   senhaAlteradaEm DateTime?
   preferencias NotificationPreference?
   resetTokens  PasswordResetToken[]
+  eventos      CampaignEvent[]
 }
 
 // Preferencias de notificacao por e-mail (uma linha por usuario; criada sob demanda
@@ -91,11 +92,18 @@ model Campaign {
   eventos  CampaignEvent[]
 }
 
+// Um evento por destinatario da campanha: e a tabela de ligacao Campaign <-> User.
 model CampaignEvent {
   id           String    @id @default(cuid())
   campaignId   String
   campaign     Campaign  @relation(fields: [campaignId], references: [id])
-  destinatario String
+  // So usuarios cadastrados recebem campanha. Restrict: quem tem historico de
+  // campanha nao pode ser excluido (inativar a conta preserva as metricas).
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  destinatario String    // copia do e-mail no momento do envio
+  // Hash SHA-256 do token do link enviado no e-mail; o token em claro nunca e gravado.
+  tokenHash    String?   @unique
   enviadoEm    DateTime?
   abertoEm     DateTime?
   clicadoEm    DateTime?
@@ -103,6 +111,9 @@ model CampaignEvent {
   reportouEm   DateTime? // reportou o e-mail suspeito ao time de TI
   treinou      Boolean   @default(false)
   treinouEm    DateTime? // quando concluiu o treinamento pos-clique
+
+  @@unique([campaignId, userId]) // a mesma pessoa nao entra duas vezes na mesma campanha
+  @@index([userId])
 }
 
 model AuditLog {

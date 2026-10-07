@@ -6,7 +6,7 @@
 
 ## O que tem aqui
 App real construído para a disciplina de Teste de Software do TCC (não mais stubs):
-- `backend/` — Node + Express + TypeScript + Prisma + SQLite, JWT (HS256) + bcrypt, RBAC, AuditLog. Porta `8080`. Testes de integração próprios em `backend/tests/` (`npm test`, 38 testes, banco `test.db` isolado).
+- `backend/` — Node + Express + TypeScript + Prisma + SQLite, JWT (HS256) + bcrypt, RBAC, AuditLog. Porta `8080`. Testes de integração próprios em `backend/tests/` (`npm test`, 152 testes — 46 de integração + 106 de pentest em `tests/seguranca/` —, banco SQLite isolado por arquivo).
 - `baluarte-frontend/` — **frontend do produto**: SPA React 18 + TypeScript + Vite + TailwindCSS com RBAC por rota, tema claro/escuro, camada mock (`npm run dev`) ou backend real (`VITE_USE_MOCKS=false`). Porta `5173`. Suítes: Vitest + RTL + axe (`npm test`), Playwright (`npm run test:e2e`; modo real com `E2E_REAL=1`).
 - `frontend/` — **frontend legado** (telas geradas do Figma). Porta `3000`. Mantido só como alvo das suítes Robot Framework da N2 AT1 (`e2e/*.robot`), que dependem das rotas `/cadastro-usuario`, `/cadastro-ativo`, `/campanha`, `/alterar-senha`, `/reset-senha` e dos ids dos formulários. Não evoluir; novas telas vão em `baluarte-frontend/`.
 - `testes-api/` e `testes/api/` — collection Postman/Newman (N2 AT1): 35 requisições / 70 asserções sobre os 6 endpoints do contrato. Precisa de banco limpo (`db:reset` + `seed`).
@@ -21,6 +21,8 @@ Ver `README.md` deste repo para como rodar, credenciais de teste e como rodar ca
 - Rotas novas de leitura vão em `backend/src/routes/read.ts`; de escrita, em `backend/src/routes/manage.ts`. Toda rota de escrita registra em `AuditLog` (`src/audit.ts`).
 - O frontend fala com o backend só por `baluarte-frontend/src/services/api.ts` + `adapters.ts` (envelope `{ status, dados, resumo }`, campos em português → modelos de domínio em inglês).
 - **RBAC é do servidor:** `exigeToken` carrega o usuário do banco a cada requisição (perfil atual, conta removida/inativa, senha redefinida) e `exigePerfil` decide pelo perfil do banco, não pelo que está no JWT. Administrador gerencia usuários; Analista opera a plataforma e lê as listas técnicas; Colaborador só vê índices, KPIs, política e o próprio treinamento. Ver a tabela no `README.md`.
+- **Campanha ↔ usuário:** `CampaignEvent.userId` é obrigatório (só destinatário cadastrado e não inativo), com unicidade (`campaignId`, `userId`); usuário com histórico de campanha não é excluído (`USUARIO_COM_HISTORICO`). O dono do treinamento é decidido pelo `userId`, nunca pelo e-mail.
+- **Dois acessos ao treinamento:** dentro do sistema, `/treinamentos/:token` usa o id do evento e exige login; o link do e-mail usa `/treinamentos/link/:token`, com token aleatório guardado só como hash (`src/tokens.ts`, o mesmo do reset de senha).
 - **Docker:** `docker compose up --build -d` sobe API `:8080`, frontend do produto `:8081` (Nginx) e legado `:3000`. O SQLite fica no volume `backend-data`; o `JWT_SECRET`, quando não vem do `.env`, é gerado no volume. Nenhum segredo fixo vai para o repositório.
 
 ## Segurança

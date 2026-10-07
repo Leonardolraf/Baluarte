@@ -178,11 +178,17 @@ describe('SQLi em path params', () => {
     'null',
   ];
 
-  it('GET /treinamentos/:token (publico) -> 404, nunca 500/vazamento', async () => {
+  it('GET /treinamentos/:token (protegido) e /treinamentos/link/:token (publico) -> 404, nunca 500/vazamento', async () => {
     for (const p of PAYLOADS) {
-      const r = await chamar('GET', `/treinamentos/${encodeURIComponent(p)}`);
+      const r = await chamar('GET', `/treinamentos/${encodeURIComponent(p)}`, { token: analista });
       nunca500(r, `treinamento ${p}`);
       esperaErro(r, 404, 'TREINAMENTO_NAO_ENCONTRADO');
+      const rl = await chamar('GET', `/treinamentos/link/${encodeURIComponent(p)}`);
+      nunca500(rl, `link de treinamento ${p}`);
+      esperaErro(rl, 404, 'TREINAMENTO_NAO_ENCONTRADO');
+      const rc = await chamar('POST', `/treinamentos/link/${encodeURIComponent(p)}/concluir`);
+      nunca500(rc, `conclusao por link ${p}`);
+      esperaErro(rc, 404, 'TREINAMENTO_NAO_ENCONTRADO');
     }
   });
 

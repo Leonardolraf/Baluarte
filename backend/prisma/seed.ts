@@ -4,10 +4,13 @@ import { prisma } from '../src/db.js';
 
 // Dados de seed — mesmos IDs/credenciais que o contrato dos testes da N2 AT1 assume:
 //  - usuario analista@empresa.com / Senha@123  (login e dup de e-mail)
+//  - colaborador@empresa.com / Colab@123  (destinatario das campanhas do Newman e do Robot:
+//    campanha so aceita usuario cadastrado)
 //  - ativo-001 host 192.168.0.10 (Ativo)  e  ativo-002 host 192.168.0.20 (Inativo)
 async function main() {
   const senhaAnalista = await bcrypt.hash('Senha@123', 10);
   const senhaAdmin = await bcrypt.hash('Admin@123', 10);
+  const senhaColab = await bcrypt.hash('Colab@123', 10);
 
   await prisma.user.upsert({
     where: { email: 'analista@empresa.com' },
@@ -18,6 +21,11 @@ async function main() {
     where: { email: 'admin@empresa.com' },
     update: {},
     create: { id: 'u-000', nome: 'Administrador', email: 'admin@empresa.com', senhaHash: senhaAdmin, perfil: 'Administrador', status: 'Ativo' },
+  });
+  await prisma.user.upsert({
+    where: { email: 'colaborador@empresa.com' },
+    update: {},
+    create: { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', senhaHash: senhaColab, perfil: 'Colaborador', status: 'Ativo' },
   });
 
   await prisma.asset.upsert({

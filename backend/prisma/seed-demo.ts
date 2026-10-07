@@ -2,16 +2,17 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/db.js';
 import { faixaCvss } from '../src/util.js';
+import { gerarTokenLink, hashToken } from '../src/tokens.js';
 
 // Popula o banco com dados de DEMONSTRACAO para o frontend ter conteudo realista.
 // Roda DEPOIS do seed de contrato. NAO deve rodar antes do Newman (use db:reset + seed).
 async function main() {
-  // limpa dados gerados (mantem usuarios/ativos de contrato u-000/u-001/ativo-001/ativo-002)
+  // limpa dados gerados (mantem usuarios/ativos de contrato u-000/u-001/u-002/ativo-001/ativo-002)
   await prisma.finding.deleteMany();
   await prisma.scan.deleteMany();
   await prisma.campaignEvent.deleteMany();
   await prisma.campaign.deleteMany();
-  await prisma.user.deleteMany({ where: { id: { notIn: ['u-000', 'u-001'] } } });
+  await prisma.user.deleteMany({ where: { id: { notIn: ['u-000', 'u-001', 'u-002'] } } });
   await prisma.asset.deleteMany({ where: { id: { notIn: ['ativo-001', 'ativo-002'] } } });
 
   // ---- Ativos extras ----
@@ -55,6 +56,20 @@ async function main() {
   ];
   for (const u of usuarios) await prisma.user.create({ data: { ...u, senhaHash: senha } });
 
+  // ---- Colaboradores-alvo das campanhas (campanha so aceita usuario cadastrado) ----
+  const TOTAL_COLABS = 203; // maior campanha abaixo
+  await prisma.user.createMany({
+    data: Array.from({ length: TOTAL_COLABS }, (_, i) => ({
+      nome: `Colaborador ${i + 1}`,
+      email: `colab${i}@empresa.com`,
+      perfil: 'Colaborador',
+      status: 'Ativo',
+      senhaHash: senha,
+    })),
+  });
+  const colabs = await prisma.user.findMany({ where: { email: { startsWith: 'colab', endsWith: '@empresa.com' }, perfil: 'Colaborador', id: { not: 'u-002' } } });
+  const idPorEmail = new Map(colabs.map((u) => [u.email, u.id]));
+
   // ---- Campanhas + eventos (funil) ----
   async function campanha(nome: string, template: string, status: string, total: number, abertos: number, clicados: number, submeteram: number, reportaram: number) {
     const c = await prisma.campaign.create({ data: { nome, template, status } });
@@ -62,7 +77,9 @@ async function main() {
       await prisma.campaignEvent.create({
         data: {
           campaignId: c.id,
+          userId: idPorEmail.get(`colab${i}@empresa.com`)!,
           destinatario: `colab${i}@empresa.com`,
+          tokenHash: hashToken(gerarTokenLink()), // demo: o token em claro e descartado
           enviadoEm: new Date(),
           abertoEm: i < abertos ? new Date() : null,
           clicadoEm: i < clicados ? new Date() : null,

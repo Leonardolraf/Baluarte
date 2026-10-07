@@ -9,7 +9,7 @@
 # A porta 8081 (e não 5173) é de propósito: 5173 é o dev server do Vite, que o
 # Playwright reutiliza se estiver ocupada — a stack Docker e o modo mock convivem.
 # Variáveis num `.env` na raiz (ver .env.example): JWT_SECRET, NODE_ENV,
-# RESET_TOKEN_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
+# RESET_TOKEN_CONSOLE, TREINAMENTO_LINK_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
 services:
   backend:
     build: ./backend
@@ -24,6 +24,9 @@ services:
       # demonstração — não há serviço de e-mail). Use 0 em qualquer ambiente compartilhado;
       # em NODE_ENV=production o token nunca é impresso, independente deste valor.
       - RESET_TOKEN_CONSOLE=${RESET_TOKEN_CONSOLE:-1}
+      # 1 = imprime no log o link de treinamento de cada destinatário ao criar uma campanha
+      # (mesma regra: nunca em NODE_ENV=production).
+      - TREINAMENTO_LINK_CONSOLE=${TREINAMENTO_LINK_CONSOLE:-1}
       # Base usada para montar o link de redefinição impresso no log.
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       # Origens permitidas no CORS (os frontends falam por proxy/mesma origem; isto é para chamadas diretas).

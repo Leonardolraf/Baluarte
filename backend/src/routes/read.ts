@@ -241,22 +241,33 @@ export function registerReadRoutes(r: Router) {
     });
   }));
 
-  // ---- Treinamento pos-clique (publico, acessado pelo link da campanha) ----
-  // O token e o id do evento de campanha; o conteudo segue o template da campanha.
-  r.get('/treinamentos/:token', wrap(async (req, res) => {
+  // ---- Treinamento pos-clique (protegido, navegacao dentro do sistema) ----
+  // `:token` e o id do evento de campanha (nome mantido por compatibilidade com o
+  // frontend). O link do e-mail usa outro token, aleatorio: ver /treinamentos/link/:token.
+  r.get('/treinamentos/:token', exigeToken, wrap(async (req, res) => {
     const evento = await prisma.campaignEvent.findUnique({ where: { id: req.params.token }, include: { campaign: true } });
     if (!evento) return erro(res, 404, 'Treinamento não encontrado', 'TREINAMENTO_NAO_ENCONTRADO');
-    const conteudo = CONTEUDO_TREINAMENTO[evento.campaign.template] ?? CONTEUDO_TREINAMENTO.urgencia;
+    if (!podeVerTreinamento(usuarioDe(req), evento))
+      return erro(res, 403, 'Este treinamento pertence a outro colaborador', 'TREINAMENTO_DE_OUTRO_USUARIO');
     enviar(res, 200, {
       status: 'sucesso',
-      dados: {
-        ...conteudo,
-        template: evento.campaign.template,
-        progresso: evento.treinou ? 100 : 0,
-        concluidoEm: evento.treinouEm,
-        campanha: evento.campaign.nome,
-        idCampanha: evento.campaign.id,
-      },
+      dados: { ...dadosTreinamento(evento), campanha: evento.campaign.nome, idCampanha: evento.campaign.id },
     });
   }));
+}
+
+/** Colaborador so acessa o proprio treinamento; Administrador e Analista acessam todos. */
+export function podeVerTreinamento(usuario: { id: string; perfil: string }, evento: { userId: string }): boolean {
+  return evento.userId === usuario.id || OPERADORES.includes(usuario.perfil);
+}
+
+/** Conteudo do treinamento (pelo template da campanha) e o progresso do destinatario. */
+export function dadosTreinamento(evento: { treinou: boolean; treinouEm: Date | null; campaign: { template: string } }) {
+  const conteudo = CONTEUDO_TREINAMENTO[evento.campaign.template] ?? CONTEUDO_TREINAMENTO.urgencia;
+  return {
+    ...conteudo,
+    template: evento.campaign.template,
+    progresso: evento.treinou ? 100 : 0,
+    concluidoEm: evento.treinouEm,
+  };
 }
