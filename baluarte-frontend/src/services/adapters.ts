@@ -128,6 +128,15 @@ export interface BackendCampaignReport {
     /** Id do evento de campanha: é o `:token` de /treinamentos/:token. */
     token?: string;
     concluidoEm?: string | null;
+    /** Quando reportou o e-mail simulado (também quem clicou pode reportar). */
+    reportouEm?: string | null;
+  }>;
+  /** Quem reportou o e-mail simulado pelo rodapé, em ordem de reporte (clicando ou não). */
+  reportes?: Array<{
+    destinatario: string;
+    departamento?: string;
+    reportouEm: string;
+    clicou: boolean;
   }>;
   porDepartamento?: Array<{
     departamento: string;
@@ -487,11 +496,31 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
     openedAt: raw.criadoEm,
     clickedAt: raw.criadoEm,
     submittedAt: null,
-    reportedAt: null,
+    reportedAt: t.reportouEm ?? null,
     trainingCompleted: t.concluido,
     // O treinamento pós-clique é acessado pelo id do evento (token) de cada destinatário.
     trainingId: t.token ?? null,
   }));
+  // Quem reportou sem clicar não está em `treinamentos`: entra como linha própria.
+  const clicaram = new Set(raw.treinamentos.map((t) => t.destinatario.toLowerCase()));
+  (raw.reportes ?? [])
+    .filter((r) => !clicaram.has(r.destinatario.toLowerCase()))
+    .forEach((r, i) =>
+      recipients.push({
+        id: `${raw.id}-rep${i}`,
+        campaignId: raw.id,
+        name: r.destinatario.split('@')[0] ?? r.destinatario,
+        email: r.destinatario,
+        department: r.departamento ?? 'Sem departamento',
+        sentAt: raw.criadoEm,
+        openedAt: r.reportouEm,
+        clickedAt: null,
+        submittedAt: null,
+        reportedAt: r.reportouEm,
+        trainingCompleted: false,
+        trainingId: null,
+      }),
+    );
   const funnel: FunnelStage[] = [
     { key: 'sent', label: RECIPIENT_STAGE_LABEL.sent, value: metrics.sent, pct: metrics.sent > 0 ? 100 : 0 },
     { key: 'opened', label: RECIPIENT_STAGE_LABEL.opened, value: metrics.opened, pct: metrics.openRate },
@@ -514,13 +543,19 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
     recipients,
     funnel,
     timeline: [
+      ...(raw.reportes ?? []).map((r, i): CampaignReport['timeline'][number] => ({
+        id: `${raw.id}-reported-${i}`,
+        at: r.reportouEm,
+        kind: 'reported',
+        description: `${r.destinatario} reportou o e-mail suspeito.`,
+      })),
       {
         id: `${raw.id}-scheduled`,
         at: raw.criadoEm,
-        kind: 'scheduled',
+        kind: 'scheduled' as const,
         description: `Campanha "${raw.nome}" criada.`,
       },
-    ],
+    ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
     byDepartment: (raw.porDepartamento ?? []).map((d) => ({
       department: d.departamento,
       recipients: d.destinatarios,

@@ -12,7 +12,7 @@
 # A porta 8081 (e não 5173) é de propósito: 5173 é o dev server do Vite, que o
 # Playwright reutiliza se estiver ocupada — a stack Docker e o modo mock convivem.
 # Variáveis num `.env` na raiz (ver .env.example): POSTGRES_PASSWORD (obrigatória), JWT_SECRET, NODE_ENV,
-# SMTP_*, EMAIL_REMETENTE, TREINAMENTO_LINK_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
+# SMTP_*, EMAIL_REMETENTE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
 services:
   # PostgreSQL local. A senha vem do .env da raiz (nunca versionada); sem ela o compose
   # recusa subir. A porta só é publicada em 127.0.0.1: nada de fora da máquina alcança o banco.
@@ -42,17 +42,14 @@ services:
       - JWT_SECRET=${JWT_SECRET:-}
       - PORT=8080
       - NODE_ENV=${NODE_ENV:-development}
-      # E-mails de conta (convite, redefinição de senha). Padrão: o Mailpit abaixo, que
+      # E-mails de conta (convite, redefinição de senha) e da campanha de phishing simulado. Padrão: o Mailpit abaixo, que
       # guarda tudo e não entrega nada para fora. Em produção, aponte para o SMTP real.
       - SMTP_HOST=${SMTP_HOST:-mailpit}
       - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - EMAIL_REMETENTE=${EMAIL_REMETENTE:-Baluarte <nao-responda@baluarte.local>}
-      # 1 = imprime no log o link de treinamento de cada destinatário ao criar uma campanha
-      # (mesma regra: nunca em NODE_ENV=production).
-      - TREINAMENTO_LINK_CONSOLE=${TREINAMENTO_LINK_CONSOLE:-1}
-      # Base dos links enviados por e-mail (convite e redefinição de senha).
+      # Base dos links enviados por e-mail (convite, redefinição de senha, campanha).
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       # Origens permitidas no CORS (os frontends falam por proxy/mesma origem; isto é para chamadas diretas).
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8081,http://localhost:5173,http://localhost:5174,http://localhost:3000}

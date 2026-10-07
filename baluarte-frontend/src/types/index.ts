@@ -325,6 +325,12 @@ export interface CampaignFilters {
 
 // ---- Treinamento ------------------------------------------------------------
 
+/** Resultado de reportar o e-mail simulado pelo link do rodapé. */
+export interface PhishingReportResult {
+  reported: true;
+  reportedAt: string;
+}
+
 export interface TrainingSection {
   heading: string;
   body: string;

@@ -5,6 +5,7 @@ import { gerarToken, exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { emailEmUso, localizarPorEmail, normalizarEmail, resolverDepartamento } from '../usuarios.js';
 import { gerarTokenLink, hashToken } from '../tokens.js';
 import { emitirLinkConta, hashSemSenha } from '../conta.js';
+import { enviarEmailsCampanha } from '../campanhaEmail.js';
 import { registrarAuditoria } from '../audit.js';
 import { avancarVarreduras } from '../varredura.js';
 import { registerReadRoutes } from './read.js';
@@ -205,14 +206,14 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
   // So recebe campanha quem esta cadastrado e nao esta Inativo (e-mail citext: ignora maiusculas).
   const usuarios = await prisma.user.findMany({
     where: { email: { in: lista.map((e) => e.toLowerCase()) } },
-    select: { id: true, email: true, status: true },
+    select: { id: true, nome: true, email: true, status: true },
   });
-  const destinos: { userId: string; email: string }[] = [];
+  const destinos: { userId: string; nome: string; email: string }[] = [];
   for (const email of lista) {
     const u = usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());
     if (!u || u.status === 'Inativo')
       return erro(res, 422, `Destinatário não cadastrado ou inativo: ${email}`, 'DESTINATARIO_NAO_CADASTRADO');
-    destinos.push({ userId: u.id, email: u.email });
+    destinos.push({ userId: u.id, nome: u.nome, email: u.email });
   }
 
   // Cada destinatario recebe um token proprio para o link do e-mail; no banco fica so o hash.
@@ -227,12 +228,15 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
       },
     },
   });
-  // Nao ha envio de e-mail neste projeto: fora de producao, e so com
-  // TREINAMENTO_LINK_CONSOLE=1, o link de cada destinatario vai para o log do servidor.
-  if (process.env.NODE_ENV !== 'production' && process.env.TREINAMENTO_LINK_CONSOLE === '1') {
-    const base = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-    destinos.forEach((d, i) => console.log(`[campanha] link de ${d.email}: ${base}/t/${tokens[i]}`));
-  }
+  const ator = usuarioDe(req);
+  await registrarAuditoria(ator.id, 'CRIAR_CAMPANHA', `${campanha.id} (${campanha.nome}, ${campanha.template}, ${destinos.length} destinatário(s))`);
+  // E-mail simulado a cada destinatario, com o link rastreavel e o de reporte (src/campanhaEmail.ts).
+  // Falha de envio nao desfaz a campanha: o evento fica sem `enviadoEm`.
+  const emailsEnviados = await enviarEmailsCampanha(
+    campanha,
+    destinos.map((d, i) => ({ userId: d.userId, nome: d.nome, email: d.email, token: tokens[i] })),
+  );
+  await registrarAuditoria(ator.id, 'ENVIAR_CAMPANHA', `${campanha.id}: ${emailsEnviados} de ${destinos.length} e-mail(s) enviado(s)`);
 
   return enviar(res, 201, {
     status: 'sucesso',
@@ -244,6 +248,8 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
       destinatarios: destinos.map((d) => d.email),
       template: campanha.template,
       status: campanha.status,
+      // Extensao compativel: quantos e-mails simulados sairam (0 em producao sem SMTP).
+      emailsEnviados,
     },
   });
 }));

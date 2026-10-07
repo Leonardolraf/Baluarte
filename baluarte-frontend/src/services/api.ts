@@ -16,6 +16,7 @@ import type {
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
+  PhishingReportResult,
   ScanReport,
   SecurityPolicy,
   Severity,
@@ -465,6 +466,35 @@ export const realApi: BaluarteApi = {
       progress: 100,
       completedAt: training.completedAt ?? new Date().toISOString(),
     };
+  },
+
+  // Link público do e-mail da campanha: sem login, pelo token aleatório do e-mail.
+  async getTrainingByLink(token: string): Promise<Training> {
+    const raw = await request<BackendTraining>({
+      method: 'GET',
+      url: `/treinamentos/link/${encodeURIComponent(token)}`,
+    });
+    return toTraining(token, raw);
+  },
+
+  async completeTrainingByLink(token: string): Promise<Training> {
+    const path = `/treinamentos/link/${encodeURIComponent(token)}`;
+    const done = await request<{ concluidoEm?: string | null }>({ method: 'POST', url: `${path}/concluir` });
+    const training = toTraining(token, await request<BackendTraining>({ method: 'GET', url: path }));
+    return {
+      ...training,
+      completed: true,
+      progress: 100,
+      completedAt: training.completedAt ?? done.concluidoEm ?? new Date().toISOString(),
+    };
+  },
+
+  async reportPhishing(token: string): Promise<PhishingReportResult> {
+    const raw = await request<{ reportado: boolean; reportadoEm: string }>({
+      method: 'POST',
+      url: `/treinamentos/link/${encodeURIComponent(token)}/reportar`,
+    });
+    return { reported: true, reportedAt: raw.reportadoEm };
   },
 
   async listUsers(): Promise<User[]> {

@@ -124,6 +124,17 @@ A varredura continua **simulada**, mas deixa de ficar "na fila" para sempre.
 - **Sem mudança de schema** — o `CHECK` já aceitava os três status.
 - **Testes** — 205 no backend (eram 194): `tests/varredura.test.ts` (transições com `criadoEm` recuado no banco, sem dormir; concluir direto da fila; leituras simultâneas; bloqueio, simultaneidade e ordem das validações). 329 no frontend (eram 324): ciclo e 409 na camada mock, tela com consulta automática, auditoria axe de `/scans`.
 
+## 2026-10-07 — E-mail simulado da campanha e "reportar e-mail suspeito" (B19)
+
+- **E-mail de verdade para cada destinatário** — `POST /campaigns` passa a enviar, pelo mesmo `src/email.ts` dos e-mails de conta (Mailpit em dev/demo, caixa em memória nos testes, nada em produção sem SMTP), o e-mail do template (`src/campanhaEmail.ts`): urgência ("conta bloqueada em 24 horas"), autoridade ("pedido da Diretoria") e curiosidade ("plano de cargos e salários"), como o frontend descreve cada um. Só texto, sem anexo, sem pedido de senha, remetente da plataforma (`EMAIL_REMETENTE`) e rodapé que identifica a **simulação de treinamento interno**. Os dois links vão para o próprio frontend: `/t/<token>` (treinamento; o clique já era registrado por `GET /treinamentos/link/:token`) e `/t/<token>/reportar`. `enviadoEm` passa a ser marcado só para quem recebeu (antes ficava vazio e o funil mostrava 0 enviados). O `TREINAMENTO_LINK_CONSOLE` saiu.
+- **Contrato** — mesmos status, mensagens e códigos de erro; a resposta ganha `emailsEnviados`. Campanha recusada (formato, domínio, template, destinatário não cadastrado/inativo) não envia nada. Falha de envio não desfaz a campanha.
+- **Reportar** — `POST /treinamentos/link/:token/reportar` (público, mesmo token do link): grava `reportouEm` (campo que já existia no `CampaignEvent`, sem migration) e a abertura, não conta clique, é idempotente (o primeiro reporte vale; `updateMany` condicional evita registro duplo concorrente) e responde `404 LINK_NAO_ENCONTRADO` para token inválido. O `GET` não registra nada: a tela pede confirmação, para antivírus que pré-visitam links não "reportarem" por ninguém.
+- **Relatório** — `GET /campanhas/:id` traz `reportes[]` (destinatário, departamento, data, se clicou) e `reportouEm` em cada treinamento; o detalhe da campanha no frontend mostra quem reportou (inclusive quem não clicou) e os reportes na linha do tempo.
+- **Auditoria** — `CRIAR_CAMPANHA`, `ENVIAR_CAMPANHA` (quantos de quantos) e `REPORTAR_PHISHING`.
+- **Frontend** — o link do e-mail não tinha tela: rotas públicas novas `/t/:token` (a mesma `TrainingPage`, em modo link, sem login e sem expor a campanha) e `/t/:token/reportar` (`ReportPhishingPage`, com confirmação). Métodos `getTrainingByLink`, `completeTrainingByLink` e `reportPhishing` na API real e nos mocks (no mock, o token é o id do destinatário). Textos do formulário de campanha e do "Sobre" deixaram de dizer que nenhum e-mail é enviado.
+- **Fora do escopo** — pixel de abertura (o e-mail é só texto; a abertura vem do clique ou do reporte).
+- **Testes** — 221 no backend com o B21 (204 só com este item) (`tests/campanha-email.test.ts`, 10 novos: e-mail por destinatário com o link e o token certos, texto por template sem link externo, nada enviado em campanha recusada, auditoria, produção sem SMTP sem envio nem log do link, clique pelo token do e-mail, reporte idempotente, relatório com reportes, token inválido); 335 no frontend (adaptador, mocks, as duas telas novas e a auditoria axe delas).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -131,7 +142,7 @@ A varredura continua **simulada**, mas deixa de ficar "na fila" para sempre.
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 211 no backend (7 banco + 91 integração + 113 pentest) · 329 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 221 no backend (7 banco + 101 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

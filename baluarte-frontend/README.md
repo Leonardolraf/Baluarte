@@ -58,7 +58,7 @@ A única porta de entrada das telas é `src/services/api.ts`, que exporta `api: 
 | Autenticação | `POST /login`, `GET /me`, `POST /auth/change-password`, `POST /auth/reset-password`, `POST /auth/reset-password/confirm` |
 | Dashboard e ativos | `GET /dashboard`, `GET /scans`, `POST /scans`, `GET/POST /assets` |
 | Vulnerabilidades | `GET /vulnerabilidades[?q=]`, `GET/PATCH /vulnerabilidades/:id` (status inclui `Risco aceito`) |
-| Campanhas e treinamento | `GET /campanhas`, `GET /campanhas/:id`, `POST /campaigns` (`destinatario` + `destinatarios[]`), `GET /treinamentos/:token`, `POST /treinamentos/:token/concluir` |
+| Campanhas e treinamento | `GET /campanhas`, `GET /campanhas/:id`, `POST /campaigns` (`destinatario` + `destinatarios[]`), `GET /treinamentos/:token`, `POST /treinamentos/:token/concluir`; públicas, pelo link do e-mail: `GET /treinamentos/link/:token`, `POST /treinamentos/link/:token/concluir`, `POST /treinamentos/link/:token/reportar` (telas `/t/:token` e `/t/:token/reportar`) |
 | Usuários | `GET /usuarios`, `POST /users`, `PATCH/DELETE /users/:id` (Administrador) |
 | Configurações | `GET /configuracoes/seguranca`, `GET/PUT /configuracoes/notificacoes` |
 

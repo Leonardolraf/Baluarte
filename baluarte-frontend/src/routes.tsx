@@ -21,6 +21,7 @@ const CampaignListPage = lazy(() => import('@/pages/Campaigns/CampaignListPage')
 const CampaignFormPage = lazy(() => import('@/pages/Campaigns/CampaignFormPage'));
 const CampaignDetailPage = lazy(() => import('@/pages/Campaigns/CampaignDetailPage'));
 const TrainingPage = lazy(() => import('@/pages/Training/TrainingPage'));
+const ReportPhishingPage = lazy(() => import('@/pages/Training/ReportPhishingPage'));
 const TrainedCollaboratorsPage = lazy(() => import('@/pages/Training/TrainedCollaboratorsPage'));
 const UserManagementPage = lazy(() => import('@/pages/Users/UserManagementPage'));
 const UserFormPage = lazy(() => import('@/pages/Users/UserFormPage'));
@@ -43,7 +44,8 @@ function NotFound() {
 
 /**
  * Hierarquia de rotas.
- *  - Públicas: /login, /reset-password, /definir-senha, /about
+ *  - Públicas: /login, /reset-password, /definir-senha, /about,
+ *    /t/:token e /t/:token/reportar (links do e-mail simulado da campanha)
  *  - Protegidas (qualquer perfil): /dashboard, /training/:id, /settings
  *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /scans, /trainings, /campaigns[/new|/:id]
  *  - Admin: /users, /users/new, /users/:id/edit
@@ -57,6 +59,10 @@ export const routes: RouteObject[] = [
       // Link do convite por e-mail: mesma tela, com o texto de primeira senha.
       { path: '/definir-senha', element: page(<ResetPasswordPage />) },
       { path: '/about', element: page(<AboutPage />) },
+      // Links do e-mail simulado da campanha (token aleatório por destinatário, sem login):
+      // abrir o treinamento (registra o clique) e reportar o e-mail suspeito.
+      { path: '/t/:token', element: page(<TrainingPage viaLink />) },
+      { path: '/t/:token/reportar', element: page(<ReportPhishingPage />) },
     ],
   },
   {

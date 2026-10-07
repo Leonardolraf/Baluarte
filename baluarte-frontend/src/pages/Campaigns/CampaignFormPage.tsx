@@ -208,8 +208,9 @@ export default function CampaignFormPage() {
           />
           <p>
             Somente destinatários internos (<span className="font-mono text-xs">{INTERNAL_DOMAIN}</span>).
-            Esta é uma simulação controlada: nenhum e-mail real é enviado e o treinamento é oferecido logo
-            após o clique.
+            Esta é uma simulação controlada: cada destinatário recebe um e-mail identificado como simulação,
+            sem anexos e sem pedido de senha, com o link do treinamento (oferecido logo após o clique) e um
+            link para reportar o e-mail suspeito.
           </p>
         </div>
 

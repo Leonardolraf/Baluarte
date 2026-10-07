@@ -54,6 +54,9 @@ const PAGES: Array<{ path: string; role: RBACRole | null; ready: string | RegExp
   { path: '/reset-password?token=demo-reset-1', role: null, ready: 'Criar nova senha' },
   { path: '/definir-senha?token=nao-existe', role: null, ready: 'Link inválido ou expirado' },
   { path: '/about', role: null, ready: /Baluarte/ },
+  // Links do e-mail simulado da campanha (no mock, o token é o id do destinatário).
+  { path: '/t/camp-001-r-01', role: null, ready: 'Reconhecendo golpes de urgência' },
+  { path: '/t/camp-001-r-01/reportar', role: null, ready: 'Reportar e-mail suspeito' },
   { path: '/dashboard', role: 'admin', ready: 'Visão geral de risco' },
   { path: '/dashboard', role: 'collaborator', ready: 'Visão geral de risco' },
   { path: '/vulnerabilities', role: 'analyst', ready: 'Vulnerabilidades' },

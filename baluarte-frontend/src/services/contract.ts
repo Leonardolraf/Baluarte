@@ -13,6 +13,7 @@ import type {
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
+  PhishingReportResult,
   ScanReport,
   SecurityPolicy,
   Training,
@@ -81,6 +82,11 @@ export interface BaluarteApi {
   // Treinamento
   getTraining(id: string): Promise<Training>;
   completeTraining(id: string): Promise<Training>;
+  /** Link público do e-mail da campanha (/t/:token): abre o treinamento e registra o clique. */
+  getTrainingByLink(token: string): Promise<Training>;
+  completeTrainingByLink(token: string): Promise<Training>;
+  /** Rodapé do e-mail simulado (/t/:token/reportar): registra o reporte; idempotente. */
+  reportPhishing(token: string): Promise<PhishingReportResult>;
 
   // Usuários (RBAC)
   listUsers(): Promise<User[]>;

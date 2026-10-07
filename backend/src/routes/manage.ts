@@ -308,6 +308,38 @@ export function registerManageRoutes(r: Router) {
     });
   }));
 
+  // ---- Reportar o e-mail suspeito (publico, pelo mesmo token do link) ---------
+  // O rodape do e-mail simulado leva a /t/<token>/reportar no frontend, que pede
+  // confirmacao antes de chamar esta rota (um GET nao registra nada: leitores de
+  // e-mail e antivirus que pre-visitam links nao "reportam" por engano). Idempotente:
+  // o primeiro reporte vale; os seguintes devolvem a mesma data. Quem reporta abriu o
+  // e-mail, entao a abertura e registrada junto, se ainda nao estava. Reportar nao
+  // registra clique nem exige ter clicado.
+  r.post('/treinamentos/link/:token/reportar', wrap(async (req, res) => {
+    const evento = await eventoPeloLink(req.params.token);
+    if (!evento) return erro(res, 404, 'Link de campanha não encontrado', 'LINK_NAO_ENCONTRADO');
+    let reportouEm = evento.reportouEm;
+    if (!reportouEm) {
+      const agora = new Date();
+      // updateMany com reportouEm: null evita registro duplo em reportes simultaneos.
+      const { count } = await prisma.campaignEvent.updateMany({
+        where: { id: evento.id, reportouEm: null },
+        data: { reportouEm: agora, abertoEm: evento.abertoEm ?? agora },
+      });
+      if (count === 1) {
+        reportouEm = agora;
+        await registrarAuditoria(evento.userId, 'REPORTAR_PHISHING', `${evento.campaign.nome} / ${evento.destinatario}`);
+      } else {
+        reportouEm = (await prisma.campaignEvent.findUniqueOrThrow({ where: { id: evento.id } })).reportouEm;
+      }
+    }
+    return enviar(res, 200, {
+      status: 'sucesso',
+      mensagem: 'E-mail reportado. Obrigado por avisar a equipe de segurança.',
+      dados: { reportado: true, reportadoEm: reportouEm },
+    });
+  }));
+
   // ---- Departamentos (Administrador) ------------------------------------------
   r.post('/departamentos', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
     const ator = usuarioDe(req);

@@ -18,6 +18,7 @@ import type {
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
+  PhishingReportResult,
   RBACRole,
   ScanReport,
   SecurityPolicy,
@@ -355,6 +356,27 @@ function refreshCampaignMetrics(campaign: Campaign): Campaign {
     campaign.metrics = computeMetrics(campaign.id, campaign.metrics.recipients);
   }
   return campaign;
+}
+
+function recipientByLink(token: string): CampaignRecipient {
+  const recipient = state.recipients.find((r) => r.id === token.trim());
+  if (!recipient) throw new HttpError(404, 'TREINAMENTO_NAO_ENCONTRADO', 'Treinamento não encontrado');
+  return recipient;
+}
+
+/** Treinamento do template da campanha, sem expor a campanha (como na API real). */
+function linkTraining(token: string, recipient: CampaignRecipient): Training {
+  const campaign = state.campaigns.find((c) => c.id === recipient.campaignId);
+  const base =
+    state.trainings.find((t) => t.id === `trn-${campaign?.template ?? 'urgency'}`) ?? state.trainings[0];
+  return {
+    ...clone(base),
+    id: token,
+    campaignId: null,
+    progress: recipient.trainingCompleted ? 100 : 0,
+    completed: recipient.trainingCompleted,
+    completedAt: null,
+  };
 }
 
 function buildFunnel(metrics: CampaignMetrics): FunnelStage[] {
@@ -1000,6 +1022,44 @@ export const mockApi: BaluarteApi = {
       });
     }
     return clone(training);
+  },
+
+  // ---- Link público do e-mail da campanha (/t/:token) ----
+  // Sem e-mail no modo mock, o "token do link" é o id do destinatário (ex.: o de um
+  // destinatário criado nesta sessão). Na API real é um token aleatório guardado como hash.
+  async getTrainingByLink(token: string): Promise<Training> {
+    return simulate(() => {
+      const recipient = recipientByLink(token);
+      if (!recipient.clickedAt) {
+        const now = nowIso();
+        recipient.clickedAt = now;
+        recipient.openedAt = recipient.openedAt ?? now;
+        recipient.sentAt = recipient.sentAt ?? now;
+      }
+      return linkTraining(token, recipient);
+    });
+  },
+
+  async completeTrainingByLink(token: string): Promise<Training> {
+    await delay();
+    const recipient = recipientByLink(token);
+    if (!recipient.clickedAt)
+      throw new HttpError(409, 'TREINAMENTO_NAO_INICIADO', 'Abra o treinamento antes de concluí-lo');
+    recipient.trainingCompleted = true;
+    return { ...linkTraining(token, recipient), completedAt: nowIso() };
+  },
+
+  async reportPhishing(token: string): Promise<PhishingReportResult> {
+    return simulate(() => {
+      const recipient = state.recipients.find((r) => r.id === token.trim());
+      if (!recipient) throw new HttpError(404, 'LINK_NAO_ENCONTRADO', 'Link de campanha não encontrado');
+      if (!recipient.reportedAt) {
+        recipient.reportedAt = nowIso();
+        recipient.openedAt = recipient.openedAt ?? recipient.reportedAt;
+        recipient.sentAt = recipient.sentAt ?? recipient.reportedAt;
+      }
+      return { reported: true as const, reportedAt: recipient.reportedAt };
+    });
   },
 
   // ---- Departamentos (mesma lista do seed do backend) ----

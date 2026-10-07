@@ -239,7 +239,12 @@ export function registerReadRoutes(r: Router) {
         id: c.id, nome: c.nome, template: c.template, status: c.status, criadoEm: c.criadoEm,
         destinatarios: c.eventos.length,
         funil: funilDe(c.eventos),
-        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, departamento: depDe(e), concluido: e.treinou, concluidoEm: e.treinouEm })),
+        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, departamento: depDe(e), concluido: e.treinou, concluidoEm: e.treinouEm, reportouEm: e.reportouEm })),
+        // Quem reportou o e-mail simulado (pelo rodape do e-mail), clicando ou nao.
+        reportes: c.eventos
+          .filter((e) => e.reportouEm)
+          .sort((a, b) => a.reportouEm!.getTime() - b.reportouEm!.getTime())
+          .map((e) => ({ destinatario: e.destinatario, departamento: depDe(e), reportouEm: e.reportouEm, clicou: !!e.clicadoEm })),
         porDepartamento: [...grupos.entries()]
           .map(([departamento, g]) => ({
             departamento,
