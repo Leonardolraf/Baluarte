@@ -15,7 +15,8 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:reset": "prisma migrate reset --force --skip-seed",
     "prisma:generate": "prisma generate",
-    "test:seguranca": "node --import tsx --test \"tests/seguranca/**/*.test.ts\""
+    "test:seguranca": "node --import tsx --test \"tests/seguranca/**/*.test.ts\"",
+    "vercel-build": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

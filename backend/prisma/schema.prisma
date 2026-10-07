@@ -9,7 +9,9 @@
 // E-mail e nome de departamento usam citext: unicidade e busca ignoram maiusculas.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Runtime Linux da Vercel alem do binario local (o build roda em outra maquina).
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
