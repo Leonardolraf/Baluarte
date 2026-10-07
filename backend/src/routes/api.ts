@@ -4,6 +4,8 @@ import { prisma } from '../db.js';
 import { gerarToken, exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { emailEmUso, localizarPorEmail, normalizarEmail, resolverDepartamento } from '../usuarios.js';
 import { gerarTokenLink, hashToken } from '../tokens.js';
+import { emitirLinkConta, hashSemSenha } from '../conta.js';
+import { registrarAuditoria } from '../audit.js';
 import { CATALOGO_ACHADOS, dadosAchado, type ChaveAchado } from '../catalogo.js';
 import { registerReadRoutes } from './read.js';
 import { registerManageRoutes } from './manage.js';
@@ -28,32 +30,33 @@ export const apiRouter = Router();
 const OPERADORES = ['Administrador', 'Analista'];
 
 // ---- Limite de tentativas de login (politica publicada em /configuracoes/seguranca) ----
+// As falhas ficam no banco (tabela LoginFailure), por e-mail digitado: o bloqueio vale
+// depois de reiniciar a API e cobre tambem e-mails que nao existem.
 const LOGIN_JANELA_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FALHAS = 5;
-const falhasLogin = new Map<string, number[]>();
 // Hash de sacrificio: mantem o custo do bcrypt igual quando o e-mail nao existe
 // (sem isso o tempo de resposta revelaria quais e-mails estao cadastrados).
 const HASH_SACRIFICIO = bcrypt.hashSync('baluarte-sem-usuario', 10);
 
-function falhasRecentes(chave: string): number[] {
-  const agora = Date.now();
-  const recentes = (falhasLogin.get(chave) ?? []).filter((t) => agora - t < LOGIN_JANELA_MS);
-  if (recentes.length) falhasLogin.set(chave, recentes);
-  else falhasLogin.delete(chave);
-  return recentes;
+function inicioDaJanela(): Date {
+  return new Date(Date.now() - LOGIN_JANELA_MS);
 }
 
-function registrarFalhaLogin(chave: string): void {
-  const recentes = falhasRecentes(chave);
-  recentes.push(Date.now());
-  falhasLogin.set(chave, recentes);
-  // Poda periodica: o mapa nunca cresce sem limite (endpoint publico).
-  if (falhasLogin.size > 1000) for (const k of falhasLogin.keys()) falhasRecentes(k);
+function falhasRecentes(chave: string): Promise<number> {
+  return prisma.loginFailure.count({ where: { email: chave, criadoEm: { gte: inicioDaJanela() } } });
+}
+
+/** Registra a falha e devolve quantas a conta acumula na janela. */
+async function registrarFalhaLogin(chave: string): Promise<number> {
+  await prisma.loginFailure.create({ data: { email: chave } });
+  // Poda: o que saiu da janela nao conta mais (endpoint publico: a tabela nao cresce sem limite).
+  await prisma.loginFailure.deleteMany({ where: { criadoEm: { lt: inicioDaJanela() } } });
+  return falhasRecentes(chave);
 }
 
 /** Zera o limitador de login (usado pelos testes). */
-export function limparLimiteLogin(): void {
-  falhasLogin.clear();
+export async function limparLimiteLogin(): Promise<void> {
+  await prisma.loginFailure.deleteMany();
 }
 
 // Varredura simulada: sorteia de 2 a 4 tipos distintos do catalogo (src/catalogo.ts).
@@ -75,18 +78,25 @@ apiRouter.post('/login', wrap(async (req, res) => {
   if (!emailFormatoValido(email)) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
 
   const chave = normalizarEmail(email);
-  if (falhasRecentes(chave).length >= LOGIN_MAX_FALHAS)
+  if ((await falhasRecentes(chave)) >= LOGIN_MAX_FALHAS)
     return erro(res, 429, 'Muitas tentativas de login. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
 
   const usuario = await localizarPorEmail(String(email));
   const ok = await bcrypt.compare(String(senha), usuario ? usuario.senhaHash : HASH_SACRIFICIO);
   if (!usuario || !ok) {
-    registrarFalhaLogin(chave);
+    const falhas = await registrarFalhaLogin(chave);
+    if (usuario && falhas === LOGIN_MAX_FALHAS)
+      await registrarAuditoria(usuario.id, 'LOGIN_BLOQUEADO', `${LOGIN_MAX_FALHAS} falhas em 15 min`);
     return erro(res, 401, 'E-mail ou senha inválidos', 'CREDENCIAIS_INVALIDAS');
   }
   if (usuario.status === 'Inativo')
     return erro(res, 403, 'Usuário inativo. Contate o administrador.', 'USUARIO_INATIVO');
-  falhasLogin.delete(chave);
+  // Quem ainda nao aceitou o convite entra so pelo link (contas antigas com senha
+  // provisoria tambem caem aqui). So chega aqui quem acertou a senha: nada e revelado.
+  if (usuario.status === 'Pendente')
+    return erro(res, 403, 'Conta ainda não ativada. Crie sua senha pelo link do convite.', 'CONTA_PENDENTE');
+  await prisma.loginFailure.deleteMany({ where: { email: chave } });
+  await registrarAuditoria(usuario.id, 'LOGIN');
 
   const token = gerarToken({ idUsuario: usuario.id, email: usuario.email, perfil: usuario.perfil });
   return enviar(res, 200, {
@@ -152,15 +162,28 @@ apiRouter.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
   const emailNorm = normalizarEmail(email);
   if (await emailEmUso(emailNorm)) return erro(res, 409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
 
-  const senhaHash = await bcrypt.hash('Mudar@123', 10);
+  // Nao existe senha provisoria: a conta nasce Pendente, sem senha utilizavel, e a
+  // pessoa cria a propria senha pelo link do convite enviado por e-mail.
   const usuario = await prisma.user.create({
-    data: { nome, email: emailNorm, perfil, senhaHash, status: 'Pendente', departmentId: departmentId ?? null },
+    data: { nome, email: emailNorm, perfil, senhaHash: await hashSemSenha(), status: 'Pendente', departmentId: departmentId ?? null },
     include: { department: true },
   });
+  const ator = usuarioDe(req);
+  await registrarAuditoria(ator.id, 'CRIAR_USUARIO', `${usuario.id} (${usuario.email}, ${usuario.perfil})`);
+  // Falha no envio nao desfaz o cadastro: o convite pode ser reenviado (POST /users/:id/convite).
+  const conviteEnviado = await emitirLinkConta(usuario, 'CONVITE');
+  if (conviteEnviado) await registrarAuditoria(ator.id, 'ENVIAR_CONVITE', usuario.email);
   return enviar(res, 201, {
     status: 'sucesso',
     mensagem: 'Usuário cadastrado com sucesso',
-    dados: { idUsuario: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil, departamento: usuario.department?.name ?? null },
+    dados: {
+      idUsuario: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      perfil: usuario.perfil,
+      departamento: usuario.department?.name ?? null,
+      conviteEnviado,
+    },
   });
 }));
 

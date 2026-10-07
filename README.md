@@ -2,7 +2,7 @@
 
 Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia de Software — UCB), construída como sistema **real** para a disciplina de **Teste de Software**: backend + frontend de verdade, contra os quais rodam as suítes de teste de API (Postman/Newman) e de UI (Robot Framework + Selenium) da N2 AT1 — não mais contra stubs.
 
-> ⚠️ **Escopo honesto:** a *plataforma* é real (autenticação JWT, RBAC, persistência, dashboard com agregações reais, trilha de auditoria). O **scanner OWASP** e o **disparo de phishing** são **simulados no servidor** (criar varredura gera achados realistas; criar campanha registra e simula rastreamento) — nenhum ataque real é executado e nenhum e-mail é enviado (o token de redefinição de senha é impresso no console do backend fora de produção).
+> ⚠️ **Escopo honesto:** a *plataforma* é real (autenticação JWT, RBAC, persistência, dashboard com agregações reais, trilha de auditoria). O **scanner OWASP** e o **disparo de phishing** são **simulados no servidor** (criar varredura gera achados realistas; criar campanha registra e simula rastreamento) — nenhum ataque real é executado e nenhum e-mail de phishing é enviado. Os e-mails de conta (convite e redefinição de senha) são enviados de verdade, para o Mailpit do Docker Compose (`http://localhost:8025`), que não entrega nada para fora.
 
 ## Arquitetura
 
@@ -56,13 +56,13 @@ npm run dev
 | `admin@empresa.com` | `Admin@123` | Administrador | seed do backend e mocks do frontend |
 | `analista@empresa.com` | `Senha@123` | Analista | seed do backend e mocks do frontend |
 | `colaborador@empresa.com` | `Colab@123` | Colaborador | seed do backend e mocks do frontend (é o destinatário das campanhas do Newman e do Robot) |
-| `ana.souza@empresa.com`, `edson@empresa.com`, … | `Mudar@123` | vários | `seed:demo` do backend (senha provisória de contas criadas pelo administrador) |
+| `ana.souza@empresa.com`, `edson@empresa.com`, … | `Mudar@123` | vários | `seed:demo` do backend (senha fixa só dos usuários de demonstração; contas criadas pelo administrador não têm senha provisória: recebem um convite por e-mail) |
 
 ## Testes
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 174 testes. Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (60): contrato, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (107, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
+| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 192 testes. Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (78): contrato, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (107, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
 | **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 321 testes |
@@ -95,7 +95,7 @@ Relatórios em `e2e/resultados/report.html` e `log.html`.
 
 **Link do e-mail de phishing (público, sem login):** `GET /treinamentos/link/:token` (registra abertura e clique uma vez e entrega o treinamento, sem expor ids nem a campanha) · `POST /treinamentos/link/:token/concluir`. O token é aleatório (256 bits), gerado por destinatário ao criar a campanha, e no banco fica só o hash SHA-256. `POST /campaigns` só aceita destinatário cadastrado e não inativo (`422 DESTINATARIO_NAO_CADASTRADO`, conferido depois de formato e domínio).
 
-**Conta e administração:** `POST /auth/change-password` · `POST /auth/reset-password` (+ `/confirm`, token de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min; redefinir encerra as sessões abertas antes) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo; quem tem histórico de campanha não é excluído, só inativado) · `DELETE /campanhas/:id` (Administrador/Analista) · `POST /departamentos` e `DELETE /departamentos/:id` (Administrador; departamento com usuários não é excluído)
+**Conta e administração:** `POST /users` cria a conta `Pendente`, sem senha, e envia um **convite** por e-mail (link de 72 h para a pessoa criar a própria senha; conta pendente não entra por login) · `POST /users/:id/convite` (reenvia; Administrador/Analista) · `POST /auth/link/verificar` (a tela confere o link antes de pedir a senha) · `POST /auth/change-password` (encerra as outras sessões e devolve um token novo para a atual) · `POST /auth/reset-password` (+ `/confirm`, que também aceita o convite; link de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min; redefinir encerra as sessões abertas antes e tira a conta do bloqueio) · `POST /auth/logout` (invalida os tokens emitidos antes, em todos os dispositivos) · `POST /auth/renovar` (sessão expira com 30 min sem uso; teto de 8 h desde o login) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo; quem tem histórico de campanha não é excluído, só inativado) · `DELETE /campanhas/:id` (Administrador/Analista) · `POST /departamentos` e `DELETE /departamentos/:id` (Administrador; departamento com usuários não é excluído)
 
 Erros seguem o envelope `{ status: "erro", mensagem, codigoErro, timestamp }`; sucessos, `{ status: "sucesso", mensagem?, dados, resumo? }`. Toda rota de escrita fora do contrato registra em `AuditLog`.
 
@@ -115,8 +115,7 @@ O perfil vem do banco a cada requisição (um token emitido antes de um rebaixam
 
 ### Limitações conhecidas (decisões conscientes de escopo)
 
-- **Sem serviço de e-mail.** O link de redefinição de senha só aparece no log do servidor, e apenas com `RESET_TOKEN_CONSOLE=1` (nunca em `NODE_ENV=production`). O mesmo vale para o link de treinamento de cada destinatário de campanha (`/t/<token>`), com `TREINAMENTO_LINK_CONSOLE=1`. Em produção o fluxo exige plugar MailHog/SendGrid.
-- **Senha provisória fixa** (`Mudar@123`) para contas criadas por um administrador, e a conta `Pendente` pode usar o sistema antes de trocá-la (trocar a senha a ativa). Sem canal de e-mail não há como entregar uma senha aleatória.
+- **E-mail só para Mailpit.** Convite e redefinição de senha saem por SMTP para o Mailpit do Compose (caixa em `http://localhost:8025`); em produção é preciso configurar `SMTP_HOST` com um servidor real. Sem SMTP, fora de produção, o e-mail inteiro vai para o log da API; em produção sem SMTP nada é enviado. O link de treinamento das campanhas ainda não vai por e-mail: aparece no log com `TREINAMENTO_LINK_CONSOLE=1` (B19 do backlog).
 - **Trocar a própria senha** (`/auth/change-password`) não derruba as outras sessões do mesmo usuário; a redefinição por token, sim. Todo token expira em 30 minutos.
 
 ## Supabase (banco hospedado para a demonstração)
@@ -139,7 +138,7 @@ Com o Docker Desktop no ar (pare os `npm run dev` antes — as portas são as me
 cp .env.example .env                       # opcional: JWT_SECRET e SEED_DEMO
 docker compose up --build -d backend app   # API :8080 + frontend do produto :8081 (Nginx)
 docker compose up --build -d               # idem + frontend legado :3000 (para as suites Robot)
-docker compose logs -f backend             # com RESET_TOKEN_CONSOLE=1, o link de redefinicao aparece aqui
+# convites e links de redefinicao chegam na caixa do Mailpit: http://localhost:8025
 docker compose down                        # -v tambem apaga o banco (volume db-data)
 ```
 - O frontend do produto fica em **:8081** no Docker, e nao em 5173: a 5173 e do dev server do Vite (que o Playwright reutiliza quando esta ocupada), entao os dois modos convivem sem se confundir.

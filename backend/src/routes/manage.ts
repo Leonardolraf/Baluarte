@@ -1,10 +1,11 @@
 import type { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
-import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
+import { exigeToken, exigePerfil, gerarToken, usuarioDe, SESSAO_MAXIMA_MS, type RequestAutenticada } from '../auth.js';
 import { registrarAuditoria } from '../audit.js';
 import { dadosTreinamento, podeVerTreinamento } from './read.js';
-import { gerarTokenLink, hashToken } from '../tokens.js';
+import { hashToken } from '../tokens.js';
+import { emitirLinkConta, localizarLinkValido } from '../conta.js';
 import { emailEmUso, localizarPorEmail, mapUsuario, normalizarEmail, resolverDepartamento, SELECT_USUARIO } from '../usuarios.js';
 import { enviar, erro, wrap, vazio, emailFormatoValido, validarSenha, PERFIS, STATUS_USUARIO } from '../util.js';
 
@@ -21,42 +22,36 @@ function falha(status: number, mensagem: string, codigo: string): { falha: ErroH
 }
 
 // ---- Redefinicao de senha -----------------------------------------------------
-// Nao ha servico de e-mail neste projeto (MailHog/SendGrid ficam para a infra de
-// producao). O unico canal de entrega em dev/demo e o log do servidor, e ele e
-// OPT-IN (RESET_TOKEN_CONSOLE=1) e nunca funciona em producao. No banco fica so o
-// hash SHA-256 do token, com validade de 30 minutos e uso unico.
+// O link vai por e-mail (src/email.ts: Mailpit em dev/demo, SMTP real em producao).
+// No banco fica so o hash SHA-256 do token, com validade de 30 minutos e uso unico
+// (o convite usa o mesmo mecanismo, com 72 h: src/conta.ts).
 
-const RESET_VALIDADE_MS = 30 * 60 * 1000;
+const OPERADORES = ['Administrador', 'Analista'];
 const RESET_JANELA_MS = 15 * 60 * 1000;
 const RESET_MAX_POR_JANELA = 3;
 const MSG_RESET_GENERICA =
   'Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha em instantes.';
 
-const tentativasReset = new Map<string, number[]>();
+// Pedidos ficam no banco (tabela ResetRequest), como as falhas de login: o limite
+// vale entre instancias da API e sobrevive a reinicio.
+function inicioDaJanelaReset(): Date {
+  return new Date(Date.now() - RESET_JANELA_MS);
+}
 
-function excedeuLimiteReset(chave: string): boolean {
-  const agora = Date.now();
-  const recentes = (tentativasReset.get(chave) ?? []).filter((t) => agora - t < RESET_JANELA_MS);
-  if (recentes.length >= RESET_MAX_POR_JANELA) {
-    tentativasReset.set(chave, recentes);
-    return true;
-  }
-  recentes.push(agora);
-  tentativasReset.set(chave, recentes);
-  // Poda periodica: o mapa nunca cresce sem limite (endpoint publico).
-  if (tentativasReset.size > 1000) {
-    for (const [k, v] of tentativasReset) {
-      const vivos = v.filter((t) => agora - t < RESET_JANELA_MS);
-      if (vivos.length) tentativasReset.set(k, vivos);
-      else tentativasReset.delete(k);
-    }
-  }
+async function excedeuLimiteReset(chave: string): Promise<boolean> {
+  const recentes = await prisma.resetRequest.count({
+    where: { email: chave, criadoEm: { gte: inicioDaJanelaReset() } },
+  });
+  if (recentes >= RESET_MAX_POR_JANELA) return true;
+  await prisma.resetRequest.create({ data: { email: chave } });
+  // Poda o que ja saiu da janela (endpoint publico: a tabela nao pode crescer sem limite).
+  await prisma.resetRequest.deleteMany({ where: { criadoEm: { lt: inicioDaJanelaReset() } } });
   return false;
 }
 
 /** Zera o limitador de solicitacoes de redefinicao (usado pelos testes). */
-export function limparLimiteReset(): void {
-  tentativasReset.clear();
+export async function limparLimiteReset(): Promise<void> {
+  await prisma.resetRequest.deleteMany();
 }
 
 // ---- Preferencias de notificacao --------------------------------------------
@@ -91,16 +86,16 @@ export function registerManageRoutes(r: Router) {
 
     const senhaHash = await bcrypt.hash(String(novaSenha), 10);
     await prisma.$transaction([
-      prisma.user.update({
-        where: { id: usuario.id },
-        // Conta criada pelo administrador (senha provisoria) passa a Ativo ao definir a propria senha.
-        data: { senhaHash, status: usuario.status === 'Pendente' ? 'Ativo' : usuario.status },
-      }),
+      // Trocar a senha encerra as outras sessoes (outro navegador, outro dispositivo).
+      prisma.user.update({ where: { id: usuario.id }, data: { senhaHash, senhaAlteradaEm: new Date() } }),
       // Links de redefinicao ainda pendentes deixam de valer.
       prisma.passwordResetToken.deleteMany({ where: { userId: usuario.id } }),
     ]);
     await registrarAuditoria(usuario.id, 'ALTERAR_SENHA');
-    return enviar(res, 200, { status: 'sucesso', mensagem: 'Senha alterada com sucesso' });
+    // A sessao atual continua: devolve um token emitido depois da troca.
+    const atual = (req as RequestAutenticada).usuario!;
+    const token = gerarToken({ idUsuario: usuario.id, email: usuario.email, perfil: usuario.perfil, inicioSessao: atual.inicioSessao });
+    return enviar(res, 200, { status: 'sucesso', mensagem: 'Senha alterada com sucesso', dados: { token } });
   }));
 
   // ---- POST /auth/reset-password (publico) -----------------------------------
@@ -108,23 +103,15 @@ export function registerManageRoutes(r: Router) {
     const { email } = req.body ?? {};
     if (!emailFormatoValido(email)) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
     const chave = normalizarEmail(email);
-    if (excedeuLimiteReset(chave))
+    if (await excedeuLimiteReset(chave))
       return erro(res, 429, 'Muitas solicitações. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
 
     const usuario = await localizarPorEmail(String(email));
     if (usuario && usuario.status !== 'Inativo') {
-      const token = gerarTokenLink();
-      await prisma.passwordResetToken.create({
-        data: { userId: usuario.id, tokenHash: hashToken(token), expiraEm: new Date(Date.now() + RESET_VALIDADE_MS) },
-      });
-      await registrarAuditoria(usuario.id, 'SOLICITAR_RESET_SENHA');
-      // Em producao nunca imprime; fora dela, so com RESET_TOKEN_CONSOLE=1.
-      if (process.env.NODE_ENV !== 'production' && process.env.RESET_TOKEN_CONSOLE === '1') {
-        const base = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-        console.log(
-          `[reset-senha] link para ${usuario.email} (válido por 30 min): ${base}/reset-password?token=${token}`,
-        );
-      }
+      // Quem ainda nao aceitou o convite recebe um convite novo (mesma tela de criar senha).
+      const tipo = usuario.status === 'Pendente' ? 'CONVITE' : 'RESET';
+      await emitirLinkConta(usuario, tipo);
+      await registrarAuditoria(usuario.id, tipo === 'CONVITE' ? 'ENVIAR_CONVITE' : 'SOLICITAR_RESET_SENHA');
     }
     // Resposta identica para e-mails conhecidos e desconhecidos (evita enumeracao de usuarios).
     return enviar(res, 200, { status: 'sucesso', mensagem: MSG_RESET_GENERICA });
@@ -138,14 +125,9 @@ export function registerManageRoutes(r: Router) {
     const problema = validarSenha(novaSenha);
     if (problema) return erro(res, 400, problema, 'SENHA_FRACA');
 
-    const registro = await prisma.passwordResetToken.findUnique({
-      where: { tokenHash: hashToken(String(token).trim()) },
-      include: { user: true },
-    });
-    if (!registro || registro.usadoEm || registro.expiraEm.getTime() < Date.now())
-      return erro(res, 400, 'Token inválido ou expirado', 'TOKEN_RESET_INVALIDO');
-    if (registro.user.status === 'Inativo')
-      return erro(res, 400, 'Token inválido ou expirado', 'TOKEN_RESET_INVALIDO');
+    const registro = await localizarLinkValido(String(token));
+    if (!registro) return erro(res, 400, 'Token inválido ou expirado', 'TOKEN_RESET_INVALIDO');
+    const convite = registro.tipo === 'CONVITE';
 
     const senhaHash = await bcrypt.hash(String(novaSenha), 10);
     await prisma.$transaction([
@@ -161,9 +143,71 @@ export function registerManageRoutes(r: Router) {
       prisma.passwordResetToken.update({ where: { id: registro.id }, data: { usadoEm: new Date() } }),
       // Demais tokens pendentes do mesmo usuario perdem a validade.
       prisma.passwordResetToken.deleteMany({ where: { userId: registro.userId, id: { not: registro.id } } }),
+      // Quem provou ser dono do e-mail sai do bloqueio por tentativas.
+      prisma.loginFailure.deleteMany({ where: { email: registro.user.email } }),
     ]);
-    await registrarAuditoria(registro.userId, 'REDEFINIR_SENHA');
-    return enviar(res, 200, { status: 'sucesso', mensagem: 'Senha redefinida com sucesso' });
+    await registrarAuditoria(registro.userId, convite ? 'ACEITAR_CONVITE' : 'REDEFINIR_SENHA');
+    const mensagem = convite ? 'Senha cadastrada com sucesso' : 'Senha redefinida com sucesso';
+    return enviar(res, 200, { status: 'sucesso', mensagem });
+  }));
+
+  // ---- POST /auth/link/verificar (publico) -----------------------------------
+  // A tela de criar/redefinir senha confere o link antes de pedir a senha. So quem tem
+  // o token (256 bits, entregue por e-mail) chega aqui com sucesso.
+  r.post('/auth/link/verificar', wrap(async (req, res) => {
+    const { token } = req.body ?? {};
+    if (vazio(token)) return erro(res, 400, 'Token é obrigatório', 'TOKEN_OBRIGATORIO');
+    const registro = await localizarLinkValido(String(token));
+    if (!registro) return erro(res, 400, 'Token inválido ou expirado', 'TOKEN_RESET_INVALIDO');
+    return enviar(res, 200, {
+      status: 'sucesso',
+      dados: { tipo: registro.tipo, nome: registro.user.nome, email: registro.user.email, expiraEm: registro.expiraEm },
+    });
+  }));
+
+  // ---- POST /auth/logout (protegido) -----------------------------------------
+  // JWT nao se "apaga": sair grava o instante, e exigeToken recusa tokens emitidos antes
+  // dele. Encerra a sessao em todos os dispositivos.
+  r.post('/auth/logout', exigeToken, wrap(async (req, res) => {
+    const usuario = usuarioDe(req);
+    await prisma.user.update({ where: { id: usuario.id }, data: { sessaoEncerradaEm: new Date() } });
+    await registrarAuditoria(usuario.id, 'LOGOUT');
+    return enviar(res, 200, { status: 'sucesso', mensagem: 'Sessão encerrada' });
+  }));
+
+  // ---- POST /auth/renovar (protegido) ----------------------------------------
+  // O frontend renova o token enquanto a pessoa usa o sistema; parada por 30 min, a
+  // sessao expira. Nenhuma renovacao passa de 8 h contadas do login.
+  r.post('/auth/renovar', exigeToken, wrap(async (req, res) => {
+    const atual = (req as RequestAutenticada).usuario!;
+    const usuario = usuarioDe(req);
+    const inicio = (atual.inicioSessao ?? atual.iat ?? 0) * 1000;
+    if (Date.now() - inicio > SESSAO_MAXIMA_MS)
+      return erro(res, 401, 'Sessão expirada. Faça login novamente.', 'SESSAO_EXPIRADA');
+    // Perfil e e-mail vem do banco: a renovacao nunca prolonga um perfil antigo.
+    const token = gerarToken({
+      idUsuario: usuario.id,
+      email: usuario.email,
+      perfil: usuario.perfil,
+      inicioSessao: Math.floor(inicio / 1000),
+    });
+    return enviar(res, 200, { status: 'sucesso', dados: { token } });
+  }));
+
+  // ---- POST /users/:id/convite (Administrador/Analista) ----------------------
+  r.post('/users/:id/convite', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
+    const ator = usuarioDe(req);
+    const alvo = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!alvo) return erro(res, 404, 'Usuário não encontrado', 'USUARIO_NAO_ENCONTRADO');
+    // Mesma regra do cadastro: so o Administrador cuida de contas de Administrador.
+    if (alvo.perfil === 'Administrador' && ator.perfil !== 'Administrador')
+      return erro(res, 403, 'Acesso negado para o seu perfil', 'PERFIL_SEM_PERMISSAO');
+    if (alvo.status !== 'Pendente')
+      return erro(res, 409, 'O convite só pode ser reenviado para contas pendentes', 'USUARIO_NAO_PENDENTE');
+    if (!(await emitirLinkConta(alvo, 'CONVITE')))
+      return erro(res, 502, 'Não foi possível enviar o e-mail. Tente novamente.', 'EMAIL_NAO_ENVIADO');
+    await registrarAuditoria(ator.id, 'ENVIAR_CONVITE', alvo.email);
+    return enviar(res, 200, { status: 'sucesso', mensagem: `Convite reenviado para ${alvo.email}` });
   }));
 
   // ---- GET /configuracoes/notificacoes (protegido) ---------------------------

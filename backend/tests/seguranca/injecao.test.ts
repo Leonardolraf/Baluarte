@@ -20,7 +20,7 @@ import {
   emailUnico,
   ADMIN,
   ANALISTA,
-  SENHA_PROVISORIA,
+  SENHA_CONTA,
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
@@ -161,7 +161,7 @@ describe('operator injection (objeto no lugar de string)', () => {
       esperaErro(r, 400, 'SENHA_OBRIGATORIA');
     }
     // A senha provisoria real ainda autentica: a defesa nao quebrou a conta.
-    const token = await login(vitima.email, SENHA_PROVISORIA);
+    const token = await login(vitima.email, SENHA_CONTA);
     assert.equal((await chamar('GET', '/me', { token })).status, 200);
   });
 
@@ -171,7 +171,7 @@ describe('operator injection (objeto no lugar de string)', () => {
       nunca500(r, `reset ${JSON.stringify(email)}`);
       esperaErro(r, 400, 'EMAIL_INVALIDO');
     }
-    assert.equal(await prisma.passwordResetToken.count(), 0, 'operator injection nao deve gerar token de reset');
+    assert.equal(await prisma.passwordResetToken.count({ where: { tipo: 'RESET' } }), 0, 'operator injection nao deve gerar token de reset');
   });
 });
 
@@ -292,7 +292,7 @@ describe('prototype pollution', () => {
 
   it('PUT /configuracoes/notificacoes com __proto__ nao polui e chave-lixo -> 400', async () => {
     const conta = await criarUsuario(admin, 'Colaborador', 'proto-pref');
-    const token = await login(conta.email, SENHA_PROVISORIA);
+    const token = await login(conta.email, SENHA_CONTA);
     // Payload so com __proto__ (nenhuma preferencia valida) -> 400, sem poluir.
     const so = await chamar('PUT', '/configuracoes/notificacoes', { token, body: { __proto__: { pollutedPref: 1 } } as any });
     nunca500(so, 'pref proto only');
@@ -351,13 +351,15 @@ describe('mass assignment e tipos errados', () => {
     nunca500(r, 'users mass');
     assert.equal(r.status, 201, JSON.stringify(r.body));
     assert.notEqual(r.body.dados.idUsuario, 'u-hack');
-    // status forjado ("Ativo") nao vale: a conta nasce Pendente e a senha e a provisoria.
+    // status forjado ("Ativo") nao vale: a conta nasce Pendente, sem senha utilizavel.
     const lista = await chamar('GET', '/usuarios', { token: admin });
     const criado = lista.body.dados.find((u: any) => u.email === email.toLowerCase());
     assert.ok(criado, 'usuario deveria existir');
     assert.equal(criado.status, 'Pendente', 'status Ativo forjado nao pode ser aceito');
-    // senhaHash forjado nao vale: login so com a provisoria.
-    await login(email, SENHA_PROVISORIA);
+    // senhaHash forjado nao vale: nenhuma senha entra antes de aceitar o convite.
+    esperaErro(await chamar('POST', '/login', { body: { email, senha: 'hash-forjado' } }), 401, 'CREDENCIAIS_INVALIDAS');
+    const banco = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    assert.notEqual(banco?.senhaHash, 'hash-forjado');
   });
 
   it('tipos errados em /assets (tipo array, host objeto) -> 400 de validacao, nunca 500', async () => {

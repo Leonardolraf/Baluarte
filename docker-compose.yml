@@ -6,12 +6,13 @@
 #   frontend do produto   http://localhost:8081   (baluarte-frontend/, build + Nginx)
 #   API                   http://localhost:8080
 #   PostgreSQL            127.0.0.1:5432          (só na máquina local; dados no volume db-data)
+#   Mailpit (e-mails)     http://localhost:8025   (caixa de entrada dos convites e redefinições)
 #   frontend legado       http://localhost:3000   (frontend/, alvo das suítes Robot)
 #
 # A porta 8081 (e não 5173) é de propósito: 5173 é o dev server do Vite, que o
 # Playwright reutiliza se estiver ocupada — a stack Docker e o modo mock convivem.
 # Variáveis num `.env` na raiz (ver .env.example): POSTGRES_PASSWORD (obrigatória), JWT_SECRET, NODE_ENV,
-# RESET_TOKEN_CONSOLE, TREINAMENTO_LINK_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
+# SMTP_*, EMAIL_REMETENTE, TREINAMENTO_LINK_CONSOLE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
 services:
   # PostgreSQL local. A senha vem do .env da raiz (nunca versionada); sem ela o compose
   # recusa subir. A porta só é publicada em 127.0.0.1: nada de fora da máquina alcança o banco.
@@ -41,14 +42,17 @@ services:
       - JWT_SECRET=${JWT_SECRET:-}
       - PORT=8080
       - NODE_ENV=${NODE_ENV:-development}
-      # 1 = imprime o token de redefinição de senha no log (único canal de entrega nesta
-      # demonstração — não há serviço de e-mail). Use 0 em qualquer ambiente compartilhado;
-      # em NODE_ENV=production o token nunca é impresso, independente deste valor.
-      - RESET_TOKEN_CONSOLE=${RESET_TOKEN_CONSOLE:-1}
+      # E-mails de conta (convite, redefinição de senha). Padrão: o Mailpit abaixo, que
+      # guarda tudo e não entrega nada para fora. Em produção, aponte para o SMTP real.
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - EMAIL_REMETENTE=${EMAIL_REMETENTE:-Baluarte <nao-responda@baluarte.local>}
       # 1 = imprime no log o link de treinamento de cada destinatário ao criar uma campanha
       # (mesma regra: nunca em NODE_ENV=production).
       - TREINAMENTO_LINK_CONSOLE=${TREINAMENTO_LINK_CONSOLE:-1}
-      # Base usada para montar o link de redefinição impresso no log.
+      # Base dos links enviados por e-mail (convite e redefinição de senha).
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       # Origens permitidas no CORS (os frontends falam por proxy/mesma origem; isto é para chamadas diretas).
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:8081,http://localhost:5173,http://localhost:5174,http://localhost:3000}
@@ -60,6 +64,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     ports:
       - "8080:8080"
     healthcheck:
@@ -68,6 +74,15 @@ services:
       timeout: 3s
       retries: 30
       start_period: 20s
+
+  # Servidor de e-mail de teste: recebe por SMTP (1025) e mostra numa caixa web (8025).
+  # Não entrega nada para fora. As duas portas só ficam em 127.0.0.1; a 1025 serve à API
+  # rodando fora do Docker (SMTP_HOST=127.0.0.1 no backend/.env).
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
 
   # SPA React (baluarte-frontend/): build de produção servido por Nginx, com /api
   # encaminhado ao serviço backend (ver baluarte-frontend/nginx.conf).

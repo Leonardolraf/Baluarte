@@ -94,6 +94,17 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 - **Testes** — 152 no backend (eram 144): campanha com não cadastrado/inativo, vínculo e hash por evento, unicidade, exclusão com histórico, link público (token desconhecido, id do evento no lugar do token, concluir antes de abrir, clique registrado uma vez, conclusão idempotente) e leitura protegida do treinamento. Newman: 35 requisições / 70 asserções, 0 falhas.
 - **Atenção ao atualizar um banco existente** — `userId` obrigatório não pode ser adicionado a eventos que já existem, então o `db push` pede reset. Local: `npm run db:reset && npm run seed && npm run seed:demo`. Docker: `docker compose down -v` antes de subir (o volume é recriado e semeado).
 
+## 2026-10-07 — Cadastro por convite, e-mail de conta e sessão no servidor
+
+- **Fim da senha provisória fixa** — todo usuário criado pelo administrador nascia com `Mudar@123`, publicada no repositório, e a conta `Pendente` já entrava com ela: quem lesse o código podia tomar qualquer conta recém-criada. Agora `POST /users` cria a conta `Pendente` com um hash descartável (nenhuma senha confere) e envia um **convite por e-mail**, com link de 72 h e uso único, para a pessoa criar a própria senha. Conta `Pendente` não entra por login (`403 CONTA_PENDENTE` para as antigas que ainda tinham a senha fixa). `POST /users/:id/convite` reenvia; "esqueci a senha" de uma conta pendente manda um convite novo.
+- **E-mail de verdade** — `src/email.ts` (nodemailer): SMTP para o **Mailpit** do Compose (`:8025`, nada sai da máquina), caixa em memória nos testes, log em dev sem SMTP. O link de redefinição deixou de ser impresso no log (`RESET_TOKEN_CONSOLE` saiu).
+- **Sessão no servidor** — `POST /auth/logout` invalida os tokens emitidos antes (todos os dispositivos); `POST /auth/renovar` mantém a sessão viva enquanto há uso (expira com 30 min parada, teto de 8 h); trocar a senha encerra as outras sessões e devolve um token novo. `POST /auth/link/verificar` deixa a tela conferir o link antes de pedir a senha.
+- **Limites no banco** — falhas de login (`LoginFailure`) e pedidos de redefinição (`ResetRequest`) saem da memória: o bloqueio vale depois de reiniciar a API e entre instâncias. Redefinir a senha pelo link tira a conta do bloqueio.
+- **Auditoria** — `LOGIN`, `LOGIN_BLOQUEADO`, `LOGOUT`, `CRIAR_USUARIO`, `ENVIAR_CONVITE`, `ACEITAR_CONVITE`.
+- **Banco** — migrations `conta_convite_login` (`PasswordResetToken.tipo` com CHECK `RESET`/`CONVITE`, `User.sessaoEncerradaEm`, `LoginFailure` com RLS) e `limite_reset_no_banco` (`ResetRequest` com RLS).
+- **Testes** — 192 no backend (eram 174): `tests/conta.test.ts` novo (convite, reenvio e RBAC, verificação do link, logout, renovação, troca de senha, bloqueio persistido, auditoria); os testes passam a criar contas pelo convite, lido da caixa de e-mail em memória.
+- **Problema conhecido** — a migration `habilita_rls` faz `ALTER TABLE "_prisma_migrations"`, tabela que não existe no banco-sombra do `prisma migrate dev`: o comando falha para qualquer migration nova. Como ela já está aplicada no Postgres local e no Supabase, o arquivo não foi alterado; migrations novas são geradas com `migrate dev --create-only` apontando para um banco descartável recém-criado, até a correção ser decidida.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -101,7 +112,7 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 174 no backend (7 banco + 60 integração + 107 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 192 no backend (7 banco + 78 integração + 107 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

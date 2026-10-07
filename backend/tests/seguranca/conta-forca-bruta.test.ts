@@ -25,7 +25,9 @@ import {
   emailUnico,
   ADMIN,
   ANALISTA,
-  SENHA_PROVISORIA,
+  SENHA_CONTA,
+  tokenDoEmail,
+  criarUsuarioPendente,
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
@@ -50,24 +52,12 @@ async function conta(prefixo: string) {
   return criarUsuario(admin, 'Colaborador', prefixo);
 }
 
-/**
- * Solicita redefinicao e captura o token do link que a rota imprime no console
- * (RESET_TOKEN_CONSOLE=1 no ambiente de teste; nao ha e-mail neste projeto).
- */
+/** Solicita redefinicao e le o token do e-mail que chegou (caixa de saida em memoria). */
 async function solicitarReset(email: string): Promise<{ status: number; mensagem: string; token: string | null }> {
-  const original = console.log;
-  let token: string | null = null;
-  console.log = (...args: unknown[]) => {
-    const linha = args.map(String).join(' ');
-    const m = linha.match(/\[reset-senha\] link para .*\/reset-password\?token=([0-9a-f]{64})$/);
-    if (m) token = m[1];
-  };
-  try {
-    const r = await chamar('POST', '/auth/reset-password', { body: { email } });
-    return { status: r.status, mensagem: r.body?.mensagem, token };
-  } finally {
-    console.log = original;
-  }
+  const antes = await tokenDoEmail(email, 'reset-password');
+  const r = await chamar('POST', '/auth/reset-password', { body: { email } });
+  const token = await tokenDoEmail(email, 'reset-password');
+  return { status: r.status, mensagem: r.body?.mensagem, token: token === antes ? null : token };
 }
 
 /** True se o corpo (serializado) vaza um hash de senha em qualquer forma. */
@@ -85,7 +75,7 @@ describe('login: limite de tentativas / forca bruta', () => {
     }
     esperaErro(await chamar('POST', '/login', { body: { email: alvo.email, senha: 'ErradaX@1' } }), 429, 'MUITAS_TENTATIVAS');
     // A senha CORRETA dentro da janela nao destrava: o gate do rate-limit vem antes do bcrypt.
-    esperaErro(await chamar('POST', '/login', { body: { email: alvo.email, senha: SENHA_PROVISORIA } }), 429, 'MUITAS_TENTATIVAS');
+    esperaErro(await chamar('POST', '/login', { body: { email: alvo.email, senha: SENHA_CONTA } }), 429, 'MUITAS_TENTATIVAS');
   });
 
   it('o bloqueio e por conta: uma conta travada nao afeta outra conta nem o seed', async () => {
@@ -96,7 +86,7 @@ describe('login: limite de tentativas / forca bruta', () => {
     esperaErro(await chamar('POST', '/login', { body: { email: travada.email, senha: 'Nope@123' } }), 429, 'MUITAS_TENTATIVAS');
     // Outra conta recem-criada entra normalmente...
     const outra = await conta('bf.livre');
-    assert.equal((await chamar('POST', '/login', { body: { email: outra.email, senha: SENHA_PROVISORIA } })).status, 200);
+    assert.equal((await chamar('POST', '/login', { body: { email: outra.email, senha: SENHA_CONTA } })).status, 200);
     // ...e o usuario do seed tambem (limite keyed por e-mail, nao global).
     assert.equal((await chamar('POST', '/login', { body: { email: ANALISTA.email, senha: ANALISTA.senha } })).status, 200);
   });
@@ -108,7 +98,7 @@ describe('login: limite de tentativas / forca bruta', () => {
       esperaErro(await chamar('POST', '/login', { body: { email: alvo.email, senha: 'Errada@9' } }), 401, 'CREDENCIAIS_INVALIDAS');
     }
     // ...login valido reseta o contador.
-    assert.equal((await chamar('POST', '/login', { body: { email: alvo.email, senha: SENHA_PROVISORIA } })).status, 200);
+    assert.equal((await chamar('POST', '/login', { body: { email: alvo.email, senha: SENHA_CONTA } })).status, 200);
     // Se NAO tivesse zerado, a 2a falha abaixo ja seria 429 (contador estaria em 4).
     for (let i = 0; i < 3; i++) {
       esperaErro(await chamar('POST', '/login', { body: { email: alvo.email, senha: 'Errada@9' } }), 401, 'CREDENCIAIS_INVALIDAS');
@@ -178,7 +168,7 @@ describe('redefinicao de senha: token, expiracao, limite e enumeracao', () => {
     assert.equal(r.status, 200);
     assert.match(r.mensagem, /Se o e-mail estiver cadastrado/);
     assert.equal(r.token, null, 'conta inativa nao deve receber link');
-    assert.equal(await prisma.passwordResetToken.count({ where: { userId: alvo.id } }), 0);
+    assert.equal(await prisma.passwordResetToken.count({ where: { userId: alvo.id, tipo: 'RESET' } }), 0);
   });
 
   it('token de redefinicao e de uso unico: reuso apos consumir -> TOKEN_RESET_INVALIDO', async () => {
@@ -206,7 +196,7 @@ describe('redefinicao de senha: token, expiracao, limite e enumeracao', () => {
     await prisma.passwordResetToken.updateMany({ where: { userId: alvo.id, usadoEm: null }, data: { expiraEm: new Date(Date.now() - 1000) } });
     esperaErro(await chamar('POST', '/auth/reset-password/confirm', { body: { token, novaSenha: 'Expirou@123' } }), 400, 'TOKEN_RESET_INVALIDO');
     // A senha nao mudou: a provisoria ainda vale.
-    await login(alvo.email, SENHA_PROVISORIA);
+    await login(alvo.email, SENHA_CONTA);
   });
 
   it('limita a 3 solicitacoes por e-mail em 15 min (4a -> 429)', async () => {
@@ -229,17 +219,17 @@ describe('redefinicao de senha: token, expiracao, limite e enumeracao', () => {
     const { token } = await solicitarReset(a.email);
     assert.ok(token);
     assert.equal((await chamar('POST', '/auth/reset-password/confirm', { body: { token, novaSenha: 'SenhaDoA@1' } })).status, 200);
-    // A passa a usar a nova senha; a provisoria antiga nao vale mais.
+    // A passa a usar a nova senha; a antiga nao vale mais.
     await login(a.email, 'SenhaDoA@1');
-    esperaErro(await chamar('POST', '/login', { body: { email: a.email, senha: SENHA_PROVISORIA } }), 401, 'CREDENCIAIS_INVALIDAS');
-    // B nao foi tocado: continua com a provisoria e sem token algum.
-    await login(b.email, SENHA_PROVISORIA);
-    assert.equal(await prisma.passwordResetToken.count({ where: { userId: b.id } }), 0);
+    esperaErro(await chamar('POST', '/login', { body: { email: a.email, senha: SENHA_CONTA } }), 401, 'CREDENCIAIS_INVALIDAS');
+    // B nao foi tocado: continua com a senha dele e sem link de redefinicao.
+    await login(b.email, SENHA_CONTA);
+    assert.equal(await prisma.passwordResetToken.count({ where: { userId: b.id, tipo: 'RESET' } }), 0);
   });
 
   it('redefinir a senha encerra sessoes abertas antes (cenario de credencial comprometida)', async () => {
     const alvo = await conta('reset.sessao');
-    const sessaoAntiga = await login(alvo.email, SENHA_PROVISORIA);
+    const sessaoAntiga = await login(alvo.email, SENHA_CONTA);
     assert.equal((await chamar('GET', '/me', { token: sessaoAntiga })).status, 200);
     // `iat` do JWT tem granularidade de segundos: espera para a comparacao ser deterministica.
     await sleep(1200);
@@ -275,40 +265,41 @@ describe('politica de senha e senha provisoria', () => {
 
   it('change-password exige token, campos e a senha atual correta', async () => {
     const alvo = await conta('pol.change');
-    const token = await login(alvo.email, SENHA_PROVISORIA);
+    const token = await login(alvo.email, SENHA_CONTA);
     esperaErro(await chamar('POST', '/auth/change-password', { body: {} }), 401, 'TOKEN_AUSENTE');
     esperaErro(await chamar('POST', '/auth/change-password', { token, body: { novaSenha: 'NovaBoa@1' } }), 400, 'SENHA_ATUAL_OBRIGATORIA');
-    esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_PROVISORIA } }), 400, 'NOVA_SENHA_OBRIGATORIA');
+    esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_CONTA } }), 400, 'NOVA_SENHA_OBRIGATORIA');
     // Senha atual errada (com nova senha forte, para nao cair antes em SENHA_FRACA).
     esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: 'ChuteErrado@1', novaSenha: 'NovaBoa@1' } }), 400, 'SENHA_ATUAL_INCORRETA');
   });
 
   it('change-password rejeita senhas fracas e a repetida', async () => {
     const alvo = await conta('pol.fracas');
-    const token = await login(alvo.email, SENHA_PROVISORIA);
+    const token = await login(alvo.email, SENHA_CONTA);
     const fracas = ['Ab@1', 'semmaiuscula1!', 'SEMMINUSCULA1!', 'SemNumeroSimbolo', `${'Aa1@bcde'.repeat(8)}x`];
     for (const senha of fracas) {
-      esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_PROVISORIA, novaSenha: senha } }), 400, 'SENHA_FRACA');
+      esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_CONTA, novaSenha: senha } }), 400, 'SENHA_FRACA');
     }
     // Repetir a senha atual (que passa na politica) e rejeitado.
-    esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_PROVISORIA, novaSenha: SENHA_PROVISORIA } }), 400, 'SENHA_REPETIDA');
+    esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_CONTA, novaSenha: SENHA_CONTA } }), 400, 'SENHA_REPETIDA');
   });
 
-  it('senha provisoria: conta Pendente vira Ativa ao trocar a senha', async () => {
-    const alvo = await conta('prov.ativa');
-    const token = await login(alvo.email, SENHA_PROVISORIA);
-    assert.equal((await chamar('GET', '/me', { token })).body.dados.status, 'Pendente');
-    const r = await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_PROVISORIA, novaSenha: 'MinhaNova@1' } });
+  it('sem senha provisoria: conta Pendente nao entra por senha nenhuma e vira Ativa so pelo convite', async () => {
+    const alvo = await criarUsuarioPendente(admin, 'Colaborador', 'conv.ativa');
+    // A antiga senha fixa e qualquer chute falham como credencial invalida.
+    for (const senha of ['Mudar@123', SENHA_CONTA]) {
+      esperaErro(await chamar('POST', '/login', { body: { email: alvo.email, senha } }), 401, 'CREDENCIAIS_INVALIDAS');
+    }
+    const r = await chamar('POST', '/auth/reset-password/confirm', { body: { token: alvo.convite, novaSenha: 'MinhaNova@1' } });
     assert.equal(r.status, 200);
+    assert.equal(r.body.mensagem, 'Senha cadastrada com sucesso');
+    const token = await login(alvo.email, 'MinhaNova@1');
     assert.equal((await chamar('GET', '/me', { token })).body.dados.status, 'Ativo');
-    // Provisoria antiga nao vale mais; a nova vale.
-    esperaErro(await chamar('POST', '/login', { body: { email: alvo.email, senha: SENHA_PROVISORIA } }), 401, 'CREDENCIAIS_INVALIDAS');
-    await login(alvo.email, 'MinhaNova@1');
   });
 
   it('o hash de senha nunca volta em nenhuma resposta (login, /me, /usuarios, PATCH)', async () => {
     const alvo = await conta('leak.hash');
-    const loginResp = await chamar('POST', '/login', { body: { email: alvo.email, senha: SENHA_PROVISORIA } });
+    const loginResp = await chamar('POST', '/login', { body: { email: alvo.email, senha: SENHA_CONTA } });
     assert.equal(loginResp.status, 200);
     assert.ok(!vazaHash(loginResp.body), 'login vazou hash');
     const token = loginResp.body.dados.token as string;

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   ADMIN,
   ANALISTA,
-  SENHA_PROVISORIA,
+  SENHA_CONTA,
   chamar,
   criarUsuario,
   encerrarServidor,
@@ -194,7 +194,7 @@ describe('departamentos', () => {
   it('GET /me traz o departamento do usuário logado', async () => {
     const conta = await criarUsuario(admin, 'Colaborador', 'me.dep');
     assert.equal((await chamar('PATCH', `/users/${conta.id}`, { token: admin, body: { departamento: 'RH' } })).status, 200);
-    const token = await login(conta.email, SENHA_PROVISORIA);
+    const token = await login(conta.email, SENHA_CONTA);
     const me = await chamar('GET', '/me', { token });
     assert.equal(me.body.dados.departamento, 'RH');
   });

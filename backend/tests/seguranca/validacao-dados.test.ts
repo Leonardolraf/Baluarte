@@ -21,7 +21,7 @@ import {
   emailUnico,
   ADMIN,
   ANALISTA,
-  SENHA_PROVISORIA,
+  SENHA_CONTA,
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
@@ -246,7 +246,7 @@ describe('PUT /configuracoes/notificacoes — apenas booleanos', () => {
 
   before(async () => {
     const conta = await criarUsuario(admin, 'Colaborador', 'notif');
-    colaborador = await login(conta.email, SENHA_PROVISORIA);
+    colaborador = await login(conta.email, SENHA_CONTA);
   });
 
   it('valor não-booleano → 400 PREFERENCIA_INVALIDA', async () => {

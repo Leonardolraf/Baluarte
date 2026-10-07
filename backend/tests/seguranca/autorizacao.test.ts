@@ -28,7 +28,7 @@ import {
   emailUnico,
   ADMIN,
   ANALISTA,
-  SENHA_PROVISORIA,
+  SENHA_CONTA,
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
@@ -54,7 +54,7 @@ before(async () => {
   admin = await login(ADMIN.email, ADMIN.senha);
   analista = await login(ANALISTA.email, ANALISTA.senha);
   contaColab = await criarUsuario(admin, 'Colaborador', 'authz-colab');
-  colaborador = await login(contaColab.email, SENHA_PROVISORIA);
+  colaborador = await login(contaColab.email, SENHA_CONTA);
 });
 
 after(async () => {
@@ -181,9 +181,9 @@ describe('escalada vertical e horizontal → 403', () => {
 describe('IDOR — treinamento pós-clique pertence ao destinatário', () => {
   it('Colaborador não conclui o treinamento de OUTRO destinatário (403), mas o dono conclui (200)', async () => {
     const dono = await criarUsuario(admin, 'Colaborador', 'idor-dono');
-    const tokenDono = await login(dono.email, SENHA_PROVISORIA);
+    const tokenDono = await login(dono.email, SENHA_CONTA);
     const contaIntruso = await criarUsuario(admin, 'Colaborador', 'idor-intruso');
-    const tokenIntruso = await login(contaIntruso.email, SENHA_PROVISORIA);
+    const tokenIntruso = await login(contaIntruso.email, SENHA_CONTA);
 
     const campanha = await prisma.campaign.create({
       data: {
@@ -223,7 +223,7 @@ describe('IDOR — treinamento pós-clique pertence ao destinatário', () => {
 describe('perfil defasado no token e ciclo de sessão', () => {
   it('rebaixar um admin invalida o poder do token antigo (ainda "Administrador") → 403', async () => {
     const conta2 = await criarUsuario(admin, 'Administrador', 'authz-admin2');
-    const token2 = await login(conta2.email, SENHA_PROVISORIA);
+    const token2 = await login(conta2.email, SENHA_CONTA);
     // Com dois admins ativos, o token2 opera a gestão de usuários.
     assert.equal((await chamar('GET', '/usuarios', { token: token2 })).status, 200);
 
@@ -241,19 +241,19 @@ describe('perfil defasado no token e ciclo de sessão', () => {
 
   it('conta inativada perde acesso na hora (401 USUARIO_INATIVO) e o login é recusado (403)', async () => {
     const conta = await criarUsuario(admin, 'Analista', 'authz-inativo');
-    const token = await login(conta.email, SENHA_PROVISORIA);
+    const token = await login(conta.email, SENHA_CONTA);
     assert.equal((await chamar('GET', '/me', { token })).status, 200);
 
     assert.equal((await chamar('PATCH', `/users/${conta.id}`, { token: admin, body: { status: 'Inativo' } })).status, 200);
 
     esperaErro(await chamar('GET', '/me', { token }), 401, 'USUARIO_INATIVO');
     esperaErro(await chamar('GET', '/vulnerabilidades', { token }), 401, 'USUARIO_INATIVO');
-    esperaErro(await chamar('POST', '/login', { body: { email: conta.email, senha: SENHA_PROVISORIA } }), 403, 'USUARIO_INATIVO');
+    esperaErro(await chamar('POST', '/login', { body: { email: conta.email, senha: SENHA_CONTA } }), 403, 'USUARIO_INATIVO');
   });
 
   it('conta excluída invalida o token na hora → 401 USUARIO_REMOVIDO', async () => {
     const conta = await criarUsuario(admin, 'Colaborador', 'authz-removido');
-    const token = await login(conta.email, SENHA_PROVISORIA);
+    const token = await login(conta.email, SENHA_CONTA);
     assert.equal((await chamar('GET', '/me', { token })).status, 200);
 
     assert.equal((await chamar('DELETE', `/users/${conta.id}`, { token: admin })).status, 200);
@@ -264,7 +264,7 @@ describe('perfil defasado no token e ciclo de sessão', () => {
 
   it('redefinição de senha encerra as sessões abertas antes → 401 SENHA_REDEFINIDA', async () => {
     const conta = await criarUsuario(admin, 'Analista', 'authz-senha');
-    const token = await login(conta.email, SENHA_PROVISORIA);
+    const token = await login(conta.email, SENHA_CONTA);
     assert.equal((await chamar('GET', '/me', { token })).status, 200);
 
     // Marca a senha como redefinida DEPOIS da emissão do token (o servidor compara iat).

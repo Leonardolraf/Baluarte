@@ -22,7 +22,7 @@ import {
   criarUsuario,
   ADMIN,
   ANALISTA,
-  SENHA_PROVISORIA,
+  SENHA_CONTA,
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
@@ -68,7 +68,7 @@ function planificar(obj: unknown): { chaves: string[]; textos: string[] } {
 // O segredo do JWT usado nos testes (definido por prepararBanco).
 const SEGREDO_JWT = 'segredo-somente-para-testes';
 const PREFIXOS_BCRYPT = ['$2a$', '$2b$', '$2y$'];
-const SENHAS_EM_CLARO = [SENHA_PROVISORIA, ADMIN.senha, ANALISTA.senha, 'Mudar@123'];
+const SENHAS_EM_CLARO = [SENHA_CONTA, ADMIN.senha, ANALISTA.senha, 'Mudar@123'];
 
 // Falha se o corpo carregar qualquer segredo (hash, senha em claro ou o segredo do JWT).
 function semSegredos(body: unknown, contexto: string): void {
@@ -317,7 +317,7 @@ describe('dashboard do Colaborador nao vaza dados tecnicos no payload', () => {
   before(async () => {
     const admin = await login(ADMIN.email, ADMIN.senha);
     const conta = await criarUsuario(admin, 'Colaborador', 'expo.dash');
-    colaborador = await login(conta.email, SENHA_PROVISORIA);
+    colaborador = await login(conta.email, SENHA_CONTA);
     const alvo1 = await criarUsuario(admin, 'Colaborador', 'expo.alvo1');
     const alvo2 = await criarUsuario(admin, 'Colaborador', 'expo.alvo2');
     // Semeia uma campanha COM metricas (enviados/clicados) para provar que o payload as retem.

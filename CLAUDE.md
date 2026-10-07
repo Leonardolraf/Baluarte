@@ -6,7 +6,7 @@
 
 ## O que tem aqui
 App real construído para a disciplina de Teste de Software do TCC (não mais stubs):
-- `backend/` — Node + Express + TypeScript + Prisma + **PostgreSQL 16** (serviço `db` do compose, `127.0.0.1:5432`), JWT (HS256) + bcrypt, RBAC, AuditLog. Porta `8080`. Testes em `backend/tests/` (`npm test`, 174 testes — 7 de banco, 60 de integração, 107 de pentest em `tests/seguranca/` —, um banco `baluarte_test_<arquivo>` por arquivo, recriado pelas migrations; só roda contra Postgres local).
+- `backend/` — Node + Express + TypeScript + Prisma + **PostgreSQL 16** (serviço `db` do compose, `127.0.0.1:5432`), JWT (HS256) + bcrypt, RBAC, AuditLog. Porta `8080`. Testes em `backend/tests/` (`npm test`, 192 testes — 7 de banco, 78 de integração, 107 de pentest em `tests/seguranca/` —, um banco `baluarte_test_<arquivo>` por arquivo, recriado pelas migrations; só roda contra Postgres local).
 - `baluarte-frontend/` — **frontend do produto**: SPA React 18 + TypeScript + Vite + TailwindCSS com RBAC por rota, tema claro/escuro, camada mock (`npm run dev`) ou backend real (`VITE_USE_MOCKS=false`). Porta `5173`. Suítes: Vitest + RTL + axe (`npm test`), Playwright (`npm run test:e2e`; modo real com `E2E_REAL=1`).
 - `frontend/` — **frontend legado** (telas geradas do Figma). Porta `3000`. Mantido só como alvo das suítes Robot Framework da N2 AT1 (`e2e/*.robot`), que dependem das rotas `/cadastro-usuario`, `/cadastro-ativo`, `/campanha`, `/alterar-senha`, `/reset-senha` e dos ids dos formulários. Não evoluir; novas telas vão em `baluarte-frontend/`.
 - `testes-api/` e `testes/api/` — collection Postman/Newman (N2 AT1): 35 requisições / 70 asserções sobre os 6 endpoints do contrato. Precisa de banco limpo (`db:reset` + `seed`, e reiniciar a API depois do reset).
@@ -14,7 +14,8 @@ App real construído para a disciplina de Teste de Software do TCC (não mais st
 
 Ver `README.md` deste repo para como rodar, credenciais de teste e como rodar cada suíte.
 
-**Escopo honesto:** a plataforma (auth, RBAC, persistência, dashboard) é real. O scanner OWASP e o disparo de phishing são **simulados no servidor** — nenhum ataque real, nenhum e-mail é enviado de fato (o token de redefinição de senha é impresso no console do backend fora de produção).
+**Escopo honesto:** a plataforma (auth, RBAC, persistência, dashboard) é real. O scanner OWASP e o disparo de phishing são **simulados no servidor** — nenhum ataque real, nenhum e-mail de phishing. Os e-mails de conta (convite e redefinição de senha) saem de verdade por SMTP para o Mailpit do Compose (`:8025`), via `src/email.ts`; nos testes, para a caixa em memória `caixaDeSaida`.
+- **Conta:** não existe senha provisória. `POST /users` cria a conta `Pendente` com hash de senha descartável e envia um convite (`src/conta.ts`, token tipo `CONVITE`, 72 h); conta `Pendente` não entra por login. Logout grava `sessaoEncerradaEm`; falhas de login ficam na tabela `LoginFailure`. Nos testes, `criarUsuario` aceita o convite com `SENHA_CONTA`; `criarUsuarioPendente` para antes.
 
 ## Regras do contrato
 - As 6 rotas testadas pelo Postman (`POST /login`, `/scans`, `/assets`, `/users`, `/campaigns`, `GET /findings/classificacao`) e as mensagens/códigos de erro em `backend/src/util.ts` **não mudam** — só se estendem de forma compatível (ex.: `destinatarios[]` além de `destinatario` em `/campaigns`).
