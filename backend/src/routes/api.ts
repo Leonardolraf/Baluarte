@@ -182,9 +182,11 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
   }
   if (!TEMPLATES.includes(template)) return erro(res, 400, 'Template é obrigatório', 'TEMPLATE_OBRIGATORIO');
 
-  // So recebe campanha quem esta cadastrado e nao esta Inativo. A comparacao ignora
-  // maiusculas (bancos antigos podem ter e-mails com caixa mista).
-  const usuarios = await prisma.user.findMany({ select: { id: true, email: true, status: true } });
+  // So recebe campanha quem esta cadastrado e nao esta Inativo (e-mail citext: ignora maiusculas).
+  const usuarios = await prisma.user.findMany({
+    where: { email: { in: lista.map((e) => e.toLowerCase()) } },
+    select: { id: true, email: true, status: true },
+  });
   const destinos: { userId: string; email: string }[] = [];
   for (const email of lista) {
     const u = usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());

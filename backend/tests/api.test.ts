@@ -1,5 +1,5 @@
-// Testes de integracao da API (node:test + fetch) contra um SQLite ISOLADO
-// (prisma/test-api.db, recriado e semeado a cada execucao — ver helpers.ts).
+// Testes de integracao da API (node:test + fetch) contra um Postgres ISOLADO
+// (banco baluarte_test_api, recriado e semeado a cada execucao — ver helpers.ts).
 // Cobre as rotas adicionais ao contrato da N2 AT1, o RBAC e as regras de conta.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';

@@ -16,7 +16,7 @@ import { enviar, erro, wrap, queryString, POLITICA_SENHA, STATUS_FINDING, STATUS
 const OPERADORES = ['Administrador', 'Analista'];
 const SEM_DEPARTAMENTO = 'Sem departamento';
 
-type FindingComScan = { id: string; categoriaOwasp: string; cvss: number; severidade: string; descricao: string; evidencia: string; cwe: string | null; cve: string | null; cvssVetor: string | null; remediacao: string | null; status: string; criadoEm: Date; scan: { asset: { host: string; nome: string } } };
+type FindingComScan = { id: string; categoriaOwasp: string; cvss: number; severidade: string; descricao: string; evidencia: string; cwe: string | null; cve: string | null; cvssVetor: string | null; remediacao: unknown; status: string; criadoEm: Date; scan: { asset: { host: string; nome: string } } };
 
 function encerrado(f: { status: string }): boolean {
   return STATUS_FINDING_ENCERRADO.includes(f.status);

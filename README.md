@@ -8,7 +8,8 @@ Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia
 
 | Camada | Pasta | Stack | Porta |
 |---|---|---|---|
-| **API** | `backend/` | Node + Express + TypeScript + Prisma + SQLite · JWT (HS256) + bcrypt · RBAC · AuditLog | `8080` |
+| **API** | `backend/` | Node + Express + TypeScript + Prisma · JWT (HS256) + bcrypt · RBAC · AuditLog | `8080` |
+| **Banco** | `docker-compose.yml` (`db`) | PostgreSQL 16 · migrations Prisma · restrições CHECK · `citext` | `5432` (só local) |
 | **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailwindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` (dev) · `8081` (Docker) |
 | **Frontend legado** | `frontend/` | React 18 + Vite (telas geradas do Figma) — mantido **só** como alvo das suítes Robot da N2 AT1 | `3000` |
 
@@ -16,11 +17,18 @@ Os dois frontends fazem proxy de `/api` → `http://localhost:8080`. Novas telas
 
 ## Como rodar
 
+### Banco (PostgreSQL, `127.0.0.1:5432`)
+```bash
+cp .env.example .env   # na raiz; defina POSTGRES_PASSWORD (ex.: openssl rand -hex 24)
+docker compose up -d db
+```
+Em `backend/.env`, `DATABASE_URL` e `DIRECT_URL` = `postgresql://baluarte:<POSTGRES_PASSWORD>@localhost:5432/baluarte?schema=public` (ver `backend/.env.example`).
+
 ### Backend (`:8080`)
 ```bash
 cd backend
 npm install
-npm run db:push        # cria o SQLite e o Prisma Client
+npm run db:migrate     # aplica as migrations (prisma/migrations) e gera o Prisma Client
 npm run seed           # dados de contrato (usuários + ativos que os testes esperam)
 npm run seed:demo      # (opcional) dados de demonstração p/ o dashboard ter conteúdo
 npm run dev            # sobe a API em http://localhost:8080
@@ -54,7 +62,7 @@ npm run dev
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração + pentest** (node:test, SQLite isolado por arquivo) | `backend/tests/` | `cd backend && npm test` | 166 testes. Integração (60): contrato, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (106, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
+| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 174 testes. Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (60): contrato, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (107, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
 | **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 321 testes |
@@ -64,7 +72,7 @@ npm run dev
 ### API — Postman/Newman (contra o backend real)
 A collection da N2 AT1 (`testes-api/`) roda **35 requisições / 70 asserções** sobre os 6 endpoints do contrato. Rode com a base de contrato (sem dados de demo) para garantir o verde:
 ```bash
-cd backend && npm run db:reset && npm run seed && npm run dev   # banco limpo de contrato
+cd backend && npm run db:reset && npm run seed && npm run dev   # banco limpo de contrato (reinicie a API depois de um db:reset)
 npx newman run testes-api/Baluarte-N2AT1.postman_collection.json -e testes-api/Baluarte-local.postman_environment.json
 # => 70 assertions, 0 failed
 ```
@@ -111,16 +119,18 @@ O perfil vem do banco a cada requisição (um token emitido antes de um rebaixam
 - **Senha provisória fixa** (`Mudar@123`) para contas criadas por um administrador, e a conta `Pendente` pode usar o sistema antes de trocá-la (trocar a senha a ativa). Sem canal de e-mail não há como entregar uma senha aleatória.
 - **Trocar a própria senha** (`/auth/change-password`) não derruba as outras sessões do mesmo usuário; a redefinição por token, sim. Todo token expira em 30 minutos.
 
-## Supabase (opcional)
+## Supabase (banco hospedado para a demonstração)
 
-O cliente Supabase está configurado em `frontend/src/supabase.ts` (lê `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` do `.env` — a chave **anon** é pública). Conectividade já verificada (auth/REST respondem 200).
+O backend fala com qualquer PostgreSQL; o Supabase (plano gratuito) serve de banco hospedado para a apresentação. Desenvolvimento e testes continuam no Postgres local do Docker: os testes recriam bancos e o Newman exige banco limpo, o que apagaria os dados da demonstração e gastaria a cota.
 
-> ⚠️ O projeto Supabase ainda **não tem tabelas**, então não há dados a ler/gravar via REST até criá-las.
+1. No Supabase, use o projeto do Baluarte (o `frontend/` legado já aponta para um) ou crie um. **Project Settings → Database → Connection string.**
+2. Em `backend/.env` (nunca no git), troque as duas URLs:
+   - `DATABASE_URL` = **Transaction pooler** (porta `6543`) + `?pgbouncer=true&connection_limit=1` — é a conexão da API.
+   - `DIRECT_URL` = **Session pooler** (porta `5432`) — usada só pelas migrations (a conexão direta do plano gratuito é só IPv6).
+3. `cd backend && npm run db:migrate && npm run seed && npm run seed:demo`.
+4. **Não rode `npm test` com essas URLs**: o helper dos testes recusa servidor não local de propósito.
 
-**Para usar o Postgres do Supabase como banco real do backend** (ver `backend/.env.example`):
-1. `backend/prisma/schema.prisma` → `provider = "postgresql"`.
-2. `backend/.env` → `DATABASE_URL` = connection string do Supabase (Project Settings → Database). **A senha é secreta** (só no seu `.env`).
-3. `npm run db:push` cria todas as tabelas no Supabase automaticamente; depois `npm run seed`.
+Cuidados do plano gratuito: 500 MB por projeto, no máximo 2 projetos gratuitos por organização e **pausa após 7 dias sem uso** — restaure o projeto no painel antes da apresentação. O Supabase hospeda só o banco: a API ainda precisa rodar em algum lugar (máquina local, Docker ou um serviço como Render/Railway).
 
 ## Docker
 
@@ -130,10 +140,11 @@ cp .env.example .env                       # opcional: JWT_SECRET e SEED_DEMO
 docker compose up --build -d backend app   # API :8080 + frontend do produto :8081 (Nginx)
 docker compose up --build -d               # idem + frontend legado :3000 (para as suites Robot)
 docker compose logs -f backend             # com RESET_TOKEN_CONSOLE=1, o link de redefinicao aparece aqui
-docker compose down                        # -v tambem apaga o banco (volume backend-data)
+docker compose down                        # -v tambem apaga o banco (volume db-data)
 ```
 - O frontend do produto fica em **:8081** no Docker, e nao em 5173: a 5173 e do dev server do Vite (que o Playwright reutiliza quando esta ocupada), entao os dois modos convivem sem se confundir.
-- O SQLite da API vive no volume `backend-data` (`/data/dev.db`): sobrevive a `down`/`up` e a rebuilds. Na **primeira** subida o entrypoint aplica o schema, roda o seed de contrato e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes so reaplica o schema e o seed de contrato (idempotente), sem apagar o que foi criado pela interface.
+- Os dados ficam no PostgreSQL do servico `db` (volume `db-data`), publicado so em `127.0.0.1:5432`. A senha vem de `POSTGRES_PASSWORD` no `.env` da raiz; sem ela o compose nao sobe. Na **primeira** subida o entrypoint aplica as migrations (`prisma migrate deploy`, que nunca apaga dados), roda o seed de contrato e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes so aplica migrations pendentes e o seed de contrato (idempotente).
+- **Depois de um `db:reset` com a API no ar, reinicie a API** (`docker compose restart backend`): o reset recria a extensao `citext` e as conexoes abertas ficam com o tipo antigo em cache (`cache lookup failed for type`).
 - **Sem segredo no repositorio:** se `JWT_SECRET` nao vier do `.env`, o entrypoint gera um aleatorio e o guarda no volume (`/data/jwt.secret`), entao as sessoes sobrevivem a reinicios sem nenhum valor fixo versionado. Com `NODE_ENV=production` a API se recusa a subir sem um segredo forte.
 - `app` faz o build de producao de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o servico `backend` (`baluarte-frontend/nginx.conf`); so sobe depois do healthcheck da API. A API roda como usuario `node`, nao como root.
 - Para as suites Newman/Robot contra o Docker, suba com um banco limpo: `docker compose down -v && SEED_DEMO=0 docker compose up --build -d`.
@@ -141,7 +152,7 @@ docker compose down                        # -v tambem apaga o banco (volume bac
 ## Estrutura
 
 ```
-backend/            API real (Express + Prisma/SQLite)
+backend/            API real (Express + Prisma/PostgreSQL)
   prisma/           schema + seed (contrato) + seed-demo
   src/              app, auth (JWT/RBAC), audit, util (validações = contrato), routes/ (api = contrato · read · manage)
   tests/            testes de integração (node:test) com banco isolado

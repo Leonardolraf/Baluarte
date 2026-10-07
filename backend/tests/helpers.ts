@@ -1,14 +1,18 @@
 // Infra compartilhada pelos testes de integracao (node:test + fetch).
 //
 // Cada arquivo de teste roda no seu proprio processo (`node --test`), entao cada um
-// ganha um SQLite PROPRIO (prisma/test-<nome>.db), recriado e semeado no import.
-// Isso permite rodar as suites em paralelo sem que uma pise no banco da outra.
+// ganha um banco Postgres PROPRIO (baluarte_test_<nome>, no mesmo servidor do
+// DATABASE_URL do .env ou de TEST_DATABASE_URL), recriado pelas migrations e semeado
+// no import. Isso permite rodar as suites em paralelo sem que uma pise na outra.
+// Trava: so roda contra servidor local (localhost/127.0.0.1/db), para nunca apagar
+// um banco remoto (ex.: o Supabase) por engano.
 //
 // Uso, no topo do arquivo de teste (antes de importar a app):
 //   import { prepararBanco, iniciarServidor, chamar, login, ... } from './helpers.js';
 //   prepararBanco(import.meta.url);
 //   const { app } = await import('../src/app.js');
 //   before(() => iniciarServidor(app)); after(() => encerrarServidor());
+import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import type { Server } from 'node:http';
@@ -26,16 +30,26 @@ function npx(args: string): void {
   if (r.status !== 0) throw new Error(`falha em "npx ${args}":\n${r.stdout}\n${r.stderr}`);
 }
 
+const HOSTS_LOCAIS = new Set(['localhost', '127.0.0.1', '::1', 'db']);
+
 /** Aponta DATABASE_URL para um banco exclusivo deste arquivo de teste e o recria com o seed de contrato. */
 export function prepararBanco(testFileUrl: string): void {
-  const nome = basename(fileURLToPath(testFileUrl)).replace(/\.test\.ts$/, '');
-  process.env.DATABASE_URL = `file:./test-${nome}.db`;
+  const nome = basename(fileURLToPath(testFileUrl)).replace(/\.test\.ts$/, '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const base = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+  if (!base?.startsWith('postgres')) throw new Error('defina DATABASE_URL (ou TEST_DATABASE_URL) apontando para o Postgres local');
+  const url = new URL(base);
+  if (!HOSTS_LOCAIS.has(url.hostname))
+    throw new Error(`os testes recriam bancos: recusando o servidor nao local "${url.hostname}" (use TEST_DATABASE_URL local)`);
+  url.pathname = `/baluarte_test_${nome}`;
+  process.env.DATABASE_URL = url.toString();
+  process.env.DIRECT_URL = url.toString();
   process.env.JWT_SECRET = 'segredo-somente-para-testes';
   process.env.NODE_ENV = 'test';
   // O canal de entrega do token de redefinicao em dev/demo e o log (opt-in).
   process.env.RESET_TOKEN_CONSOLE = '1';
   process.env.FRONTEND_URL = 'http://localhost:5173';
-  npx('prisma db push --force-reset --accept-data-loss --skip-generate');
+  // migrate reset cria o banco se faltar, apaga tudo e reaplica as migrations (testa as migrations de verdade).
+  npx('prisma migrate reset --force --skip-seed --skip-generate');
   npx('tsx prisma/seed.ts');
 }
 

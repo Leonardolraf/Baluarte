@@ -104,6 +104,16 @@ describe('SQLi no login', () => {
       assert.equal(r.body.status, 'erro');
     }
   });
+
+  it('NUL byte no corpo, na query ou no caminho é barrado na borda (400), nunca chega ao banco', async () => {
+    const analista = await login(ANALISTA.email, ANALISTA.senha);
+    esperaErro(await chamar('POST', '/login', { body: { email: 'admin@empresa.com\u0000', senha: 'x' } }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('POST', '/assets', { token: analista, body: { nome: 'a\u0000b', tipo: 'Rede', host: '10.9.9.9' } }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('POST', '/users', { token: analista, body: { nome: 'X', email: 'x@empresa.com', perfil: 'Colaborador', extra: { 'chave\u0000': 1 } } }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('GET', '/vulnerabilidades?q=a%00b', { token: analista }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('GET', '/vulnerabilidades/abc%00', { token: analista }), 400, 'CARACTERE_INVALIDO');
+    esperaErro(await chamar('GET', '/treinamentos/link/abc%00'), 400, 'CARACTERE_INVALIDO');
+  });
 });
 
 // -----------------------------------------------------------------------------

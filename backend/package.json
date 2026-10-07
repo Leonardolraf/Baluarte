@@ -11,8 +11,9 @@
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
-    "db:push": "prisma db push",
-    "db:reset": "prisma db push --force-reset",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:reset": "prisma migrate reset --force --skip-seed",
     "prisma:generate": "prisma generate",
     "test:seguranca": "node --import tsx --test \"tests/seguranca/**/*.test.ts\""
   },

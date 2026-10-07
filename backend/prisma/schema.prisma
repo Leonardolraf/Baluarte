@@ -1,23 +1,31 @@
-// Baluarte V2 — modelo de dados real (Prisma + SQLite).
-// SQLite nao suporta enums nativos no Prisma, por isso os campos de "enum"
-// (perfil, status, tipo, severidade) sao String validados na camada de aplicacao.
+// Baluarte V2 — modelo de dados real (Prisma + PostgreSQL).
+//
+// Valores fixos (perfil, status, tipo, severidade, template) ficam como texto e sao
+// garantidos NO BANCO por restricoes CHECK criadas nas migrations (prisma/migrations),
+// nao por enums do Prisma: os valores do contrato tem acento e espaco ("Em revisão",
+// "Banco de Dados") e enums obrigariam uma camada de traducao em todas as rotas.
+// As listas validas sao as mesmas de src/util.ts.
+//
+// E-mail e nome de departamento usam citext: unicidade e busca ignoram maiusculas.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Conexao direta para as migrations (no Supabase, a URL do dia a dia passa pelo pooler).
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id        String   @id @default(cuid())
   nome      String
-  email     String   @unique
+  email     String   @unique @db.Citext
   senhaHash String
-  perfil    String   @default("Analista") // Administrador | Analista | Colaborador
-  status    String   @default("Ativo")    // Ativo | Inativo | Pendente
+  perfil    String   @default("Analista") // CHECK: Administrador | Analista | Colaborador
+  status    String   @default("Ativo")    // CHECK: Ativo | Inativo | Pendente
   criadoEm  DateTime @default(now())
   // Marca a ultima redefinicao de senha: tokens JWT emitidos antes disso deixam de valer.
   senhaAlteradaEm DateTime?
@@ -26,13 +34,15 @@ model User {
   preferencias NotificationPreference?
   resetTokens  PasswordResetToken[]
   eventos      CampaignEvent[]
+
+  @@index([departmentId])
 }
 
 // Departamento do usuario (agrupa os resultados das campanhas). Campos em ingles por
 // decisao do projeto. Restrict: departamento com usuarios nao e excluido.
 model Department {
   id        String   @id @default(cuid())
-  name      String   @unique
+  name      String   @unique @db.Citext
   createdAt DateTime @default(now())
   users     User[]
 }
@@ -59,35 +69,41 @@ model PasswordResetToken {
   expiraEm  DateTime
   usadoEm   DateTime?
   criadoEm  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Asset {
   id       String   @id @default(cuid())
   nome     String
   host     String   @unique
-  tipo     String // Servidor | Aplicacao | Rede | Banco de Dados
-  status   String   @default("Ativo") // Ativo | Inativo
+  tipo     String   // CHECK: Servidor | Aplicacao | Rede | Banco de Dados
+  status   String   @default("Ativo") // CHECK: Ativo | Inativo
   criadoEm DateTime @default(now())
   scans    Scan[]
 }
 
+// Restrict: ativo com historico de varredura nao e excluido (inativar preserva o historico).
 model Scan {
   id          String    @id @default(cuid())
   assetId     String
-  asset       Asset     @relation(fields: [assetId], references: [id])
-  status      String    @default("EM_FILA") // EM_FILA | EM_ANDAMENTO | CONCLUIDA
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  status      String    @default("EM_FILA") // CHECK: EM_FILA | EM_ANDAMENTO | CONCLUIDA
   criadoEm    DateTime  @default(now())
   concluidoEm DateTime?
   findings    Finding[]
+
+  @@index([assetId])
 }
 
+// Cascade: o achado so existe dentro da varredura que o gerou.
 model Finding {
   id             String   @id @default(cuid())
   scanId         String
-  scan           Scan     @relation(fields: [scanId], references: [id])
+  scan           Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
   categoriaOwasp String
-  cvss           Float
-  severidade     String // Baixo | Medio | Alto | Critico
+  cvss           Float    // CHECK: 0 a 10
+  severidade     String   // CHECK: Baixo | Médio | Alto | Crítico
   descricao      String
   evidencia      String
   // Classificacao: CWE = tipo de falha; CVE = falha concreta num produto (so achado de
@@ -95,27 +111,30 @@ model Finding {
   cwe            String?
   cve            String?
   cvssVetor      String?
-  // Passos de correcao em JSON: [{ "titulo", "descricao", "esforco": "baixo"|"medio"|"alto" }].
+  // Passos de correcao: [{ "titulo", "descricao", "esforco": "baixo"|"medio"|"alto" }].
   // Copiados do catalogo no momento do achado (relatorio antigo nao muda se o catalogo mudar).
-  remediacao     String?
-  status         String   @default("Aberta") // Aberta | Em revisao | Em remediacao | Resolvida | Risco aceito
+  remediacao     Json?
+  status         String   @default("Aberta") // CHECK: Aberta | Em revisão | Em remediação | Resolvida | Risco aceito
   criadoEm       DateTime @default(now())
+
+  @@index([scanId])
 }
 
 model Campaign {
   id       String          @id @default(cuid())
   nome     String
-  template String // urgencia | autoridade | curiosidade
-  status   String          @default("AGENDADA") // AGENDADA | ATIVA | ENCERRADA
+  template String          // CHECK: urgencia | autoridade | curiosidade
+  status   String          @default("AGENDADA") // CHECK: AGENDADA | ATIVA | ENCERRADA
   criadoEm DateTime        @default(now())
   eventos  CampaignEvent[]
 }
 
 // Um evento por destinatario da campanha: e a tabela de ligacao Campaign <-> User.
+// Cascade na campanha: excluir a campanha leva os eventos dela.
 model CampaignEvent {
   id           String    @id @default(cuid())
   campaignId   String
-  campaign     Campaign  @relation(fields: [campaignId], references: [id])
+  campaign     Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   // So usuarios cadastrados recebem campanha. Restrict: quem tem historico de
   // campanha nao pode ser excluido (inativar a conta preserva as metricas).
   userId       String
@@ -135,10 +154,15 @@ model CampaignEvent {
   @@index([userId])
 }
 
+// Sem chave estrangeira para User de proposito: o registro de auditoria sobrevive a
+// exclusao do usuario.
 model AuditLog {
   id        String   @id @default(cuid())
   usuarioId String?
   acao      String
   detalhe   String?
   timestamp DateTime @default(now())
+
+  @@index([usuarioId])
+  @@index([timestamp])
 }

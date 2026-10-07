@@ -341,9 +341,8 @@ export function registerManageRoutes(r: Router) {
       const alvo = await tx.user.findUnique({ where: { id: req.params.id } });
       if (!alvo) return falha(404, 'Usuário não encontrado', 'USUARIO_NAO_ENCONTRADO');
       if (dados.email !== undefined) {
-        const outros = await tx.user.findMany({ select: { id: true, email: true } });
-        if (outros.some((u) => u.id !== alvo.id && u.email.toLowerCase() === dados.email))
-          return falha(409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
+        const dono = await tx.user.findUnique({ where: { email: dados.email }, select: { id: true } });
+        if (dono && dono.id !== alvo.id) return falha(409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
       }
       const eraAdminAtivo = alvo.perfil === 'Administrador' && alvo.status !== 'Inativo';
       const deixaDeSerAdminAtivo =

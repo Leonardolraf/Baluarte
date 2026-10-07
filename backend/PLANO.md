@@ -4,7 +4,7 @@
 
 ## 1. Onde estamos (inventário honesto)
 
-O backend já roda de verdade: Node + Express + TypeScript + **Prisma sobre SQLite**, JWT **HS256** + bcrypt, RBAC por middleware relendo o perfil do banco, trilha em `AuditLog`, e uma superfície REST que sustenta os dois frontends e as suítes da N2 AT1.
+O backend já roda de verdade: Node + Express + TypeScript + **Prisma sobre PostgreSQL** (desde 07/10/2026; antes SQLite), JWT **HS256** + bcrypt, RBAC por middleware relendo o perfil do banco, trilha em `AuditLog`, e uma superfície REST que sustenta os dois frontends e as suítes da N2 AT1.
 
 | Camada | Arquivo | Estado |
 |---|---|---|
@@ -22,7 +22,7 @@ O backend já roda de verdade: Node + Express + TypeScript + **Prisma sobre SQLi
 
 | Eixo | Hoje | Alvo DRS |
 |---|---|---|
-| Banco | SQLite (arquivo/volume) | **PostgreSQL** + Prisma (migrations versionadas) |
+| Banco | **PostgreSQL** + Prisma, migrations versionadas — feito em 07/10/2026 | **PostgreSQL** + Prisma (migrations versionadas) |
 | Token JWT | HS256 (segredo simétrico) | **RS256** (par de chaves; assina com privada, verifica com pública) |
 | E-mail | nenhum (token no log) | **MailHog** (dev) / **SendGrid** (prod): bloqueio de conta, link de reset, disparo de phishing |
 | Scanner | sorteio de catálogo | motor de varredura com **progresso em tempo real**, uma por ativo (RN-003), fila/worker |

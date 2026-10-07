@@ -48,6 +48,21 @@ Três commits no mesmo dia, construindo as suítes de teste exigidas pela discip
   - **Barra lateral no tema escuro:** `ink` e `slate-950` são a mesma cor (`#0B1220`), então navegação e conteúdo ficavam indistinguíveis. A barra passou a usar `slate-900` com borda — a mesma superfície da barra superior. O tema claro não muda.
 - **[`a488663`](https://github.com/Leonardolraf/Baluarte/commit/a488663)** + **[`c068783`](https://github.com/Leonardolraf/Baluarte/commit/c068783)** + **[`137fcca`](https://github.com/Leonardolraf/Baluarte/commit/137fcca)** — **`npm run lint` era impossível de passar no Windows**: o repositório guarda LF, mas `core.autocrlf=true` entregava CRLF no checkout e o Prettier (`endOfLine: "lf"`) acusava cada linha de cada arquivo — 16.800 avisos com `--max-warnings=0`. Regra global `* text=auto eol=lf` no [`.gitattributes`](.gitattributes) resolve na origem, sem configuração por máquina e sem mudar nenhum conteúdo versionado (`git diff --ignore-cr-at-eol` ficou vazio nos 134 arquivos alinhados). A evidência gerada pelo Robot ficou como `-text`, fora de qualquer conversão. Resultado: 16.800 avisos → **0**.
 
+## 2026-10-07 — Migração para PostgreSQL (itens 6 a 8 da revisão do banco)
+
+O DRS pede PostgreSQL e o código usava SQLite. A troca foi feita junto com os itens que dependiam dela.
+
+- **PostgreSQL 16 no Docker Compose** (serviço `db`, porta publicada só em `127.0.0.1`). A senha vem de `POSTGRES_PASSWORD` no `.env` da raiz — sem ela o compose não sobe; nenhuma senha vai para o git. A API, o Newman, o Robot e o Playwright rodam contra ele.
+- **Migrations versionadas** (`prisma/migrations/`) no lugar do `db push`: `db:migrate` (aplica), `db:migrate:dev` (cria), `db:reset`. O entrypoint do Docker usa `migrate deploy`, que nunca apaga dados. `directUrl` separado para o Supabase (pooler para a API, conexão de sessão para as migrations).
+- **Valores fixos garantidos pelo banco** (item 6) com restrições **CHECK** — perfil, status, tipo de ativo, severidade, template, faixa do CVSS, formato de CWE/CVE/vetor e remediação como lista. Não foram enums do Prisma, como tinha sido proposto: os valores do contrato têm acento e espaço ("Em revisão", "Banco de Dados"), e enum obrigaria traduzir valor em todas as rotas. A garantia no banco é a mesma. Conferido que o Prisma não tenta remover as CHECK (`migrate diff` vazio).
+- **E-mail e nome de departamento em `citext`**: unicidade e busca sem diferenciar maiúsculas no próprio banco; as varreduras manuais de "todos os usuários" para comparar e-mail saíram do código.
+- **Exclusões e índices** (item 7): cascata onde o filho não existe sozinho (achado → varredura, evento → campanha); restrição onde há histórico (varredura → ativo, evento → usuário, usuário → departamento). Índices nas chaves estrangeiras e no `AuditLog` (usuário e data).
+- **Remediação em JSONB** (`Json` do Prisma).
+- **Achado real do pentest no Postgres**: o caractere NUL (`\u0000`) no e-mail do login virava erro 500 (o Postgres recusa NUL em texto; o SQLite aceitava). Agora é barrado na borda com `400 CARACTERE_INVALIDO`, no corpo, na query e no caminho.
+- **Testes** em um banco Postgres por arquivo (`baluarte_test_<arquivo>`), recriado pelas migrations — as migrations são testadas a cada execução. O helper recusa servidor não local, para nunca apagar o Supabase por engano. 174 no backend (eram 166): 7 novos de garantias do banco e 1 de NUL. Newman 70/70, Robot 29/29 e Playwright em modo real 10/10 contra a stack Docker com Postgres.
+- **O SQLite antigo do Docker** foi copiado para `backend/prisma/backup-docker-sqlite-2026-10-07.db` (fora do git) antes de limpar o volume.
+- **Pendente:** apontar para o Supabase exige criar/escolher o projeto e colocar a senha no `backend/.env` (passo a passo no README).
+
 ## 2026-10-07 — Classificação e remediação dos achados; departamentos
 
 Itens 1, 2 e 4 da revisão do banco.
@@ -84,9 +99,9 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 | Área | O que existe | Desde |
 |---|---|---|
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
-| Backend real (Express+Prisma+SQLite, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-09-11 |
+| Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 166 no backend (60 integração + 106 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
-| Deploy | Docker Compose local (3 serviços) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
+| Testes | 174 no backend (7 banco + 60 integração + 107 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

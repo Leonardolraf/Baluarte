@@ -1,5 +1,5 @@
 // Classificacao dos achados (CWE, CVE, vetor CVSS 3.1 -> nota), remediacao e departamentos.
-// Banco SQLite isolado (prisma/test-classificacao-departamentos.db) — ver helpers.ts.
+// Banco Postgres isolado (baluarte_test_classificacao_departamentos) — ver helpers.ts.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {

@@ -6,10 +6,10 @@
 
 ## O que tem aqui
 App real construído para a disciplina de Teste de Software do TCC (não mais stubs):
-- `backend/` — Node + Express + TypeScript + Prisma + SQLite, JWT (HS256) + bcrypt, RBAC, AuditLog. Porta `8080`. Testes de integração próprios em `backend/tests/` (`npm test`, 166 testes — 60 de integração + 106 de pentest em `tests/seguranca/` —, banco SQLite isolado por arquivo).
+- `backend/` — Node + Express + TypeScript + Prisma + **PostgreSQL 16** (serviço `db` do compose, `127.0.0.1:5432`), JWT (HS256) + bcrypt, RBAC, AuditLog. Porta `8080`. Testes em `backend/tests/` (`npm test`, 174 testes — 7 de banco, 60 de integração, 107 de pentest em `tests/seguranca/` —, um banco `baluarte_test_<arquivo>` por arquivo, recriado pelas migrations; só roda contra Postgres local).
 - `baluarte-frontend/` — **frontend do produto**: SPA React 18 + TypeScript + Vite + TailwindCSS com RBAC por rota, tema claro/escuro, camada mock (`npm run dev`) ou backend real (`VITE_USE_MOCKS=false`). Porta `5173`. Suítes: Vitest + RTL + axe (`npm test`), Playwright (`npm run test:e2e`; modo real com `E2E_REAL=1`).
 - `frontend/` — **frontend legado** (telas geradas do Figma). Porta `3000`. Mantido só como alvo das suítes Robot Framework da N2 AT1 (`e2e/*.robot`), que dependem das rotas `/cadastro-usuario`, `/cadastro-ativo`, `/campanha`, `/alterar-senha`, `/reset-senha` e dos ids dos formulários. Não evoluir; novas telas vão em `baluarte-frontend/`.
-- `testes-api/` e `testes/api/` — collection Postman/Newman (N2 AT1): 35 requisições / 70 asserções sobre os 6 endpoints do contrato. Precisa de banco limpo (`db:reset` + `seed`).
+- `testes-api/` e `testes/api/` — collection Postman/Newman (N2 AT1): 35 requisições / 70 asserções sobre os 6 endpoints do contrato. Precisa de banco limpo (`db:reset` + `seed`, e reiniciar a API depois do reset).
 - `testes/ui/` e `e2e/` — Robot Framework + Selenium (N2 AT1): 29 testes contra `frontend/` em `:3000`. Também precisam de banco limpo (o CT01 de ativo cadastra `10.0.0.5`).
 
 Ver `README.md` deste repo para como rodar, credenciais de teste e como rodar cada suíte.
@@ -23,9 +23,11 @@ Ver `README.md` deste repo para como rodar, credenciais de teste e como rodar ca
 - **RBAC é do servidor:** `exigeToken` carrega o usuário do banco a cada requisição (perfil atual, conta removida/inativa, senha redefinida) e `exigePerfil` decide pelo perfil do banco, não pelo que está no JWT. Administrador gerencia usuários; Analista opera a plataforma e lê as listas técnicas; Colaborador só vê índices, KPIs, política e o próprio treinamento. Ver a tabela no `README.md`.
 - **Campanha ↔ usuário:** `CampaignEvent.userId` é obrigatório (só destinatário cadastrado e não inativo), com unicidade (`campaignId`, `userId`); usuário com histórico de campanha não é excluído (`USUARIO_COM_HISTORICO`). O dono do treinamento é decidido pelo `userId`, nunca pelo e-mail.
 - **Dois acessos ao treinamento:** dentro do sistema, `/treinamentos/:token` usa o id do evento e exige login; o link do e-mail usa `/treinamentos/link/:token`, com token aleatório guardado só como hash (`src/tokens.ts`, o mesmo do reset de senha).
-- **Achados:** a nota CVSS sai do vetor (`src/cvss.ts`), nunca é digitada; tipos de falha, CWE, CVE e remediação ficam no catálogo `src/catalogo.ts` e são copiados para o `Finding` no momento do achado. `remediacao` é JSON numa coluna `String` (SQLite + Prisma 5 não tem `Json`).
+- **Achados:** a nota CVSS sai do vetor (`src/cvss.ts`), nunca é digitada; tipos de falha, CWE, CVE e remediação ficam no catálogo `src/catalogo.ts` e são copiados para o `Finding` no momento do achado. `remediacao` é `Json` (JSONB).
 - **Idioma do banco:** os campos são em português, exceto o modelo `Department` (`name`, `createdAt`) e `User.departmentId`, por decisão do projeto. A API continua em português (`departamento`).
-- **Docker:** `docker compose up --build -d` sobe API `:8080`, frontend do produto `:8081` (Nginx) e legado `:3000`. O SQLite fica no volume `backend-data`; o `JWT_SECRET`, quando não vem do `.env`, é gerado no volume. Nenhum segredo fixo vai para o repositório.
+- **Banco:** mudança de schema só por migration (`npm run db:migrate:dev -- --name <nome>`), nunca `db push`. Valores fixos (perfil, status, tipo, severidade, template) são texto com restrição **CHECK** escrita à mão na migration (o Prisma não modela CHECK; `migrate diff` confirma que ele não tenta removê-las) — mudar uma lista de `src/util.ts` exige migration nova. E-mail e nome de departamento são `citext`. Caractere NUL é barrado na borda (`src/app.ts`), porque o Postgres o recusa.
+- **Docker:** `docker compose up --build -d` sobe Postgres, API `:8080`, frontend do produto `:8081` (Nginx) e legado `:3000`. Dados no volume `db-data`; `POSTGRES_PASSWORD` vem do `.env` da raiz (obrigatória). O `JWT_SECRET`, quando não vem do `.env`, é gerado no volume `backend-data`. Nenhum segredo fixo vai para o repositório.
+- **Supabase:** banco hospedado só para a demonstração (ver README); desenvolvimento e testes no Postgres local.
 
 ## Segurança
 Nunca deixar segredo hardcoded (chave/token/senha) no código — usar `.env` (fora do git; ver `.env.example` em `backend/`, `frontend/` e `baluarte-frontend/`). Senhas só com bcrypt; tokens de redefinição só como hash SHA-256 no banco.

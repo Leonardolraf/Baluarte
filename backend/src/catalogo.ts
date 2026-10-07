@@ -1,4 +1,5 @@
 import { notaCvss, cweValido, cveValido } from './cvss.js';
+import type { Prisma } from '@prisma/client';
 import { faixaCvss } from './util.js';
 
 // Catalogo de tipos de falha do scanner simulado (e do seed de demonstracao).
@@ -149,17 +150,20 @@ export function dadosAchado(chave: ChaveAchado) {
     cvssVetor: t.cvssVetor,
     cvss,
     severidade: faixaCvss(cvss),
-    remediacao: JSON.stringify(t.remediacao),
+    remediacao: t.remediacao as unknown as Prisma.InputJsonValue,
   };
 }
 
-/** Passos de correcao gravados no Finding, numerados para a API. Texto corrompido vira lista vazia. */
-export function lerRemediacao(json: string | null): Array<PassoRemediacao & { ordem: number }> {
-  if (!json) return [];
-  try {
-    const passos = JSON.parse(json) as PassoRemediacao[];
-    return Array.isArray(passos) ? passos.map((p, i) => ({ ordem: i + 1, ...p })) : [];
-  } catch {
-    return [];
-  }
+function passoValido(p: unknown): p is PassoRemediacao {
+  const x = p as Record<string, unknown> | null;
+  return !!x && typeof x.titulo === 'string' && typeof x.descricao === 'string' && ['baixo', 'medio', 'alto'].includes(x.esforco as string);
+}
+
+/**
+ * Passos de correcao gravados no Finding (coluna JSONB), numerados para a API.
+ * O banco garante que e uma lista; passos fora do formato sao descartados em vez de quebrar a tela.
+ */
+export function lerRemediacao(valor: unknown): Array<PassoRemediacao & { ordem: number }> {
+  if (!Array.isArray(valor)) return [];
+  return valor.filter(passoValido).map((p, i) => ({ ordem: i + 1, titulo: p.titulo, descricao: p.descricao, esforco: p.esforco }));
 }
