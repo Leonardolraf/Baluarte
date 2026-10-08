@@ -1776,13 +1776,13 @@ export const mockApi: BaluarteApi = {
   },
 
   // A trilha da sessão é só da memória: a cadeia de hash existe só na API real. O mock
-  // responde como o servidor da main: cadeia íntegra e trava do banco desligada (ela fica na
-  // branch feat/b29-trava). Os testes da tela forçam a quebra com spy.
+  // responde como o servidor com a trava do banco aplicada (20261008176000_auditoria_imutavel)
+  // e a cadeia íntegra. Os testes da tela forçam a quebra com spy.
   async verifyAuditIntegrity(): Promise<AuditIntegrity> {
     return simulate(() => {
       const user = requireUser();
       requireRole(user, ['admin']);
-      return { intact: true, verifiedCount: state.auditLog.length, databaseLock: false, firstBreak: null };
+      return { intact: true, verifiedCount: state.auditLog.length, databaseLock: true, firstBreak: null };
     });
   },
 

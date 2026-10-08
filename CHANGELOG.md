@@ -434,14 +434,24 @@ A coluna `sequencia` do `AuditLog` saiu da migration `20261008170000_auditoria_c
 - **Ordem no banco hospedado** — a migration só troca um default e o dono da sequence: o código da `main` funciona antes e depois dela. Com o Prisma desta versão, o próprio cliente manda `sequencia = 0` no `create` (o trigger sobrescreve), então o salto já some na aplicação; a migration resolve para qualquer outro escritor (script, SQL Editor, cliente antigo).
 - **Teste** — `tests/auditoria-integridade.test.ts` ganhou o caso "a sequencia é contígua": 60 inserções (sequenciais e concorrentes, pelo service, pelo Prisma, por `createMany` e por SQL sem a coluna) dão números consecutivos, nenhum 0 gravado, e a cadeia segue íntegra. Sem a migration, o caso falha (o SQL sem a coluna pula de 2 em 2). Backend 582/582 (eram 581). `migrate reset` + `migrate diff --exit-code` sem diferença; Newman 35 requisições / 70 asserções sem falhas numa instância isolada.
 
+## 2026-10-08 — Trava no banco da trilha de auditoria (B29, branch `feat/b29-trava`)
+
+Segunda parte do B29, separada para entrar só quando o Leo decidir. Com ela, a trilha de auditoria fica **imutável no banco**, além da cadeia de hash com verificação de integridade que já existia.
+
+- **Migration `20261008176000_auditoria_imutavel`** — triggers `BEFORE UPDATE OR DELETE` (por linha) e `BEFORE TRUNCATE` (por comando) que recusam a operação com `AuditLog e somente insercao`. A única exceção é a retenção: `auditoria_aplicar_retencao()` liga a variável `baluarte.retencao` só dentro da própria transação, e mesmo com ela ligada o trigger só deixa sair registro com mais de 12 meses.
+- **Porta de mão única** — depois dela ninguém limpa o `AuditLog`, nem para arrumar dado de demonstração. Os seeds não mexem na tabela e `db:reset` recria o banco. O entrypoint do Docker/Railway roda `migrate deploy` a cada subida, então a trava entra no primeiro deploy depois do merge.
+- **Política de segurança** — `logImutavel` passa a sair `true` (consulta os triggers), e a tela de configurações mostra "Auditoria imutável no banco (trava ativa): Sim". O mock do frontend passa a responder com a trava ligada.
+- **Limite honesto** — não protege contra o DBA: um superusuário, ou o dono da tabela (hoje o mesmo papel da API), desliga os triggers.
+- **Testes** — backend 587/587 (eram 582: sai o bloco "sem a trava" de `auditoria-integridade.test.ts` (2) e entram 7 em `tests/auditoria-trava.test.ts`: `UPDATE`, `DELETE` (inclusive de registro antigo) e `TRUNCATE` recusados; a variável da retenção não libera registro recente; `logImutavel` e `travaNoBanco` seguem o trigger; a retenção continua apagando os registros com mais de 12 meses com a trava ligada e a cadeia segue íntegra; fora da retenção a exclusão continua recusada). Frontend 567/567. `migrate reset` + `migrate diff --exit-code` sem diferença com as duas migrations.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
 |---|---|---|
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
-| Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração) e retenção de 12 meses; trava no banco pendente na branch `feat/b29-trava`) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
+| Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração), retenção de 12 meses e trava no banco (imutável no banco com a migration `20261008176000_auditoria_imutavel`)) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 582 no backend (156 unidade + 7 banco + 302 integração + 117 pentest) · 567 no frontend (Vitest+RTL+axe) + 35 Playwright em modo mock · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 587 no backend (156 unidade + 7 banco + 307 integração + 117 pentest) · 567 no frontend (Vitest+RTL+axe) + 35 Playwright em modo mock · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

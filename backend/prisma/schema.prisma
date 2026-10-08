@@ -239,9 +239,9 @@ model CampaignEvent {
 // Trilha de auditoria (RN-008, RNF-002). A aplicacao so insere. Cada registro e encadeado
 // ao anterior (migration 20261008170000_auditoria_cadeia_hash): o trigger de INSERT calcula
 // `sequencia`, `hashAnterior` e `hash` sob um advisory lock (valores enviados pela aplicacao
-// sao ignorados) e GET /auditoria/integridade detecta adulteracao. A trava no banco
-// (UPDATE/DELETE/TRUNCATE recusados) e pendencia: migration 20261008176000_auditoria_imutavel
-// na branch feat/b29-trava. Serializacao do hash no README (Auditoria).
+// sao ignorados) e GET /auditoria/integridade detecta adulteracao. A migration
+// 20261008176000_auditoria_imutavel trava o banco: UPDATE/DELETE/TRUNCATE recusados, exceto
+// a retencao de 12 meses. Serializacao do hash no README (Auditoria).
 // Sem FK para User de proposito: o registro sobrevive a exclusao da conta.
 model AuditLog {
   id           String   @id @default(cuid())

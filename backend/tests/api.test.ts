@@ -115,10 +115,10 @@ describe('RBAC das rotas de escrita e leitura', () => {
     }
   });
 
-  it('a política de segurança publica a retenção de 12 meses e não afirma a trava que não existe (B29)', async () => {
+  it('a política de segurança publica a retenção de 12 meses e a trava do banco (B29)', async () => {
     const r = await chamar('GET', '/configuracoes/seguranca', { token: colaborador });
-    // Sem a migration 20261008176000_auditoria_imutavel (branch feat/b29-trava) o banco aceita UPDATE/DELETE.
-    assert.equal(r.body.dados.auditoria.logImutavel, false);
+    // Com a migration 20261008176000_auditoria_imutavel a trava está ligada.
+    assert.equal(r.body.dados.auditoria.logImutavel, true);
     assert.equal(r.body.dados.auditoria.retencaoMeses, 12);
     assert.equal(r.body.dados.auditoria.registraAcoes, true);
     assert.equal(r.body.dados.sessao.sessaoMaximaHoras, 8);

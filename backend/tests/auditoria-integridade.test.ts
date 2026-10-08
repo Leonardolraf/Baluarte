@@ -3,9 +3,9 @@
 // auditoria_cadeia_hash), a verificacao GET /auditoria/integridade e a retencao
 // POST /auditoria/retencao. Banco isolado (ver helpers.ts).
 //
-// A adulteracao e simulada direto no banco. Se a trava (migration auditoria_imutavel, branch
-// feat/b29-trava) existir, `semTrava` a desliga so dentro da transacao, como o dono da tabela
-// pode fazer: a cadeia de hash e que denuncia a mudanca.
+// A adulteracao e simulada direto no banco. Com a trava (migration auditoria_imutavel; testes
+// dela em auditoria-trava.test.ts), `semTrava` a desliga so dentro da transacao, como o dono da
+// tabela pode fazer: a cadeia de hash e que denuncia a mudanca.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -281,25 +281,4 @@ describe('B29: RBAC das rotas novas', () => {
       assert.equal(await prisma.auditLog.count({ where: { acao: 'APLICAR_RETENCAO_AUDITORIA' } }), antes);
     });
   }
-});
-
-// Sem a trava no banco (estado da main): a aplicacao nunca altera nem apaga, mas quem tem a
-// connection string consegue. O banco aceita; a verificacao acusa. Na branch feat/b29-trava
-// este bloco da lugar a tests/auditoria-trava.test.ts.
-describe('B29: sem a trava, o banco aceita a alteração e a verificação acusa', () => {
-  it('a política não afirma log imutável e a verificação informa a trava desligada', async () => {
-    const r = await chamar('GET', '/configuracoes/seguranca', { token: colaborador });
-    assert.deepEqual(r.body.dados.auditoria, { registraAcoes: true, logImutavel: false, retencaoMeses: 12 });
-    assert.equal((await integridade()).travaNoBanco, false);
-  });
-
-  it('UPDATE direto pelo Prisma é aceito e a verificação aponta o registro certo', async () => {
-    const alvo = (await prisma.auditLog.findMany({ where: { acao: 'LOTE_B29' }, orderBy: { sequencia: 'asc' }, take: 1, skip: 700 }))[0];
-    await prisma.auditLog.update({ where: { id: alvo.id }, data: { detalhe: 'alterado sem trava' } });
-    const v = await integridade();
-    assert.equal(v.integra, false);
-    assert.deepEqual(v.primeiraQuebra, { id: alvo.id, timestamp: alvo.timestamp.toISOString(), motivo: 'CONTEUDO_ALTERADO' });
-    await prisma.auditLog.update({ where: { id: alvo.id }, data: { detalhe: alvo.detalhe } });
-    assert.equal((await integridade()).integra, true);
-  });
 });
