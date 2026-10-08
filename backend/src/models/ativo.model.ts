@@ -30,3 +30,28 @@ export const CADASTRO = [
   regra('ip', ipOpcional, 'Endereço IP inválido', 'IP_INVALIDO'),
   regra('descricao', descricaoOpcional, `A descrição deve ter no máximo ${DESCRICAO_MAX} caracteres`, 'DESCRICAO_INVALIDA'),
 ];
+
+// ---- Nota de risco do ativo (B25) ------------------------------------------------
+
+/**
+ * Peso de cada achado ABERTO na nota de risco do ativo. Cada peso e o piso da faixa CVSS 3.1
+ * da severidade (Critico 9,0 arredondado para 10; Alto 7,0; Medio 4,0; Baixo 0,1 arredondado
+ * para 1): um achado critico pesa dez baixos.
+ */
+export const PESO_RISCO: Readonly<Record<string, number>> = { 'Crítico': 10, 'Alto': 7, 'Médio': 4, 'Baixo': 1 };
+
+/** Teto da nota: 100 = dez criticos abertos (ou combinacao de mesmo peso) ou mais. */
+export const NOTA_RISCO_MAXIMA = 100;
+
+/** Quantos ativos o dashboard mostra no bloco "ativos de maior risco". */
+export const LIMITE_MAIOR_RISCO = 5;
+
+/** Achados abertos de um ativo por severidade (sempre as quatro chaves, inclusive zero). */
+export type AbertosPorSeveridade = Record<string, number>;
+
+/** Risco do ativo como a API devolve (GET /assets e o dashboard). */
+export interface RiscoAtivo {
+  notaRisco: number;
+  achadosAbertos: number;
+  abertosPorSeveridade: AbertosPorSeveridade;
+}

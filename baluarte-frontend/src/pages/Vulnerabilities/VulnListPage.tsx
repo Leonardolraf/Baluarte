@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SEVERITIES, type VulnerabilityFilters, type VulnerabilitySummary } from '@/types';
+import {
+  SEVERITIES,
+  VULN_PAGE_SIZE,
+  type SortState,
+  type VulnerabilityFilters,
+  type VulnerabilitySortKey,
+  type VulnerabilitySummary,
+} from '@/types';
 import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { useAuth } from '@/contexts/useAuth';
@@ -24,6 +31,10 @@ import { VulnTable } from '@/components/Table/VulnTable';
 
 const QUERY_PARAM = 'q';
 const DEBOUNCE_MS = 300;
+/** Tamanhos de página oferecidos (o servidor aceita até 100). */
+const PAGE_SIZE_OPTIONS = [10, VULN_PAGE_SIZE, 50, 100];
+/** Começa pelas mais graves, como antes da paginação no servidor. */
+const INITIAL_SORT: SortState<VulnerabilitySortKey> = { key: 'severity', direction: 'asc' };
 
 /** Retorna `value` somente depois de `delayMs` sem novas alterações (evita uma requisição por tecla). */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -133,13 +144,31 @@ export default function VulnListPage() {
   );
   const filtersKey = JSON.stringify(effectiveFilters);
 
+  // Paginação e ordenação no servidor (B25): a API devolve uma página e o resumo do filtro inteiro.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(VULN_PAGE_SIZE);
+  const [sort, setSort] = useState<SortState<VulnerabilitySortKey> | null>(INITIAL_SORT);
+
+  // Filtro novo → primeira página (a ordenação é preservada).
+  const lastFiltersKey = useRef(filtersKey);
+  if (lastFiltersKey.current !== filtersKey) {
+    lastFiltersKey.current = filtersKey;
+    if (page !== 1) setPage(1);
+  }
+
   // keepPreviousData: a tabela (e o campo de busca focado) continua montada durante os refetches por filtro;
   // o spinner de página aparece só no primeiro carregamento.
   const { data, error, loading, reload } = useAsync(
-    () => api.listVulnerabilities(effectiveFilters),
-    [filtersKey],
+    () => api.listVulnerabilities(effectiveFilters, { page, pageSize, sort }),
+    [filtersKey, page, pageSize, JSON.stringify(sort)],
     { keepPreviousData: true },
   );
+
+  // A lista encolheu (ex.: achados resolvidos) e a página ficou além da última: volta para a última.
+  const lastPage = data ? Math.max(1, Math.ceil(data.summary.total / data.pageSize)) : 1;
+  useEffect(() => {
+    if (data && data.items.length === 0 && page > lastPage) setPage(lastPage);
+  }, [data, page, lastPage]);
 
   // O relatório usa os filtros que estão na tela agora (a busca sem esperar o debounce).
   const { exporting, exportError, exportReport } = useReportExport({
@@ -190,6 +219,22 @@ export default function VulnListPage() {
           loading={loading}
           filters={filters}
           onFiltersChange={setFilters}
+          server={{
+            page,
+            pageSize,
+            total: data?.summary.total ?? 0,
+            sort,
+            pageSizeOptions: PAGE_SIZE_OPTIONS,
+            onPageChange: (next) => setPage(Math.max(1, Math.min(next, lastPage))),
+            onPageSizeChange: (size) => {
+              setPageSize(size);
+              setPage(1);
+            },
+            onSortChange: (next) => {
+              setSort(next);
+              setPage(1);
+            },
+          }}
         />
       )}
     </div>

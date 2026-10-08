@@ -8,6 +8,7 @@ import type {
   AccountLink,
   Asset,
   AssetInput,
+  AssetRisk,
   AuditEntry,
   AuditFilters,
   AuditListResponse,
@@ -47,10 +48,12 @@ import type {
   Vulnerability,
   VulnerabilityFilters,
   VulnerabilityHistoryEntry,
+  VulnerabilityListOptions,
   VulnerabilityListResponse,
   VulnerabilityReportFile,
   VulnerabilityStatus,
 } from '@/types';
+import { SEVERITIES, VULN_PAGE_SIZE } from '@/types';
 import { HttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict, MAX_FILE_SIZE_BYTES } from '@/lib/files';
@@ -60,13 +63,7 @@ import { formatDate, formatDateTime, localDayRange } from '@/lib/format';
 import { normalizeAssetHost } from '@/lib/host';
 import { buildMockToken, decodeToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
-import {
-  FUNNEL_STAGE_LABEL,
-  SEVERITY_LABEL,
-  SEVERITY_RANK,
-  severityFromCvss,
-  VULN_STATUS_LABEL,
-} from '@/lib/severity';
+import { FUNNEL_STAGE_LABEL, SEVERITY_LABEL, severityFromCvss, VULN_STATUS_LABEL } from '@/lib/severity';
 import { simplePdf } from '@/mocks/pdf';
 import {
   MOCK_ASSETS,
@@ -341,6 +338,97 @@ function emptySeverityMap(): Record<Severity, number> {
 
 function isOpen(v: Vulnerability): boolean {
   return v.status !== 'resolved' && v.status !== 'accepted';
+}
+
+// ---- Nota de risco por ativo (espelha backend/src/services/riscoAtivo.service.ts) ----
+// pontos = 10 × crítica + 7 × alta + 4 × média + 1 × baixa (abertas); nota = min(100, pontos).
+const RISK_WEIGHT: Record<Severity, number> = { critical: 10, high: 7, medium: 4, low: 1, info: 0 };
+const RISK_MAX = 100;
+/** Quantos ativos o dashboard mostra no ranking de maior risco. */
+export const TOP_RISK_ASSETS = 5;
+
+function openBySeverityOf(assetId: string): Record<Severity, number> {
+  const map = emptySeverityMap();
+  for (const v of state.vulnerabilities) if (v.assetId === assetId && isOpen(v)) map[v.severity] += 1;
+  return map;
+}
+
+function riskPoints(open: Record<Severity, number>): number {
+  return SEVERITIES.reduce((sum, s) => sum + RISK_WEIGHT[s] * open[s], 0);
+}
+
+export function mockRiskScore(open: Record<Severity, number>): number {
+  return Math.min(RISK_MAX, riskPoints(open));
+}
+
+function topRiskAssets(): AssetRisk[] {
+  return state.assets
+    .map((a) => {
+      const openBySeverity = openBySeverityOf(a.id);
+      return {
+        id: a.id,
+        name: a.name,
+        host: a.host,
+        riskScore: mockRiskScore(openBySeverity),
+        openFindings: SEVERITIES.reduce((n, s) => n + openBySeverity[s], 0),
+        openBySeverity,
+      };
+    })
+    .filter((a) => a.openFindings > 0)
+    .sort(
+      (a, b) =>
+        b.riskScore - a.riskScore ||
+        riskPoints(b.openBySeverity) - riskPoints(a.openBySeverity) ||
+        SEVERITIES.reduce((d, s) => d || b.openBySeverity[s] - a.openBySeverity[s], 0) ||
+        a.name.localeCompare(b.name, 'pt-BR') ||
+        a.id.localeCompare(b.id),
+    )
+    .slice(0, TOP_RISK_ASSETS);
+}
+
+// ---- Lista de vulnerabilidades (filtro, ordem e página, como o servidor) ----
+
+function filterVulnerabilities(filters: VulnerabilityFilters): Vulnerability[] {
+  let items = [...state.vulnerabilities];
+  if (filters.severity && filters.severity !== 'all')
+    items = items.filter((v) => v.severity === filters.severity);
+  if (filters.status && filters.status !== 'all') items = items.filter((v) => v.status === filters.status);
+  const q = filters.query?.trim().toLowerCase();
+  if (q) {
+    items = items.filter((v) =>
+      [v.title, v.cve ?? '', v.assetHost, v.assetName, v.owaspCategory, v.owaspId, v.affectedComponent]
+        .join(' ')
+        .toLowerCase()
+        .includes(q),
+    );
+  }
+  return items;
+}
+
+const time = (iso: string) => new Date(iso).getTime();
+
+/** Mesma ordem estável do servidor: a coluna pedida, depois a mais recente, depois o id. */
+function sortVulnerabilities(
+  items: Vulnerability[],
+  sort: VulnerabilityListOptions['sort'],
+): Vulnerability[] {
+  const byKey = (a: Vulnerability, b: Vulnerability): number => {
+    if (!sort) return 0;
+    const factor = sort.direction === 'asc' ? 1 : -1;
+    switch (sort.key) {
+      case 'severity': // da mais grave (asc) = CVSS do maior para o menor
+        return (b.cvss.base - a.cvss.base) * factor;
+      case 'cvss':
+        return (a.cvss.base - b.cvss.base) * factor;
+      case 'title':
+        return a.title.localeCompare(b.title, 'pt-BR') * factor;
+      case 'detectedAt':
+        return (time(a.detectedAt) - time(b.detectedAt)) * factor;
+    }
+  };
+  return [...items].sort(
+    (a, b) => byKey(a, b) || time(b.detectedAt) - time(a.detectedAt) || b.id.localeCompare(a.id),
+  );
 }
 
 // ---- Varredura simulada (espelha backend/src/services/cicloVarredura.service.ts) ----
@@ -829,6 +917,7 @@ export const mockApi: BaluarteApi = {
         },
         severityDistribution: manager ? severityDistribution : null,
         recentFindings: manager ? byDate(open, 'detectedAt').slice(0, 5).map(digest) : [],
+        topRiskAssets: manager ? topRiskAssets() : [],
         recentCampaigns: manager ? byDate(campaigns, 'createdAt').slice(0, 4) : [],
         recentScans: manager ? byDate(state.scans, 'startedAt').slice(0, 3) : [],
         // A linha do tempo mistura achados e campanhas: também é só dos operadores.
@@ -852,10 +941,15 @@ export const mockApi: BaluarteApi = {
     return simulate(() => {
       requireUser();
       advanceScans();
-      return state.assets.map((a) => ({
-        ...a,
-        openFindings: state.vulnerabilities.filter((v) => v.assetId === a.id && isOpen(v)).length,
-      }));
+      return state.assets.map((a) => {
+        const openBySeverity = openBySeverityOf(a.id);
+        return {
+          ...a,
+          openFindings: SEVERITIES.reduce((n, s) => n + openBySeverity[s], 0),
+          riskScore: mockRiskScore(openBySeverity),
+          openBySeverity,
+        };
+      });
     });
   },
 
@@ -968,31 +1062,21 @@ export const mockApi: BaluarteApi = {
   },
 
   // ---- Vulnerabilidades ----
-  async listVulnerabilities(filters: VulnerabilityFilters = {}): Promise<VulnerabilityListResponse> {
+  async listVulnerabilities(
+    filters: VulnerabilityFilters = {},
+    options: VulnerabilityListOptions = {},
+  ): Promise<VulnerabilityListResponse> {
     return simulate(() => {
       const user = requireUser();
       requireRole(user, ['admin', 'analyst']);
+      const page = options.page ?? 1;
+      const pageSize = options.pageSize ?? VULN_PAGE_SIZE;
+      if (!Number.isInteger(page) || page < 1)
+        throw new HttpError(400, 'PAGINA_INVALIDA', 'Página inválida: use um inteiro a partir de 1');
+      if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100)
+        throw new HttpError(400, 'TAMANHO_INVALIDO', 'Tamanho inválido: use um inteiro de 1 a 100');
       advanceScans();
-      let items = [...state.vulnerabilities];
-      if (filters.severity && filters.severity !== 'all')
-        items = items.filter((v) => v.severity === filters.severity);
-      if (filters.status && filters.status !== 'all')
-        items = items.filter((v) => v.status === filters.status);
-      const q = filters.query?.trim().toLowerCase();
-      if (q) {
-        items = items.filter((v) =>
-          [v.title, v.cve ?? '', v.assetHost, v.assetName, v.owaspCategory, v.owaspId, v.affectedComponent]
-            .join(' ')
-            .toLowerCase()
-            .includes(q),
-        );
-      }
-      items.sort(
-        (a, b) =>
-          SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
-          b.cvss.base - a.cvss.base ||
-          new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
-      );
+      const items = sortVulnerabilities(filterVulnerabilities(filters), options.sort);
       const bySeverity = emptySeverityMap();
       const byStatus: Record<VulnerabilityStatus, number> = {
         open: 0,
@@ -1006,13 +1090,15 @@ export const mockApi: BaluarteApi = {
         byStatus[v.status] += 1;
       }
       return {
-        items,
+        items: items.slice((page - 1) * pageSize, page * pageSize),
         summary: {
           total: items.length,
           bySeverity,
           byStatus,
           assets: new Set(items.map((v) => v.assetId)).size,
         },
+        page,
+        pageSize,
       };
     });
   },
@@ -1020,7 +1106,9 @@ export const mockApi: BaluarteApi = {
   // Sem backend, o relatório é um PDF simples de texto (src/mocks/pdf.ts) com os mesmos
   // filtros da lista; a exportação entra na trilha de auditoria da sessão, como no servidor.
   async exportVulnerabilityReport(filters: VulnerabilityFilters = {}): Promise<VulnerabilityReportFile> {
-    const { items, summary } = await this.listVulnerabilities(filters);
+    // O relatório não pagina: leva todos os achados do filtro (como o servidor).
+    const { summary } = await this.listVulnerabilities(filters, { pageSize: 1 });
+    const items = filterVulnerabilities(filters);
     const user = requireUser();
     const sorted = [...items].sort((a, b) => b.cvss.base - a.cvss.base);
     const severity =

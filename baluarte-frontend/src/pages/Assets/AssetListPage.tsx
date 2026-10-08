@@ -28,7 +28,7 @@ function plural(count: number, singular: string, pluralForm: string): string {
   return `${formatNumber(count)} ${count === 1 ? singular : pluralForm}`;
 }
 
-function AssetRows({ items }: { items: Asset[] }) {
+function AssetRows({ items, showRisk }: { items: Asset[]; showRisk: boolean }) {
   return (
     <TBody>
       {items.map((asset) => (
@@ -61,6 +61,14 @@ function AssetRows({ items }: { items: Asset[] }) {
               <span className="tabular-nums text-slate-500 dark:text-slate-400">0</span>
             )}
           </Td>
+          {showRisk && (
+            <Td align="right" className="tabular-nums" data-testid="asset-risk">
+              <span className="font-semibold text-ink dark:text-white">
+                {formatNumber(asset.riskScore ?? 0)}
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">/100</span>
+            </Td>
+          )}
           <Td className="whitespace-nowrap text-slate-500 dark:text-slate-400">
             {asset.lastScanAt ? (
               <time dateTime={asset.lastScanAt} title={formatDateTime(asset.lastScanAt)}>
@@ -84,6 +92,8 @@ export default function AssetListPage() {
   const active = assets.filter((asset) => asset.status === 'active').length;
   const openFindings = assets.reduce((sum, asset) => sum + asset.openFindings, 0);
   const neverScanned = assets.filter((asset) => !asset.lastScanAt).length;
+  // A nota vem do servidor (B25); API sem ela não mostra a coluna (nunca uma nota inventada).
+  const showRisk = assets.some((asset) => typeof asset.riskScore === 'number');
 
   return (
     <div className="space-y-6">
@@ -170,10 +180,20 @@ export default function AssetListPage() {
                     <Th>IP</Th>
                     <Th>Status</Th>
                     <Th align="right">Achados abertos</Th>
+                    {showRisk && (
+                      <Th align="right">
+                        <abbr
+                          title="10 por crítica, 7 por alta, 4 por média e 1 por baixa em aberto, teto 100"
+                          className="no-underline"
+                        >
+                          Nota de risco
+                        </abbr>
+                      </Th>
+                    )}
                     <Th>Última varredura</Th>
                   </tr>
                 </THead>
-                <AssetRows items={assets} />
+                <AssetRows items={assets} showRisk={showRisk} />
               </Table>
             </div>
           </Card>

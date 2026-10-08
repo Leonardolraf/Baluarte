@@ -1,6 +1,14 @@
 import { useEffect, useId, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { SEVERITIES, VULNERABILITY_STATUSES, type Vulnerability, type VulnerabilityFilters } from '@/types';
+import {
+  SEVERITIES,
+  VULNERABILITY_STATUSES,
+  type SortDirection,
+  type SortState,
+  type Vulnerability,
+  type VulnerabilityFilters,
+  type VulnerabilitySortKey,
+} from '@/types';
 import { useSort, type SortAccessor } from '@/hooks/useSort';
 import { usePagination } from '@/hooks/usePagination';
 import { SEVERITY_LABEL, SEVERITY_RANK, VULN_STATUS_CLASS, VULN_STATUS_LABEL } from '@/lib/severity';
@@ -25,7 +33,21 @@ import {
 import { CloseIcon, SearchIcon } from '@/components/icons';
 
 // Tabela de vulnerabilidades (estilo VirusTotal): densa, neutra, monoespaçado para CVE/host/CVSS.
-// Os filtros são controlados pela página (que consulta a API); aqui só ordenamos e paginamos.
+// Os filtros são controlados pela página (que consulta a API). Sem `server`, a tabela ordena e
+// pagina a lista recebida; com `server`, a lista já é a página e a ordem vem do servidor (B25).
+
+/** Paginação e ordenação feitas no servidor: `items` já é a página pedida. */
+export interface VulnTableServerState {
+  page: number;
+  pageSize: number;
+  /** Total do filtro inteiro (não só da página). */
+  total: number;
+  sort: SortState<VulnerabilitySortKey> | null;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+  onSortChange: (sort: SortState<VulnerabilitySortKey> | null) => void;
+  pageSizeOptions?: number[];
+}
 
 export interface VulnTableProps {
   items: Vulnerability[];
@@ -41,9 +63,18 @@ export interface VulnTableProps {
   /** Dashboard usa sem barra de filtros. */
   hideFilters?: boolean;
   emptyMessage?: string;
+  /** Paginação e ordenação no servidor (a lista de vulnerabilidades da API). */
+  server?: VulnTableServerState;
 }
 
-type SortKey = 'severity' | 'title' | 'cvss' | 'detectedAt';
+type SortKey = VulnerabilitySortKey;
+
+/** Mesmo ciclo do cabeçalho client-side: asc → desc → sem ordenação. */
+function nextSort(current: SortState<SortKey> | null, key: SortKey): SortState<SortKey> | null {
+  if (!current || current.key !== key) return { key, direction: 'asc' };
+  if (current.direction === 'asc') return { key, direction: 'desc' };
+  return null;
+}
 
 const COLUMN_COUNT = 7;
 const SKELETON_ROWS = 5;
@@ -252,20 +283,26 @@ export function VulnTable({
   pageSize = 10,
   hideFilters = false,
   emptyMessage = 'Nenhuma vulnerabilidade encontrada.',
+  server,
 }: VulnTableProps) {
   const navigate = useNavigate();
-  const { sorted, toggle, directionOf } = useSort(items, SORT_ACCESSORS, {
+  const clientSort = useSort(items, SORT_ACCESSORS, {
     key: 'severity',
     direction: 'asc',
   });
-  const {
-    page,
-    pageSize: currentPageSize,
-    total,
-    pageItems,
-    setPage,
-    setPageSize,
-  } = usePagination(sorted, pageSize);
+  const clientPage = usePagination(clientSort.sorted, pageSize);
+
+  // No modo servidor a tabela só desenha a página recebida e repassa ordem e página.
+  const toggle = (key: SortKey) =>
+    server ? server.onSortChange(nextSort(server.sort, key)) : clientSort.toggle(key);
+  const directionOf = (key: SortKey): SortDirection | null =>
+    server ? (server.sort?.key === key ? server.sort.direction : null) : clientSort.directionOf(key);
+  const page = server ? server.page : clientPage.page;
+  const currentPageSize = server ? server.pageSize : clientPage.pageSize;
+  const total = server ? server.total : clientPage.total;
+  const pageItems = server ? items : clientPage.pageItems;
+  const setPage = server ? server.onPageChange : clientPage.setPage;
+  const setPageSize = server ? server.onPageSizeChange : clientPage.setPageSize;
 
   // Mudou o filtro → volta para a primeira página (a ordenação é preservada).
   const filtersKey = JSON.stringify([
@@ -279,10 +316,16 @@ export function VulnTable({
     setPageRef.current(1);
   }, [filtersKey]);
 
+  const serverPageSizeOptions = server?.pageSizeOptions;
   const pageSizeOptions = useMemo(
-    () => Array.from(new Set([pageSize, ...DEFAULT_PAGE_SIZE_OPTIONS])).sort((a, b) => a - b),
-    [pageSize],
+    () =>
+      Array.from(new Set(serverPageSizeOptions ?? [pageSize, ...DEFAULT_PAGE_SIZE_OPTIONS])).sort(
+        (a, b) => a - b,
+      ),
+    [pageSize, serverPageSizeOptions],
   );
+  // A barra de páginas aparece quando há mais de uma página no menor tamanho oferecido.
+  const showPagination = server ? total > Math.min(...pageSizeOptions) : total > pageSize;
 
   const handleRowClick = (vuln: Vulnerability) => {
     if (onRowClick) onRowClick(vuln);
@@ -290,7 +333,7 @@ export function VulnTable({
   };
 
   const showSkeleton = loading && items.length === 0;
-  const showEmpty = !showSkeleton && total === 0;
+  const showEmpty = !showSkeleton && pageItems.length === 0;
   const filtersActive = !hideFilters && hasActiveFilters(filters);
 
   return (
@@ -355,7 +398,7 @@ export function VulnTable({
         </p>
       )}
 
-      {total > pageSize && (
+      {showPagination && (
         <Pagination
           page={page}
           pageSize={currentPageSize}

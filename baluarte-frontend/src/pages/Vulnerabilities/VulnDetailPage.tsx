@@ -48,7 +48,7 @@ const EFFORT_LABEL: Record<RemediationStep['effort'], string> = {
 };
 
 const HISTORY_ACTION_LABEL: Record<VulnerabilityHistoryEntry['action'], string> = {
-  detected: 'Detectada pelo scanner',
+  detected: 'Detectada pela varredura',
   status_changed: 'Status alterado',
   commented: 'Comentário',
   rescanned: 'Nova varredura',
@@ -229,7 +229,13 @@ function RemediationTab({ vuln }: { vuln: Vulnerability }) {
   );
 }
 
-function HistoryTab({ items }: { items: VulnerabilityHistoryEntry[] }) {
+/**
+ * Histórico só com o que o dado sustenta (B25): a detecção, as mudanças de status registradas
+ * e o status atual. Quando os registros não explicam o status atual (`historyComplete`
+ * false), avisa em vez de completar a sequência por conta própria.
+ */
+function HistoryTab({ vuln }: { vuln: Vulnerability }) {
+  const items = vuln.history;
   if (items.length === 0) {
     return (
       <EmptyState
@@ -241,35 +247,52 @@ function HistoryTab({ items }: { items: VulnerabilityHistoryEntry[] }) {
   }
   const entries = [...items].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   return (
-    <ol className="ml-1.5 border-l border-slate-200 dark:border-slate-800">
-      {entries.map((entry) => {
-        const transition = [
-          entry.from ? VULN_STATUS_LABEL[entry.from] : null,
-          entry.to ? VULN_STATUS_LABEL[entry.to] : null,
-        ]
-          .filter(Boolean)
-          .join(' → ');
-        return (
-          <li key={entry.id} className="relative pb-5 pl-5 last:pb-0">
-            <span
-              aria-hidden="true"
-              className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-slate-400 ring-4 ring-white dark:bg-slate-500 dark:ring-slate-900"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <span className="text-sm font-medium text-ink dark:text-white">
-                {HISTORY_ACTION_LABEL[entry.action]}
-              </span>
-              <time dateTime={entry.at} className="text-xs text-slate-500 dark:text-slate-400">
-                {formatDateTime(entry.at)}
-              </time>
-            </div>
-            {transition && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{transition}</p>}
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">por {entry.actor}</p>
-            {entry.note && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{entry.note}</p>}
-          </li>
-        );
-      })}
-    </ol>
+    <div className="space-y-4">
+      <p className="text-sm text-slate-700 dark:text-slate-300">
+        Status atual:{' '}
+        <StatusPill label={VULN_STATUS_LABEL[vuln.status]} colorClass={VULN_STATUS_CLASS[vuln.status]} />
+      </p>
+      <ol className="ml-1.5 border-l border-slate-200 dark:border-slate-800" data-testid="vuln-history">
+        {entries.map((entry) => {
+          const transition = [
+            entry.from ? VULN_STATUS_LABEL[entry.from] : null,
+            entry.to ? VULN_STATUS_LABEL[entry.to] : null,
+          ]
+            .filter(Boolean)
+            .join(' → ');
+          return (
+            <li key={entry.id} className="relative pb-5 pl-5 last:pb-0">
+              <span
+                aria-hidden="true"
+                className="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-slate-400 ring-4 ring-white dark:bg-slate-500 dark:ring-slate-900"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <span className="text-sm font-medium text-ink dark:text-white">
+                  {HISTORY_ACTION_LABEL[entry.action]}
+                </span>
+                <time dateTime={entry.at} className="text-xs text-slate-500 dark:text-slate-400">
+                  {formatDateTime(entry.at)}
+                </time>
+              </div>
+              {transition && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{transition}</p>}
+              {entry.actor && (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">por {entry.actor}</p>
+              )}
+              {entry.note && <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{entry.note}</p>}
+            </li>
+          );
+        })}
+      </ol>
+      {vuln.historyComplete === false && (
+        <p
+          role="note"
+          className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400"
+        >
+          Histórico completo de status ainda não registrado: houve mudança de status sem registro na trilha de
+          auditoria (por exemplo, anterior a ela), então a sequência acima não chega ao status atual.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -414,7 +437,7 @@ export default function VulnDetailPage() {
       id: 'history',
       label: 'Histórico',
       count: vuln.history.length,
-      content: <HistoryTab items={vuln.history} />,
+      content: <HistoryTab vuln={vuln} />,
     },
   ];
 

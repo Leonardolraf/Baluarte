@@ -241,17 +241,16 @@ describe('injecao na query string de /vulnerabilidades', () => {
     }
   });
 
-  it('?severidade= e ?status= com SQLi (string) devolvem 200 e nao vazam tudo', async () => {
-    const r = await chamar(
-      'GET',
-      `/vulnerabilidades?severidade=${encodeURIComponent("Alto' OR '1'='1")}&status=${encodeURIComponent("Aberta'--")}`,
-      { token: analista },
-    );
-    nunca500(r, 'sev/status sqli');
-    assert.equal(r.status, 200);
-    assert.equal(r.body.status, 'sucesso');
-    // Nenhum finding tem severidade/status igual ao payload -> lista vazia.
-    assert.equal(r.body.dados.length, 0, 'filtro injetado nao deve casar registros');
+  it('?severidade= e ?status= com SQLi (string) sao recusados com 400 e nao vazam nada', async () => {
+    // Desde o B25 a lista valida os filtros como o relatorio em PDF: valor fora da lista
+    // oficial e 400 com codigo proprio (antes, 200 com lista vazia).
+    const sev = await chamar('GET', `/vulnerabilidades?severidade=${encodeURIComponent("Alto' OR '1'='1")}`, { token: analista });
+    nunca500(sev, 'sev sqli');
+    esperaErro(sev, 400, 'SEVERIDADE_INVALIDA');
+    assert.equal(sev.body.dados, undefined, 'erro nao traz dados');
+    const st = await chamar('GET', `/vulnerabilidades?status=${encodeURIComponent("Aberta'--")}`, { token: analista });
+    nunca500(st, 'status sqli');
+    esperaErro(st, 400, 'STATUS_INVALIDO');
   });
 
   // ACHADO (confirmado): filtros de query aceitam sintaxe de objeto/array do parser

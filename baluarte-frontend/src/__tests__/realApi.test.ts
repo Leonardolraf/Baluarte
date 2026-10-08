@@ -1,6 +1,6 @@
 import { AxiosError, AxiosHeaders, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { httpClient, realApi } from '@/services/api';
+import { httpClient, realApi, vulnerabilitySortParams } from '@/services/api';
 import type { BackendCampaign, BackendFinding, BackendTraining, BackendUser } from '@/services/adapters';
 import { HttpError } from '@/lib/errors';
 import { FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
@@ -502,24 +502,132 @@ describe('realApi — dashboard, ativos e varreduras', () => {
 });
 
 describe('realApi — vulnerabilidades', () => {
-  it('filtra por severidade e status no cliente e monta o resumo', async () => {
-    on(
-      'GET /vulnerabilidades',
-      ok([
-        finding(),
-        finding({ id: 'f-2', severidade: 'Baixo', cvss: 2, ativo: '10.0.0.6' }),
-        finding({ id: 'f-3', status: 'Resolvida' }),
-      ]),
+  it('manda filtro, ordem e página ao servidor e lê o resumo do filtro inteiro (B25)', async () => {
+    on('GET /vulnerabilidades', {
+      status: 200,
+      data: {
+        status: 'sucesso',
+        dados: [finding(), finding({ id: 'f-2', severidade: 'Baixo', cvss: 2, ativo: '10.0.0.6' })],
+        resumo: {
+          total: 45,
+          ativos: 7,
+          pagina: 3,
+          tamanho: 2,
+          porSeveridade: { Crítico: 20, Alto: 10, Médio: 10, Baixo: 5 },
+          porStatus: { Aberta: 30, 'Em revisão': 5, 'Em remediação': 5, Resolvida: 4, 'Risco aceito': 1 },
+        },
+      },
+    });
+    const page = await realApi.listVulnerabilities(
+      { query: ' sql ', severity: 'critical', status: 'open' },
+      { page: 3, pageSize: 2, sort: { key: 'severity', direction: 'asc' } },
     );
-    const all = await realApi.listVulnerabilities({ query: 'sql' });
-    expect(calls[0]?.params).toEqual({ q: 'sql' });
-    expect(all.summary).toMatchObject({ total: 3, assets: 2 });
-    expect(all.summary.bySeverity).toMatchObject({ critical: 2, low: 1 });
-    expect(all.summary.byStatus).toMatchObject({ open: 2, resolved: 1 });
+    expect(calls[0]?.params).toEqual({
+      q: 'sql',
+      severidade: 'Crítico',
+      status: 'Aberta',
+      ordenar: 'cvss',
+      direcao: 'desc',
+      pagina: '3',
+      tamanho: '2',
+    });
+    expect(page.items.map((v) => v.id)).toEqual(['f-1', 'f-2']);
+    expect(page).toMatchObject({ page: 3, pageSize: 2 });
+    // O resumo é do filtro inteiro (45), não da página (2).
+    expect(page.summary).toMatchObject({ total: 45, assets: 7 });
+    expect(page.summary.bySeverity).toMatchObject({ critical: 20, high: 10, medium: 10, low: 5, info: 0 });
+    expect(page.summary.byStatus).toEqual({
+      open: 30,
+      in_review: 5,
+      remediating: 5,
+      resolved: 4,
+      accepted: 1,
+    });
+  });
 
-    const filtered = await realApi.listVulnerabilities({ severity: 'critical', status: 'open' });
-    expect(calls[1]?.params).toEqual({});
-    expect(filtered.items.map((v) => v.id)).toEqual(['f-1']);
+  it('sem opções pede a página 1 de 20, na ordem padrão do servidor', async () => {
+    on('GET /vulnerabilidades', ok([finding()]));
+    const page = await realApi.listVulnerabilities();
+    expect(calls[0]?.params).toEqual({ pagina: '1', tamanho: '20' });
+    // Servidor antigo, sem resumo: cai no que a página tem.
+    expect(page).toMatchObject({ page: 1, pageSize: 20, summary: { total: 1, assets: 1 } });
+  });
+
+  it('mapeia cada coluna para a ordenação do servidor', () => {
+    expect(vulnerabilitySortParams(null)).toEqual({});
+    expect(vulnerabilitySortParams({ key: 'severity', direction: 'desc' })).toEqual({
+      ordenar: 'cvss',
+      direcao: 'asc',
+    });
+    expect(vulnerabilitySortParams({ key: 'cvss', direction: 'asc' })).toEqual({
+      ordenar: 'cvss',
+      direcao: 'asc',
+    });
+    expect(vulnerabilitySortParams({ key: 'title', direction: 'desc' })).toEqual({
+      ordenar: 'descricao',
+      direcao: 'desc',
+    });
+    expect(vulnerabilitySortParams({ key: 'detectedAt', direction: 'asc' })).toEqual({
+      ordenar: 'detectadoEm',
+      direcao: 'asc',
+    });
+  });
+
+  it('severidade "informativo" (inexistente no servidor) devolve página vazia sem chamar a API', async () => {
+    const page = await realApi.listVulnerabilities({ severity: 'info' });
+    expect(calls).toHaveLength(0);
+    expect(page.items).toEqual([]);
+    expect(page.summary.total).toBe(0);
+  });
+
+  it('o detalhe traz o histórico honesto: detecção, mudanças registradas e se ele está completo', async () => {
+    on(
+      'GET /vulnerabilidades/f-1',
+      ok({
+        ...finding({ status: 'Em remediação' }),
+        origem: { varreduraId: 's-1', varreduraIniciadaEm: '2026-10-01T09:59:40.000Z', ativoId: 'a-1' },
+        historico: {
+          eventos: [
+            {
+              tipo: 'DETECTADO',
+              quando: '2026-10-01T10:00:00.000Z',
+              varreduraId: 's-1',
+              ativo: '10.0.0.5',
+              ativoNome: 'Portal',
+            },
+            {
+              tipo: 'STATUS_ALTERADO',
+              quando: '2026-10-02T10:00:00.000Z',
+              de: 'Em revisão',
+              para: 'Em remediação',
+              autor: null,
+            },
+          ],
+          statusAtual: 'Em remediação',
+          completo: false,
+        },
+      }),
+    );
+    const vuln = await realApi.getVulnerability('f-1');
+    expect(vuln.history).toEqual([
+      {
+        id: 'f-1-detectado',
+        at: '2026-10-01T10:00:00.000Z',
+        action: 'detected',
+        note: 'Varredura do ativo Portal (10.0.0.5).',
+      },
+      {
+        id: 'f-1-status-1',
+        at: '2026-10-02T10:00:00.000Z',
+        action: 'status_changed',
+        from: 'in_review',
+        to: 'remediating',
+        actor: 'Usuário removido',
+      },
+    ]);
+    expect(vuln.historyComplete).toBe(false);
+    expect(vuln.origin).toEqual({ scanId: 's-1', scanStartedAt: '2026-10-01T09:59:40.000Z', assetId: 'a-1' });
+    expect(vuln.updatedAt).toBe('2026-10-02T10:00:00.000Z');
   });
 
   it('busca o detalhe e atualiza o status com o rótulo em português', async () => {

@@ -4,6 +4,7 @@ import type {
   AccountLink,
   Asset,
   AssetInput,
+  AssetRisk,
   AssetType,
   AuthUser,
   Campaign,
@@ -39,6 +40,8 @@ import type {
   UserInput,
   UserStatus,
   Vulnerability,
+  VulnerabilityHistoryEntry,
+  VulnerabilityListResponse,
   VulnerabilityStatus,
 } from '@/types';
 import { roleFromLabel } from '@/lib/roles';
@@ -81,6 +84,10 @@ export interface BackendAsset {
   ip?: string | null;
   descricao?: string | null;
   achadosAbertos?: number;
+  /** Nota de risco 0–100 calculada pelo servidor na leitura (B25). */
+  notaRisco?: number;
+  /** Abertos por severidade, no rótulo do servidor (Crítico, Alto, Médio, Baixo). */
+  abertosPorSeveridade?: Record<string, number>;
   ultimaVarredura?: { id: string; status: string; criadoEm: string; concluidoEm?: string | null } | null;
   _count?: { scans?: number };
 }
@@ -114,6 +121,50 @@ export interface BackendFinding {
   cve?: string | null;
   cvssVetor?: string | null;
   remediacao?: Array<{ ordem: number; titulo: string; descricao: string; esforco: string }>;
+  /** Só no detalhe: a varredura e o ativo de origem. */
+  origem?: {
+    varreduraId: string;
+    varreduraIniciadaEm: string;
+    varreduraConcluidaEm?: string | null;
+    ativoId: string;
+  };
+  /** Só no detalhe: detecção + mudanças de status registradas na trilha de auditoria (B25). */
+  historico?: BackendFindingHistory;
+}
+
+export interface BackendFindingHistory {
+  eventos: Array<
+    | { tipo: 'DETECTADO'; quando: string; varreduraId: string; ativo: string; ativoNome: string }
+    | {
+        tipo: 'STATUS_ALTERADO';
+        quando: string;
+        de: string;
+        para: string;
+        autor: { id: string; nome: string } | null;
+      }
+  >;
+  statusAtual: string;
+  /** As mudanças registradas explicam o status atual a partir de "Aberta"? */
+  completo: boolean;
+}
+
+/** `resumo` de GET /vulnerabilidades (paginada no servidor, B25). */
+export interface BackendVulnerabilitySummary {
+  total?: number;
+  ativos?: number;
+  pagina?: number;
+  tamanho?: number;
+  porSeveridade?: Record<string, number>;
+  porStatus?: Record<string, number>;
+}
+
+export interface BackendAssetRisk {
+  id: string;
+  nome: string;
+  host: string;
+  notaRisco: number;
+  achadosAbertos: number;
+  abertosPorSeveridade: Record<string, number>;
 }
 
 export interface BackendCampaign {
@@ -184,6 +235,8 @@ export interface BackendDashboard {
   };
   distribuicaoSeveridade: Record<string, number> | null;
   vulnerabilidadesRecentes: BackendFinding[];
+  /** Ausente em API anterior ao B25; vazio para o Colaborador. */
+  ativosMaiorRisco?: BackendAssetRisk[];
   alertas: Array<{ id: string; severidade: string; texto: string; cvss: number; quando: string }>;
   campanhas: BackendCampaign[];
   funil: BackendFunnel | null;
@@ -351,6 +404,19 @@ function emptySeverityMap(): Record<Severity, number> {
   return { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
 }
 
+/** Contagem por rótulo do servidor (Crítico, Alto…) → mapa por severidade do domínio. */
+function severityMapFrom(raw: Record<string, number> | undefined): Record<Severity, number> {
+  const map = emptySeverityMap();
+  for (const [label, count] of Object.entries(raw ?? {})) {
+    if (typeof count === 'number') map[severityFromLabel(label)] += count;
+  }
+  return map;
+}
+
+function vulnStatusFromLabel(label: string | null | undefined): VulnerabilityStatus {
+  return VULN_STATUS_FROM_LABEL[norm(label)] ?? 'open';
+}
+
 // ---- Backend -> domínio -----------------------------------------------------
 
 export function toAuthUser(raw: BackendUser): AuthUser {
@@ -393,6 +459,19 @@ export function toAsset(raw: BackendAsset): Asset {
     // A API passou a devolver os dois; a tela não precisa mais derivar de outras listas.
     lastScanAt: raw.ultimaVarredura?.concluidoEm ?? raw.ultimaVarredura?.criadoEm ?? null,
     openFindings: raw.achadosAbertos ?? 0,
+    ...(typeof raw.notaRisco === 'number' ? { riskScore: raw.notaRisco } : {}),
+    ...(raw.abertosPorSeveridade ? { openBySeverity: severityMapFrom(raw.abertosPorSeveridade) } : {}),
+  };
+}
+
+export function toAssetRisk(raw: BackendAssetRisk): AssetRisk {
+  return {
+    id: raw.id,
+    name: raw.nome,
+    host: raw.host,
+    riskScore: raw.notaRisco,
+    openFindings: raw.achadosAbertos,
+    openBySeverity: severityMapFrom(raw.abertosPorSeveridade),
   };
 }
 
@@ -432,10 +511,40 @@ export function toScan(raw: BackendScan): ScanReport {
   };
 }
 
+/**
+ * Histórico só com fatos que o servidor sustenta (B25): a detecção (data e varredura que
+ * geraram o achado, sem afirmar o status de então) e as mudanças de status registradas na
+ * trilha de auditoria. Nada é deduzido: sem `historico` (lista, API antiga) fica só a detecção.
+ */
+function toHistory(raw: BackendFinding): VulnerabilityHistoryEntry[] {
+  const detected = raw.historico?.eventos.find((e) => e.tipo === 'DETECTADO');
+  const entries: VulnerabilityHistoryEntry[] = [
+    {
+      id: `${raw.id}-detectado`,
+      at: detected?.quando ?? raw.detectadoEm,
+      action: 'detected',
+      note: `Varredura do ativo ${raw.ativoNome} (${raw.ativo}).`,
+    },
+  ];
+  (raw.historico?.eventos ?? []).forEach((e, i) => {
+    if (e.tipo !== 'STATUS_ALTERADO') return;
+    entries.push({
+      id: `${raw.id}-status-${i}`,
+      at: e.quando,
+      action: 'status_changed',
+      from: vulnStatusFromLabel(e.de),
+      to: vulnStatusFromLabel(e.para),
+      actor: e.autor?.nome ?? 'Usuário removido',
+    });
+  });
+  return entries;
+}
+
 export function toVulnerability(raw: BackendFinding): Vulnerability {
   const { owaspId, owaspCategory } = owaspParts(raw.categoria);
   const severity = severityFromLabel(raw.severidade, raw.cvss);
-  const status = VULN_STATUS_FROM_LABEL[norm(raw.status)] ?? 'open';
+  const status = vulnStatusFromLabel(raw.status);
+  const history = toHistory(raw);
   return {
     id: raw.id,
     title: raw.descricao,
@@ -471,8 +580,49 @@ export function toVulnerability(raw: BackendFinding): Vulnerability {
     })),
     references: [],
     detectedAt: raw.detectadoEm,
-    updatedAt: raw.detectadoEm,
-    history: [{ id: `${raw.id}-h0`, at: raw.detectadoEm, actor: 'Scanner', action: 'detected', to: 'open' }],
+    // Última mudança registrada (ou a detecção): o servidor não guarda "atualizado em".
+    updatedAt: history[history.length - 1]!.at,
+    history,
+    ...(raw.historico ? { historyComplete: raw.historico.completo } : {}),
+    ...(raw.origem
+      ? {
+          origin: {
+            scanId: raw.origem.varreduraId,
+            scanStartedAt: raw.origem.varreduraIniciadaEm,
+            assetId: raw.origem.ativoId,
+          },
+        }
+      : {}),
+  };
+}
+
+/** Página de GET /vulnerabilidades (`dados` + `resumo` do filtro inteiro). */
+export function toVulnerabilityList(
+  dados: BackendFinding[],
+  resumo: BackendVulnerabilitySummary | undefined,
+  fallback: { page: number; pageSize: number },
+): VulnerabilityListResponse {
+  const items = (dados ?? []).map(toVulnerability);
+  const byStatus: Record<VulnerabilityStatus, number> = {
+    open: 0,
+    in_review: 0,
+    remediating: 0,
+    resolved: 0,
+    accepted: 0,
+  };
+  for (const [label, count] of Object.entries(resumo?.porStatus ?? {})) {
+    if (typeof count === 'number') byStatus[vulnStatusFromLabel(label)] += count;
+  }
+  return {
+    items,
+    summary: {
+      total: typeof resumo?.total === 'number' ? resumo.total : items.length,
+      bySeverity: severityMapFrom(resumo?.porSeveridade),
+      byStatus,
+      assets: typeof resumo?.ativos === 'number' ? resumo.ativos : new Set(items.map((v) => v.assetId)).size,
+    },
+    page: typeof resumo?.pagina === 'number' ? resumo.pagina : fallback.page,
+    pageSize: typeof resumo?.tamanho === 'number' ? resumo.tamanho : fallback.pageSize,
   };
 }
 
@@ -679,6 +829,7 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
     },
     severityDistribution,
     recentFindings: raw.vulnerabilidadesRecentes.map(toVulnerability),
+    topRiskAssets: (raw.ativosMaiorRisco ?? []).map(toAssetRisk),
     recentCampaigns: campaigns.slice(0, 4),
     recentScans: scans.slice(0, 3),
     timeline,

@@ -4,6 +4,7 @@ import { contar as contarAtivos } from '../repositories/ativo.repository.js';
 import { listarComEventos } from '../repositories/campanha.repository.js';
 import { contarArquivosMaliciosos } from './analiseArquivo.service.js';
 import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
+import { ativosMaiorRisco } from './riscoAtivo.service.js';
 import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.service.js';
 
 // Dashboard unificado: risco tecnico (achados) + risco humano (campanhas) num painel so.
@@ -22,6 +23,10 @@ import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.
  * (vulnerabilidades, criticas, ativos) e a distribuicao por severidade vem `null`, e as
  * listas e metricas por campanha ficam com os operadores. Sem envio, a resiliencia e
  * `null` (nao medida), nunca 0.
+ *
+ * `ativosMaiorRisco` (B25): os 5 ativos de maior nota de risco (services/riscoAtivo.service.ts),
+ * calculada nesta leitura. Nome e host de ativo vulneravel sao dado tecnico: para o Colaborador
+ * a lista vem vazia, como as outras listas tecnicas.
  */
 export async function painel(perfil: string) {
   const operador = OPERADORES.includes(perfil);
@@ -43,6 +48,7 @@ export async function painel(perfil: string) {
       },
       distribuicaoSeveridade: null,
       vulnerabilidadesRecentes: [],
+      ativosMaiorRisco: [],
       alertas: [],
       campanhas: [],
       funil: null,
@@ -72,6 +78,7 @@ export async function painel(perfil: string) {
     },
     distribuicaoSeveridade: sev,
     vulnerabilidadesRecentes: emAberto.slice(0, 5).map(mapFinding),
+    ativosMaiorRisco: await ativosMaiorRisco(),
     alertas: emAberto
       .slice(0, 3)
       .map((f) => ({ id: f.id, severidade: f.severidade, texto: `${f.categoriaOwasp} em ${f.scan.asset.host}`, cvss: f.cvss, quando: f.criadoEm })),

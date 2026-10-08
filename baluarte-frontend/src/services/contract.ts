@@ -29,6 +29,7 @@ import type {
   UserInput,
   Vulnerability,
   VulnerabilityFilters,
+  VulnerabilityListOptions,
   VulnerabilityListResponse,
   VulnerabilityReportFile,
   VulnerabilityStatus,
@@ -86,7 +87,11 @@ export interface BaluarteApi {
   startScan(assetId: string): Promise<ScanReport>;
 
   // Vulnerabilidades
-  listVulnerabilities(filters?: VulnerabilityFilters): Promise<VulnerabilityListResponse>;
+  /** Uma página da lista, filtrada e ordenada no servidor; `summary` cobre o filtro inteiro. */
+  listVulnerabilities(
+    filters?: VulnerabilityFilters,
+    options?: VulnerabilityListOptions,
+  ): Promise<VulnerabilityListResponse>;
   getVulnerability(id: string): Promise<Vulnerability>;
   updateVulnerabilityStatus(id: string, status: VulnerabilityStatus, note?: string): Promise<Vulnerability>;
   /** Relatório em PDF com os mesmos filtros da lista (B24; registra a exportação na auditoria). */
