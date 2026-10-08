@@ -147,9 +147,28 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Ativos ----
+  // achadosAbertos e ultimaVarredura vem prontos (o frontend nao precisa cruzar as listas
+  // de vulnerabilidades e varreduras). "Aberto" = mesma regra dos KPIs do dashboard.
   r.get('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
-    const assets = await prisma.asset.findMany({ include: { _count: { select: { scans: true } } }, orderBy: { criadoEm: 'desc' } });
-    enviar(res, 200, { status: 'sucesso', dados: assets });
+    await avancarVarreduras();
+    const assets = await prisma.asset.findMany({
+      include: {
+        _count: { select: { scans: true } },
+        scans: {
+          orderBy: { criadoEm: 'desc' },
+          select: { id: true, status: true, criadoEm: true, concluidoEm: true, findings: { select: { status: true } } },
+        },
+      },
+      orderBy: { criadoEm: 'desc' },
+    });
+    const dados = assets.map(({ scans, ...ativo }) => ({
+      ...ativo,
+      achadosAbertos: scans.reduce((n, s) => n + s.findings.filter((f) => !STATUS_FINDING_ENCERRADO.includes(f.status)).length, 0),
+      ultimaVarredura: scans[0]
+        ? { id: scans[0].id, status: scans[0].status, criadoEm: scans[0].criadoEm, concluidoEm: scans[0].concluidoEm }
+        : null,
+    }));
+    enviar(res, 200, { status: 'sucesso', dados });
   }));
 
   // ---- Varreduras ----
@@ -287,6 +306,51 @@ export function registerReadRoutes(r: Router) {
         // So o que existe: as acoes sao registradas, mas o log ainda nao e imutavel nem
         // tem politica de retencao (B29 do backlog). Publicar o contrario seria falso.
         auditoria: { registraAcoes: true, logImutavel: false, retencaoMeses: null },
+      },
+    });
+  }));
+
+  // ---- Treinamentos consolidados (Administrador/Analista) ----
+  // Tudo o que a tela de treinamentos precisa numa requisicao so (antes: uma por campanha).
+  // Conclusao = clicou e concluiu o treinamento, a mesma regra do relatorio da campanha,
+  // entao `conclusoes` bate com o KPI do dashboard. Registrada antes de /treinamentos/:token.
+  r.get('/treinamentos/consolidado', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
+    const [campanhas, cliques, concluidos] = await Promise.all([
+      prisma.campaign.count(),
+      prisma.campaignEvent.count({ where: { clicadoEm: { not: null } } }),
+      prisma.campaignEvent.findMany({
+        where: { clicadoEm: { not: null }, treinou: true },
+        select: {
+          campaign: { select: { id: true, nome: true } },
+          user: { select: { id: true, nome: true, email: true, department: { select: { name: true } } } },
+        },
+      }),
+    ]);
+    const pessoas = new Map<string, { nome: string; email: string; departamento: string; campanhas: { id: string; nome: string }[] }>();
+    const porDep = new Map<string, number>();
+    for (const e of concluidos) {
+      const departamento = e.user.department?.name ?? SEM_DEPARTAMENTO;
+      const p = pessoas.get(e.user.id) ?? { nome: e.user.nome, email: e.user.email, departamento, campanhas: [] };
+      p.campanhas.push({ id: e.campaign.id, nome: e.campaign.nome });
+      pessoas.set(e.user.id, p);
+      porDep.set(departamento, (porDep.get(departamento) ?? 0) + 1);
+    }
+    const conclusoes = concluidos.length;
+    enviar(res, 200, {
+      status: 'sucesso',
+      dados: {
+        campanhas,
+        conclusoes,
+        cliques,
+        pendentesAposClique: Math.max(0, cliques - conclusoes),
+        // Todo evento tem usuario (userId obrigatorio): no backend real toda conclusao e nominal.
+        conclusoesNominais: conclusoes,
+        colaboradores: [...pessoas.values()].sort(
+          (a, b) => b.campanhas.length - a.campanhas.length || a.nome.localeCompare(b.nome, 'pt-BR'),
+        ),
+        porDepartamento: [...porDep.entries()]
+          .map(([departamento, n]) => ({ departamento, conclusoes: n }))
+          .sort((a, b) => b.conclusoes - a.conclusoes || a.departamento.localeCompare(b.departamento, 'pt-BR')),
       },
     });
   }));

@@ -156,6 +156,14 @@ Até aqui a demo da Vercel era só o frontend com dados em memória. Agora é a 
 - **Lista de ativos deixa de mentir** — a tela mostrava "0 achados" e "nunca varrido" em todos os ativos, contra 6 achados no dashboard: o adaptador fixava `openFindings: 0` e `lastScanAt: null`, o que só apareceu quando a tela de listagem passou a existir. Os dois valores passam a ser derivados das listas que a própria tela lê (achados agrupados por **host**, porque a API identifica o ativo do achado pelo host, não por id).
 - **Operação** — projeto gratuito do Supabase **pausa após 7 dias sem uso**: restaurar no painel antes de apresentar. Valores marcados como *Secret* na Vercel não podem ser lidos de volta pelo CLI, então migration e seed contra o Supabase exigem a connection string à mão.
 
+## 2026-10-08 — Treinamentos numa requisição só e ativos com contagem pronta
+
+A tela de treinamentos levava ~9 s em produção: uma requisição por campanha, somadas no cliente (cada ida ao banco pelo pooler serverless custa caro).
+
+- **`GET /treinamentos/consolidado`** (Administrador/Analista) — campanhas, cliques, conclusões, pendentes após clique, conclusões nominais, colaboradores que concluíram (com as campanhas de cada um) e conclusões por departamento, já ordenados. Conclusão = clicou e concluiu, a mesma regra do relatório da campanha, então o total bate com o KPI do dashboard (há teste comparando com a soma dos relatórios).
+- **`GET /assets`** ganha `achadosAbertos` (mesma regra de "aberto" dos KPIs) e `ultimaVarredura`, para o frontend não cruzar as listas de vulnerabilidades e varreduras por host.
+- **Testes** — 232 no backend (7 banco + 112 integração + 113 pentest).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -163,7 +171,7 @@ Até aqui a demo da Vercel era só o frontend com dados em memória. Agora é a 
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 227 no backend (7 banco + 107 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 232 no backend (7 banco + 112 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |
