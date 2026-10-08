@@ -19,3 +19,13 @@ e2e/resultados*/
 
 # worktrees temporários dos agentes do Claude Code
 .claude/worktrees/
+
+# certificados TLS locais (B06, scripts/gerar-certificados.sh): a chave da CA e a do
+# servidor nunca vão para o repositório. Só o .gitkeep fica, para a pasta montada no
+# serviço app existir (sem ela o Docker a criaria como root no Linux).
+/certs/*
+!/certs/servidor/
+/certs/servidor/*
+!/certs/servidor/.gitkeep
+*.key
+*.pem

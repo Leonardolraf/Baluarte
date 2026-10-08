@@ -10,7 +10,7 @@ Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia
 |---|---|---|---|
 | **API** | `backend/` | Node + Express + TypeScript + Prisma · JWT (HS256) + bcrypt · RBAC · AuditLog | `8080` |
 | **Banco** | `docker-compose.yml` (`db`) | PostgreSQL 16 · migrations Prisma · restrições CHECK · `citext` | `5432` (só local) |
-| **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailwindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` (dev) · `8081` (Docker) |
+| **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailwindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` (dev) · `8081` (Docker) · `8443` (Docker, HTTPS) |
 | **Frontend legado** | `frontend/` | React 18 + Vite (telas geradas do Figma) — mantido **só** como alvo das suítes Robot da N2 AT1 | `3000` |
 
 Os dois frontends fazem proxy de `/api` → `http://localhost:8080`. Novas telas e funcionalidades vão em `baluarte-frontend/`; `frontend/` não evolui (as suítes Robot dependem das rotas e ids dele).
@@ -214,8 +214,41 @@ docker compose down                        # -v tambem apaga o banco (volume db-
 - Os dados ficam no PostgreSQL do servico `db` (volume `db-data`), publicado so em `127.0.0.1:5432`. A senha vem de `POSTGRES_PASSWORD` no `.env` da raiz; sem ela o compose nao sobe. Na **primeira** subida o entrypoint aplica as migrations (`prisma migrate deploy`, que nunca apaga dados), roda o seed de contrato (`SEED_CONTRATO=0` desliga: ele cria contas com as senhas públicas acima, então não vai para produção) e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes so aplica migrations pendentes e o seed de contrato (idempotente).
 - **Depois de um `db:reset` com a API no ar, reinicie a API** (`docker compose restart backend`): o reset recria a extensao `citext` e as conexoes abertas ficam com o tipo antigo em cache (`cache lookup failed for type`).
 - **Sem segredo no repositorio:** se `JWT_SECRET` nao vier do `.env`, o entrypoint gera um aleatorio e o guarda no volume (`/data/jwt.secret`), entao as sessoes sobrevivem a reinicios sem nenhum valor fixo versionado. Com `NODE_ENV=production` a API se recusa a subir sem um segredo forte.
-- `app` faz o build de producao de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o servico `backend` (`baluarte-frontend/nginx.conf`); so sobe depois do healthcheck da API. A API roda como usuario `node`, nao como root.
+- `app` faz o build de producao de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o servico `backend` (`baluarte-frontend/nginx/`); so sobe depois do healthcheck da API. A API roda como usuario `node`, nao como root.
 - Para as suites Newman/Robot contra o Docker, suba com um banco limpo: `docker compose down -v && SEED_DEMO=0 docker compose up --build -d`.
+
+### HTTPS local (B06)
+
+Em produção o HTTPS vem da plataforma (Vercel, Railway). No ambiente local e na demonstração, o Nginx do serviço `app` atende HTTPS na **8443** com uma autoridade certificadora (CA) local, o que também é pré-requisito do agente osquery (ele só fala TLS). **Sem certificado nada muda**: o `app` sobe só em HTTP na 8081, como antes.
+
+```bash
+sh scripts/gerar-certificados.sh            # Git Bash no Windows; usa o openssl da máquina
+sh scripts/gerar-certificados.sh --docker   # alternativa sem openssl instalado (contêiner Alpine)
+docker compose up --build -d app            # se o app já estava no ar: docker compose restart app
+curl --cacert certs/ca.crt https://localhost:8443/
+curl --cacert certs/ca.crt "https://localhost:8443/api/findings/classificacao?cvss=9.8"
+openssl s_client -connect localhost:8443 -CAfile certs/ca.crt </dev/null | grep -E "Protocol|Verify"
+```
+
+- **Arquivos** (pasta `certs/`, fora do git): `certs/ca.crt` (certificado da CA, o único que se distribui), `certs/ca.key` (chave da CA, **nunca** sai da máquina), `certs/servidor/servidor.crt` e `servidor.key` (montados no Nginx; o contêiner não vê a chave da CA). Rodar o script de novo refaz o certificado do servidor e reaproveita a CA; `--nova-ca` troca a CA. O certificado vale para `localhost`, `app`, `host.docker.internal`, o nome da máquina, `127.0.0.1` e `::1`; para um agente em outra máquina, acrescente o endereço dela: `EXTRA_SAN="IP:192.168.0.10,DNS:pc-do-leo.lan" sh scripts/gerar-certificados.sh`.
+- **A CA só vale para nomes locais** (name constraints: `localhost`, `app`, o nome da máquina, `*.local`, `*.lan`, `*.internal`, `*.home.arpa`, loopback e IPs privados). Se a chave vazar, um certificado emitido com ela para um site público é recusado pelos navegadores atuais e pelo OpenSSL, mesmo onde a CA foi instalada. Um nome fora dessa lista exige `--nova-ca` com o nome em `EXTRA_SAN` (o script avisa).
+- **Portas e variáveis** (`.env` da raiz): `8081` HTTP, `8443` HTTPS (`HTTPS_PORT`). `HTTPS_REDIRECT=1` faz a 8081 só redirecionar (`308`) para o HTTPS; o padrão é `0` porque o Playwright em modo real, o Newman e este README usam `http://localhost:8081`. `HSTS_MAX_AGE` (padrão 1 ano) vale só no HTTPS e **não é enviado para `localhost`**: HSTS vale para o nome em todas as portas e quebraria a 8081, a 3000, a 5173 e a 8025, que são HTTP. Em `https://app:8443` ou pelo nome da máquina ele sai. Para os links dos e-mails apontarem para o HTTPS, `FRONTEND_URL=https://localhost:8443`.
+- **TLS 1.3 e 1.2** (RNF-001), HTTP/2; TLS 1.1 ou menor é recusado.
+- **curl do Windows** (Schannel, o do Git Bash e o do `System32`) falha com "revocation status is unknown", porque a CA local não publica lista de revogação: use `curl --ssl-revoke-best-effort --cacert certs/ca.crt ...`.
+- **Dev server do Vite em HTTPS** (opcional): `DEV_HTTPS=1 npm run dev` em `baluarte-frontend/` usa o mesmo certificado (`https://localhost:5173`).
+
+**Confiar na CA no navegador** (para a demonstração em `https://localhost:8443` sem aviso). Instale só o `certs/ca.crt`, nunca a chave, e remova depois da apresentação.
+- Windows (Chrome e Edge usam o repositório do Windows; sem administrador): `certutil -user -addstore Root certs\ca.crt`. Para remover: `certutil -user -delstore Root "Baluarte CA local"`.
+- Firefox: Configurações → Privacidade e segurança → Certificados → Ver certificados → Autoridades → Importar `certs/ca.crt` → marcar "Confiar nesta CA para identificar sites".
+- macOS: `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db certs/ca.crt`.
+- Linux (Chrome/Chromium): `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "Baluarte CA local" -i certs/ca.crt`.
+
+**Agente osquery.** O instalador do agente leva só o `certs/ca.crt` e o aponta nas flags de TLS do osquery:
+```
+--tls_server_certs=<caminho>/ca.crt   # ex.: C:\Program Files\osquery\certs\baluarte-ca.crt
+--tls_hostname=<host>:<porta>         # sem https://; precisa estar no certificado
+```
+`<host>:<porta>` é `localhost:8443` com o agente na mesma máquina, `192.168.0.10:8443` (ou o nome da máquina) com o agente em outra máquina (gere o certificado com esse endereço em `EXTRA_SAN` e libere a 8443 no firewall) e `app:443` com o agente num contêiner da mesma rede do compose. Os caminhos de cadastro, configuração e envio de dados (`--enroll_tls_endpoint`, `--config_tls_endpoint`, `--logger_tls_endpoint`) são as rotas `/api/agentes/...` do servidor do osquery, encaminhadas à API pelo mesmo proxy `/api`.
 
 ## Deploy da API no Railway
 

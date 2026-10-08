@@ -115,7 +115,7 @@ VITE_USE_MOCKS=
 
 ## Docker
 
-`Dockerfile` faz o build de produção (sem mocks) e o serve com Nginx (`nginx.conf`: fallback de SPA, cache longo só nos assets com hash, `no-cache` no index e proxy `/api` → `backend:8080`). Na raiz do repositório, `docker compose up --build -d backend app` sobe API + este frontend em **http://localhost:8081** — porta diferente da 5173 de propósito, para a stack Docker não ser confundida com o dev server nas suítes do Playwright. Para validar a stack: `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts`.
+`Dockerfile` faz o build de produção (sem mocks) e o serve com Nginx (`nginx/app.conf`: fallback de SPA, cache longo só nos assets com hash, `no-cache` no index e proxy `/api` → `backend:8080`). Na subida, `nginx/40-baluarte-tls.sh` monta a configuração: sem certificado, só HTTP; com o certificado de `scripts/gerar-certificados.sh` montado em `/etc/nginx/certs`, também HTTPS (TLS 1.3/1.2) na **8443** e, com `HTTPS_REDIRECT=1`, a 8081 passa a redirecionar (ver "HTTPS local (B06)" no README da raiz). `DEV_HTTPS=1 npm run dev` sobe o dev server em HTTPS com o mesmo certificado. Na raiz do repositório, `docker compose up --build -d backend app` sobe API + este frontend em **http://localhost:8081** — porta diferente da 5173 de propósito, para a stack Docker não ser confundida com o dev server nas suítes do Playwright. Para validar a stack: `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts`.
 
 ## Estrutura
 
@@ -133,7 +133,7 @@ src/
   types/           modelos de domínio
   __tests__/       Vitest (unitários, componentes, RBAC, a11y, mocks, adapters)
 e2e/               Playwright (mock e modo real)
-Dockerfile · nginx.conf
+Dockerfile · nginx/ (blocos HTTP/HTTPS + entrypoint do TLS)
 ```
 
 ## Direção visual e acessibilidade

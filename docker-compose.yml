@@ -4,6 +4,7 @@
 #   docker compose up -d db                   -> só o Postgres (desenvolvimento e testes fora do Docker)
 #
 #   frontend do produto   http://localhost:8081   (baluarte-frontend/, build + Nginx)
+#                         https://localhost:8443  (só com certificado: sh scripts/gerar-certificados.sh)
 #   API                   http://localhost:8080
 #   PostgreSQL            127.0.0.1:5432          (só na máquina local; dados no volume db-data)
 #   Mailpit (e-mails)     http://localhost:8025   (caixa de entrada dos convites e redefinições)
@@ -12,7 +13,7 @@
 # A porta 8081 (e não 5173) é de propósito: 5173 é o dev server do Vite, que o
 # Playwright reutiliza se estiver ocupada — a stack Docker e o modo mock convivem.
 # Variáveis num `.env` na raiz (ver .env.example): POSTGRES_PASSWORD (obrigatória), JWT_SECRET, NODE_ENV,
-# SMTP_*, EMAIL_REMETENTE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL.
+# SMTP_*, EMAIL_REMETENTE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL, HTTPS_REDIRECT, HTTPS_PORT, HSTS_MAX_AGE.
 services:
   # PostgreSQL local. A senha vem do .env da raiz (nunca versionada); sem ela o compose
   # recusa subir. A porta só é publicada em 127.0.0.1: nada de fora da máquina alcança o banco.
@@ -99,11 +100,24 @@ services:
       - "127.0.0.1:3310:3310"
 
   # SPA React (baluarte-frontend/): build de produção servido por Nginx, com /api
-  # encaminhado ao serviço backend (ver baluarte-frontend/nginx.conf).
+  # encaminhado ao serviço backend (ver baluarte-frontend/nginx/).
+  # HTTPS (B06): com certificado em certs/servidor/ (scripts/gerar-certificados.sh) o Nginx
+  # também atende TLS 1.3/1.2 na 8443; sem ele, sobe só em HTTP na 8081, como antes.
+  # A pasta montada tem só o certificado e a chave do servidor; a chave da CA fica em certs/.
   app:
     build: ./baluarte-frontend
+    environment:
+      # 1 = a 8081 só redireciona para o HTTPS (só vale com certificado). Padrão 0: as suítes
+      # (Playwright em modo real, README) usam http://localhost:8081.
+      - HTTPS_REDIRECT=${HTTPS_REDIRECT:-0}
+      # Porta publicada do HTTPS, usada no endereço do redirecionamento.
+      - HTTPS_PORT=${HTTPS_PORT:-8443}
+      - HSTS_MAX_AGE=${HSTS_MAX_AGE:-31536000}
+    volumes:
+      - ./certs/servidor:/etc/nginx/certs:ro
     ports:
       - "8081:80"
+      - "${HTTPS_PORT:-8443}:443"
     depends_on:
       backend:
         condition: service_healthy
