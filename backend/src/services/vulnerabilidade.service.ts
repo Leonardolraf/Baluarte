@@ -3,6 +3,7 @@ import { STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
 import { lerRemediacao } from '../models/catalogoAchado.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
 import { faixaCvss } from './cvss.service.js';
+import { registrarAuditoria } from './auditoria.service.js';
 import * as repo from '../repositories/vulnerabilidade.repository.js';
 import type { FiltrosVulnerabilidade, FindingComScan } from '../models/vulnerabilidade.model.js';
 
@@ -58,9 +59,14 @@ export async function detalhe(id: string) {
   return mapFinding(f);
 }
 
-export async function alterarStatus(id: string, status: string) {
-  if (!(await repo.existe(id))) falhar(404, 'Vulnerabilidade não encontrada', 'FINDING_NAO_ENCONTRADO');
-  return mapFinding(await repo.alterarStatus(id, status));
+export async function alterarStatus(atorId: string, id: string, status: string) {
+  const atual = await repo.existe(id);
+  if (!atual) falhar(404, 'Vulnerabilidade não encontrada', 'FINDING_NAO_ENCONTRADO');
+  const f = await repo.alterarStatus(id, status);
+  // RN-008: so registra mudanca de fato (repetir o mesmo status nao e evento).
+  if (atual.status !== status)
+    await registrarAuditoria(atorId, 'ALTERAR_STATUS_VULNERABILIDADE', `${id} (${f.scan.asset.host}, ${f.categoriaOwasp}): ${atual.status} → ${status}`);
+  return mapFinding(f);
 }
 
 /** Classificacao publica do contrato: faixa de severidade de uma nota CVSS. */

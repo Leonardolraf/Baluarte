@@ -8,6 +8,9 @@ import type {
   AccountLink,
   Asset,
   AssetInput,
+  AuditEntry,
+  AuditFilters,
+  AuditListResponse,
   AuthUser,
   Campaign,
   CampaignFilters,
@@ -50,6 +53,7 @@ import { tokenStorage } from '@/lib/storage';
 import { FUNNEL_STAGE_LABEL, SEVERITY_RANK, severityFromCvss, VULN_STATUS_LABEL } from '@/lib/severity';
 import {
   MOCK_ASSETS,
+  MOCK_AUDIT_LOG,
   MOCK_CAMPAIGNS,
   MOCK_CREDENTIALS,
   MOCK_FILE_SCANS,
@@ -128,6 +132,8 @@ interface MockState {
   recipients: CampaignRecipient[];
   trainings: Training[];
   timeline: TimelineEvent[];
+  /** Trilha de auditoria, mais recente primeiro (RN-008). */
+  auditLog: AuditEntry[];
   notificationPreferences: NotificationPreferences;
   securityPolicy: SecurityPolicy;
   /** Tokens de redefinição de senha emitidos nesta sessão (token -> e-mail). */
@@ -165,6 +171,7 @@ function createState(): MockState {
     recipients: clone(MOCK_RECIPIENTS),
     trainings: clone(MOCK_TRAININGS),
     timeline: clone(MOCK_TIMELINE),
+    auditLog: clone(MOCK_AUDIT_LOG),
     notificationPreferences: clone(MOCK_NOTIFICATION_PREFERENCES),
     securityPolicy: clone(MOCK_SECURITY_POLICY),
     // Link de demonstração sempre válido: a tela de criar senha confere o token na API
@@ -222,6 +229,21 @@ async function simulate<T>(produce: () => T, options: { canFail?: boolean } = {}
 }
 
 /** Rejeita com 401/403 e emite o mesmo evento global que a camada HTTP real emitiria. */
+/** Grava na trilha de auditoria da sessão, como o servidor faz nas rotas de escrita. */
+function pushAudit(
+  user: Pick<User, 'id' | 'name' | 'email'> | null,
+  action: string,
+  detail: string | null = null,
+): void {
+  state.auditLog.unshift({
+    id: nextId('aud'),
+    action,
+    detail,
+    at: nowIso(),
+    user: user ? { id: user.id, name: user.name, email: user.email } : null,
+  });
+}
+
 function deny(status: 401 | 403, code: string, message: string): never {
   const error = new HttpError(status, code, message);
   dispatchAuthEvent(status === 401 ? UNAUTHORIZED_EVENT : FORBIDDEN_EVENT, error);
@@ -562,6 +584,7 @@ export const mockApi: BaluarteApi = {
       );
     }
     user.lastLoginAt = nowIso();
+    pushAudit(user, 'LOGIN');
     const token = buildMockToken({ sub: user.id, email: user.email, name: user.name, role: user.role });
     const authUser: AuthUser = { id: user.id, name: user.name, email: user.email, role: user.role };
     return clone({ token, user: authUser });
@@ -772,6 +795,7 @@ export const mockApi: BaluarteApi = {
       openFindings: 0,
     };
     state.assets.unshift(asset);
+    pushAudit(user, 'CRIAR_ATIVO', `${asset.id} (${asset.host}, ${asset.type})`);
     pushTimeline({
       kind: 'system',
       title: 'Novo ativo cadastrado',
@@ -824,6 +848,7 @@ export const mockApi: BaluarteApi = {
     state.scans.unshift(scan);
     state.runtimeScans.add(scan.id);
     asset.lastScanAt = scan.startedAt;
+    pushAudit(user, 'INICIAR_VARREDURA', `${scan.id} no ativo ${asset.id} (${asset.host})`);
     pushTimeline({
       kind: 'scan',
       title: 'Varredura enfileirada',
@@ -914,6 +939,11 @@ export const mockApi: BaluarteApi = {
       to: status,
       note: note?.trim() || undefined,
     };
+    pushAudit(
+      user,
+      'ALTERAR_STATUS_VULNERABILIDADE',
+      `${v.id} (${v.assetHost}, ${v.owaspId}): ${VULN_STATUS_LABEL[v.status]} → ${VULN_STATUS_LABEL[status]}`,
+    );
     v.status = status;
     v.updatedAt = entry.at;
     v.history.unshift(entry);
@@ -1391,6 +1421,37 @@ export const mockApi: BaluarteApi = {
   },
 
   // ---- Configurações ----
+  // ---- Auditoria ----
+  async listAuditLog(filters: AuditFilters = {}): Promise<AuditListResponse> {
+    return simulate(() => {
+      const user = requireUser();
+      requireRole(user, ['admin']);
+      const page = filters.page ?? 1;
+      const pageSize = filters.pageSize ?? 20;
+      if (!Number.isInteger(page) || page < 1)
+        throw new HttpError(400, 'PAGINA_INVALIDA', 'Página inválida: use um inteiro a partir de 1');
+      if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100)
+        throw new HttpError(400, 'TAMANHO_INVALIDO', 'Tamanho inválido: use um inteiro de 1 a 100');
+      const from = localDayRange(filters.from);
+      const to = localDayRange(filters.to);
+      if (from && to && from.start > to.end)
+        throw new HttpError(400, 'PERIODO_INVALIDO', 'Período inválido: a data inicial é posterior à final');
+      let items = [...state.auditLog];
+      if (filters.action) items = items.filter((e) => e.action === filters.action);
+      if (from) items = items.filter((e) => Date.parse(e.at) >= from.start);
+      if (to) items = items.filter((e) => Date.parse(e.at) <= to.end);
+      items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || b.id.localeCompare(a.id));
+      const actions = Array.from(new Set(state.auditLog.map((e) => e.action))).sort();
+      return {
+        items: items.slice((page - 1) * pageSize, page * pageSize),
+        total: items.length,
+        page,
+        pageSize,
+        actions,
+      };
+    });
+  },
+
   async getNotificationPreferences(): Promise<NotificationPreferences> {
     return simulate(() => {
       requireUser();

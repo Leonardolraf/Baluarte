@@ -73,6 +73,7 @@ const PAGES: Array<{ path: string; role: RBACRole | null; ready: string | RegExp
   { path: '/training/trn-urgency', role: 'collaborator', ready: /Reconhecendo|urgência/i },
   { path: '/users', role: 'admin', ready: 'Usuários e perfis de acesso' },
   { path: '/users/new', role: 'admin', ready: /Novo usuário/ },
+  { path: '/audit', role: 'admin', ready: 'Trilha de auditoria' },
   { path: '/settings', role: 'admin', ready: 'Configurações' },
 ];
 

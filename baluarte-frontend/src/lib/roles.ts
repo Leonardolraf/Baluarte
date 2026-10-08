@@ -33,6 +33,8 @@ export const ROUTE_ROLES = {
   /** Consolidado de quem concluiu treinamento: dado individual, restrito à gestão (RN-006). */
   trainings: ['admin', 'analyst'],
   users: ['admin'],
+  /** Trilha de auditoria (GET /auditoria): só Administrador no servidor (RN-008). */
+  audit: ['admin'],
   settings: ['admin', 'analyst', 'collaborator'],
 } as const satisfies Record<string, readonly RBACRole[]>;
 

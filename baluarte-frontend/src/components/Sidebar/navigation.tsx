@@ -4,6 +4,7 @@ import { ROUTE_ROLES } from '@/lib/roles';
 import {
   ActivityIcon,
   BugIcon,
+  ClockIcon,
   DashboardIcon,
   FileScanIcon,
   GraduationIcon,
@@ -75,6 +76,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'Administração',
     items: [
       { to: '/users', label: 'Usuários', icon: <UsersIcon />, roles: ROUTE_ROLES.users },
+      { to: '/audit', label: 'Auditoria', icon: <ClockIcon />, roles: ROUTE_ROLES.audit },
       { to: '/settings', label: 'Configurações', icon: <SettingsIcon />, roles: ROUTE_ROLES.settings },
     ],
   },

@@ -2,6 +2,8 @@ import type {
   AccountLink,
   Asset,
   AssetInput,
+  AuditFilters,
+  AuditListResponse,
   AuthUser,
   Campaign,
   CampaignFilters,
@@ -116,6 +118,10 @@ export interface BaluarteApi {
   analyzeFile(file: File, options?: AnalyzeFileOptions): Promise<FileScanOutcome>;
   /** Análises anteriores, mais recente primeiro. Colaborador só recebe as próprias. */
   listFileScans(): Promise<FileScan[]>;
+
+  // Auditoria (só Administrador)
+  /** Trilha de auditoria filtrada e paginada no servidor, mais recente primeiro. */
+  listAuditLog(filters?: AuditFilters): Promise<AuditListResponse>;
 
   // Configurações
   getNotificationPreferences(): Promise<NotificationPreferences>;

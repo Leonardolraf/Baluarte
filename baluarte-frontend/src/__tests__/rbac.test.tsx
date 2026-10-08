@@ -67,6 +67,8 @@ const BLOCKED: Array<[string, RBACRole]> = [
   ['/users', 'analyst'],
   ['/users/new', 'analyst'],
   ['/users/u-001/edit', 'analyst'],
+  ['/audit', 'analyst'],
+  ['/audit', 'collaborator'],
 ];
 
 describe('RBAC — guarda da tabela de rotas', () => {
@@ -86,6 +88,16 @@ describe('RBAC — guarda da tabela de rotas', () => {
 
     expect(
       await screen.findByRole('heading', { name: 'Campanhas de phishing' }, FIND_OPTIONS),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Acesso negado' })).not.toBeInTheDocument();
+    await waitForIdle();
+  });
+
+  it('administrador em /audit vê a "Trilha de auditoria"', async () => {
+    renderApp('/audit', authenticatedSession('admin'));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Trilha de auditoria' }, FIND_OPTIONS),
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Acesso negado' })).not.toBeInTheDocument();
     await waitForIdle();
@@ -123,6 +135,7 @@ describe('RBAC — itens de navegação por perfil', () => {
   it('analista vê análise e conscientização, mas não Usuários', () => {
     const paths = pathsFor('analyst');
     expect(paths).not.toContain('/users');
+    expect(paths).not.toContain('/audit');
     expect(paths).toEqual(
       expect.arrayContaining([
         '/dashboard',
@@ -139,6 +152,7 @@ describe('RBAC — itens de navegação por perfil', () => {
   it('administrador vê Usuários', () => {
     const paths = pathsFor('admin');
     expect(paths).toContain('/users');
+    expect(paths).toContain('/audit');
     expect(paths).toEqual(expect.arrayContaining(pathsFor('analyst')));
   });
 

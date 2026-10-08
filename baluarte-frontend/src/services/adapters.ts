@@ -1,4 +1,6 @@
 import type {
+  AuditEntry,
+  AuditListResponse,
   AccountLink,
   Asset,
   AssetInput,
@@ -803,4 +805,49 @@ export function toFileScan(raw: BackendFileScan): FileScan {
   };
   if (raw.usuario) scan.uploadedBy = { name: raw.usuario.nome, email: raw.usuario.email };
   return scan;
+}
+
+// ---- Auditoria ----------------------------------------------------------------
+
+export interface BackendAuditEntry {
+  id: string;
+  acao: string;
+  detalhe: string | null;
+  quando: string;
+  usuario: { id: string; nome: string; email: string } | null;
+}
+
+export interface BackendAuditSummary {
+  total?: number;
+  pagina?: number;
+  tamanho?: number;
+  acoes?: string[];
+}
+
+export function toAuditEntry(raw: BackendAuditEntry): AuditEntry {
+  return {
+    id: raw.id,
+    action: raw.acao,
+    detail: raw.detalhe ?? null,
+    at: raw.quando,
+    user: raw.usuario ? { id: raw.usuario.id, name: raw.usuario.nome, email: raw.usuario.email } : null,
+  };
+}
+
+/** Lista paginada de GET /auditoria (`dados` + `resumo`). */
+export function toAuditList(
+  dados: BackendAuditEntry[],
+  resumo: BackendAuditSummary | undefined,
+  fallback: { page: number; pageSize: number },
+): AuditListResponse {
+  const items = (dados ?? []).map(toAuditEntry);
+  return {
+    items,
+    total: typeof resumo?.total === 'number' ? resumo.total : items.length,
+    page: typeof resumo?.pagina === 'number' ? resumo.pagina : fallback.page,
+    pageSize: typeof resumo?.tamanho === 'number' ? resumo.tamanho : fallback.pageSize,
+    actions: Array.isArray(resumo?.acoes)
+      ? resumo.acoes.filter((a): a is string => typeof a === 'string')
+      : [],
+  };
 }

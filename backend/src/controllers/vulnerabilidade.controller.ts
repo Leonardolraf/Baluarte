@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { usuarioDe } from '../middlewares/auth.middleware.js';
 import { ALTERACAO_STATUS, CLASSIFICACAO } from '../models/vulnerabilidade.model.js';
 import * as vulnerabilidadeService from '../services/vulnerabilidade.service.js';
 import { enviar } from '../utils/resposta.js';
@@ -31,6 +32,6 @@ export async function detalhe(req: Request, res: Response) {
 /** PATCH /vulnerabilidades/:id (status, "Risco aceito" incluso). */
 export async function alterarStatus(req: Request, res: Response) {
   const { status } = validar(req.body, ALTERACAO_STATUS);
-  const dados = await vulnerabilidadeService.alterarStatus(req.params.id, String(status));
+  const dados = await vulnerabilidadeService.alterarStatus(usuarioDe(req).id, req.params.id, String(status));
   enviar(res, 200, { status: 'sucesso', mensagem: 'Status atualizado', dados });
 }
