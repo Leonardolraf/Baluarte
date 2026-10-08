@@ -94,6 +94,8 @@ export interface BaluarteApi {
   createUser(input: UserInput): Promise<CreatedUser>;
   /** Reenvia o convite de uma conta Pendente. */
   resendInvite(id: string): Promise<MessageResponse>;
+  /** Dispara o e-mail de redefinição de senha de uma conta Ativa (ação do administrador). */
+  sendPasswordReset(id: string): Promise<MessageResponse>;
   updateUser(id: string, input: Partial<UserInput>): Promise<User>;
   deleteUser(id: string): Promise<void>;
   /** Nomes dos departamentos cadastrados (opções do cadastro de usuário). */

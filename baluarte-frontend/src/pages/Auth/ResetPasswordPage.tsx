@@ -247,7 +247,8 @@ function ConfirmStep({ token }: { token: string }) {
       setDone(response.message);
     } catch (err) {
       const apiError = toApiError(err);
-      if (apiError.code === 'SENHA_FRACA') {
+      // SENHA_REPETIDA: a nova senha é igual à atual. Erro do campo, não do formulário.
+      if (apiError.code === 'SENHA_FRACA' || apiError.code === 'SENHA_REPETIDA') {
         setError('newPassword', { type: 'server', message: apiError.message }, { shouldFocus: true });
       } else if (apiError.code === 'TOKEN_RESET_INVALIDO' || apiError.code === 'TOKEN_OBRIGATORIO') {
         setTokenRejected(true);

@@ -1143,6 +1143,21 @@ export const mockApi: BaluarteApi = {
     return { message: `Convite reenviado para ${alvo.email}` };
   },
 
+  // Ação do administrador: dispara o link de redefinição de uma conta já ativa.
+  // Conta Pendente ainda não tem senha, então o caminho dela é o convite.
+  async sendPasswordReset(id: string): Promise<MessageResponse> {
+    await delay();
+    const actor = requireUser();
+    requireRole(actor, ['admin']);
+    const alvo = state.users.find((u) => u.id === id);
+    if (!alvo) throw new HttpError(404, 'USUARIO_NAO_ENCONTRADO', 'Usuário não encontrado');
+    if (alvo.status !== 'active')
+      throw new HttpError(409, 'USUARIO_NAO_ATIVO', 'O link de redefinição só vale para contas ativas');
+    const token = nextId('demo-reset');
+    state.resetTokens.set(token, alvo.email.toLowerCase());
+    return { message: `Link de redefinição enviado para ${alvo.email}` };
+  },
+
   async updateUser(id: string, input: Partial<UserInput>): Promise<User> {
     await delay();
     const actor = requireUser();

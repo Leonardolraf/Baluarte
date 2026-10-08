@@ -545,6 +545,14 @@ export const realApi: BaluarteApi = {
     return { message: raw?.mensagem || 'Convite reenviado.' };
   },
 
+  async sendPasswordReset(id: string): Promise<MessageResponse> {
+    const raw = await request<{ mensagem?: string } | undefined>({
+      method: 'POST',
+      url: `/users/${encodeURIComponent(id)}/redefinir-senha`,
+    });
+    return { message: raw?.mensagem || 'Link de redefinição enviado.' };
+  },
+
   async updateUser(id: string, input: Partial<UserInput>): Promise<User> {
     const data: Record<string, string | null> = {};
     if (input.name !== undefined) data.nome = input.name.trim();

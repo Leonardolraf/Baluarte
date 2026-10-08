@@ -139,6 +139,29 @@ export default function UserFormPage() {
     }
   };
 
+  // Ação de acesso da conta editada: conta Pendente ainda não tem senha (reenvia o
+  // convite); conta Ativa redefine a que já existe. Inativa não recebe link nenhum.
+  const [enviandoAcesso, setEnviandoAcesso] = useState(false);
+  const acaoAcesso =
+    editing && data?.status === 'pending'
+      ? { rotulo: 'Reenviar convite', executar: () => api.resendInvite(data.id) }
+      : editing && data?.status === 'active'
+        ? { rotulo: 'Enviar link de redefinição', executar: () => api.sendPasswordReset(data!.id) }
+        : null;
+
+  async function dispararAcessoDaConta() {
+    if (!acaoAcesso) return;
+    setEnviandoAcesso(true);
+    try {
+      const resposta = await trackOperation(acaoAcesso.executar());
+      notify.success(resposta.message);
+    } catch (err) {
+      notify.error(errorMessage(err, 'Não foi possível enviar o e-mail.'));
+    } finally {
+      setEnviandoAcesso(false);
+    }
+  }
+
   const pageTitle = editing ? 'Editar usuário' : 'Novo usuário';
   const header = (
     <PageHeader
@@ -149,6 +172,18 @@ export default function UserFormPage() {
           : 'Cadastre uma nova conta e defina o perfil de acesso conforme a função da pessoa.'
       }
       breadcrumbs={[{ label: 'Usuários', to: '/users' }, { label: pageTitle }]}
+      actions={
+        acaoAcesso ? (
+          <Button
+            variant="outline"
+            leftIcon={<Icons.SendIcon size={16} />}
+            loading={enviandoAcesso}
+            onClick={() => void dispararAcessoDaConta()}
+          >
+            {acaoAcesso.rotulo}
+          </Button>
+        ) : undefined
+      }
       meta={
         data ? (
           <>
