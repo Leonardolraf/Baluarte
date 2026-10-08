@@ -649,6 +649,8 @@ export interface Station {
   inventoryAt: string | null;
   softwareCount: number;
   portCount: number;
+  /** Último cruzamento do inventário com as bases de vulnerabilidades (B14); null: nunca. */
+  verifiedAt: string | null;
 }
 
 /** Origem do programa no inventário (tabela do osquery). */
@@ -675,6 +677,30 @@ export interface StationDetail extends Station {
   offlineAfterSec: number;
   software: StationSoftware[];
   ports: StationPort[];
+  /** Achados da estação (programas com CVE, B14): todos e os ainda em aberto. */
+  findingsTotal: number;
+  findingsOpen: number;
+}
+
+/** Base pública consultada no cruzamento do inventário (B14). */
+export type VulnerabilitySource = 'OSV' | 'NVD';
+
+/** Resultado de POST /estacoes/:id/verificar (B14). */
+export interface StationVerification {
+  verifiedAt: string;
+  /** Programas consultados numa base (pacotes Linux no OSV, programas Windows da tabela no NVD). */
+  checkedPrograms: number;
+  /** Programas sem como consultar (Windows fora da tabela, sistema sem suporte no OSV). */
+  uncoveredPrograms: number;
+  vulnerabilitiesFound: number;
+  newFindings: number;
+  existingFindings: number;
+  /** CVEs sem nota CVSS 3.x em nenhuma base: não viram achado. */
+  noCvss: number;
+  /** Consultas que ficaram para a próxima verificação (limite por verificação). */
+  pending: number;
+  /** Bases que não responderam nesta verificação. */
+  failures: VulnerabilitySource[];
 }
 
 export interface StationListResponse {

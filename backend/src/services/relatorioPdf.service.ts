@@ -187,7 +187,8 @@ function celulas(r: RelatorioVulnerabilidades, i: number): string[] {
   return [
     String(i + 1),
     `${a.ativo}\n${a.ativoNome}`,
-    a.categoria,
+    // Achado de estacao (B14): a categoria leva o programa instalado (o ativo e a estacao).
+    a.programa ? `${a.categoria}\n${[a.programa, a.programaVersao].filter(Boolean).join(' ')}` : a.categoria,
     [a.cwe, a.cve].filter(Boolean).join('\n') || '—',
     `${a.cvss.toFixed(1)}\n${a.cvssVetor ?? 'sem vetor'}`,
     a.severidade,

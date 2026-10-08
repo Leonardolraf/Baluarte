@@ -64,14 +64,17 @@ export const QUERIES: Record<string, QueryAgendada> = {
     fonte: 'programs',
   },
   baluarte_programas_deb: {
-    query: 'SELECT name, version, maintainer AS fornecedor FROM deb_packages;',
+    // source: pacote-fonte, que e como o Debian e o Ubuntu indexam as vulnerabilidades no OSV (B14).
+    query: 'SELECT name, version, maintainer AS fornecedor, source AS origem FROM deb_packages;',
     platform: 'linux',
     categoria: 'programas',
     fonte: 'deb_packages',
   },
   baluarte_programas_rpm: {
+    // Versao completa epoch:versao-release: sem a epoch, o OSV compararia "3.0.7-27.el9" com
+    // "1:3.0.7-25.el9_3" e daria o pacote ja corrigido como vulneravel (B14).
     query:
-      "SELECT name, CASE WHEN release = '' THEN version ELSE version || '-' || release END AS version, vendor AS fornecedor FROM rpm_packages;",
+      "SELECT name, CASE WHEN CAST(epoch AS INTEGER) > 0 THEN epoch || ':' ELSE '' END || version || CASE WHEN release = '' THEN '' ELSE '-' || release END AS version, vendor AS fornecedor FROM rpm_packages;",
     platform: 'linux',
     categoria: 'programas',
     fonte: 'rpm_packages',
@@ -108,15 +111,19 @@ export const eventoResultado = z.object({
 });
 
 const campo = (max: number) => z.string().trim().max(max);
+// Coluna ausente vale como vazia (o zod 4 recusaria a linha inteira): o osquery com a
+// configuracao anterior a uma coluna nova (ex.: source do deb, B14) continua sendo aceito.
 const opcionalTexto = (max: number) =>
   z
     .unknown()
+    .optional()
     .transform((v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null));
 
 export const linhaPrograma = z.object({
   name: campo(512).min(1),
   version: opcionalTexto(255).transform((v) => v ?? ''),
   fornecedor: opcionalTexto(255),
+  origem: opcionalTexto(512),
 });
 
 export const linhaSistema = z.object({
@@ -160,6 +167,8 @@ export interface ItemPrograma {
   nome: string;
   versao: string;
   fornecedor: string | null;
+  /** Pacote-fonte do deb (coluna source); null quando e o proprio nome ou nos outros sistemas. */
+  pacoteOrigem: string | null;
 }
 
 export interface ItemPorta {

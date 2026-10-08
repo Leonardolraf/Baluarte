@@ -24,6 +24,7 @@ import type {
   SecurityPolicy,
   StationDetail,
   StationListResponse,
+  StationVerification,
   Training,
   User,
   UserInput,
@@ -144,6 +145,8 @@ export interface BaluarteApi {
   listStations(): Promise<StationListResponse>;
   /** Detalhe com os programas instalados e as portas abertas. */
   getStation(id: string): Promise<StationDetail>;
+  /** Cruza o inventário com as bases públicas de vulnerabilidades agora (B14). */
+  verifyStation(id: string): Promise<StationVerification>;
 
   // Configurações
   getNotificationPreferences(): Promise<NotificationPreferences>;

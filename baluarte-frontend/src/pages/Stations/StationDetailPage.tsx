@@ -1,8 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
-import type { StationDetail, StationPort, StationSoftware } from '@/types';
+import { Link, useParams } from 'react-router-dom';
+import type { StationDetail, StationPort, StationSoftware, StationVerification } from '@/types';
 import { api } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
+import { errorMessage } from '@/lib/errors';
+import { ROUTE_ROLES } from '@/lib/roles';
+import { BugIcon, ShieldIcon } from '@/components/icons';
 import { usePagination } from '@/hooks/usePagination';
 import { formatDateTime, formatNumber, formatRelative } from '@/lib/format';
 import {
@@ -14,9 +18,11 @@ import {
   STATION_STATUS_LABEL,
 } from '@/lib/stations';
 import {
+  Button,
   Card,
   EmptyState,
   ErrorState,
+  FormErrorBanner,
   FormField,
   Input,
   KeyValueList,
@@ -166,10 +172,72 @@ function PortsTab({ items, collected }: { items: StationPort[]; collected: boole
   );
 }
 
-/** Detalhe da estação (B13): resumo, programas instalados e portas abertas do último inventário. */
+function plural(n: number, singular: string, pluralForm: string): string {
+  return `${formatNumber(n)} ${n === 1 ? singular : pluralForm}`;
+}
+
+/** Resultado da verificação de vulnerabilidades (B14), anunciado para leitores de tela. */
+function VerificationResult({ result }: { result: StationVerification }) {
+  const parts = [
+    `${plural(result.newFindings, 'achado novo', 'achados novos')}`,
+    `${plural(result.existingFindings, 'já registrado', 'já registrados')}`,
+  ];
+  return (
+    <div
+      role="status"
+      data-testid="verification-result"
+      className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200 dark:bg-slate-800/60 dark:text-slate-200 dark:ring-slate-700"
+    >
+      <p className="font-medium text-ink dark:text-white">Verificação concluída: {parts.join(', ')}.</p>
+      <p className="mt-1 text-slate-600 dark:text-slate-300">
+        {plural(result.checkedPrograms, 'programa consultado', 'programas consultados')}
+        {result.uncoveredPrograms > 0 &&
+          ` · ${plural(result.uncoveredPrograms, 'sem cobertura nas bases', 'sem cobertura nas bases')}`}
+        {result.noCvss > 0 &&
+          ` · ${plural(result.noCvss, 'CVE sem nota CVSS', 'CVEs sem nota CVSS')} (não vira achado)`}
+      </p>
+      {result.failures.length > 0 && (
+        <p className="mt-1 font-medium text-amber-700 dark:text-amber-300">
+          Sem resposta de {result.failures.join(' e ')}: o que depende dessa base fica para a próxima
+          verificação.
+        </p>
+      )}
+      {result.pending > 0 && (
+        <p className="mt-1 text-slate-600 dark:text-slate-300">
+          {plural(result.pending, 'consulta ficou', 'consultas ficaram')} para a próxima verificação (limite
+          por verificação).
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Detalhe da estação (B13): resumo, programas instalados e portas abertas do último inventário.
+ * B14: botão "Verificar vulnerabilidades" (Administrador/Analista), última verificação e achados.
+ */
 export default function StationDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  const { hasRole } = useAuth();
   const { data: station, error, loading, reload } = useAsync<StationDetail>(() => api.getStation(id), [id]);
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<StationVerification | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const canVerify = hasRole(...ROUTE_ROLES.stations);
+
+  async function onVerify() {
+    setVerifying(true);
+    setVerifyError(null);
+    setVerification(null);
+    try {
+      setVerification(await api.verifyStation(id));
+      await reload();
+    } catch (err) {
+      setVerifyError(errorMessage(err));
+    } finally {
+      setVerifying(false);
+    }
+  }
 
   if (!station) {
     if (error) {
@@ -223,6 +291,28 @@ export default function StationDetailPage() {
       label: 'Último inventário',
       value: collected ? formatDateTime(station.inventoryAt) : 'Aguardando a primeira coleta',
     },
+    {
+      label: 'Última verificação de vulnerabilidades',
+      value: station.verifiedAt ? formatDateTime(station.verifiedAt) : 'Nunca verificada',
+    },
+    {
+      label: 'Achados em aberto',
+      value:
+        station.findingsOpen > 0 ? (
+          // A lista de vulnerabilidades filtra por texto livre: o host leva aos achados da estação.
+          <Link
+            to={`/vulnerabilities?q=${encodeURIComponent(station.host)}`}
+            className="inline-flex items-center gap-1 font-semibold tabular-nums text-ink underline-offset-4 hover:underline dark:text-white"
+          >
+            {formatNumber(station.findingsOpen)} de {formatNumber(station.findingsTotal)}
+            <BugIcon size={14} />
+          </Link>
+        ) : (
+          <span className="tabular-nums">
+            0{station.findingsTotal > 0 ? ` de ${formatNumber(station.findingsTotal)}` : ''}
+          </span>
+        ),
+    },
     { label: 'Inscrita em', value: formatDateTime(station.enrolledAt) },
     { label: 'Identificador do agente', value: <Mono>{station.identifier}</Mono> },
   ];
@@ -248,6 +338,19 @@ export default function StationDetailPage() {
         breadcrumbs={[{ label: 'Estações', to: '/stations' }, { label: station.name }]}
         title={station.name}
         description={station.os}
+        actions={
+          canVerify ? (
+            <Button
+              leftIcon={<ShieldIcon size={16} />}
+              loading={verifying}
+              disabled={!collected}
+              title={collected ? undefined : 'O inventário ainda não chegou'}
+              onClick={() => void onVerify()}
+            >
+              Verificar vulnerabilidades
+            </Button>
+          ) : undefined
+        }
         meta={
           <>
             <StatusPill
@@ -268,6 +371,9 @@ export default function StationDetailPage() {
           </>
         }
       />
+
+      <FormErrorBanner message={verifyError} />
+      {verification && <VerificationResult result={verification} />}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Resumo" className="lg:col-span-1">

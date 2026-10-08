@@ -32,6 +32,7 @@ import type {
   SortState,
   StationDetail,
   StationListResponse,
+  StationVerification,
   Training,
   TrainingOverview,
   User,
@@ -72,6 +73,7 @@ import {
   toSecurityPolicy,
   toStationDetail,
   toStationList,
+  toStationVerification,
   toTraining,
   toTrainingOverview,
   toUser,
@@ -96,6 +98,7 @@ import {
   type BackendStation,
   type BackendStationDetail,
   type BackendStationSummary,
+  type BackendStationVerification,
   type BackendTraining,
   type BackendTrainingOverview,
   type BackendUser,
@@ -782,6 +785,15 @@ export const realApi: BaluarteApi = {
   async getStation(id: string): Promise<StationDetail> {
     return toStationDetail(
       await request<BackendStationDetail>({ method: 'GET', url: `/estacoes/${encodeURIComponent(id)}` }),
+    );
+  },
+
+  async verifyStation(id: string): Promise<StationVerification> {
+    return toStationVerification(
+      await request<BackendStationVerification>({
+        method: 'POST',
+        url: `/estacoes/${encodeURIComponent(id)}/verificar`,
+      }),
     );
   },
 

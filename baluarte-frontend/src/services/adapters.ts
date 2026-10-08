@@ -33,6 +33,8 @@ import type {
   StationDetail,
   StationListResponse,
   StationPort,
+  StationVerification,
+  VulnerabilitySource,
   TimelineEvent,
   Training,
   TrainingOverview,
@@ -1181,10 +1183,15 @@ export interface BackendStation {
   inventarioEm: string | null;
   totalProgramas: number;
   totalPortas: number;
+  /** B14: último cruzamento com as bases de vulnerabilidades (null: nunca). */
+  verificadaEm?: string | null;
 }
 
 export interface BackendStationDetail extends BackendStation {
   janelaOfflineS: number;
+  /** B14: achados da estação, todos e os em aberto. */
+  totalAchados?: number;
+  achadosAbertos?: number;
   programas: Array<{ nome: string; versao: string; fornecedor: string | null; fonte: string }>;
   portas: Array<{ porta: number; protocolo: string; endereco: string; processo: string | null }>;
 }
@@ -1214,6 +1221,7 @@ export function toStation(raw: BackendStation): Station {
     inventoryAt: raw.inventarioEm ?? null,
     softwareCount: Number(raw.totalProgramas) || 0,
     portCount: Number(raw.totalPortas) || 0,
+    verifiedAt: raw.verificadaEm ?? null,
   };
 }
 
@@ -1239,6 +1247,35 @@ export function toStationDetail(raw: BackendStationDetail): StationDetail {
         : 'other',
     })),
     ports: raw.portas.map(toStationPort),
+    findingsTotal: Number(raw.totalAchados) || 0,
+    findingsOpen: Number(raw.achadosAbertos) || 0,
+  };
+}
+
+/** Resposta de POST /estacoes/:id/verificar (B14). */
+export interface BackendStationVerification {
+  verificadaEm: string;
+  programasConsultados: number;
+  programasSemCobertura: number;
+  vulnerabilidadesEncontradas: number;
+  achadosNovos: number;
+  achadosExistentes: number;
+  semCvss: number;
+  pendentes: number;
+  falhas: string[];
+}
+
+export function toStationVerification(raw: BackendStationVerification): StationVerification {
+  return {
+    verifiedAt: raw.verificadaEm,
+    checkedPrograms: Number(raw.programasConsultados) || 0,
+    uncoveredPrograms: Number(raw.programasSemCobertura) || 0,
+    vulnerabilitiesFound: Number(raw.vulnerabilidadesEncontradas) || 0,
+    newFindings: Number(raw.achadosNovos) || 0,
+    existingFindings: Number(raw.achadosExistentes) || 0,
+    noCvss: Number(raw.semCvss) || 0,
+    pending: Number(raw.pendentes) || 0,
+    failures: (raw.falhas ?? []).filter((f): f is VulnerabilitySource => f === 'OSV' || f === 'NVD'),
   };
 }
 

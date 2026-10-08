@@ -4,7 +4,8 @@ import { intervaloQueries } from './agente.service.js';
 import * as repo from '../repositories/estacao.repository.js';
 
 // Painel de estacoes monitoradas (B13): lista com status online/offline e detalhe com os
-// programas instalados e as portas abertas. So leitura; quem escreve e o agente (B07).
+// programas instalados e as portas abertas. So leitura; quem escreve e o agente (B07) e o
+// cruzamento com as bases de vulnerabilidades (B14, cruzamento.service.ts).
 
 /** Segundos sem contato ate a estacao virar "Offline": CICLOS_ATE_OFFLINE x intervalo de coleta. */
 export function janelaOfflineS(): number {
@@ -34,6 +35,8 @@ function mapBase(e: EstacaoBase, janelaS: number, agora: number) {
     ultimoContato: e.vistaEm,
     inscritaEm: e.inscritaEm,
     inventarioEm: e.inventarioEm,
+    // B14: ultimo cruzamento do inventario com as bases de vulnerabilidades (null: nunca).
+    verificadaEm: e.verificadaEm,
   };
 }
 
@@ -50,9 +53,12 @@ export async function listar() {
   return { lista, resumo: { total: lista.length, online, offline: lista.length - online, janelaOfflineS: janelaS } };
 }
 
-function mapDetalhe(e: EstacaoComInventario, janelaS: number, agora: number) {
+function mapDetalhe(e: EstacaoComInventario, janelaS: number, agora: number, achados: { total: number; abertos: number }) {
   return {
     ...mapBase(e, janelaS, agora),
+    // B14: achados da estacao (programas com CVE), todos e os ainda em aberto.
+    totalAchados: achados.total,
+    achadosAbertos: achados.abertos,
     totalProgramas: e.programas.length,
     totalPortas: e.portas.length,
     janelaOfflineS: janelaS,
@@ -65,5 +71,5 @@ function mapDetalhe(e: EstacaoComInventario, janelaS: number, agora: number) {
 export async function detalhe(id: string) {
   const estacao = await repo.buscarComInventario(id);
   if (!estacao) falhar(404, 'Estação não encontrada', 'ESTACAO_NAO_ENCONTRADA');
-  return mapDetalhe(estacao, janelaOfflineS(), Date.now());
+  return mapDetalhe(estacao, janelaOfflineS(), Date.now(), await repo.contarAchados(estacao.id));
 }

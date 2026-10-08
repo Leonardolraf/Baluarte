@@ -40,6 +40,7 @@ import type {
   Station,
   StationDetail,
   StationListResponse,
+  StationVerification,
   TimelineEvent,
   Training,
   TrainingOverview,
@@ -81,6 +82,7 @@ import {
   MOCK_STATION_OFFLINE_AFTER_SEC,
   MOCK_VULNERABILITIES,
   buildMockStations,
+  MOCK_STATION_CVES,
   type MockFileScan,
   type MockStation,
 } from '@/mocks/data';
@@ -298,6 +300,9 @@ function stationView(station: MockStation, nowMs: number = Date.now()): StationD
     softwareCount: station.software.length,
     portCount: station.ports.length,
     offlineAfterSec: MOCK_STATION_OFFLINE_AFTER_SEC,
+    verifiedAt: station.verifiedAt ?? null,
+    findingsTotal: station.findingsTotal ?? 0,
+    findingsOpen: station.findingsOpen ?? 0,
   };
 }
 
@@ -1684,6 +1689,8 @@ export const mockApi: BaluarteApi = {
           delete view.software;
           delete view.ports;
           delete view.offlineAfterSec;
+          delete view.findingsTotal;
+          delete view.findingsOpen;
           return view as Station;
         });
       const online = items.filter((s) => s.status === 'online').length;
@@ -1705,6 +1712,33 @@ export const mockApi: BaluarteApi = {
       const station = state.stations.find((s) => s.id === id);
       if (!station) throw new HttpError(404, 'ESTACAO_NAO_ENCONTRADA', 'Estação não encontrada');
       return stationView(station);
+    });
+  },
+
+  // B14: a verificação simulada acha MOCK_STATION_CVES[id] CVEs; nas seguintes, nada de novo.
+  async verifyStation(id: string): Promise<StationVerification> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin', 'analyst']);
+      const station = state.stations.find((s) => s.id === id);
+      if (!station) throw new HttpError(404, 'ESTACAO_NAO_ENCONTRADA', 'Estação não encontrada');
+      const covered = station.osPlatform !== 'rhel';
+      const found = covered ? (MOCK_STATION_CVES[id] ?? 0) : 0;
+      const before = station.findingsTotal ?? 0;
+      const created = Math.max(0, found - before);
+      station.findingsTotal = before + created;
+      station.findingsOpen = (station.findingsOpen ?? 0) + created;
+      station.verifiedAt = new Date().toISOString();
+      return {
+        verifiedAt: station.verifiedAt,
+        checkedPrograms: covered ? station.software.length : 0,
+        uncoveredPrograms: covered ? 0 : station.software.length,
+        vulnerabilitiesFound: found,
+        newFindings: created,
+        existingFindings: found - created,
+        noCvss: 0,
+        pending: 0,
+        failures: [],
+      };
     });
   },
 

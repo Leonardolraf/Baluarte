@@ -938,6 +938,36 @@ describe('realApi — estações monitoradas (B13)', () => {
     const err = await rejection(realApi.listStations());
     expect(err).toMatchObject({ status: 403, code: 'PERFIL_SEM_PERMISSAO' });
   });
+
+  it('verifica em POST /estacoes/:id/verificar e propaga o 409 do servidor (B14)', async () => {
+    on(
+      'POST /estacoes/cm-1/verificar',
+      ok({
+        estacaoId: 'cm-1',
+        ativoId: 'cm-2',
+        host: 'dev-ws-02.empresa.local',
+        verificadaEm: '2026-10-08T12:00:00.000Z',
+        programasConsultados: 4,
+        programasSemCobertura: 0,
+        vulnerabilidadesEncontradas: 4,
+        achadosNovos: 3,
+        achadosExistentes: 0,
+        semCvss: 1,
+        pendentes: 0,
+        falhas: [],
+        varreduraId: 'cm-9',
+      }),
+    );
+    expect(await realApi.verifyStation('cm-1')).toMatchObject({ newFindings: 3, noCvss: 1, failures: [] });
+    on(
+      'POST /estacoes/cm-1/verificar',
+      fail(409, 'VERIFICACAO_EM_ANDAMENTO', 'Já existe uma verificação em andamento'),
+    );
+    expect(await rejection(realApi.verifyStation('cm-1'))).toMatchObject({
+      status: 409,
+      code: 'VERIFICACAO_EM_ANDAMENTO',
+    });
+  });
 });
 
 describe('realApi — configurações', () => {

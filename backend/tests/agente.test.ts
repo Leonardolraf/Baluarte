@@ -307,6 +307,42 @@ describe('recebimento de resultados (logger)', () => {
     );
   });
 
+  it('B14: deb guarda o pacote-fonte; linha sem a coluna nova (configuração antiga) continua aceita', async () => {
+    const { nodeKey, hostIdentifier } = await inscrever();
+    const r = await chamar('POST', LOGGER, {
+      body: {
+        node_key: nodeKey,
+        log_type: 'result',
+        data: [
+          snapshot('baluarte_programas_deb', hostIdentifier, [
+            { name: 'libssl3', version: '3.0.2-0ubuntu1.18', fornecedor: 'Ubuntu Developers', origem: 'openssl' },
+            { name: 'openssl', version: '3.0.2-0ubuntu1.18', fornecedor: 'Ubuntu Developers', origem: 'openssl' },
+            { name: 'gcc-12-base', version: '12.3.0-1ubuntu1~22.04', fornecedor: 'Ubuntu', origem: 'gcc-12 (12.3.0-1ubuntu1~22.04)' },
+            { name: 'curl', version: '7.81.0-1ubuntu1.18', fornecedor: 'Ubuntu' },
+          ]),
+        ],
+      },
+    });
+    assert.deepEqual(r.body, {});
+    const programas = await prisma.workstationSoftware.findMany({ where: { workstation: { hostIdentifier } }, orderBy: { nome: 'asc' } });
+    assert.deepEqual(
+      programas.map((p) => [p.nome, p.pacoteOrigem]),
+      [
+        ['curl', null],
+        ['gcc-12-base', 'gcc-12 (12.3.0-1ubuntu1~22.04)'],
+        ['libssl3', 'openssl'],
+        ['openssl', null],
+      ],
+    );
+  });
+
+  it('B14: a configuração pede o pacote-fonte do deb e a epoch do rpm', async () => {
+    const { nodeKey } = await inscrever();
+    const s = (await chamar('POST', CONFIG, { body: { node_key: nodeKey } })).body.schedule;
+    assert.match(s.baluarte_programas_deb.query, /source AS origem/);
+    assert.match(s.baluarte_programas_rpm.query, /epoch \|\| ':'/);
+  });
+
   it('log de status e eventos desconhecidos só atualizam o visto-por-último', async () => {
     const { nodeKey, hostIdentifier } = await inscrever();
     const antes = new Date('2026-01-01T00:00:00Z');

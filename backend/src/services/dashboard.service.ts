@@ -11,12 +11,20 @@ import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.
 // Nao tem repository proprio: agrega os de ativos e campanhas e os services de achados e de
 // analise de arquivos.
 //
+// Os achados das estacoes (B14, programas com CVE) contam junto com os do scanner: sao
+// Findings de uma varredura concluida no ativo da estacao (inclusive na nota de risco).
+//
 // Arquivos maliciosos no risco tecnico (B17): `arquivosMaliciosos` = arquivos distintos por
 // SHA-256 com AMEACA do ClamAV nos ultimos 30 dias (services/analiseArquivo.service.ts). Cada um
 // pesa como um achado CRITICO: entra em `criticas` e em `distribuicaoSeveridade['Crítico']`,
 // mas NAO em `vulnerabilidadesAbertas` (arquivo malicioso nao e vulnerabilidade de ativo).
 // Logo: soma da distribuicao = vulnerabilidadesAbertas + arquivosMaliciosos. O risco tecnico
 // do frontend, que pondera a distribuicao, ja recebe o peso critico sem mudar a formula.
+
+/** Achado de estacao (B14) cita o CVE e o programa; o do scanner, a categoria OWASP. */
+function textoAlerta(f: { categoriaOwasp: string; cve: string | null; programa?: string | null; scan: { asset: { host: string } } }): string {
+  return f.programa && f.cve ? `${f.cve} em ${f.programa} (${f.scan.asset.host})` : `${f.categoriaOwasp} em ${f.scan.asset.host}`;
+}
 
 /**
  * Colaborador recebe so o indice de resiliencia a phishing (RN-006): os KPIs tecnicos
@@ -81,7 +89,7 @@ export async function painel(perfil: string) {
     ativosMaiorRisco: await ativosMaiorRisco(),
     alertas: emAberto
       .slice(0, 3)
-      .map((f) => ({ id: f.id, severidade: f.severidade, texto: `${f.categoriaOwasp} em ${f.scan.asset.host}`, cvss: f.cvss, quando: f.criadoEm })),
+      .map((f) => ({ id: f.id, severidade: f.severidade, texto: textoAlerta(f), cvss: f.cvss, quando: f.criadoEm })),
     campanhas: campanhas.map(mapCampaign),
     funil: ativa ? funilDe(ativa.eventos) : null,
     campanhaAtiva: ativa ? ativa.nome : null,
