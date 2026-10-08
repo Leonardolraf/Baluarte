@@ -4,8 +4,10 @@ import { lerRemediacao } from '../models/catalogoAchado.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
 import { faixaCvss } from './cvss.service.js';
 import { registrarAuditoria } from './auditoria.service.js';
+import { desenharRelatorioPdf } from './relatorioPdf.service.js';
+import { descreverFiltros, montarRelatorio, nomeDoArquivo } from './relatorioVulnerabilidade.service.js';
 import * as repo from '../repositories/vulnerabilidade.repository.js';
-import type { FiltrosVulnerabilidade, FindingComScan } from '../models/vulnerabilidade.model.js';
+import type { AutorRelatorio, FiltrosVulnerabilidade, FindingComScan } from '../models/vulnerabilidade.model.js';
 
 // Vulnerabilidades (achados das varreduras): lista com filtros, detalhe, mudanca de status
 // e a classificacao CVSS publica do contrato.
@@ -41,16 +43,39 @@ export async function todos(): Promise<FindingComScan[]> {
   return repo.listar();
 }
 
-export async function listar(filtros: FiltrosVulnerabilidade) {
-  let findings = await todos();
-  if (filtros.severidade) findings = findings.filter((f) => f.severidade.toLowerCase() === filtros.severidade!.toLowerCase());
-  if (filtros.status) findings = findings.filter((f) => f.status.toLowerCase() === filtros.status!.toLowerCase());
+/** Filtros da lista (e do relatorio): severidade e status sem diferenciar maiusculas; busca no host ou na categoria. */
+export function filtrar(findings: FindingComScan[], filtros: FiltrosVulnerabilidade): FindingComScan[] {
+  let saida = findings;
+  if (filtros.severidade) saida = saida.filter((f) => f.severidade.toLowerCase() === filtros.severidade!.toLowerCase());
+  if (filtros.status) saida = saida.filter((f) => f.status.toLowerCase() === filtros.status!.toLowerCase());
   if (filtros.q) {
     const termo = filtros.q.toLowerCase();
-    findings = findings.filter((f) => f.scan.asset.host.toLowerCase().includes(termo) || f.categoriaOwasp.toLowerCase().includes(termo));
+    saida = saida.filter((f) => f.scan.asset.host.toLowerCase().includes(termo) || f.categoriaOwasp.toLowerCase().includes(termo));
   }
+  return saida;
+}
+
+export async function listar(filtros: FiltrosVulnerabilidade) {
+  const findings = filtrar(await todos(), filtros);
   const lista = findings.map(mapFinding);
   return { lista, resumo: { total: lista.length, ativos: new Set(findings.map((f) => f.scan.asset.host)).size } };
+}
+
+/**
+ * Relatorio em PDF (B24, US-011): os mesmos achados que a lista mostra com esses filtros,
+ * resumidos e ordenados por CVSS. A exportacao vai para a auditoria (com filtros e
+ * quantidade) depois que o PDF ficou pronto.
+ */
+export async function exportarRelatorio(autor: AutorRelatorio & { id: string }, filtros: FiltrosVulnerabilidade) {
+  const relatorio = montarRelatorio(filtrar(await todos(), filtros), filtros, autor);
+  const pdf = await desenharRelatorioPdf(relatorio);
+  const total = relatorio.resumo.total;
+  await registrarAuditoria(
+    autor.id,
+    'EXPORTAR_RELATORIO_VULNERABILIDADES',
+    `${total} ${total === 1 ? 'achado' : 'achados'}; ${descreverFiltros(filtros)}`,
+  );
+  return { pdf, nomeArquivo: nomeDoArquivo(relatorio.geradoEm), total };
 }
 
 export async function detalhe(id: string) {

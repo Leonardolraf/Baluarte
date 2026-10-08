@@ -64,6 +64,16 @@ export const notaCvss = z
   .refine((v) => v !== undefined && v !== '')
   .pipe(z.coerce.number().min(0).max(10));
 
+/** Valor de uma lista fixa sem diferenciar maiusculas (filtro de query: `?severidade=alto`). */
+export function umDeSemCaixa(lista: readonly string[]) {
+  return z.string().refine((v) => lista.some((item) => item.toLowerCase() === v.trim().toLowerCase()));
+}
+
+/** Parametro de query opcional: ausente ou vazio (`?acao=`) passa; o resto cumpre o schema. */
+export function seVeio(esquema: z.ZodType) {
+  return z.unknown().refine((v) => v === undefined || v === '' || esquema.safeParse(v).success);
+}
+
 /** Parametro de query: so string passa; objeto/array (`?q[$ne]=x`) vira undefined. */
 export const textoDeQuery = z.string().optional().catch(undefined);
 

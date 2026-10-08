@@ -199,6 +199,12 @@ export interface VulnerabilityListResponse {
   summary: VulnerabilitySummary;
 }
 
+/** Relatório de vulnerabilidades exportado (B24): o arquivo e o nome sugerido para salvar. */
+export interface VulnerabilityReportFile {
+  blob: Blob;
+  filename: string;
+}
+
 // ---- Varreduras -------------------------------------------------------------
 
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed';

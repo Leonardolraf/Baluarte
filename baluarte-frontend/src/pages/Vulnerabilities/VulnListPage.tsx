@@ -3,9 +3,23 @@ import { useSearchParams } from 'react-router-dom';
 import { SEVERITIES, type VulnerabilityFilters, type VulnerabilitySummary } from '@/types';
 import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
+import { useAuth } from '@/contexts/useAuth';
+import { saveBlob } from '@/lib/download';
+import { errorMessage } from '@/lib/errors';
+import { VULNERABILITY_REPORT_ROLES } from '@/lib/roles';
 import { SEVERITY_LABEL } from '@/lib/severity';
 import { formatNumber } from '@/lib/format';
-import { ErrorState, LoadingSpinner, PageHeader, SeverityBadge, Skeleton } from '@/components';
+import { notify } from '@/store/uiStore';
+import {
+  Button,
+  ErrorState,
+  FormErrorBanner,
+  LoadingSpinner,
+  PageHeader,
+  SeverityBadge,
+  Skeleton,
+} from '@/components';
+import { DownloadIcon } from '@/components/icons';
 import { VulnTable } from '@/components/Table/VulnTable';
 
 const QUERY_PARAM = 'q';
@@ -44,7 +58,34 @@ function SummaryMeta({ summary }: { summary: VulnerabilitySummary }) {
   );
 }
 
+/**
+ * Exportar o relatório em PDF (B24) com os filtros ativos na tela. O arquivo é gerado no
+ * servidor (que também registra a exportação na auditoria) e baixado pelo cliente da API.
+ */
+function useReportExport(filters: VulnerabilityFilters) {
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function exportReport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const { blob, filename } = await api.exportVulnerabilityReport(filters);
+      saveBlob(blob, filename);
+      notify.success(`Relatório gerado: ${filename}`);
+    } catch (error) {
+      setExportError(errorMessage(error, 'Não foi possível gerar o relatório em PDF.'));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return { exporting, exportError, exportReport };
+}
+
 export default function VulnListPage() {
+  const { hasRole } = useAuth();
+  const canExport = hasRole(...VULNERABILITY_REPORT_ROLES);
   const [searchParams, setSearchParams] = useSearchParams();
   const urlQuery = searchParams.get(QUERY_PARAM) ?? '';
 
@@ -100,6 +141,14 @@ export default function VulnListPage() {
     { keepPreviousData: true },
   );
 
+  // O relatório usa os filtros que estão na tela agora (a busca sem esperar o debounce).
+  const { exporting, exportError, exportReport } = useReportExport({
+    severity: filters.severity ?? 'all',
+    status: filters.status ?? 'all',
+    query: query.trim(),
+  });
+  const nothingToExport = !data || data.summary.total === 0;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -108,7 +157,23 @@ export default function VulnListPage() {
         meta={
           data ? <SummaryMeta summary={data.summary} /> : loading ? <Skeleton className="h-5 w-56" /> : null
         }
+        actions={
+          canExport ? (
+            <Button
+              variant="outline"
+              leftIcon={<DownloadIcon size={16} />}
+              loading={exporting}
+              disabled={nothingToExport}
+              title={nothingToExport ? 'Nenhuma vulnerabilidade com os filtros atuais' : undefined}
+              onClick={() => void exportReport()}
+            >
+              {exporting ? 'Gerando PDF…' : 'Exportar PDF'}
+            </Button>
+          ) : null
+        }
       />
+
+      <FormErrorBanner message={exportError} />
 
       {error ? (
         <ErrorState

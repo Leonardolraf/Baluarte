@@ -38,6 +38,9 @@ export const ROUTE_ROLES = {
   settings: ['admin', 'analyst', 'collaborator'],
 } as const satisfies Record<string, readonly RBACRole[]>;
 
+/** Exportar o relatório de vulnerabilidades em PDF (B24): os perfis que leem a lista técnica no servidor. */
+export const VULNERABILITY_REPORT_ROLES: readonly RBACRole[] = ['admin', 'analyst'];
+
 /** Converte o rótulo do backend ("Administrador") para o identificador interno. */
 export function roleFromLabel(label: string | null | undefined): RBACRole {
   const normalized = (label ?? '').trim().toLowerCase();

@@ -42,15 +42,24 @@ import type {
   VulnerabilityFilters,
   VulnerabilityHistoryEntry,
   VulnerabilityListResponse,
+  VulnerabilityReportFile,
   VulnerabilityStatus,
 } from '@/types';
 import { HttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict, MAX_FILE_SIZE_BYTES } from '@/lib/files';
-import { localDayRange } from '@/lib/format';
+import { vulnerabilityReportFilename } from '@/lib/download';
+import { formatDate, formatDateTime, localDayRange } from '@/lib/format';
 import { buildMockToken, decodeToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
-import { FUNNEL_STAGE_LABEL, SEVERITY_RANK, severityFromCvss, VULN_STATUS_LABEL } from '@/lib/severity';
+import {
+  FUNNEL_STAGE_LABEL,
+  SEVERITY_LABEL,
+  SEVERITY_RANK,
+  severityFromCvss,
+  VULN_STATUS_LABEL,
+} from '@/lib/severity';
+import { simplePdf } from '@/mocks/pdf';
 import {
   MOCK_ASSETS,
   MOCK_AUDIT_LOG,
@@ -905,6 +914,42 @@ export const mockApi: BaluarteApi = {
         },
       };
     });
+  },
+
+  // Sem backend, o relatório é um PDF simples de texto (src/mocks/pdf.ts) com os mesmos
+  // filtros da lista; a exportação entra na trilha de auditoria da sessão, como no servidor.
+  async exportVulnerabilityReport(filters: VulnerabilityFilters = {}): Promise<VulnerabilityReportFile> {
+    const { items, summary } = await this.listVulnerabilities(filters);
+    const user = requireUser();
+    const sorted = [...items].sort((a, b) => b.cvss.base - a.cvss.base);
+    const severity =
+      filters.severity && filters.severity !== 'all' ? SEVERITY_LABEL[filters.severity] : 'todas';
+    const status = filters.status && filters.status !== 'all' ? VULN_STATUS_LABEL[filters.status] : 'todos';
+    const query = filters.query?.trim();
+    const filtersText = `severidade: ${severity}; status: ${status}; busca: ${query ? `"${query}"` : 'nenhuma'}`;
+    const scores = sorted.map((v) => v.cvss.base);
+    const lines = [
+      'Baluarte — Relatório de vulnerabilidades (modo demonstração)',
+      `Gerado em ${formatDateTime(new Date())} por ${user.name} (${user.email})`,
+      `Filtros — ${filtersText}`,
+      '',
+      `Achados: ${summary.total} · Ativos afetados: ${summary.assets}` +
+        (scores.length
+          ? ` · CVSS médio: ${(scores.reduce((s, n) => s + n, 0) / scores.length).toFixed(1)} · CVSS máximo: ${Math.max(...scores).toFixed(1)}`
+          : ''),
+      '',
+      ...sorted.flatMap((v, i) => [
+        `${i + 1}. [${v.cvss.base.toFixed(1)} ${SEVERITY_LABEL[v.severity]}] ${v.assetHost} — ${v.owaspId} ${v.owaspCategory}`,
+        `    ${[v.cwe, v.cve].filter(Boolean).join(' · ') || 'sem CWE/CVE'} · ${VULN_STATUS_LABEL[v.status]} · ${formatDate(v.detectedAt)}`,
+      ]),
+      ...(sorted.length ? [] : ['Nenhum achado para os filtros aplicados.']),
+    ];
+    pushAudit(
+      user,
+      'EXPORTAR_RELATORIO_VULNERABILIDADES',
+      `${summary.total} ${summary.total === 1 ? 'achado' : 'achados'}; ${filtersText}`,
+    );
+    return { blob: simplePdf(lines, 'Baluarte (demonstração)'), filename: vulnerabilityReportFilename() };
   },
 
   async getVulnerability(id: string): Promise<Vulnerability> {

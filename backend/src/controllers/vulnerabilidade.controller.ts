@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
-import { ALTERACAO_STATUS, CLASSIFICACAO } from '../models/vulnerabilidade.model.js';
+import { SEVERIDADES, STATUS_FINDING } from '../models/dominio.model.js';
+import { ALTERACAO_STATUS, CLASSIFICACAO, FILTROS_RELATORIO, rotuloDaLista } from '../models/vulnerabilidade.model.js';
 import * as vulnerabilidadeService from '../services/vulnerabilidade.service.js';
-import { enviar } from '../utils/resposta.js';
+import { enviar, enviarArquivo } from '../utils/resposta.js';
 import { textoDeQuery, validar } from '../utils/esquemas.js';
 
 // Controller de vulnerabilidades (achados) e da classificacao CVSS publica.
@@ -22,6 +23,19 @@ export async function listar(req: Request, res: Response) {
     q: textoDeQuery.parse(req.query.q),
   });
   enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
+}
+
+/** GET /vulnerabilidades/relatorio.pdf?severidade=&status=&q= (Administrador/Analista; B24). */
+export async function exportarRelatorio(req: Request, res: Response) {
+  validar(req.query, FILTROS_RELATORIO);
+  // Depois de validar, todo parametro presente e string; vazio (ou so espacos) conta como ausente.
+  const q = (campo: string) => textoDeQuery.parse(req.query[campo])?.trim() || undefined;
+  const { pdf, nomeArquivo } = await vulnerabilidadeService.exportarRelatorio(usuarioDe(req), {
+    severidade: rotuloDaLista(SEVERIDADES, q('severidade')),
+    status: rotuloDaLista(STATUS_FINDING, q('status')),
+    q: q('q'),
+  });
+  enviarArquivo(res, pdf, 'application/pdf', nomeArquivo);
 }
 
 /** GET /vulnerabilidades/:id. */

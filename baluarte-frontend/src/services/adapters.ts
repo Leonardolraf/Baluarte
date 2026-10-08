@@ -227,6 +227,17 @@ const VULN_STATUS_FROM_LABEL: Record<string, VulnerabilityStatus> = {
   'risco aceito': 'accepted',
 };
 
+/**
+ * Severidade no rótulo do backend (filtro do relatório em PDF). "Informativo" não existe no
+ * servidor: a nota CVSS de todo achado cai numa das quatro faixas.
+ */
+export const SEVERITY_TO_LABEL: Partial<Record<Severity, string>> = {
+  critical: 'Crítico',
+  high: 'Alto',
+  medium: 'Médio',
+  low: 'Baixo',
+};
+
 export const VULN_STATUS_TO_LABEL: Record<VulnerabilityStatus, string> = {
   open: 'Aberta',
   in_review: 'Em revisão',
