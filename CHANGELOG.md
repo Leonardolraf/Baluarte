@@ -177,7 +177,7 @@ Item 3.2 do roteiro do professor: teste de unidade com percentual de cobertura e
 
 Fase 0 do `backend/PLANO.md`: a regra de negócio saiu dos três arquivos de rota (`routes/api.ts`, `read.ts`, `manage.ts`) para módulos de domínio, sem mudar nenhuma rota, mensagem ou código de erro.
 
-- **Estrutura** — `src/http` (app, servidor, roteador, middlewares de token e perfil, envelope de resposta), `src/platform` (Prisma, e-mail, tokens de link), `src/shared` (validações de entrada e constantes) e `src/modules/<domínio>/{routes,service,repository}.ts` para auth, users, departments, assets, scanner, reports (vulnerabilidades), campaigns, training, dashboard, notifications e audit.
+- **Estrutura** — `src/app.ts` (o app Express) e `src/http` (servidor, roteador, middlewares de token e perfil, envelope de resposta), `src/platform` (Prisma, e-mail, tokens de link), `src/shared` (validações de entrada e constantes) e `src/modules/<domínio>/{routes,service,repository}.ts` para auth, users, departments, assets, scanner, reports (vulnerabilidades), campaigns, training, dashboard, notifications e audit.
 - **Padrão** — a rota valida o formato e responde; o serviço tem a regra e lança `falhar(status, mensagem, código)`; o `wrap` converte esse erro de negócio no mesmo envelope do contrato; o repositório fala com o Prisma.
 - **Testes** — 289 no backend (eram 279): 10 testes de unidade novos para as peças criadas (erro de negócio no `wrap`, métricas de campanha, conteúdo e permissão do treinamento, constantes). Unidade 57/57 (83,9% de linhas); completa 289/289 (98,8% de linhas, 95,3% de ramos). Contra a API refatorada: Newman 35 requisições / 70 asserções e Robot 29/29, sem falhas.
 

@@ -17,7 +17,7 @@ import {
 
 prepararBanco(import.meta.url);
 
-const { app } = await import('../src/http/app.js');
+const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/platform/db.js');
 const { CATALOGO_ACHADOS, dadosAchado } = await import('../src/modules/scanner/catalogo.js');
 

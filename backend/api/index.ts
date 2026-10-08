@@ -1,4 +1,4 @@
-import { app } from '../src/http/app.js';
+import { app } from '../src/app.js';
 import { validarSegredoJwt } from '../src/modules/auth/jwt.js';
 
 // Fail-fast igual ao servidor de longa duracao: sem JWT_SECRET forte em producao,

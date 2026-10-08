@@ -8,7 +8,7 @@ O backend já roda de verdade: Node + Express + TypeScript + **Prisma sobre Post
 
 | Camada | Arquivo | Estado |
 |---|---|---|
-| App/HTTP | `src/http/` | app (CORS restrito, helmet, JSON 64kb, envelope de erro 400/413, 404), roteador, middlewares `exigeToken`/`exigePerfil` (relê o usuário no banco), `ErroNegocio` + `wrap` |
+| App/HTTP | `src/app.ts` + `src/http/` | app (CORS restrito, helmet, JSON 64kb, envelope de erro 400/413, 404), roteador, middlewares `exigeToken`/`exigePerfil` (relê o usuário no banco), `ErroNegocio` + `wrap` |
 | Plataforma | `src/platform/` | Prisma, e-mail (SMTP/Mailpit/memória), tokens de link (SHA-256) |
 | Módulos | `src/modules/` | auth, users, departments, assets, scanner, reports, campaigns, training, dashboard, notifications, audit — cada um com `routes` → `service` → `repository` (Fase 0 concluída em 08/10/2026, B01) |
 | Dados | `prisma/schema.prisma` | User, Asset, Scan, Finding, Campaign, CampaignEvent, AuditLog, NotificationPreference, PasswordResetToken |

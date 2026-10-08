@@ -25,7 +25,7 @@ import {
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
-const { app } = await import('../../src/http/app.js');
+const { app } = await import('../../src/app.js');
 const { prisma } = await import('../../src/platform/db.js');
 
 let admin: string;

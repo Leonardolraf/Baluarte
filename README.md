@@ -174,7 +174,8 @@ docker compose down                        # -v tambem apaga o banco (volume db-
 ```
 backend/            API real (Express + Prisma/PostgreSQL)
   prisma/           schema + seed (contrato) + seed-demo
-  src/http/         app, servidor, roteador, middlewares (token e perfil) e envelope de resposta
+  src/app.ts        o app Express (a Vercel o procura neste caminho)
+  src/http/         servidor, roteador, middlewares (token e perfil) e envelope de resposta
   src/platform/     Prisma, e-mail (SMTP/Mailpit) e tokens de link
   src/shared/       validações de entrada e constantes de domínio
   src/modules/      um módulo por domínio (routes → service → repository): auth, users, departments,

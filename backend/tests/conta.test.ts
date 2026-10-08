@@ -23,7 +23,7 @@ import {
 
 prepararBanco(import.meta.url);
 
-const { app } = await import('../src/http/app.js');
+const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/platform/db.js');
 const { caixaDeSaida } = await import('../src/platform/email.js');
 const { limparLimiteReset } = await import('../src/modules/auth/service.js');

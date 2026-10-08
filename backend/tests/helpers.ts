@@ -10,7 +10,7 @@
 // Uso, no topo do arquivo de teste (antes de importar a app):
 //   import { prepararBanco, iniciarServidor, chamar, login, ... } from './helpers.js';
 //   prepararBanco(import.meta.url);
-//   const { app } = await import('../src/http/app.js');
+//   const { app } = await import('../src/app.js');
 //   before(() => iniciarServidor(app)); after(() => encerrarServidor());
 import 'dotenv/config';
 import assert from 'node:assert/strict';

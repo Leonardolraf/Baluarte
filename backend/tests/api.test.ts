@@ -23,7 +23,7 @@ import {
 prepararBanco(import.meta.url);
 
 // Importados so depois de apontar DATABASE_URL para o banco de teste.
-const { app } = await import('../src/http/app.js');
+const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/platform/db.js');
 const { limparLimiteReset } = await import('../src/modules/auth/service.js');
 const { limparLimiteLogin } = await import('../src/modules/auth/service.js');
