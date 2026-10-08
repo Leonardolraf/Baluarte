@@ -23,11 +23,11 @@ import {
 prepararBanco(import.meta.url);
 
 // Importados so depois de apontar DATABASE_URL para o banco de teste.
-const { app } = await import('../src/app.js');
-const { prisma } = await import('../src/db.js');
-const { limparLimiteReset } = await import('../src/routes/manage.js');
-const { limparLimiteLogin } = await import('../src/routes/api.js');
-const { hashToken } = await import('../src/tokens.js');
+const { app } = await import('../src/http/app.js');
+const { prisma } = await import('../src/platform/db.js');
+const { limparLimiteReset } = await import('../src/modules/auth/service.js');
+const { limparLimiteLogin } = await import('../src/modules/auth/service.js');
+const { hashToken } = await import('../src/platform/tokens.js');
 
 before(async () => {
   await iniciarServidor(app);

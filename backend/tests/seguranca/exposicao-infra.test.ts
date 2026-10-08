@@ -28,8 +28,8 @@ import {
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
-const { app } = await import('../../src/app.js');
-const { prisma } = await import('../../src/db.js');
+const { app } = await import('../../src/http/app.js');
+const { prisma } = await import('../../src/platform/db.js');
 
 before(async () => {
   await iniciarServidor(app);
@@ -351,12 +351,12 @@ describe('limites de tamanho barram abuso barato', () => {
   });
 
   // ACHADO (A05): corpo acima de 64kb cai no error-handler PADRAO do Express, nao no envelope
-  // padronizado do projeto. O middleware de erro em src/app.ts so trata `entity.parse.failed`
+  // padronizado do projeto. O middleware de erro em src/http/app.ts so trata `entity.parse.failed`
   // (JSON malformado); `entity.too.large` chama next(err) e escorre ate o finalhandler, que
   // responde HTML e, fora de producao (NODE_ENV != production), inclui o stack trace no corpo.
   // Correcao: tratar `entity.too.large` (413 CORPO_MUITO_GRANDE) e adicionar um handler de erro
   // final generico que devolva { status:'erro', codigoErro:'ERRO_INTERNO' } sem stack.
-  // TODO(seguranca): destravar apos padronizar a resposta de corpo grande em src/app.ts.
+  // TODO(seguranca): destravar apos padronizar a resposta de corpo grande em src/http/app.ts.
   it('corpo acima de 64kb e rejeitado com envelope JSON padronizado (sem HTML/stack)', async () => {
     const gigante = JSON.stringify({ email: ANALISTA.email, senha: 'x'.repeat(70 * 1024) });
     const r = await chamar('POST', '/login', { raw: gigante });
@@ -404,7 +404,7 @@ describe('dashboard do Colaborador nao vaza dados tecnicos no payload', () => {
   });
 
   // ACHADO (A05 / A01): o dashboard entrega `campanhas[]` (nome, template, taxaClique, destinatarios),
-  // `funil` e `campanhaAtiva` a QUALQUER perfil — o flag `operador` em src/routes/read.ts so filtra
+  // `funil` e `campanhaAtiva` a QUALQUER perfil — o flag `operador` em src/modules/dashboard/service.ts so filtra
   // `vulnerabilidadesRecentes` e `alertas`. Um Colaborador ve, pela API, metricas por campanha de
   // phishing (nomes, taxa de clique, funil enviados/abertos/clicados) que a tela nao mostra.
   // Correcao: em GET /dashboard, condicionar `campanhas`, `funil` e `campanhaAtiva` ao `operador`

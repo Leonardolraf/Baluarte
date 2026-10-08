@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Backend real do Baluarte V2 — plataforma de ciberseguranca (varredura OWASP simulada + phishing simulado + dashboard). Honra o contrato dos testes da N2 AT1.",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/http/server.ts",
+    "start": "tsx src/http/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "seed": "tsx prisma/seed.ts",
@@ -18,8 +18,8 @@
     "test:seguranca": "node --import tsx --test \"tests/seguranca/**/*.test.ts\"",
     "vercel-build": "prisma generate",
     "test:unidade": "node --import tsx --test \"tests/unidade/**/*.test.ts\"",
-    "cobertura:unidade": "c8 --reports-dir=coverage-unidade --reporter=text --reporter=html --reporter=json-summary --all --include=\"src/*.ts\" --exclude=src/app.ts --exclude=src/server.ts --check-coverage --lines 75 --branches 85 --functions 70 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage-unidade/junit.xml \"tests/unidade/**/*.test.ts\"",
-    "cobertura": "c8 --reports-dir=coverage --reporter=text-summary --reporter=html --reporter=json-summary --all --include=\"src/**/*.ts\" --exclude=src/server.ts --check-coverage --lines 90 --branches 85 --functions 90 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage/junit.xml \"tests/**/*.test.ts\"",
+    "cobertura:unidade": "c8 --reports-dir=coverage-unidade --reporter=text --reporter=html --reporter=json-summary --all --include=\"src/platform/**/*.ts\" --include=\"src/shared/**/*.ts\" --include=\"src/http/resposta.ts\" --include=\"src/http/middlewares.ts\" --include=\"src/modules/scanner/cvss.ts\" --include=\"src/modules/scanner/catalogo.ts\" --include=\"src/modules/scanner/ciclo.ts\" --include=\"src/modules/campaigns/email.ts\" --include=\"src/modules/auth/jwt.ts\" --include=\"src/modules/auth/links.ts\" --include=\"src/modules/users/repository.ts\" --include=\"src/modules/campaigns/metricas.ts\" --include=\"src/modules/training/conteudo.ts\" --check-coverage --lines 75 --branches 85 --functions 70 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage-unidade/junit.xml \"tests/unidade/**/*.test.ts\"",
+    "cobertura": "c8 --reports-dir=coverage --reporter=text-summary --reporter=html --reporter=json-summary --all --include=\"src/**/*.ts\" --exclude=src/http/server.ts --check-coverage --lines 90 --branches 85 --functions 90 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage/junit.xml \"tests/**/*.test.ts\"",
     "test:relatorio": "npm run cobertura:unidade && npm run cobertura && node scripts/relatorio-testes.mjs"
   },
   "dependencies": {

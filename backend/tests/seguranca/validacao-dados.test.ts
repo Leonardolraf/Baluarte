@@ -25,8 +25,8 @@ import {
 } from '../helpers.js';
 
 prepararBanco(import.meta.url);
-const { app } = await import('../../src/app.js');
-const { prisma } = await import('../../src/db.js');
+const { app } = await import('../../src/http/app.js');
+const { prisma } = await import('../../src/platform/db.js');
 
 let admin: string;
 let analista: string;
@@ -275,7 +275,7 @@ describe('confusão de tipo em campos String', () => {
   // rejeição de tipo ausente na borda + vazamento de erro interno.
   // Comportamento SEGURO esperado: 400 (campo obrigatório / formato inválido).
   // TODO(backend): validar `typeof nome === 'string'` em POST /assets, /users e
-  // /campaigns (src/routes/api.ts) antes de gravar. Ver finding "nome não-string -> 500".
+  // /campaigns (modules/users e modules/campaigns) antes de gravar. Ver finding "nome não-string -> 500".
   it('POST /assets com nome não-string deve dar 400, não 500 [finding: nome não-string -> 500]', async () => {
     const r = await chamar('POST', '/assets', { token: analista, body: { nome: 123, tipo: 'Rede', host: '198.51.100.90' } });
     assert.equal(r.status, 400, `nome numérico deveria ser 400, veio ${r.status} ${JSON.stringify(r.body)}`);
@@ -289,7 +289,7 @@ describe('confusão de tipo em campos String', () => {
   // regra de campo obrigatório inconsistente e contornável com espaços.
   // Comportamento SEGURO esperado: 400 NOME_OBRIGATORIO.
   // TODO(backend): trocar `vazio(nome)` por checagem com trim em POST /assets,
-  // /users e /campaigns (src/routes/api.ts). Ver finding "nome em branco (espaços) aceito".
+  // /users e /campaigns (modules/users e modules/campaigns). Ver finding "nome em branco (espaços) aceito".
   it('POST /assets com nome só de espaços deve dar 400 NOME_OBRIGATORIO [finding: nome em branco aceito]', async () => {
     esperaErro(await chamar('POST', '/assets', { token: analista, body: { nome: '   ', tipo: 'Rede', host: '198.51.100.93' } }), 400, 'NOME_OBRIGATORIO');
   });

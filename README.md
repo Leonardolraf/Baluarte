@@ -62,7 +62,7 @@ npm run dev
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 279 testes. Unidade (47, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura, validações, política de senha, tokens, JWT/RBAC, e-mails). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (112): treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
+| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 289 testes. Unidade (57, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura, validações, política de senha, tokens, JWT/RBAC, erro de negócio, métricas de campanha, treinamento, e-mails). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (112): treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
 | **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 340 testes |
@@ -72,7 +72,7 @@ npm run dev
 ### Cobertura e relatório de testes (roteiro 3.2)
 
 ```bash
-cd backend && npm run test:unidade      # só os 47 testes de unidade (sem banco, < 1 s)
+cd backend && npm run test:unidade      # só os 57 testes de unidade (sem banco, < 1 s)
 cd backend && npm run test:relatorio    # cobertura de unidade + completa e coverage/RELATORIO.md
 cd baluarte-frontend && npm run test:coverage
 ```
@@ -81,8 +81,8 @@ O `test:relatorio` mede a cobertura com o c8 e escreve `backend/coverage/RELATOR
 
 | Suíte | Testes | Taxa de sucesso | Linhas | Ramos | Funções |
 |---|---:|---:|---:|---:|---:|
-| Backend — unidade | 47 | 100% | 80,5% | 93,0% | 78,3% |
-| Backend — completa (unidade + integração + pentest) | 279 | 100% | 98,7% | 94,2% | 98,8% |
+| Backend — unidade | 57 | 100% | 83,9% | 94,2% | 78,2% |
+| Backend — completa (unidade + integração + pentest) | 289 | 100% | 98,8% | 95,3% | 99,0% |
 | Frontend (Vitest) | 340 | 100% | 84,1% | 79,9% | 63,2% |
 
 As funções do frontend (63,2%) estão abaixo dos 70% do RNF-08; linhas e ramos estão acima.
@@ -174,8 +174,12 @@ docker compose down                        # -v tambem apaga o banco (volume db-
 ```
 backend/            API real (Express + Prisma/PostgreSQL)
   prisma/           schema + seed (contrato) + seed-demo
-  src/              app, auth (JWT/RBAC), audit, util (validações = contrato), routes/ (api = contrato · read · manage)
-  tests/            testes de integração (node:test) com banco isolado
+  src/http/         app, servidor, roteador, middlewares (token e perfil) e envelope de resposta
+  src/platform/     Prisma, e-mail (SMTP/Mailpit) e tokens de link
+  src/shared/       validações de entrada e constantes de domínio
+  src/modules/      um módulo por domínio (routes → service → repository): auth, users, departments,
+                    assets, scanner, reports, campaigns, training, dashboard, notifications, audit
+  tests/            unidade (tests/unidade, sem banco) + integração e pentest (node:test) com banco isolado
 baluarte-frontend/  SPA React do produto (mocks ou backend real) — ver README próprio
 frontend/           SPA legado (telas do Figma) — alvo das suítes Robot
 e2e/                6 suítes Robot apontando para o frontend legado

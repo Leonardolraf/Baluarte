@@ -8,11 +8,9 @@ O backend já roda de verdade: Node + Express + TypeScript + **Prisma sobre Post
 
 | Camada | Arquivo | Estado |
 |---|---|---|
-| App/HTTP | `src/app.ts` | CORS restrito, JSON 64kb, envelope de erro (400/413), 404 padronizado |
-| Auth | `src/auth.ts` | `exigeToken` (relê usuário: existência, status, senha redefinida), `exigePerfil` pelo banco, fail-fast do segredo em produção |
-| Contas | `src/usuarios.ts` | normalização de e-mail, duplicidade case-insensitive |
-| Auditoria | `src/audit.ts` | grava toda escrita fora do contrato |
-| Rotas | `src/routes/{api,read,manage}.ts` | contrato N2 AT1 + leitura/agregação + conta/usuários/treinamento |
+| App/HTTP | `src/http/` | app (CORS restrito, helmet, JSON 64kb, envelope de erro 400/413, 404), roteador, middlewares `exigeToken`/`exigePerfil` (relê o usuário no banco), `ErroNegocio` + `wrap` |
+| Plataforma | `src/platform/` | Prisma, e-mail (SMTP/Mailpit/memória), tokens de link (SHA-256) |
+| Módulos | `src/modules/` | auth, users, departments, assets, scanner, reports, campaigns, training, dashboard, notifications, audit — cada um com `routes` → `service` → `repository` (Fase 0 concluída em 08/10/2026, B01) |
 | Dados | `prisma/schema.prisma` | User, Asset, Scan, Finding, Campaign, CampaignEvent, AuditLog, NotificationPreference, PasswordResetToken |
 | Testes | `tests/` | 38 de integração + 106 de pentest, banco isolado por arquivo |
 
@@ -88,4 +86,4 @@ Cada módulo: `routes` (Express) → `service` (regra de negócio) → `reposito
 
 ## 7. Próximo passo concreto
 
-Fase 0, primeiro módulo: extrair `auth` (login, sessão, reset) de `routes/api.ts`+`routes/manage.ts` para `modules/auth/{routes,service,repository}.ts`, com validação zod na borda, mantendo os testes do backend verdes. É o módulo de maior risco de segurança e o que mais se beneficia de virar serviço testável.
+Fase 0 — modularização **concluída em 08/10/2026 (B01)**: as rotas saíram de `routes/{api,read,manage}.ts` para `modules/<domínio>/{routes,service,repository}.ts`, sem mudar rota, mensagem nem código de erro (backend 289/289, Newman 70/70). Falta da Fase 0 a validação com zod na borda (B09), que entra nas rotas dos módulos.

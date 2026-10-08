@@ -173,6 +173,14 @@ Item 3.2 do roteiro do professor: teste de unidade com percentual de cobertura e
 - **Cobertura com c8** — `npm run cobertura:unidade`, `npm run cobertura` e `npm run test:relatorio`, que escreve `coverage/RELATORIO.md` com taxa de sucesso e % de linhas, ramos e funções. Metas mínimas no c8 e no Vitest do frontend (o comando falha abaixo delas).
 - **Números:** backend unidade 47/47 (80,5% linhas, 93,0% ramos); backend completo 279/279 (98,7% linhas, 94,2% ramos, 98,8% funções); frontend 340/340 (84,1% linhas, 79,9% ramos, 63,2% funções).
 
+## 2026-10-08 — Backend separado em módulos por domínio (B01)
+
+Fase 0 do `backend/PLANO.md`: a regra de negócio saiu dos três arquivos de rota (`routes/api.ts`, `read.ts`, `manage.ts`) para módulos de domínio, sem mudar nenhuma rota, mensagem ou código de erro.
+
+- **Estrutura** — `src/http` (app, servidor, roteador, middlewares de token e perfil, envelope de resposta), `src/platform` (Prisma, e-mail, tokens de link), `src/shared` (validações de entrada e constantes) e `src/modules/<domínio>/{routes,service,repository}.ts` para auth, users, departments, assets, scanner, reports (vulnerabilidades), campaigns, training, dashboard, notifications e audit.
+- **Padrão** — a rota valida o formato e responde; o serviço tem a regra e lança `falhar(status, mensagem, código)`; o `wrap` converte esse erro de negócio no mesmo envelope do contrato; o repositório fala com o Prisma.
+- **Testes** — 289 no backend (eram 279): 10 testes de unidade novos para as peças criadas (erro de negócio no `wrap`, métricas de campanha, conteúdo e permissão do treinamento, constantes). Unidade 57/57 (83,9% de linhas); completa 289/289 (98,8% de linhas, 95,3% de ramos). Contra a API refatorada: Newman 35 requisições / 70 asserções e Robot 29/29, sem falhas.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -180,7 +188,7 @@ Item 3.2 do roteiro do professor: teste de unidade com percentual de cobertura e
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 279 no backend (47 unidade + 7 banco + 112 integração + 113 pentest; 98,7% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 289 no backend (57 unidade + 7 banco + 112 integração + 113 pentest; 98,8% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |
