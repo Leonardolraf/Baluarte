@@ -1,5 +1,10 @@
 // Constantes de dominio (iguais ao stub)
-export const TIPOS_ATIVO = ['Servidor', 'Aplicacao', 'Rede', 'Banco de Dados'];
+/** Tipo do ativo criado pela inscricao do agente osquery (B07); nao se cadastra pela interface. */
+export const TIPO_ESTACAO = 'Estação de trabalho';
+/** Tipos aceitos no cadastro manual (POST /assets, contrato N2 AT1). */
+export const TIPOS_ATIVO_CADASTRO = ['Servidor', 'Aplicacao', 'Rede', 'Banco de Dados'];
+/** Todos os tipos validos no banco (CHECK Asset_tipo_check). */
+export const TIPOS_ATIVO = [...TIPOS_ATIVO_CADASTRO, TIPO_ESTACAO];
 export const PERFIS = ['Administrador', 'Analista', 'Colaborador'];
 export const TEMPLATES = ['urgencia', 'autoridade', 'curiosidade'];
 export const DOMINIO_INTERNO = '@empresa.com';

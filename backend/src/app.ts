@@ -40,7 +40,11 @@ const ORIGENS = (process.env.CORS_ORIGIN ?? 'http://localhost:5173,http://localh
   .map((o) => o.trim())
   .filter(Boolean);
 app.use(cors({ origin: ORIGENS.includes('*') ? true : ORIGENS }));
-// Corpo JSON pequeno: nenhuma rota recebe payload grande (limita abuso de memoria).
+// O agente osquery manda o inventario inteiro (snapshot) num envio so: as rotas dele aceitam
+// corpo maior e qualquer Content-Type (o corpo e sempre JSON; gzip e aceito). Registrado antes
+// do parser geral, que pula o corpo ja lido.
+app.use('/api/agentes/osquery', express.json({ limit: '2mb', type: () => true }));
+// Corpo JSON pequeno: nenhuma outra rota recebe payload grande (limita abuso de memoria).
 app.use(express.json({ limit: '64kb' }));
 
 // Erro de JSON malformado no corpo (espelha o contrato do stub: 400 JSON_INVALIDO).

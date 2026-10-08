@@ -123,6 +123,50 @@ Erros seguem o envelope `{ status: "erro", mensagem, codigoErro, timestamp }`; s
 
 As suítes de segurança em `backend/tests/seguranca/` exercitam a API com payloads reais (injeção, tokens adulterados, força bruta, corpos malformados); os achados que elas revelaram foram corrigidos no backend (coerção de query string, validação de tipo em campos obrigatórios, senha só como string, corpo grande com envelope 413, e o dashboard do colaborador sem métricas por campanha — RN-006).
 
+**Agente de estação (osquery, B07):** o agente instalado nas estações é o [osquery](https://osquery.readthedocs.io/en/stable/deployment/remote/), falando com a API pelo plugin `tls`. As três rotas são públicas (sem JWT) e respondem no formato do osquery, não no envelope da API:
+
+| Rota | Corpo (o osquery manda) | Resposta |
+|---|---|---|
+| `POST /api/agentes/osquery/enroll` | `{ enroll_secret, host_identifier, host_details: { os_version, system_info, ... } }` | `200 { node_key, node_invalid: false }` · segredo errado ou ausente: `401 { node_invalid: true, codigoErro: "SEGREDO_INVALIDO", ... }` · `OSQUERY_ENROLL_SECRET` ausente ou com menos de 16 caracteres: `503 { node_invalid: true, codigoErro: "INSCRICAO_DESLIGADA", ... }` |
+| `POST /api/agentes/osquery/config` | `{ node_key }` | `200 { options, schedule, node_invalid: false }` · chave desconhecida: `200 { node_invalid: true }` (o osquery se reinscreve) |
+| `POST /api/agentes/osquery/logger` | `{ node_key, log_type: "result" \| "status", data: [...] }` | `200 {}` · chave desconhecida: `200 { node_invalid: true }` |
+
+Corpo fora do formato (chave que não é hexadecimal de 64 caracteres, `log_type` desconhecido, `data` que não é lista, `host_identifier` vazio ou com mais de 255 caracteres) recebe `400` com o envelope de erro e `node_invalid: true`. Chave desconhecida responde `200` de propósito: o osquery não lê o corpo de respostas fora de 2xx e só se reinscreve quando vê `node_invalid: true`.
+
+- **Inscrição:** o segredo vem de `OSQUERY_ENROLL_SECRET` (nunca do código) e é comparado em tempo constante (`crypto.timingSafeEqual` sobre o SHA-256 dos dois lados). A chave da estação é aleatória (256 bits) e só o hash SHA-256 vai para o banco (`Workstation.nodeKeyHash`). A estação inscrita vira um ativo do tipo **"Estação de trabalho"**, que só a inscrição cria (`POST /assets` continua recusando o tipo com `TIPO_INVALIDO`). O host do ativo é o hostname da máquina; se já houver ativo com esse host, ganha um sufixo. A mesma estação (`host_identifier`) pode se reinscrever: recebe chave nova e a anterior deixa de valer. Toda inscrição vai para o `AuditLog` (`INSCREVER_ESTACAO`, com o `host_identifier`). Desligar a variável só fecha novas inscrições; estações já inscritas continuam enviando.
+- **Configuração entregue:** seis queries agendadas como *snapshot* — programas instalados (`programs` no Windows, `deb_packages` e `rpm_packages` no Linux, `apps` no macOS, cada uma com o filtro `platform`), versão do SO (`os_version`) e portas em escuta (`listening_ports` + `processes`). Intervalo de 1 h em produção e 5 min fora dela; `OSQUERY_INTERVALO_S` (60 a 86400) muda.
+- **Resultados guardados:** só o inventário mais recente por estação. Cada snapshot substitui o anterior da mesma fonte: `WorkstationSoftware` (nome, versão, fonte, fornecedor), `WorkstationPort` (porta, TCP/UDP, endereço, processo) e o SO nos campos `sistema`/`so*` da `Workstation`. Toda requisição com chave válida atualiza `vistaEm`; resultado de inventário atualiza também `inventarioEm`. Eventos de outras queries e resultados diferenciais são ignorados. O cruzamento com vulnerabilidades é o B14.
+- **Corpo:** as rotas do agente aceitam até 2 MB (as demais, 64 kB) e qualquer `Content-Type`, inclusive gzip (`--logger_tls_compress`).
+
+### Como apontar o osquery para o Baluarte
+
+O osquery só fala HTTPS e a API não termina TLS (o HTTPS é o B06). Em produção o TLS vem da plataforma (Railway/Vercel, certificado público, que o pacote do osquery já confia): basta `--tls_hostname=<domínio-da-api>`. Em desenvolvimento, ponha um proxy TLS na frente da API e entregue ao osquery a autoridade local com `--tls_server_certs`, por exemplo com o [mkcert](https://github.com/FiloSottile/mkcert):
+
+```bash
+mkcert localhost                                    # gera localhost.pem e localhost-key.pem
+npx local-ssl-proxy --source 8443 --target 8080 --cert localhost.pem --key localhost-key.pem
+mkcert -CAROOT                                      # pasta do rootCA.pem, para o --tls_server_certs
+```
+
+(ou `caddy reverse-proxy --from localhost:8443 --to localhost:8080`, com a raiz em `~/.local/share/caddy/pki/authorities/local/root.crt`). No `backend/.env`, defina `OSQUERY_ENROLL_SECRET` com um segredo longo (`openssl rand -hex 32`) e grave o mesmo valor num arquivo legível só pelo administrador da estação. Arquivo de flags do osquery (`osquery.flags`; no Windows, `C:\Program Files\osquery\osquery.flags`):
+
+```
+--tls_hostname=localhost:8443
+--tls_server_certs=/caminho/para/rootCA.pem
+--host_identifier=uuid
+--enroll_secret_path=/etc/osquery/baluarte.secret
+--enroll_tls_endpoint=/api/agentes/osquery/enroll
+--config_plugin=tls
+--config_tls_endpoint=/api/agentes/osquery/config
+--config_refresh=3600
+--logger_plugin=tls
+--logger_tls_endpoint=/api/agentes/osquery/logger
+--logger_tls_period=60
+--disable_distributed=true
+```
+
+`--host_identifier=uuid` é o recomendado: com o padrão (`hostname`), duas máquinas com o mesmo nome seriam a mesma estação. Para conferir na máquina: `osqueryd --flagfile osquery.flags --verbose` deve mostrar a inscrição e, depois de um intervalo, os envios do logger.
+
 ### RBAC efetivo (verificado no servidor, não só na interface)
 
 | Perfil | Pode |
@@ -182,7 +226,8 @@ backend/            API real (Express + Prisma/PostgreSQL)
   prisma/           schema + seed (contrato) + seed-demo
   src/              arquitetura em camadas: rota → controller → service → repository
                     (um arquivo por funcionalidade em cada camada: auth, usuario, departamento, ativo,
-                    varredura, vulnerabilidade, campanha, treinamento, dashboard, notificacao, auditoria)
+                    varredura, vulnerabilidade, campanha, treinamento, dashboard, notificacao, auditoria,
+                    agente)
     app.ts          o app Express (fica aqui porque a Vercel o procura neste caminho)
     server.ts       sobe o servidor HTTP
     routes/         index.ts (roteador /api, ordem de registro) + <f>.routes.ts: caminho + middlewares + controller

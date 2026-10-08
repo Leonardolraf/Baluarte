@@ -1,6 +1,6 @@
 import type { Asset } from '@prisma/client';
 import { host, regra, texto, umDe } from '../utils/esquemas.js';
-import { TIPOS_ATIVO } from './dominio.model.js';
+import { TIPOS_ATIVO_CADASTRO } from './dominio.model.js';
 
 // Model de ativo: tipo do dominio, DTO e regras de entrada (zod) do cadastro.
 
@@ -16,6 +16,6 @@ export interface CadastroAtivo {
 
 export const CADASTRO = [
   regra('nome', texto, 'Nome do ativo é obrigatório', 'NOME_OBRIGATORIO'),
-  regra('tipo', umDe(TIPOS_ATIVO), 'Tipo de ativo inválido', 'TIPO_INVALIDO'),
+  regra('tipo', umDe(TIPOS_ATIVO_CADASTRO), 'Tipo de ativo inválido', 'TIPO_INVALIDO'),
   regra('host', host, 'Host inválido', 'HOST_INVALIDO'),
 ];

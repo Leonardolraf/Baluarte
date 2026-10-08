@@ -85,10 +85,65 @@ model Asset {
   id       String   @id @default(cuid())
   nome     String
   host     String   @unique
-  tipo     String   // CHECK: Servidor | Aplicacao | Rede | Banco de Dados
+  tipo     String   // CHECK: Servidor | Aplicacao | Rede | Banco de Dados | Estação de trabalho
   status   String   @default("Ativo") // CHECK: Ativo | Inativo
   criadoEm DateTime @default(now())
   scans    Scan[]
+  estacao  Workstation?
+}
+
+// Estacao de trabalho inscrita pelo agente osquery (B07). Cada estacao e um ativo do tipo
+// "Estação de trabalho", criado so pela inscricao (POST /assets nao aceita esse tipo).
+// Da chave da estacao (node_key) guarda-se apenas o hash SHA-256; o osquery guarda a chave
+// em claro na propria maquina. Restrict: o ativo da estacao nao e excluido com ela inscrita.
+model Workstation {
+  id             String   @id @default(cuid())
+  assetId        String   @unique
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  hostIdentifier String   @unique // --host_identifier do osquery (recomendado: uuid)
+  nodeKeyHash    String   @unique
+  // Sistema operacional: "sistema" e o rotulo legivel ("Ubuntu 22.04.4 LTS"); os campos so*
+  // vem da tabela os_version do osquery (na inscricao e a cada resultado da query de SO).
+  sistema        String
+  soNome         String?
+  soVersao       String?
+  soBuild        String?
+  soPlataforma   String?  // platform do osquery: windows, darwin, ubuntu, rhel...
+  inscritaEm     DateTime @default(now())
+  vistaEm        DateTime @default(now()) // ultima requisicao do agente (config ou logger)
+  inventarioEm   DateTime? // ultimo resultado de inventario recebido
+  programas      WorkstationSoftware[]
+  portas         WorkstationPort[]
+}
+
+// Inventario mais recente de programas da estacao (cada resultado substitui o anterior da
+// mesma fonte). nome + versao + fonte e o que o cruzamento com vulnerabilidades (B14) usa.
+model WorkstationSoftware {
+  id            String      @id @default(cuid())
+  workstationId String
+  workstation   Workstation @relation(fields: [workstationId], references: [id], onDelete: Cascade)
+  nome          String
+  versao        String      // "" quando o sistema nao informa a versao
+  fonte         String      // CHECK: programs | deb_packages | rpm_packages | apps
+  fornecedor    String?     // publisher (Windows), maintainer (deb), vendor (rpm), bundle id (macOS)
+  coletadoEm    DateTime    @default(now())
+
+  @@unique([workstationId, fonte, nome, versao])
+  @@index([nome])
+}
+
+// Portas em escuta da estacao no ultimo resultado (listening_ports + processes).
+model WorkstationPort {
+  id            String      @id @default(cuid())
+  workstationId String
+  workstation   Workstation @relation(fields: [workstationId], references: [id], onDelete: Cascade)
+  porta         Int         // CHECK: 1 a 65535
+  protocolo     String      // CHECK: TCP | UDP
+  endereco      String
+  processo      String?
+  coletadoEm    DateTime    @default(now())
+
+  @@unique([workstationId, porta, protocolo, endereco])
 }
 
 // Restrict: ativo com historico de varredura nao e excluido (inativar preserva o historico).
