@@ -141,7 +141,20 @@ Pedidos do Leo depois de testar o convite em produção.
 
 - **Redefinição recusa a senha atual** — `POST /auth/reset-password/confirm` passa a responder `400 SENHA_REPETIDA` (mesma mensagem da troca de senha logada) quando a nova senha é igual à atual; o link não é consumido. O convite não é afetado: a conta pendente tem hash descartável, então a primeira senha sempre passa.
 - **Administrador envia o link de redefinição** — `POST /users/:id/redefinir-senha` (só Administrador; conta ativa; `409 USUARIO_NAO_ATIVO` para Pendente/Inativa, `404`, `502 EMAIL_NAO_ENVIADO`). Rota própria em vez da pública para auditar quem pediu (`ENVIAR_RESET_SENHA`) e não gastar o limite de 3 pedidos por e-mail do dono da conta.
-- **Testes** — 227 no backend (7 banco + 107 integração + 113 pentest).
+- **Frontend** — a tela de editar usuário ganha uma ação que acompanha o status da conta: **Pendente** reenvia o convite, **Ativa** dispara o link de redefinição, **Inativa** não mostra nada (mandar link para quem está sem acesso não faz sentido). O `SENHA_REPETIDA` passa a aparecer no campo "Nova senha" da tela de redefinição, como já acontecia na troca de senha logada.
+- **Testes** — 227 no backend (7 banco + 107 integração + 113 pentest); 340 no frontend.
+
+## 2026-10-07/08 — A demo pública passa a rodar com banco real
+
+Até aqui a demo da Vercel era só o frontend com dados em memória. Agora é a aplicação inteira: navegador → frontend → **API serverless** → PostgreSQL no **Supabase**.
+
+- **API publicada** — o app Express já era exportado separado do `listen`, então a função é um wrapper fino (`backend/api/index.ts` + `backend/vercel.json`, projeto `baluarte-api`). `binaryTargets` inclui o runtime Linux da Vercel e `vercel-build` roda `prisma generate`. A API usa o **transaction pooler** do Supabase (`pgbouncer=true&connection_limit=1`), padrão exigido em serverless; as migrations usam o session pooler.
+- **Frontend ligado à API** — `VITE_USE_MOCKS=false` e `VITE_API_BASE_URL`. Vale lembrar que essas variáveis entram no bundle em tempo de build: sem elas em Production, um rebuild silenciosamente volta a demo para os mocks.
+- **E-mail em produção** — SMTP do Gmail com senha de aplicativo. Convite e redefinição chegam de verdade; o remetente precisa ser a mesma conta autenticada. Só vale para endereços reais: `@empresa.com` é domínio fictício e os e-mails do seed não chegam a lugar nenhum.
+- **Senha inicial padrão, introduzida e revertida no mesmo dia** — para demonstrar criação de conta sem servidor de e-mail, `POST /users` passou a criar a conta `Ativa` com uma senha fixa (`28d077e`). Com o SMTP funcionando, a decisão foi desfeita (`ec39e14`) e o convite voltou a ser o único caminho. Durante essa janela, três contas nasceram com a senha pública: duas eram de teste e foram removidas; a terceira teve a senha trocada pelo dono. Fica registrado porque o valor esteve no repositório.
+- **Dois erros de configuração que custaram deploys** — os projetos da Vercel foram criados pelo CLI de dentro da subpasta, então o **Root Directory** nasceu apontando para a raiz do monorepo nos dois. Deploy por CLI funcionava (subia a pasta certa) e **todo deploy por Git falhava**, no frontend com build da pasta errada e na API com erro em 2–4 s. Sem a correção, o merge na `main` não teria publicado nada e a Vercel manteria no ar a versão anterior, sem sinal de erro.
+- **Lista de ativos deixa de mentir** — a tela mostrava "0 achados" e "nunca varrido" em todos os ativos, contra 6 achados no dashboard: o adaptador fixava `openFindings: 0` e `lastScanAt: null`, o que só apareceu quando a tela de listagem passou a existir. Os dois valores passam a ser derivados das listas que a própria tela lê (achados agrupados por **host**, porque a API identifica o ativo do achado pelo host, não por id).
+- **Operação** — projeto gratuito do Supabase **pausa após 7 dias sem uso**: restaurar no painel antes de apresentar. Valores marcados como *Secret* na Vercel não podem ser lidos de volta pelo CLI, então migration e seed contra o Supabase exigem a connection string à mão.
 
 ## Resumo por área (estado atual)
 
@@ -151,6 +164,6 @@ Pedidos do Leo depois de testar o convite em produção.
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
 | Testes | 227 no backend (7 banco + 107 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
-| Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
+| Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
-| Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |
+| Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |
