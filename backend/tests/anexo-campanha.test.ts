@@ -297,14 +297,20 @@ describe('relatório da campanha: anexos reportados e vereditos (B23)', () => {
     assert.deepEqual(r.body.dados.anexos, { total: 0, ameacas: 0, regrasProprias: 0, lista: [] });
   });
 
-  it('excluir a campanha preserva as análises (a origem vira nula, FK SET NULL)', async () => {
-    const ids = (await prisma.fileScan.findMany({ where: { campaignEvent: { campaignId: campanhaId } }, select: { id: true } })).map((a) => a.id);
-    assert.equal((await chamar('DELETE', `/campanhas/${campanhaId}`, { token: analista })).status, 200);
-    const depois = await prisma.fileScan.findMany({ where: { id: { in: ids } } });
-    assert.equal(depois.length, ids.length);
-    assert.ok(depois.every((a) => a.campaignEventId === null));
+  it('campanha com anexo analisado não é excluída: 409 CAMPANHA_COM_ANALISES, nada é apagado', async () => {
+    const antes = await prisma.fileScan.count({ where: { campaignEvent: { campaignId: campanhaId } } });
+    assert.ok(antes > 0);
+    esperaErro(await chamar('DELETE', `/campanhas/${campanhaId}`, { token: analista }), 409, 'CAMPANHA_COM_ANALISES');
+    assert.ok(await prisma.campaign.findUnique({ where: { id: campanhaId } }));
+    assert.equal(await prisma.fileScan.count({ where: { campaignEvent: { campaignId: campanhaId } } }), antes);
     const hist = await chamar('GET', '/arquivos/analises?tamanho=100', { token: ana.token });
-    assert.equal(hist.body.dados.find((a: any) => a.nome === 'fatura.pdf.txt').campanha, null);
+    assert.ok(hist.body.dados.find((a: any) => a.nome === 'fatura.pdf.txt').campanha);
+  });
+
+  it('campanha sem anexo analisado continua podendo ser excluída', async () => {
+    const c = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Sem anexo, excluível', destinatarios: [ana.email], template: 'autoridade' } });
+    assert.equal((await chamar('DELETE', `/campanhas/${c.body.dados.idCampanha}`, { token: analista })).status, 200);
+    assert.equal(await prisma.campaign.findUnique({ where: { id: c.body.dados.idCampanha } }), null);
   });
 });
 

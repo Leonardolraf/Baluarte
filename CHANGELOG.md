@@ -511,6 +511,12 @@ O que o B25 deixou para depois por exigir migration: o histórico real de status
 - **Correções no caminho** — `config/antivirus.ts#escrever`: cada bloco que esperava o `drain` deixava um ouvinte de `error` pendurado no socket, e um arquivo grande passava do limite de 10 ouvintes do Node (`MaxListenersExceededWarning`, visto no teste de 413); agora os dois ouvintes saem juntos (`once` + `off`), com teste que conta os ouvintes em 50 blocos, o caminho de erro e um envio de 10 MB sem o aviso (os três falham no código antigo). Tela `/files`: o envio ficava "ocupado" até o histórico recarregar, já com o veredito na tela, e um segundo arquivo escolhido nesse intervalo era ignorado em silêncio (o teste B17 do modo real passou a falhar sempre depois do rebase sobre o B18); a tela libera o próximo envio assim que o veredito chega, com teste que segura a recarga do histórico.
 - **Números** (rebase sobre o B18, `14d8dec`) — backend 681 testes (175 unidade + 7 banco + 382 integração + 117 pentest), `tsc` limpo, `migrate reset` + `migrate diff --exit-code` sem diferença com a 200000 depois da 190000; Newman isolado (banco `baluarte_contract_b23`, porta 8099) 35/70 sem falhas; frontend `npm test` 620 (600 + 18 do arquivo novo + 1 da checagem por destinatário do seed + 1 da tela de arquivos), lint, typecheck (app e E2E) e build limpos; Playwright mock 45 (42 + 3), modo real 21 (20 na 1ª rodada com ClamAV e as regras carregadas, + 1 `@sem-antivirus` na 2ª).
 
+## 2026-10-08 — Campanha com anexo analisado não é excluída
+
+- **Defeito (achado na verificação da migration do B23):** `DELETE /campanhas/:id` (Administrador e Analista) apaga os eventos da campanha, e o `FileScan.campaignEventId` dos anexos analisados vira nulo (FK `SET NULL`). A análise perdia a origem em silêncio e sumia do relatório da campanha e do histórico por campanha.
+- **Correção:** a campanha com anexo analisado é recusada com `409 CAMPANHA_COM_ANALISES`, no mesmo espírito do `USUARIO_COM_HISTORICO`. Campanha sem anexo analisado continua podendo ser excluída. Sem migration; o frontend não tem tela de exclusão de campanha.
+- **Testes:** o teste que confirmava o `SET NULL` passa a confirmar a recusa (nada é apagado), e um novo garante a exclusão de campanha sem anexo.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
