@@ -26,6 +26,10 @@ import type {
   FileScanOutcome,
   LoginCredentials,
   LoginResponse,
+  MonitoringAcknowledgementFilters,
+  MonitoringAcknowledgementListResponse,
+  MonitoringAcknowledgementResult,
+  MonitoringNotice,
   NotificationPreferences,
   PhishingReportResult,
   ScanReport,
@@ -70,6 +74,9 @@ import {
   toDashboard,
   toFileScan,
   toFileScanList,
+  toMonitoringAcknowledgementList,
+  toMonitoringAcknowledgementResult,
+  toMonitoringNotice,
   toNotificationPreferences,
   toScan,
   toSecurityPolicy,
@@ -95,6 +102,10 @@ import {
   type BackendFileScanSummary,
   type BackendFinding,
   type BackendLogin,
+  type BackendMonitoringAcknowledgement,
+  type BackendMonitoringAcknowledgementResult,
+  type BackendMonitoringAcknowledgementSummary,
+  type BackendMonitoringNotice,
   type BackendNotificationPreferences,
   type BackendScan,
   type BackendSecurityPolicy,
@@ -284,6 +295,9 @@ function rethrowAsNotImplemented(error: unknown): never {
 
 /** Tamanho padrão da página da trilha de auditoria (o servidor aceita até 100). */
 export const AUDIT_PAGE_SIZE = 20;
+
+/** Tamanho padrão da página da lista de ciências do aviso de monitoramento (o servidor aceita até 100). */
+export const MONITORING_ACK_PAGE_SIZE = 20;
 
 /** Tamanho padrão da página do histórico de análises de arquivo (o servidor aceita até 100). */
 export const FILE_SCAN_PAGE_SIZE = 20;
@@ -803,6 +817,41 @@ export const realApi: BaluarteApi = {
   async verifyAuditIntegrity(): Promise<AuditIntegrity> {
     return toAuditIntegrity(
       await request<BackendAuditIntegrity>({ method: 'GET', url: '/auditoria/integridade' }),
+    );
+  },
+
+  async getMonitoringNotice(): Promise<MonitoringNotice> {
+    return toMonitoringNotice(
+      await request<BackendMonitoringNotice>({ method: 'GET', url: '/monitoramento/aviso' }),
+    );
+  },
+
+  async acknowledgeMonitoringNotice(version: string): Promise<MonitoringAcknowledgementResult> {
+    return toMonitoringAcknowledgementResult(
+      await request<BackendMonitoringAcknowledgementResult>({
+        method: 'POST',
+        url: '/monitoramento/ciencia',
+        data: { versao: version },
+      }),
+    );
+  },
+
+  async listMonitoringAcknowledgements(
+    filters: MonitoringAcknowledgementFilters = {},
+  ): Promise<MonitoringAcknowledgementListResponse> {
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? MONITORING_ACK_PAGE_SIZE;
+    const params: Record<string, string> = { pagina: String(page), tamanho: String(pageSize) };
+    if (filters.version) params.versao = filters.version;
+    const { dados, resumo } = await requestWithSummary<BackendMonitoringAcknowledgement[]>({
+      method: 'GET',
+      url: '/monitoramento/ciencias',
+      params,
+    });
+    return toMonitoringAcknowledgementList(
+      dados,
+      resumo as BackendMonitoringAcknowledgementSummary | undefined,
+      { page, pageSize },
     );
   },
 

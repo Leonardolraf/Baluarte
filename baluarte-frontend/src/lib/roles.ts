@@ -38,7 +38,12 @@ export const ROUTE_ROLES = {
   /** Trilha de auditoria (GET /auditoria): só Administrador no servidor (RN-008). */
   audit: ['admin'],
   settings: ['admin', 'analyst', 'collaborator'],
+  /** Aviso de monitoramento da estação (B18, LGPD): todo perfil lê e registra a própria ciência. */
+  monitoring: ['admin', 'analyst', 'collaborator'],
 } as const satisfies Record<string, readonly RBACRole[]>;
+
+/** Lista de quem deu ciência do aviso de monitoramento (B18): GET /monitoramento/ciencias é só do Administrador. */
+export const MONITORING_ACK_LIST_ROLES: readonly RBACRole[] = ['admin'];
 
 /** Exportar o relatório de vulnerabilidades em PDF (B24): os perfis que leem a lista técnica no servidor. */
 export const VULNERABILITY_REPORT_ROLES: readonly RBACRole[] = ['admin', 'analyst'];

@@ -20,6 +20,10 @@ import type {
   FileScan,
   FileScanListResponse,
   FunnelStage,
+  MonitoringAcknowledgement,
+  MonitoringAcknowledgementListResponse,
+  MonitoringAcknowledgementResult,
+  MonitoringNotice,
   SecondOpinion,
   SecondOpinionReason,
   SecondOpinionStatus,
@@ -1191,6 +1195,103 @@ export function toAuditList(
     actions: Array.isArray(resumo?.acoes)
       ? resumo.acoes.filter((a): a is string => typeof a === 'string')
       : [],
+  };
+}
+
+// ---- Aviso de monitoramento da estação (B18) ----------------------------------
+
+export interface BackendMonitoringNotice {
+  versao: string;
+  rascunho: boolean;
+  titulo: string;
+  introducao: string;
+  secoes: Array<{
+    id: string;
+    titulo: string;
+    paragrafos?: string[];
+    itens?: string[];
+    observacoes?: string[];
+  }>;
+  ciencia: { registrada: boolean; registradaEm: string | null };
+}
+
+export interface BackendMonitoringAcknowledgementResult {
+  versao: string;
+  registradaEm: string;
+  nova: boolean;
+}
+
+export interface BackendMonitoringAcknowledgement {
+  id: string;
+  versao: string;
+  registradaEm: string;
+  usuario: { id: string; nome: string; email: string; perfil: string; status: string };
+}
+
+export interface BackendMonitoringAcknowledgementSummary {
+  total?: number;
+  pagina?: number;
+  tamanho?: number;
+  versaoAtual?: string;
+  pendentesVersaoAtual?: number;
+}
+
+/** GET /monitoramento/aviso: o texto chega pronto da API; aqui só muda o idioma dos campos. */
+export function toMonitoringNotice(raw: BackendMonitoringNotice): MonitoringNotice {
+  return {
+    version: raw.versao,
+    draft: raw.rascunho === true,
+    title: raw.titulo,
+    intro: raw.introducao ?? '',
+    sections: (raw.secoes ?? []).map((section) => ({
+      id: section.id,
+      title: section.titulo,
+      paragraphs: section.paragrafos ?? [],
+      items: section.itens ?? [],
+      notes: section.observacoes ?? [],
+    })),
+    acknowledged: raw.ciencia?.registrada === true,
+    acknowledgedAt: raw.ciencia?.registradaEm ?? null,
+  };
+}
+
+export function toMonitoringAcknowledgementResult(
+  raw: BackendMonitoringAcknowledgementResult,
+): MonitoringAcknowledgementResult {
+  return { version: raw.versao, acknowledgedAt: raw.registradaEm, created: raw.nova === true };
+}
+
+export function toMonitoringAcknowledgement(
+  raw: BackendMonitoringAcknowledgement,
+): MonitoringAcknowledgement {
+  return {
+    id: raw.id,
+    version: raw.versao,
+    acknowledgedAt: raw.registradaEm,
+    user: {
+      id: raw.usuario.id,
+      name: raw.usuario.nome,
+      email: raw.usuario.email,
+      role: roleFromLabel(raw.usuario.perfil),
+      status: USER_STATUS_FROM_LABEL[norm(raw.usuario.status)] ?? 'active',
+    },
+  };
+}
+
+/** Lista paginada de GET /monitoramento/ciencias (`dados` + `resumo`). */
+export function toMonitoringAcknowledgementList(
+  dados: BackendMonitoringAcknowledgement[],
+  resumo: BackendMonitoringAcknowledgementSummary | undefined,
+  fallback: { page: number; pageSize: number },
+): MonitoringAcknowledgementListResponse {
+  const items = (dados ?? []).map(toMonitoringAcknowledgement);
+  return {
+    items,
+    total: typeof resumo?.total === 'number' ? resumo.total : items.length,
+    page: typeof resumo?.pagina === 'number' ? resumo.pagina : fallback.page,
+    pageSize: typeof resumo?.tamanho === 'number' ? resumo.tamanho : fallback.pageSize,
+    currentVersion: typeof resumo?.versaoAtual === 'string' ? resumo.versaoAtual : '',
+    pendingCurrentVersion: typeof resumo?.pendentesVersaoAtual === 'number' ? resumo.pendentesVersaoAtual : 0,
   };
 }
 

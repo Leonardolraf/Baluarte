@@ -115,6 +115,16 @@ export const INTERVALO_MAX_S = 86400;
  */
 export const FATOR_INTERVALO: Record<CategoriaQuery, number> = { portas: 0.25, programas: 1, sistema: 6 };
 
+/**
+ * Intervalo de uma categoria sobre um intervalo-base: base x FATOR_INTERVALO, entre o minimo
+ * e o maximo. Puro: o service o usa com o base do ambiente e o aviso de monitoramento (B18)
+ * com o de producao, entao o texto e a configuracao entregue ao agente saem da mesma conta.
+ */
+export function intervaloDaCategoriaNoBase(categoria: CategoriaQuery, base: number): number {
+  const s = Math.round(base * FATOR_INTERVALO[categoria]);
+  return Math.min(INTERVALO_MAX_S, Math.max(INTERVALO_MIN_S, s));
+}
+
 /** Espalha cada execucao em ate +-10% do intervalo, para as estacoes nao coletarem juntas. */
 export const SPLAY_PERCENTUAL = 10;
 

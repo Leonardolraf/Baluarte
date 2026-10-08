@@ -77,6 +77,11 @@ const PAGES: Array<{ path: string; role: RBACRole | null; ready: string | RegExp
   { path: '/users/new', role: 'admin', ready: /Novo usuário/ },
   { path: '/audit', role: 'admin', ready: 'Trilha de auditoria' },
   { path: '/settings', role: 'admin', ready: 'Configurações' },
+  // Aviso de monitoramento da estação (B18): o colaborador antes da ciência e o administrador com a lista.
+  { path: '/monitoring', role: 'collaborator', ready: 'Li e estou ciente' },
+  { path: '/monitoring', role: 'admin', ready: 'Ciências registradas' },
+  // Banner do aviso pendente sobre outra página (analista sem ciência no seed do mock).
+  { path: '/scans', role: 'analyst', ready: 'Ler o aviso de monitoramento' },
 ];
 
 describe('acessibilidade (axe-core)', () => {

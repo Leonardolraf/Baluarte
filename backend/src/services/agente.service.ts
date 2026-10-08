@@ -4,7 +4,7 @@ import { gerarTokenLink, hashToken } from '../utils/tokens.js';
 import {
   detalhesInscricao,
   eventoResultado,
-  FATOR_INTERVALO,
+  intervaloDaCategoriaNoBase,
   INTERVALO_DEV_S,
   INTERVALO_MAX_S,
   INTERVALO_MIN_S,
@@ -60,8 +60,7 @@ export function intervaloQueries(): number {
 
 /** Intervalo de uma categoria (B08): base x FATOR_INTERVALO, entre o minimo e o maximo. */
 export function intervaloDaCategoria(categoria: CategoriaQuery, base: number = intervaloQueries()): number {
-  const s = Math.round(base * FATOR_INTERVALO[categoria]);
-  return Math.min(INTERVALO_MAX_S, Math.max(INTERVALO_MIN_S, s));
+  return intervaloDaCategoriaNoBase(categoria, base);
 }
 
 /** Configuracao do osquery (mesmo formato do arquivo osquery.conf). */

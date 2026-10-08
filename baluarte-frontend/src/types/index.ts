@@ -651,6 +651,63 @@ export interface AuditListResponse extends Paginated<AuditEntry> {
   actions: string[];
 }
 
+// ---- Aviso de monitoramento da estação (B18, LGPD) -----------------------------
+
+/** Seção do aviso: parágrafos, a lista de itens (quando há) e observações depois da lista. */
+export interface MonitoringNoticeSection {
+  id: string;
+  title: string;
+  paragraphs: string[];
+  items: string[];
+  notes: string[];
+}
+
+/**
+ * Aviso sobre o que o agente osquery coleta da estação. O texto vem da API (lugar único,
+ * versionado); a ciência vale só para a `version` lida.
+ */
+export interface MonitoringNotice {
+  version: string;
+  /** Texto ainda não aprovado (a tela avisa). */
+  draft: boolean;
+  title: string;
+  intro: string;
+  sections: MonitoringNoticeSection[];
+  /** Ciência do usuário atual nesta versão. */
+  acknowledged: boolean;
+  /** ISO 8601; `null` sem ciência. */
+  acknowledgedAt: string | null;
+}
+
+export interface MonitoringAcknowledgementResult {
+  version: string;
+  acknowledgedAt: string;
+  /** `false` quando a ciência desta versão já existia (a operação é idempotente). */
+  created: boolean;
+}
+
+/** Ciência registrada, como o Administrador vê. */
+export interface MonitoringAcknowledgement {
+  id: string;
+  version: string;
+  /** ISO 8601. */
+  acknowledgedAt: string;
+  user: { id: string; name: string; email: string; role: RBACRole; status: UserStatus };
+}
+
+export interface MonitoringAcknowledgementFilters {
+  /** Versão do texto; ausente = todas. */
+  version?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface MonitoringAcknowledgementListResponse extends Paginated<MonitoringAcknowledgement> {
+  currentVersion: string;
+  /** Contas ativas que ainda não deram ciência da versão atual. */
+  pendingCurrentVersion: number;
+}
+
 // ---- Estações monitoradas (B13) -----------------------------------------------
 
 /** Online enquanto o último contato do agente estiver dentro da janela do servidor. */

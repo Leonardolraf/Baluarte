@@ -32,6 +32,10 @@ import type {
   SecondOpinion,
   LoginCredentials,
   LoginResponse,
+  MonitoringAcknowledgementFilters,
+  MonitoringAcknowledgementListResponse,
+  MonitoringAcknowledgementResult,
+  MonitoringNotice,
   NotificationPreferences,
   PhishingReportResult,
   RBACRole,
@@ -74,6 +78,8 @@ import {
   MOCK_CAMPAIGNS,
   MOCK_CREDENTIALS,
   MOCK_FILE_SCANS,
+  MOCK_MONITORING_ACKS,
+  MOCK_MONITORING_NOTICE,
   MOCK_NOTIFICATION_PREFERENCES,
   MOCK_RECIPIENTS,
   MOCK_SCANS,
@@ -86,6 +92,7 @@ import {
   buildMockStations,
   MOCK_STATION_CVES,
   type MockFileScan,
+  type MockMonitoringAcknowledgement,
   type MockStation,
 } from '@/mocks/data';
 
@@ -174,6 +181,8 @@ interface MockState {
   stations: MockStation[];
   /** Segunda opinião do VirusTotal simulada (B20): ligada, desligada (sem chave) ou sem cota. */
   secondOpinionMode: MockSecondOpinionMode;
+  /** Ciências do aviso de monitoramento (B18): uma por usuário e versão. */
+  monitoringAcks: MockMonitoringAcknowledgement[];
 }
 
 export type MockSecondOpinionMode = 'enabled' | 'disabled' | 'quota';
@@ -212,6 +221,7 @@ function createState(): MockState {
     antivirusAvailable: true,
     stations: buildMockStations(),
     secondOpinionMode: 'enabled',
+    monitoringAcks: clone(MOCK_MONITORING_ACKS),
   };
 }
 
@@ -1659,6 +1669,8 @@ export const mockApi: BaluarteApi = {
       throw new HttpError(409, 'ULTIMO_ADMIN', 'Não é possível excluir o único administrador ativo.');
     state.users.splice(index, 1);
     state.passwords.delete(user.email.toLowerCase());
+    // Como no banco (onDelete: Cascade): a ciência do aviso de monitoramento sai com a conta.
+    state.monitoringAcks = state.monitoringAcks.filter((a) => a.userId !== user.id);
     pushTimeline({
       kind: 'user',
       title: 'Usuário removido',
@@ -1838,6 +1850,94 @@ export const mockApi: BaluarteApi = {
       const user = requireUser();
       requireRole(user, ['admin']);
       return { intact: true, verifiedCount: state.auditLog.length, databaseLock: false, firstBreak: null };
+    });
+  },
+
+  // ---- Aviso de monitoramento da estação (B18) ----
+  async getMonitoringNotice(): Promise<MonitoringNotice> {
+    return simulate(() => {
+      const user = requireUser();
+      const ack = state.monitoringAcks.find(
+        (a) => a.userId === user.id && a.version === MOCK_MONITORING_NOTICE.version,
+      );
+      return {
+        ...MOCK_MONITORING_NOTICE,
+        acknowledged: !!ack,
+        acknowledgedAt: ack?.acknowledgedAt ?? null,
+      };
+    });
+  },
+
+  async acknowledgeMonitoringNotice(version: string): Promise<MonitoringAcknowledgementResult> {
+    await delay();
+    const user = requireUser();
+    if (typeof version !== 'string' || !/^[0-9A-Za-z._-]{1,32}$/.test(version))
+      throw new HttpError(400, 'VERSAO_INVALIDA', 'Versão do aviso inválida');
+    if (version !== MOCK_MONITORING_NOTICE.version)
+      throw new HttpError(
+        409,
+        'VERSAO_DESATUALIZADA',
+        'O aviso mudou desde a sua leitura: leia a versão atual antes de registrar a ciência',
+      );
+    const existing = state.monitoringAcks.find((a) => a.userId === user.id && a.version === version);
+    if (existing) return { version, acknowledgedAt: existing.acknowledgedAt, created: false };
+    const ack: MockMonitoringAcknowledgement = {
+      id: nextId('ack'),
+      userId: user.id,
+      version,
+      acknowledgedAt: nowIso(),
+    };
+    state.monitoringAcks.push(ack);
+    pushAudit(user, 'REGISTRAR_CIENCIA_MONITORAMENTO', `versao=${version}`);
+    return { version, acknowledgedAt: ack.acknowledgedAt, created: true };
+  },
+
+  async listMonitoringAcknowledgements(
+    filters: MonitoringAcknowledgementFilters = {},
+  ): Promise<MonitoringAcknowledgementListResponse> {
+    return simulate(() => {
+      const user = requireUser();
+      requireRole(user, ['admin']);
+      const page = filters.page ?? 1;
+      const pageSize = filters.pageSize ?? 20;
+      if (!Number.isInteger(page) || page < 1)
+        throw new HttpError(400, 'PAGINA_INVALIDA', 'Página inválida: use um inteiro a partir de 1');
+      if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100)
+        throw new HttpError(400, 'TAMANHO_INVALIDO', 'Tamanho inválido: use um inteiro de 1 a 100');
+      const current = MOCK_MONITORING_NOTICE.version;
+      const rows = state.monitoringAcks
+        .filter((a) => !filters.version || a.version === filters.version)
+        .map((a) => ({ ack: a, owner: state.users.find((u) => u.id === a.userId) }))
+        .filter((row): row is { ack: MockMonitoringAcknowledgement; owner: User } => !!row.owner)
+        .sort(
+          (a, b) =>
+            Date.parse(b.ack.acknowledgedAt) - Date.parse(a.ack.acknowledgedAt) ||
+            b.ack.id.localeCompare(a.ack.id),
+        );
+      const pending = state.users.filter(
+        (u) =>
+          u.status === 'active' &&
+          !state.monitoringAcks.some((a) => a.userId === u.id && a.version === current),
+      ).length;
+      return {
+        items: rows.slice((page - 1) * pageSize, page * pageSize).map(({ ack, owner }) => ({
+          id: ack.id,
+          version: ack.version,
+          acknowledgedAt: ack.acknowledgedAt,
+          user: {
+            id: owner.id,
+            name: owner.name,
+            email: owner.email,
+            role: owner.role,
+            status: owner.status,
+          },
+        })),
+        total: rows.length,
+        page,
+        pageSize,
+        currentVersion: current,
+        pendingCurrentVersion: pending,
+      };
     });
   },
 

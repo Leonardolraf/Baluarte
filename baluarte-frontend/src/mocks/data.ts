@@ -18,6 +18,7 @@ import type {
   CampaignRecipient,
   Evidence,
   FileScan,
+  MonitoringNotice,
   NotificationPreferences,
   ScanReport,
   SecurityPolicy,
@@ -2272,3 +2273,114 @@ export function buildMockStations(nowMs: number = Date.now()): MockStation[] {
     },
   ];
 }
+
+// ---- Aviso de monitoramento da estação (B18) ---------------------------------
+// CÓPIA do texto que a API serve (backend/src/models/avisoMonitoramento.model.ts, o lugar
+// único do texto, com a frequência de coleta calculada da configuração do agente), só para a
+// demonstração em modo mock. O teste backend/tests/aviso-monitoramento.test.ts compara esta
+// cópia com o texto servido pela API: mudou lá, muda aqui.
+export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'acknowledgedAt'> = {
+  version: '2026-10-08',
+  draft: true,
+  title: 'Aviso sobre o monitoramento da estação de trabalho',
+  intro:
+    'A empresa usa o Baluarte para encontrar falhas de segurança nos computadores de trabalho antes que alguém as aproveite. Para isso, um programa chamado agente (o osquery) fica instalado na sua estação e envia ao Baluarte um inventário técnico da máquina: as portas de rede abertas a cada 15 minutos, a lista de programas instalados a cada 1 hora e a versão do sistema operacional a cada 6 horas. Este aviso explica o que o agente coleta, o que ele não coleta e para que isso serve.',
+  sections: [
+    {
+      id: 'coletado',
+      title: 'O que é coletado',
+      paragraphs: [],
+      items: [
+        'A lista de programas instalados, com a versão e o fornecedor de cada um.',
+        'O nome e a versão do sistema operacional.',
+        'As portas de rede abertas na máquina (por onde ela aceita conexões) e o nome do programa que abriu cada uma.',
+        'O nome da máquina, um identificador técnico do equipamento e a data e a hora do último contato do agente, que mostram se a estação está ligada e conectada.',
+      ],
+      notes: [],
+    },
+    {
+      id: 'nao-coletado',
+      title: 'O que não é coletado',
+      paragraphs: ['O agente não lê nem envia ao Baluarte:'],
+      items: [
+        'arquivos e documentos;',
+        'e-mails;',
+        'histórico de navegação;',
+        'o que você digita no teclado;',
+        'imagens da tela;',
+        'a sua localização.',
+      ],
+      notes: [
+        'A análise de arquivos do portal só acontece quando você mesmo envia um arquivo; ela não tem relação com o agente.',
+      ],
+    },
+    {
+      id: 'finalidade',
+      title: 'Para que serve',
+      paragraphs: [
+        'Para encontrar programas vulneráveis: o nome e a versão de cada programa são comparados com bases públicas de vulnerabilidades conhecidas, e as portas abertas mostram serviços expostos sem necessidade. Com isso a equipe de segurança sabe o que precisa ser atualizado ou corrigido.',
+        'O Baluarte não usa esses dados para medir produtividade nem o horário de uso da máquina.',
+      ],
+      items: [],
+      notes: [],
+    },
+    {
+      id: 'acesso',
+      title: 'Quem vê',
+      paragraphs: [
+        'Só os perfis Administrador e Analista do Baluarte veem o inventário das estações. O perfil Colaborador não vê o inventário de nenhuma máquina.',
+      ],
+      items: [],
+      notes: [],
+    },
+    {
+      id: 'retencao',
+      title: 'Por quanto tempo fica guardado',
+      paragraphs: [
+        'O Baluarte guarda só o inventário mais recente de cada estação: cada nova coleta substitui a anterior. As vulnerabilidades encontradas a partir dele viram achados de segurança e seguem a política de gestão de vulnerabilidades da empresa.',
+      ],
+      items: [],
+      notes: [],
+    },
+    {
+      id: 'base-legal',
+      title: 'Base legal',
+      paragraphs: [
+        'O tratamento se apoia no legítimo interesse da empresa em proteger os seus sistemas e informações (art. 7º, inciso IX, da Lei Geral de Proteção de Dados Pessoais, a LGPD) e no dever de adotar medidas de segurança para proteger os dados pessoais (art. 46 da LGPD).',
+      ],
+      items: [],
+      notes: [],
+    },
+    {
+      id: 'duvidas',
+      title: 'Dúvidas',
+      paragraphs: [
+        'Fale com a equipe de segurança da informação (os administradores do Baluarte) ou com o encarregado pelo tratamento de dados pessoais da empresa.',
+      ],
+      items: [],
+      notes: [],
+    },
+    {
+      id: 'ciencia',
+      title: 'Sua ciência',
+      paragraphs: [
+        'Ao clicar em "Li e estou ciente", você confirma que leu este aviso. A ciência não é um pedido de consentimento: ela registra que você foi informado. Ficam guardados quem registrou, quando e a versão do texto. Se o texto mudar, uma nova ciência será pedida.',
+      ],
+      items: [],
+      notes: [],
+    },
+  ],
+};
+
+/** Ciências já registradas no seed do mock: o administrador e um analista. */
+export interface MockMonitoringAcknowledgement {
+  id: string;
+  userId: string;
+  version: string;
+  acknowledgedAt: string;
+}
+
+export const MOCK_MONITORING_ACKS: MockMonitoringAcknowledgement[] = [
+  { id: 'ack-001', userId: 'u-000', version: '2026-10-08', acknowledgedAt: '2026-10-08T12:10:00.000Z' },
+  { id: 'ack-002', userId: 'u-003', version: '2026-10-08', acknowledgedAt: '2026-10-08T13:42:00.000Z' },
+];

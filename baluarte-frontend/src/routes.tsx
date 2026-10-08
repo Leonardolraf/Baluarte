@@ -30,6 +30,7 @@ const UserManagementPage = lazy(() => import('@/pages/Users/UserManagementPage')
 const UserFormPage = lazy(() => import('@/pages/Users/UserFormPage'));
 const AuditLogPage = lazy(() => import('@/pages/Audit/AuditLogPage'));
 const SettingsPage = lazy(() => import('@/pages/Settings/SettingsPage'));
+const MonitoringNoticePage = lazy(() => import('@/pages/Monitoring/MonitoringNoticePage'));
 
 function page(element: ReactNode): ReactNode {
   return <Suspense fallback={<LoadingSpinner label="Carregando página…" />}>{element}</Suspense>;
@@ -50,7 +51,7 @@ function NotFound() {
  * Hierarquia de rotas.
  *  - Públicas: /login, /reset-password, /definir-senha, /about,
  *    /t/:token e /t/:token/reportar (links do e-mail simulado da campanha)
- *  - Protegidas (qualquer perfil): /dashboard, /files, /training/:id, /settings
+ *  - Protegidas (qualquer perfil): /dashboard, /files, /training/:id, /settings, /monitoring
  *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /scans, /stations[/:id], /trainings,
  *    /campaigns[/new|/:id]
  *  - Admin: /users, /users/new, /users/:id/edit, /audit
@@ -80,6 +81,8 @@ export const routes: RouteObject[] = [
           { path: '/files', element: page(<FileAnalysisPage />) },
           { path: '/training/:id', element: page(<TrainingPage />) },
           { path: '/settings', element: page(<SettingsPage />) },
+          // Aviso de monitoramento da estação (B18): texto, ciência e, para o Administrador, a lista.
+          { path: '/monitoring', element: page(<MonitoringNoticePage />) },
           {
             element: <ProtectedRoute roles={ROUTE_ROLES.vulnerabilities} />,
             children: [

@@ -1,10 +1,11 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar/Sidebar';
 import { Topbar } from '@/components/Layout/Topbar';
+import { MonitoringNoticeBanner } from '@/components/Layout/MonitoringNoticeBanner';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useGlobalLoading } from '@/store/uiStore';
 
-/** Shell autenticado: sidebar + topbar + área de conteúdo. */
+/** Shell autenticado: sidebar + topbar + área de conteúdo (com o aviso de monitoramento pendente, B18). */
 export function AppLayout() {
   const globalLoading = useGlobalLoading();
   return (
@@ -13,6 +14,7 @@ export function AppLayout() {
       <div className="relative flex min-w-0 flex-1 flex-col">
         <Topbar />
         <main id="conteudo" className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8" tabIndex={-1}>
+          <MonitoringNoticeBanner />
           <Outlet />
         </main>
         {globalLoading && <LoadingSpinner overlay label="Processando…" />}
