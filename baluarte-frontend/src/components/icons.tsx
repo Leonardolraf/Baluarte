@@ -48,6 +48,13 @@ export const ServerIcon = (p: IconProps) => (
     <path d="M7 7.5h.01M7 16.5h.01" />
   </svg>
 );
+/** Monitor de mesa: estação de trabalho (B13). */
+export const MonitorIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="12" rx="1.5" />
+    <path d="M8 20h8M12 16v4" />
+  </svg>
+);
 export const MailIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="3" y="5" width="18" height="14" rx="2" />

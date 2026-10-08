@@ -64,6 +64,8 @@ const PAGES: Array<{ path: string; role: RBACRole | null; ready: string | RegExp
   { path: '/assets', role: 'analyst', ready: 'Ativos monitorados' },
   { path: '/assets/new', role: 'analyst', ready: /Cadastrar ativo/ },
   { path: '/scans', role: 'analyst', ready: 'Histórico' },
+  { path: '/stations', role: 'analyst', ready: 'FIN-NB-07' },
+  { path: '/stations/ws-002', role: 'admin', ready: 'openssh-server' },
   { path: '/files', role: 'analyst', ready: 'Análises anteriores' },
   { path: '/files', role: 'collaborator', ready: 'Análises anteriores' },
   { path: '/trainings', role: 'analyst', ready: 'Colaboradores treinados' },

@@ -81,8 +81,10 @@ export interface CvssScore {
 
 // ---- Ativos -----------------------------------------------------------------
 
-export type AssetType = 'server' | 'application' | 'network' | 'database';
+/** `workstation`: estação inscrita pelo agente osquery (B07); só nasce pela inscrição, nunca pelo cadastro. */
+export type AssetType = 'server' | 'application' | 'network' | 'database' | 'workstation';
 
+/** Tipos aceitos no cadastro manual de ativo (a estação de trabalho fica de fora). */
 export const ASSET_TYPES: readonly AssetType[] = ['server', 'application', 'network', 'database'] as const;
 
 export type AssetStatus = 'active' | 'inactive';
@@ -524,6 +526,65 @@ export interface AuditFilters {
 export interface AuditListResponse extends Paginated<AuditEntry> {
   /** Ações distintas já registradas (opções do filtro). */
   actions: string[];
+}
+
+// ---- Estações monitoradas (B13) -----------------------------------------------
+
+/** Online enquanto o último contato do agente estiver dentro da janela do servidor. */
+export type StationStatus = 'online' | 'offline';
+
+/** Estação de trabalho inscrita pelo agente osquery, como a lista mostra. */
+export interface Station {
+  id: string;
+  assetId: string;
+  /** Nome da máquina. */
+  name: string;
+  host: string;
+  /** host_identifier do osquery (UUID da máquina). */
+  identifier: string;
+  /** Sistema operacional legível ("Ubuntu 22.04.4 LTS"). */
+  os: string;
+  /** Plataforma do osquery: windows, darwin, ubuntu, rhel… */
+  osPlatform: string | null;
+  osBuild: string | null;
+  status: StationStatus;
+  lastSeenAt: string;
+  enrolledAt: string;
+  /** Último inventário recebido (null antes da primeira coleta). */
+  inventoryAt: string | null;
+  softwareCount: number;
+  portCount: number;
+}
+
+/** Origem do programa no inventário (tabela do osquery). */
+export type SoftwareSource = 'programs' | 'deb_packages' | 'rpm_packages' | 'apps' | 'other';
+
+export interface StationSoftware {
+  name: string;
+  /** Vazio quando o sistema não informa a versão. */
+  version: string;
+  vendor: string | null;
+  source: SoftwareSource;
+}
+
+export interface StationPort {
+  port: number;
+  protocol: 'TCP' | 'UDP';
+  /** Endereço em escuta (0.0.0.0 = todas as interfaces). */
+  address: string;
+  process: string | null;
+}
+
+export interface StationDetail extends Station {
+  /** Segundos sem contato até a estação virar offline. */
+  offlineAfterSec: number;
+  software: StationSoftware[];
+  ports: StationPort[];
+}
+
+export interface StationListResponse {
+  items: Station[];
+  summary: { total: number; online: number; offline: number; offlineAfterSec: number };
 }
 
 // ---- Infra / API ------------------------------------------------------------
