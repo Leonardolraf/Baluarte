@@ -42,33 +42,34 @@ export async function limparLimiteReset(): Promise<void> {
   await repo.apagarPedidosReset();
 }
 
-/** Registra a falha e devolve quantas a conta acumula na janela. */
-async function registrarFalhaLogin(chave: string): Promise<number> {
-  await repo.criarFalhaLogin(chave);
-  // Poda: o que saiu da janela nao conta mais (endpoint publico: a tabela nao cresce sem limite).
-  await repo.apagarFalhasLogin({ antes: desde(LOGIN_JANELA_MS) });
-  return repo.contarFalhasLogin(chave, desde(LOGIN_JANELA_MS));
-}
-
 /** Login: devolve o token e os dados publicos do usuario, ou lanca o erro do contrato. */
 export async function entrar(email: string, senha: string) {
   const chave = normalizarEmail(email);
-  if ((await repo.contarFalhasLogin(chave, desde(LOGIN_JANELA_MS))) >= LOGIN_MAX_FALHAS)
-    falhar(429, 'Muitas tentativas de login. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
+  // DT09: a tentativa reserva a vaga ANTES do bcrypt (conta e grava sob trava, no repository).
+  // Contar antes e gravar a falha depois deixava uma rajada paralela inteira ler "0 falhas" e
+  // testar senhas sem bloqueio. Limite cheio: 429, inclusive para a senha certa (como antes).
+  const reserva = await repo.reservarTentativaLogin(chave, desde(LOGIN_JANELA_MS), LOGIN_MAX_FALHAS);
+  if (!reserva.id) falhar(429, 'Muitas tentativas de login. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
 
   const usuario = await localizarPorEmail(email);
   const ok = await bcrypt.compare(senha, usuario ? usuario.senhaHash : HASH_SACRIFICIO);
   if (!usuario || !ok) {
-    const falhas = await registrarFalhaLogin(chave);
-    if (usuario && falhas === LOGIN_MAX_FALHAS)
+    // A reserva fica gravada: e a falha. Poda o que saiu da janela (endpoint publico: a
+    // tabela nao cresce sem limite).
+    await repo.apagarFalhasLogin({ antes: desde(LOGIN_JANELA_MS) });
+    // A posicao da reserva e unica (trava por e-mail): so a falha que completa o limite audita.
+    if (usuario && reserva.anteriores + 1 === LOGIN_MAX_FALHAS)
       await registrarAuditoria(usuario.id, 'LOGIN_BLOQUEADO', `${LOGIN_MAX_FALHAS} falhas em 15 min`);
     falhar(401, 'E-mail ou senha inválidos', 'CREDENCIAIS_INVALIDAS');
   }
+  // Senha certa em conta que nao entra: devolve a vaga (nao e falha de senha, como antes).
+  if (usuario.status === 'Inativo' || usuario.status === 'Pendente') await repo.cancelarTentativaLogin(reserva.id);
   if (usuario.status === 'Inativo') falhar(403, 'Usuário inativo. Contate o administrador.', 'USUARIO_INATIVO');
   // Quem ainda nao aceitou o convite entra so pelo link (contas antigas com senha
   // provisoria tambem caem aqui). So chega aqui quem acertou a senha: nada e revelado.
   if (usuario.status === 'Pendente')
     falhar(403, 'Conta ainda não ativada. Crie sua senha pelo link do convite.', 'CONTA_PENDENTE');
+  // Login valido zera o contador do e-mail (inclusive a propria reserva).
   await repo.apagarFalhasLogin({ email: chave });
   await registrarAuditoria(usuario.id, 'LOGIN');
 
@@ -94,9 +95,10 @@ export async function trocarSenha(usuario: UsuarioAtual, sessao: TokenPayload, s
  */
 export async function solicitarRedefinicao(email: string): Promise<void> {
   const chave = normalizarEmail(email);
-  if ((await repo.contarPedidosReset(chave, desde(RESET_JANELA_MS))) >= RESET_MAX_POR_JANELA)
-    falhar(429, 'Muitas solicitações. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
-  await repo.criarPedidoReset(chave);
+  // DT09: conta e grava o pedido numa reserva so (sob trava), como no login: pedidos
+  // simultaneos nao passam juntos do limite.
+  const reserva = await repo.reservarPedidoReset(chave, desde(RESET_JANELA_MS), RESET_MAX_POR_JANELA);
+  if (!reserva.id) falhar(429, 'Muitas solicitações. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
   // Poda o que ja saiu da janela (endpoint publico: a tabela nao pode crescer sem limite).
   await repo.apagarPedidosReset(desde(RESET_JANELA_MS));
 
