@@ -49,6 +49,9 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - EMAIL_REMETENTE=${EMAIL_REMETENTE:-Baluarte <nao-responda@baluarte.local>}
+      # Antivírus (B04): clamd do serviço clamav (perfil `antivirus`). Sem ele, 503 na análise.
+      - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
+      - CLAMAV_PORT=${CLAMAV_PORT:-3310}
       # Base dos links enviados por e-mail (convite, redefinição de senha, campanha).
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       # Origens permitidas no CORS (os frontends falam por proxy/mesma origem; isto é para chamadas diretas).
@@ -81,6 +84,20 @@ services:
       - "127.0.0.1:8025:8025"
       - "127.0.0.1:1025:1025"
 
+  # Antivírus da análise de arquivos (B04). Perfil opcional: precisa de 3 a 4 GiB de RAM para
+  # carregar as assinaturas (documentação do ClamAV), então não sobe no `docker compose up`
+  # padrão. Ligue com `docker compose --profile antivirus up -d`. Sem ele, a API responde
+  # 503 ANTIVIRUS_INDISPONIVEL. O freshclam atualiza as assinaturas sozinho (1x por dia) e as
+  # guarda no volume, para não baixar tudo de novo a cada subida. A porta 3310 (clamd) fica só
+  # em 127.0.0.1, para a API rodando fora do Docker; nada de fora da máquina a alcança.
+  clamav:
+    image: clamav/clamav:1.5
+    profiles: ["antivirus"]
+    volumes:
+      - clamav-db:/var/lib/clamav
+    ports:
+      - "127.0.0.1:3310:3310"
+
   # SPA React (baluarte-frontend/): build de produção servido por Nginx, com /api
   # encaminhado ao serviço backend (ver baluarte-frontend/nginx.conf).
   app:
@@ -104,5 +121,6 @@ services:
         condition: service_healthy
 
 volumes:
+  clamav-db:
   db-data:
   backend-data:
