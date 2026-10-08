@@ -14,7 +14,7 @@
 # Playwright reutiliza se estiver ocupada — a stack Docker e o modo mock convivem.
 # Variáveis num `.env` na raiz (ver .env.example): POSTGRES_PASSWORD (obrigatória), JWT_SECRET, NODE_ENV,
 # SMTP_*, EMAIL_REMETENTE, SEED_DEMO, CORS_ORIGIN, FRONTEND_URL, HTTPS_REDIRECT, HTTPS_PORT, HSTS_MAX_AGE,
-# DOMINIO_INTERNO.
+# DOMINIO_INTERNO, VIRUSTOTAL_API_KEY.
 services:
   # PostgreSQL local. A senha vem do .env da raiz (nunca versionada); sem ela o compose
   # recusa subir. A porta só é publicada em 127.0.0.1: nada de fora da máquina alcança o banco.
@@ -54,6 +54,8 @@ services:
       # Antivírus (B04): clamd do serviço clamav (perfil `antivirus`). Sem ele, 503 na análise.
       - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
       - CLAMAV_PORT=${CLAMAV_PORT:-3310}
+      # Segunda opinião do VirusTotal (B20), só pelo SHA-256 (o arquivo nunca sai). Vazio = desligada.
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY:-}
       # Base dos links enviados por e-mail (convite, redefinição de senha, campanha).
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8081}
       # Origens permitidas no CORS (os frontends falam por proxy/mesma origem; isto é para chamadas diretas).

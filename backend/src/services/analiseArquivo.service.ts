@@ -6,12 +6,16 @@ import { OPERADORES } from '../models/dominio.model.js';
 import {
   LIMITE_ANALISES_POR_HORA, LIMITE_ARQUIVO_BYTES, MENSAGEM_LIMPO, mensagemAmeaca, nomeParaExibir, type AnaliseDto,
 } from '../models/analiseArquivo.model.js';
+import { segundaOpiniaoDto } from '../models/segundaOpiniao.model.js';
 import * as repo from '../repositories/analiseArquivo.repository.js';
 import { falhar } from '../utils/resposta.js';
 import { registrarAuditoria } from './auditoria.service.js';
+import * as segundaOpiniao from './segundaOpiniao.service.js';
 
 // Analise de arquivo (B04): o arquivo passa em fluxo pelo ClamAV, com o SHA-256 e o tamanho
 // calculados no caminho, e e descartado. Nada vai para disco nem volta para o navegador.
+// Depois do ClamAV vem a segunda opiniao do VirusTotal (B20), so pelo SHA-256: o arquivo nunca
+// e enviado, a falha dela nunca derruba a analise e ela nao muda o veredito principal.
 
 const UMA_HORA_MS = 60 * 60 * 1000;
 const MSG_INDISPONIVEL = 'A análise de arquivos não está disponível neste ambiente';
@@ -54,15 +58,17 @@ export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | und
     }
     throw e;
   }
+  const sha256 = medida.hash.digest('hex');
   const registro = await repo.criar({
     userId: usuario.id,
     nome: nomeParaExibir(nomeOriginal),
     tamanho: medida.bytes,
-    sha256: medida.hash.digest('hex'),
+    sha256,
     resultado: veredito.resultado,
     ameaca: veredito.ameaca,
+    ...(await segundaOpiniao.obter(sha256)),
   });
-  await registrarAuditoria(usuario.id, 'ANALISAR_ARQUIVO', `${registro.nome} (${registro.sha256}): ${registro.resultado}${registro.ameaca ? ` ${registro.ameaca}` : ''}`);
+  await registrarAuditoria(usuario.id, 'ANALISAR_ARQUIVO', `${registro.nome} (${registro.sha256}): ${registro.resultado}${registro.ameaca ? ` ${registro.ameaca}` : ''}; VirusTotal: ${registro.vtSituacao}`);
   return {
     mensagem: registro.ameaca ? mensagemAmeaca(registro.ameaca) : MENSAGEM_LIMPO,
     dados: paraDto(registro),
@@ -78,6 +84,7 @@ function paraDto(r: Awaited<ReturnType<typeof repo.criar>>, usuario?: { nome: st
     resultado: r.resultado as AnaliseDto['resultado'],
     ameaca: r.ameaca,
     analisadoEm: r.criadoEm,
+    segundaOpiniao: segundaOpiniaoDto(r),
     ...(usuario ? { usuario } : {}),
   };
 }

@@ -7,7 +7,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage, userStorage } from '@/lib/storage';
 import { MAX_FILE_SIZE_BYTES } from '@/lib/files';
-import { mockApi, setMockAntivirusAvailable } from '@/mocks/api';
+import { mockApi, setMockAntivirusAvailable, setMockSecondOpinion } from '@/mocks/api';
 import { MOCK_USERS } from '@/mocks/data';
 import FileAnalysisPage from '@/pages/Files/FileAnalysisPage';
 
@@ -182,6 +182,7 @@ describe('FileAnalysisPage (B05)', () => {
           result: 'clean',
           threat: null,
           scannedAt: new Date().toISOString(),
+          secondOpinion: null,
         },
         message: 'Nenhuma ameaça conhecida encontrada',
       };
@@ -198,5 +199,88 @@ describe('FileAnalysisPage (B05)', () => {
     finish();
     expect(await screen.findByTestId('file-verdict')).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  describe('segunda opinião do VirusTotal (B20)', () => {
+    it('EICAR: detecções/total abaixo do veredito, com link para o relatório do hash', async () => {
+      renderAs('collaborator');
+      await historyTable();
+
+      choose(
+        new File(['X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'], 'eicar.com'),
+      );
+
+      const panel = await screen.findByTestId('second-opinion');
+      expect(panel).toHaveAttribute('data-status', 'malicious');
+      expect(panel).toHaveTextContent('61 de 68 antivírus do VirusTotal detectaram este arquivo');
+      expect(panel).toHaveTextContent(/Consultado em/);
+      const hash = within(
+        screen.getByRole('heading', { name: 'Resultado da análise' }).closest('section')!,
+      ).getByText(/^[0-9a-f]{64}$/).textContent;
+      const link = within(panel).getByRole('link', { name: /Ver relatório do hash no VirusTotal/ });
+      expect(link).toHaveAttribute('href', `https://www.virustotal.com/gui/file/${hash}`);
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+      // O veredito principal continua sendo o do antivírus.
+      const verdict = screen.getByTestId('file-verdict');
+      expect(verdict.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByTestId('file-scan-announcer')).toHaveTextContent('VirusTotal: 61 de 68');
+    });
+
+    it('arquivo que o VirusTotal não conhece: texto claro de que só o hash foi consultado', async () => {
+      renderAs('collaborator');
+      await historyTable();
+
+      choose(new File(['conteúdo novo nunca visto'], 'novo.docx'));
+
+      const panel = await screen.findByTestId('second-opinion');
+      expect(panel).toHaveAttribute('data-status', 'unknown');
+      expect(panel).toHaveTextContent('O VirusTotal não conhece este arquivo');
+      expect(panel).toHaveTextContent('O arquivo não foi enviado ao VirusTotal');
+      expect(screen.getByTestId('file-verdict')).toHaveAttribute('data-result', 'clean');
+      expect(screen.queryByText(/arquivo seguro/i)).not.toBeInTheDocument();
+    });
+
+    it('cota estourada: "indisponível agora (cota)" e a análise do antivírus segue normal', async () => {
+      setMockSecondOpinion('quota');
+      renderAs('collaborator');
+      await historyTable();
+
+      choose(new File(['sem cota'], 'planilha.xlsx'));
+
+      const panel = await screen.findByTestId('second-opinion');
+      expect(panel).toHaveAttribute('data-status', 'unavailable');
+      expect(panel).toHaveTextContent('Segunda opinião indisponível agora (cota)');
+      expect(panel).toHaveTextContent('O veredito do antivírus acima vale normalmente');
+      expect(panel).not.toHaveTextContent(/Consultado em/);
+      expect(screen.getByTestId('file-verdict')).toHaveTextContent('Nenhuma ameaça conhecida encontrada');
+    });
+
+    it('desligada (sem chave): avisa, sem link', async () => {
+      setMockSecondOpinion('disabled');
+      renderAs('collaborator');
+      await historyTable();
+
+      choose(new File(['abc'], 'a.txt'));
+
+      const panel = await screen.findByTestId('second-opinion');
+      expect(panel).toHaveAttribute('data-status', 'disabled');
+      expect(panel).toHaveTextContent('Segunda opinião desligada neste ambiente');
+      expect(within(panel).queryByRole('link')).not.toBeInTheDocument();
+    });
+
+    it('histórico mostra a segunda opinião guardada e "—" nas análises anteriores a ela', async () => {
+      renderAs('admin');
+      const table = await historyTable();
+
+      expect(within(table).getByRole('columnheader', { name: 'VirusTotal' })).toBeInTheDocument();
+      const row = (name: string) => within(table).getByText(name).closest('tr')!;
+      expect(within(row('eicar.com')).getByText('61/68 detecções')).toBeInTheDocument();
+      expect(within(row('proposta-comercial-v3.pdf')).getByText('0/66 detecções')).toBeInTheDocument();
+      expect(within(row('orcamento-2027.xlsx')).getByText('Desconhecido')).toBeInTheDocument();
+      expect(
+        within(row('nota-fiscal-setembro.zip')).getByTitle('Análise anterior à segunda opinião'),
+      ).toBeInTheDocument();
+    });
   });
 });

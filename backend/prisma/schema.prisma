@@ -269,8 +269,27 @@ model FileScan {
   resultado String   // CHECK: LIMPO | AMEACA
   ameaca    String?  // nome da assinatura encontrada (so com AMEACA)
   criadoEm  DateTime @default(now())
+  // Segunda opiniao do VirusTotal (B20), consultada so pelo SHA-256 depois do ClamAV; o
+  // arquivo nunca vai ao VirusTotal. Nao muda `resultado`. Nulo nas analises anteriores ao B20.
+  // Este registro tambem serve de cache: a consulta mais recente do mesmo SHA-256, dentro da
+  // validade, e reaproveitada sem gastar cota.
+  vtSituacao     String?   // CHECK: MALICIOSO | SUSPEITO | SEM_DETECCAO | DESCONHECIDO | INDISPONIVEL | DESLIGADO
+  vtMotivo       String?   // CHECK: so com INDISPONIVEL (COTA | CHAVE_INVALIDA | LIMITE_VIRUSTOTAL | TEMPO_ESGOTADO | FALHA)
+  vtDeteccoes    Int?      // mecanismos que marcaram malicioso ou suspeito; so com veredito
+  vtTotal        Int?      // mecanismos que deram veredito; so com veredito
+  vtConsultadoEm DateTime? // quando o VirusTotal respondeu (copiado quando vem do cache)
 
   @@index([userId, criadoEm])
   @@index([criadoEm])
-  @@index([sha256])
+  @@index([sha256, vtConsultadoEm]) // cache da segunda opiniao (tambem serve a busca so por sha256)
+}
+
+// Consultas feitas ao VirusTotal (B20), para respeitar a cota gratuita (4 por minuto, 500 por
+// dia) entre instancias e depois de reiniciar a API, como LoginFailure/ResetRequest. So o
+// instante: nem o hash nem quem pediu ficam aqui.
+model VirusTotalLookup {
+  id       String   @id @default(cuid())
+  criadoEm DateTime @default(now())
+
+  @@index([criadoEm])
 }

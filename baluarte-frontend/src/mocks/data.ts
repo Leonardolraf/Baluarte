@@ -1844,7 +1844,13 @@ export interface MockFileScan extends Omit<FileScan, 'uploadedBy'> {
   userId: string;
 }
 
-/** Histórico inicial, mais recente primeiro. O hash do EICAR é o real do arquivo de teste de 68 bytes. */
+/** Relatório público do hash no VirusTotal (segunda opinião, B20). */
+const vtLink = (sha256: string) => `https://www.virustotal.com/gui/file/${sha256}`;
+
+/**
+ * Histórico inicial, mais recente primeiro. O hash do EICAR é o real do arquivo de teste de 68 bytes.
+ * Cada análise mostra uma situação da segunda opinião do VirusTotal (B20).
+ */
 export const MOCK_FILE_SCANS: MockFileScan[] = [
   {
     id: 'arq-004',
@@ -1855,6 +1861,15 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     result: 'clean',
     threat: null,
     scannedAt: hoursAgo(5),
+    secondOpinion: {
+      source: 'VirusTotal',
+      status: 'no_detection',
+      reason: null,
+      detections: 0,
+      total: 66,
+      checkedAt: hoursAgo(5),
+      link: vtLink('41a8760770b6306e718f0b7a89eca7d188e9f4edfe519eccb1b136f6071e0a3e'),
+    },
   },
   {
     id: 'arq-003',
@@ -1865,6 +1880,15 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     result: 'threat',
     threat: 'Eicar-Signature',
     scannedAt: daysAgo(1),
+    secondOpinion: {
+      source: 'VirusTotal',
+      status: 'malicious',
+      reason: null,
+      detections: 61,
+      total: 68,
+      checkedAt: daysAgo(1),
+      link: vtLink('275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f'),
+    },
   },
   {
     id: 'arq-002',
@@ -1875,6 +1899,15 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     result: 'clean',
     threat: null,
     scannedAt: daysAgo(3),
+    secondOpinion: {
+      source: 'VirusTotal',
+      status: 'unknown',
+      reason: null,
+      detections: null,
+      total: null,
+      checkedAt: daysAgo(3),
+      link: vtLink('a25c22a11d33d444ecb9aa93185aa15bf2b1e1264137dffc40b7cab7922deae9'),
+    },
   },
   {
     id: 'arq-001',
@@ -1885,6 +1918,8 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     result: 'clean',
     threat: null,
     scannedAt: daysAgo(6),
+    // Análise anterior à segunda opinião (B20).
+    secondOpinion: null,
   },
 ];
 

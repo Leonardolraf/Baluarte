@@ -16,6 +16,9 @@ import type {
   DashboardMetrics,
   FileScan,
   FunnelStage,
+  SecondOpinion,
+  SecondOpinionReason,
+  SecondOpinionStatus,
   NotificationPreferences,
   RBACRole,
   RemediationStep,
@@ -860,8 +863,63 @@ export interface BackendFileScan {
   resultado: string;
   ameaca: string | null;
   analisadoEm: string;
+  /** Segunda opinião do VirusTotal (B20); null nas análises anteriores a ela. */
+  segundaOpiniao?: BackendSecondOpinion | null;
   /** Só para Administrador e Analista em GET /arquivos/analises. */
   usuario?: { nome: string; email: string } | null;
+}
+
+export interface BackendSecondOpinion {
+  fonte: string;
+  situacao: string;
+  motivo: string | null;
+  deteccoes: number | null;
+  total: number | null;
+  consultadoEm: string | null;
+  link: string;
+  mensagem?: string;
+}
+
+const SECOND_OPINION_STATUS: Record<string, SecondOpinionStatus> = {
+  MALICIOSO: 'malicious',
+  SUSPEITO: 'suspicious',
+  SEM_DETECCAO: 'no_detection',
+  DESCONHECIDO: 'unknown',
+  INDISPONIVEL: 'unavailable',
+  DESLIGADO: 'disabled',
+};
+
+const SECOND_OPINION_REASON: Record<string, SecondOpinionReason> = {
+  COTA: 'quota',
+  CHAVE_INVALIDA: 'invalid_key',
+  LIMITE_VIRUSTOTAL: 'provider_limit',
+  TEMPO_ESGOTADO: 'timeout',
+  FALHA: 'failure',
+};
+
+const countOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+
+/** Situação desconhecida pelo frontend vira "indisponível" (nunca vira "sem detecção"). */
+export function toSecondOpinion(
+  raw: BackendSecondOpinion | null | undefined,
+  sha256: string,
+): SecondOpinion | null {
+  if (!raw) return null;
+  const status = SECOND_OPINION_STATUS[String(raw.situacao).toUpperCase()] ?? 'unavailable';
+  const withCounts = status === 'malicious' || status === 'suspicious' || status === 'no_detection';
+  return {
+    source: 'VirusTotal',
+    status,
+    reason:
+      status === 'unavailable'
+        ? (SECOND_OPINION_REASON[String(raw.motivo).toUpperCase()] ?? 'failure')
+        : null,
+    detections: withCounts ? countOrNull(raw.deteccoes) : null,
+    total: withCounts ? countOrNull(raw.total) : null,
+    checkedAt: raw.consultadoEm ?? null,
+    link: `https://www.virustotal.com/gui/file/${sha256}`,
+  };
 }
 
 export function toFileScan(raw: BackendFileScan): FileScan {
@@ -874,7 +932,9 @@ export function toFileScan(raw: BackendFileScan): FileScan {
     result: threat ? 'threat' : 'clean',
     threat: threat ? (raw.ameaca ?? null) : null,
     scannedAt: raw.analisadoEm,
+    secondOpinion: null,
   };
+  scan.secondOpinion = toSecondOpinion(raw.segundaOpiniao, scan.sha256);
   if (raw.usuario) scan.uploadedBy = { name: raw.usuario.nome, email: raw.usuario.email };
   return scan;
 }
