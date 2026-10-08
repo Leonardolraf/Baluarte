@@ -71,6 +71,14 @@ function canOpenHref(href: string, hasRole: HasRole): boolean {
   return hasRole(...ROUTE_ROLES[segment as keyof typeof ROUTE_ROLES]);
 }
 
+/** Saudação pelo horário local de quem está usando o sistema. */
+function saudacao(agora = new Date()): string {
+  const hora = agora.getHours();
+  if (hora < 12) return 'Bom dia';
+  if (hora < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
 function clampPct(value: number): number {
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 }
@@ -337,7 +345,7 @@ function PendingTrainingCard({ training }: { training: PendingTraining }) {
 // ---- Página -----------------------------------------------------------------
 
 export default function DashboardPage() {
-  const { hasRole } = useAuth();
+  const { hasRole, user } = useAuth();
   const { data, error, loading, reload } = useAsync<DashboardMetrics>(() => api.getDashboard(), []);
 
   const canManage = hasRole('admin', 'analyst');
@@ -360,6 +368,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        eyebrow={`${saudacao()}, ${user?.name?.split(' ')[0] ?? ''}`.trim().replace(/,$/, '')}
         title="Visão geral de risco"
         description="Consolidação do risco técnico e do risco humano da organização."
         meta={
@@ -460,7 +469,7 @@ export default function DashboardPage() {
             }
           />
         </div>
-        <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-relaxed text-slate-400">
+        <p className="mt-5 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500 dark:border-white/10 dark:text-slate-400">
           Risco técnico: severidade ponderada das vulnerabilidades abertas por ativo monitorado. Risco humano:
           taxas de clique e de submissão de credenciais nas simulações de phishing, medidas pessoa a pessoa.
         </p>

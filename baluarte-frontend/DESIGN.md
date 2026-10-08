@@ -12,7 +12,7 @@ Público: equipes de segurança e TI de empresas de médio porte (telas técnica
 
 | Token | Valor | Uso |
 |---|---|---|
-| `ink` | `#0B1220` | texto principal, barra lateral, placa do dashboard, ações primárias |
+| `ink` | `#0B1220` | texto principal, barra lateral, ações primárias |
 | `ink-soft` | `#1B2A44` | hover das ações primárias, item ativo do menu |
 | `slate-100` | `#EEF2F7` | fundo da página (claro) |
 | `slate-200` | `#DCE3EC` | bordas |
@@ -23,7 +23,7 @@ Público: equipes de segurança e TI de empresas de médio porte (telas técnica
 
 A escala `slate` do Tailwind foi **sobrescrita** por esses neutros com tinta de aço-azulado: as classes `slate-*` existentes continuam válidas e já saem na paleta nova. `brand` é um alias de `ink` mantido por compatibilidade.
 
-Sobre a placa escura (`.plate`), texto de severidade usa os tons 300 (`SEVERITY_PLATE_TEXT_CLASS`).
+Sobre a placa (`.plate`), o texto de severidade usa `SEVERITY_PLATE_TEXT_CLASS`: tons 700 no tema claro e 300 no escuro, para contrastar com o fundo de cada tema.
 
 ## Tipografia
 
@@ -60,7 +60,7 @@ Regra prática: **dentro de um cartão, tudo alinha no inset de 20 px** (título
 
 ## Componentes-assinatura
 
-- **Placa de comando** (`Plate`, dashboard): superfície `ink` com os dois medidores e os seis KPIs num só bloco. É o único lugar escuro da página clara; o resto fica quieto.
+- **Placa de comando** (`Plate`, dashboard): bloco único com os dois medidores e os seis KPIs. Acompanha o tema — branca com borda no claro, `slate-900` no escuro. O destaque vem do agrupamento e da sombra, não de inverter a cor da página.
 - **Medidor de risco humano em traços**: 24 segmentos discretos, um para cada fatia da população; o risco técnico é um arco contínuo. A geometria diz o que a cor não precisa dizer.
 - **Marca**: baluarte (planta pentagonal) em `BaluarteMark`; favicon em `public/baluarte.svg`.
 

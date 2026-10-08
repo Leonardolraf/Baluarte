@@ -21,6 +21,7 @@ import type {
   SecurityPolicy,
   Severity,
   Training,
+  TrainingOverview,
   User,
   UserInput,
   Vulnerability,
@@ -49,6 +50,7 @@ import {
   toScan,
   toSecurityPolicy,
   toTraining,
+  toTrainingOverview,
   toUser,
   toVulnerability,
   VULN_STATUS_TO_LABEL,
@@ -63,6 +65,7 @@ import {
   type BackendScan,
   type BackendSecurityPolicy,
   type BackendTraining,
+  type BackendTrainingOverview,
   type BackendUser,
 } from '@/services/adapters';
 
@@ -495,6 +498,12 @@ export const realApi: BaluarteApi = {
       url: `/treinamentos/link/${encodeURIComponent(token)}/reportar`,
     });
     return { reported: true, reportedAt: raw.reportadoEm };
+  },
+
+  async getTrainingOverview(): Promise<TrainingOverview> {
+    return toTrainingOverview(
+      await request<BackendTrainingOverview>({ method: 'GET', url: '/treinamentos/consolidado' }),
+    );
   },
 
   async listUsers(): Promise<User[]> {

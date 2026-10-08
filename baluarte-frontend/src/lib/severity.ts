@@ -60,12 +60,13 @@ export const SEVERITY_TEXT_CLASS: Record<Severity, string> = {
 };
 
 /** Texto por severidade sobre a placa escura (`.plate`), independente do tema: tons 300. */
+// Sobre a placa: tons escuros no tema claro (contraste sobre branco) e os 300 no escuro.
 export const SEVERITY_PLATE_TEXT_CLASS: Record<Severity, string> = {
-  critical: 'text-red-300',
-  high: 'text-orange-300',
-  medium: 'text-yellow-300',
-  low: 'text-green-300',
-  info: 'text-blue-300',
+  critical: 'text-red-700 dark:text-red-300',
+  high: 'text-orange-700 dark:text-orange-300',
+  medium: 'text-yellow-700 dark:text-yellow-300',
+  low: 'text-green-700 dark:text-green-300',
+  info: 'text-blue-700 dark:text-blue-300',
 };
 
 export const SEVERITY_HEX: Record<Severity, string> = {

@@ -40,9 +40,11 @@
     @apply rounded-xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900;
   }
 
-  /* Placa de comando (dashboard): a única superfície escura da página clara. */
+  /* Placa de comando (dashboard): bloco destacado dos dois índices de risco.
+     Acompanha o tema — clara no claro, escura no escuro. */
   .plate {
-    @apply rounded-plate bg-ink text-white shadow-plate dark:border dark:border-slate-800 dark:bg-slate-900;
+    @apply rounded-plate border border-slate-200 bg-white text-ink shadow-card;
+    @apply dark:border-slate-800 dark:bg-slate-900 dark:text-white dark:shadow-plate;
   }
 
   .label-caps {
