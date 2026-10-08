@@ -110,7 +110,7 @@ export async function aplicarRetencao(usuarioId: string | null): Promise<Resulta
 
 /**
  * O que a politica de seguranca publica sobre a auditoria. `logImutavel` so e verdadeiro
- * quando a trava do banco esta de fato ativa (migration 20261008171000_auditoria_imutavel).
+ * quando a trava do banco esta de fato ativa (migration 20261008176000_auditoria_imutavel).
  */
 export async function politicaAuditoria() {
   return { registraAcoes: true, logImutavel: await repo.travaAtiva(), retencaoMeses: RETENCAO_MESES };

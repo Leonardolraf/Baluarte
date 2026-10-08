@@ -47,7 +47,7 @@ export async function aplicarRetencao(meses: number) {
 
 /**
  * A trava no banco esta ligada? So quando os dois triggers da migration
- * 20261008171000_auditoria_imutavel (branch feat/b29-trava) existem e nao estao desabilitados.
+ * 20261008176000_auditoria_imutavel (branch feat/b29-trava) existem e nao estao desabilitados.
  */
 export async function travaAtiva(): Promise<boolean> {
   const [r] = await prisma.$queryRaw<{ ativos: bigint }[]>`
