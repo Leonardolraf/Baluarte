@@ -24,7 +24,8 @@ npm run dev          # http://localhost:5173 — usa a camada mock (sem backend)
 | `npm run lint` / `npm run lint:fix` | ESLint (react, react-hooks, jsx-a11y, @typescript-eslint, prettier) |
 | `npm run format` / `npm run format:check` | Prettier |
 | `npm test` / `npm run test:watch` / `npm run test:coverage` | Vitest + React Testing Library + axe-core (jsdom) |
-| `npm run test:e2e` / `npm run test:e2e:headed` | Playwright (Chrome do sistema) contra o dev server em modo mock |
+| `npm run test:e2e` / `npm run test:e2e:headed` | Playwright (Chrome do sistema) contra o dev server em modo mock (`E2E_PORT` troca a porta 5173) |
+| `npm run test:e2e:real` | Playwright contra a API real: sobe banco descartável, API (`:8097`), OSV/NVD falsos e Vite (`:5200`), roda `e2e/real/` e derruba tudo (`../scripts/e2e-real.mjs`) |
 | `npm run test:all` | typecheck + lint + unit + build + E2E, em sequência |
 
 ## Credenciais de demonstração (camada mock)
@@ -61,10 +62,10 @@ A única porta de entrada das telas é `src/services/api.ts`, que exporta `api: 
 | Campanhas e treinamento | `GET /campanhas`, `GET /campanhas/:id`, `POST /campaigns` (`destinatario` + `destinatarios[]`), `GET /treinamentos/:token`, `POST /treinamentos/:token/concluir`; públicas, pelo link do e-mail: `GET /treinamentos/link/:token`, `POST /treinamentos/link/:token/concluir`, `POST /treinamentos/link/:token/reportar` (telas `/t/:token` e `/t/:token/reportar`) |
 | Usuários | `GET /usuarios`, `POST /users`, `PATCH/DELETE /users/:id` (Administrador) |
 | Configurações | `GET /configuracoes/seguranca`, `GET/PUT /configuracoes/notificacoes` |
-| Análise de arquivos (B04, backend em andamento) | `POST /arquivos/analise` (multipart, campo `arquivo`), `GET /arquivos/analises` |
+| Análise de arquivos (B04/B17/B20) | `POST /arquivos/analise` (multipart, campo `arquivo`), `GET /arquivos/analises?resultado=&pagina=&tamanho=` |
 | Estações monitoradas (B13/B14) | `GET /estacoes` (lista com `resumo` de online/offline), `GET /estacoes/:id` (programas instalados, portas abertas, última verificação e achados), `POST /estacoes/:id/verificar` (cruza o inventário com OSV/NVD) |
 
-Todas, exceto as de análise de arquivos (contrato do B04, cujo backend vem em seguida), estão implementadas em `../backend` (testes em `../backend/tests`). `src/services/api.ts` exporta `FEATURES`, um mapa de capacidades hoje todo ligado; as telas continuam consultando-o para esconder uma ação (em vez de mostrar um 404 genérico) caso uma implantação desligue alguma capacidade. Se uma rota não existir no servidor, a camada real converte o 404 `ROTA_NAO_ENCONTRADA` em **501 `NAO_IMPLEMENTADO`**.
+Todas estão implementadas em `../backend` (testes em `../backend/tests`). `src/services/api.ts` exporta `FEATURES`, um mapa de capacidades hoje todo ligado; as telas continuam consultando-o para esconder uma ação (em vez de mostrar um 404 genérico) caso uma implantação desligue alguma capacidade. Se uma rota não existir no servidor, a camada real converte o 404 `ROTA_NAO_ENCONTRADA` em **501 `NAO_IMPLEMENTADO`**.
 
 **Relatório em PDF (B24).** O botão **Exportar PDF** da tela de vulnerabilidades (só Administrador e Analista) chama `api.exportVulnerabilityReport` com os filtros ativos na tela (severidade e status no rótulo do backend, a busca sem esperar o debounce), recebe o arquivo como Blob pelo `httpClient` (o interceptor põe o token e, em erro, lê o envelope JSON de dentro do Blob) e o entrega ao navegador com `saveBlob` (`src/lib/download.ts`), com o nome do `Content-Disposition`. Mostra "Gerando PDF…" enquanto espera e o erro num banner; sem achados nos filtros atuais, o botão fica desabilitado. **No modo mock** não há servidor para gerar o relatório: `src/mocks/pdf.ts` monta um PDF simples só de texto (cabeçalho, resumo e um achado por linha, com acentos e "Página X de Y"), marcado como modo demonstração, e a exportação entra na trilha de auditoria da sessão. O módulo fica em `src/mocks/` e não vai para o build de produção.
 
@@ -96,8 +97,8 @@ VITE_USE_MOCKS=
 |---|---|---|
 | Unitários e de componentes (Vitest + RTL) | `src/__tests__/*.test.ts(x)` | `ProtectedRoute`, RBAC por rota e por navegação, `SeverityBadge`, `DashboardPage`, `LoginPage`, hooks (`useAsync`, `useSort`, `usePagination`), bibliotecas (`format`, `severity`, `roles`, `jwt`, `storage`, `errors`), API mock (autenticação, redefinição de senha, RBAC por endpoint, validações, métricas), adapters e invariantes dos dados fictícios |
 | Acessibilidade (axe-core) | `src/__tests__/a11y.test.tsx` | Todas as páginas renderizadas com dados do mock, sem violações (a regra de contraste é auditada manualmente — o jsdom não calcula layout) |
-| Ponta a ponta (Playwright, Chrome do sistema) | `e2e/*.spec.ts` | Login/logout/redirecionamento, redefinição de senha (fluxo completo com token), RBAC, vulnerabilidades (filtros, busca global, detalhe, status), campanhas (lista, relatório, criação), usuários (criar/editar/excluir com diálogo), configurações (senha, notificações, tema), treinamento, layout mobile (gaveta com foco preso, sem rolagem horizontal) |
-| Ponta a ponta em modo real | `e2e/real-backend.spec.ts` | Contra a API real: login, sessão, “Risco aceito” (ida e volta), campanha com dois destinatários (removida no fim), criar/editar/excluir usuário, troca de senha, conta inativada perdendo acesso, RBAC de colaborador conferido na própria API, preferências de notificação e redefinição de senha. `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; `:5174` em dev com `VITE_USE_MOCKS=false`; `E2E_API_URL` muda a API, padrão `http://localhost:8080/api`) |
+| Ponta a ponta — **suíte funcional oficial** (Playwright, Chrome do sistema, modo mock) | `e2e/*.spec.ts` | 39 testes: login/logout/redirecionamento, redefinição de senha (fluxo completo com token), RBAC, vulnerabilidades (filtros, busca global, detalhe, status), campanhas (lista, relatório, criação), usuários (criar/editar/excluir com diálogo), configurações (senha, notificações, tema), treinamento, estações (lista, detalhe com programas e portas, RBAC), análise de arquivos (envio, veredito, segunda opinião, histórico filtrado, limite de 10 MB, colaborador), layout mobile (gaveta com foco preso, sem rolagem horizontal). `screenshots.spec.ts` (14) só gera capturas de referência e fica pulado sem `E2E_SCREENSHOTS=1` |
+| Ponta a ponta em modo real | `e2e/real/*.spec.ts` | 19 testes contra a API real e o PostgreSQL, por `npm run test:e2e:real` (orquestrador `../scripts/e2e-real.mjs`, isolado: banco `baluarte_e2e` descartável, API `:8097`, Vite `:5200`, OSV/NVD falsos `:8098`, nunca a 8080/5173). `conta-e-operacao.spec.ts` (10): login, sessão, “Risco aceito” (ida e volta), campanha com dois destinatários, criar/editar/excluir usuário, convite lido no Mailpit, troca de senha, conta inativada perdendo acesso, RBAC de colaborador na própria API, preferências e redefinição de senha. `arquivos.spec.ts` (5): sem ClamAV a tela explica o 503; com ClamAV, arquivo limpo (SHA-256 conferido, segunda opinião desligada), EICAR montado em memória, histórico filtrado no servidor e colaborador. `estacoes.spec.ts` (4): estação inscrita simulando o osquery, lista e detalhe com programas e portas, “Verificar vulnerabilidades” contra a base falsa, base fora do ar e RBAC. Detalhes no README da raiz (“Funcional — Playwright”). Contra a stack Docker: `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test` (`E2E_API_URL` muda a API, padrão `http://localhost:8080/api`) |
 
 ## Rotas e RBAC
 
@@ -119,7 +120,7 @@ VITE_USE_MOCKS=
 
 ## Docker
 
-`Dockerfile` faz o build de produção (sem mocks) e o serve com Nginx (`nginx/app.conf`: fallback de SPA, cache longo só nos assets com hash, `no-cache` no index e proxy `/api` → `backend:8080`). Na subida, `nginx/40-baluarte-tls.sh` monta a configuração: sem certificado, só HTTP; com o certificado de `scripts/gerar-certificados.sh` montado em `/etc/nginx/certs`, também HTTPS (TLS 1.3/1.2) na **8443** e, com `HTTPS_REDIRECT=1`, a 8081 passa a redirecionar (ver "HTTPS local (B06)" no README da raiz). `DEV_HTTPS=1 npm run dev` sobe o dev server em HTTPS com o mesmo certificado. Na raiz do repositório, `docker compose up --build -d backend app` sobe API + este frontend em **http://localhost:8081** — porta diferente da 5173 de propósito, para a stack Docker não ser confundida com o dev server nas suítes do Playwright. Para validar a stack: `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts`.
+`Dockerfile` faz o build de produção (sem mocks) e o serve com Nginx (`nginx/app.conf`: fallback de SPA, cache longo só nos assets com hash, `no-cache` no index e proxy `/api` → `backend:8080`). Na subida, `nginx/40-baluarte-tls.sh` monta a configuração: sem certificado, só HTTP; com o certificado de `scripts/gerar-certificados.sh` montado em `/etc/nginx/certs`, também HTTPS (TLS 1.3/1.2) na **8443** e, com `HTTPS_REDIRECT=1`, a 8081 passa a redirecionar (ver "HTTPS local (B06)" no README da raiz). `DEV_HTTPS=1 npm run dev` sobe o dev server em HTTPS com o mesmo certificado. Na raiz do repositório, `docker compose up --build -d backend app` sobe API + este frontend em **http://localhost:8081** — porta diferente da 5173 de propósito, para a stack Docker não ser confundida com o dev server nas suítes do Playwright. Para validar a stack: `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test` (roda `e2e/real/`).
 
 ## Estrutura
 
@@ -136,7 +137,7 @@ src/
   styles/          tailwind.css
   types/           modelos de domínio
   __tests__/       Vitest (unitários, componentes, RBAC, a11y, mocks, adapters)
-e2e/               Playwright (mock e modo real)
+e2e/               Playwright: mock em e2e/*.spec.ts, modo real em e2e/real/ (apoio.ts + specs)
 Dockerfile · nginx/ (blocos HTTP/HTTPS + entrypoint do TLS)
 ```
 
