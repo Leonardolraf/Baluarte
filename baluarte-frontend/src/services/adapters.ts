@@ -26,6 +26,7 @@ import type {
   NotificationPreferences,
   RBACRole,
   RemediationStep,
+  RiskTrendPoint,
   ScanReport,
   ScanStatus,
   SecurityPolicy,
@@ -132,7 +133,7 @@ export interface BackendFinding {
     varreduraConcluidaEm?: string | null;
     ativoId: string;
   };
-  /** Só no detalhe: detecção + mudanças de status registradas na trilha de auditoria (B25). */
+  /** Só no detalhe: detecção + mudanças de status do histórico do achado (B25b: tabela própria no servidor). */
   historico?: BackendFindingHistory;
 }
 
@@ -236,8 +237,12 @@ export interface BackendDashboard {
     ativosMonitorados: number | null;
     /** Arquivos distintos com ameaça nos últimos 30 dias (B17); null para o Colaborador, ausente em backend anterior. */
     arquivosMaliciosos?: number | null;
+    /** Índice de risco técnico 0–100 calculado no servidor (B25b); null para o Colaborador. */
+    indiceRiscoTecnico?: number | null;
   };
   distribuicaoSeveridade: Record<string, number> | null;
+  /** Últimos 30 dias, do mais antigo a hoje (B25b); null para o Colaborador. */
+  evolucaoRisco?: BackendRiskTrendPoint[] | null;
   vulnerabilidadesRecentes: BackendFinding[];
   /** Ausente em API anterior ao B25; vazio para o Colaborador. */
   ativosMaiorRisco?: BackendAssetRisk[];
@@ -245,6 +250,17 @@ export interface BackendDashboard {
   campanhas: BackendCampaign[];
   funil: BackendFunnel | null;
   campanhaAtiva: string | null;
+}
+
+export interface BackendRiskTrendPoint {
+  data: string;
+  critico: number;
+  alto: number;
+  medio: number;
+  baixo: number;
+  arquivosMaliciosos: number;
+  ativos: number;
+  indice: number;
 }
 
 export interface BackendTraining {
@@ -516,9 +532,8 @@ export function toScan(raw: BackendScan): ScanReport {
 }
 
 /**
- * Histórico só com fatos que o servidor sustenta (B25): a detecção (data e varredura que
- * geraram o achado, sem afirmar o status de então) e as mudanças de status registradas na
- * trilha de auditoria. Nada é deduzido: sem `historico` (lista, API antiga) fica só a detecção.
+ * Histórico só com fatos que o servidor sustenta (B25/B25b): a detecção (data e varredura que
+ * geraram o achado) e as mudanças de status gravadas no histórico do achado. Nada é deduzido: sem `historico` (lista, API antiga) fica só a detecção.
  */
 function toHistory(raw: BackendFinding): VulnerabilityHistoryEntry[] {
   const detected = raw.historico?.eventos.find((e) => e.tipo === 'DETECTADO');
@@ -783,22 +798,35 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
   };
 }
 
+/** Ponto da evolução do risco (B25b): só renomeia; os números (inclusive o índice) são do servidor. */
+export function toRiskTrendPoint(raw: BackendRiskTrendPoint): RiskTrendPoint {
+  return {
+    date: raw.data,
+    critical: raw.critico,
+    high: raw.alto,
+    medium: raw.medio,
+    low: raw.baixo,
+    maliciousFiles: raw.arquivosMaliciosos,
+    assets: raw.ativos,
+    index: raw.indice,
+  };
+}
+
 export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): DashboardMetrics {
   // Colaborador (RN-006, B10): a API não manda a parte técnica nem as campanhas; só a resiliência.
   const technical = raw.distribuicaoSeveridade !== null && raw.kpis.vulnerabilidadesAbertas !== null;
   let severityDistribution: Record<Severity, number> | null = null;
-  let technicalRisk: number | null = null;
   if (raw.distribuicaoSeveridade !== null) {
     const distribution = emptySeverityMap();
     for (const [label, count] of Object.entries(raw.distribuicaoSeveridade)) {
       distribution[severityFromLabel(label)] += count;
     }
-    const weighted =
-      distribution.critical * 10 + distribution.high * 6 + distribution.medium * 3 + distribution.low * 1;
-    const capacity = Math.max(1, raw.kpis.ativosMonitorados ?? 0) * 20;
-    technicalRisk = Math.max(0, Math.min(100, Math.round((weighted / capacity) * 100)));
     severityDistribution = distribution;
   }
+  // B25b: o índice de risco técnico vem pronto do servidor (pesos únicos no backend); sem fórmula aqui.
+  const technicalRisk = technical ? countOrNull(raw.kpis.indiceRiscoTecnico) : null;
+  const riskTrend =
+    technical && Array.isArray(raw.evolucaoRisco) ? raw.evolucaoRisco.map(toRiskTrendPoint) : null;
   const campaigns = raw.campanhas.map(toCampaign);
   // Sem envios o índice é NÃO MEDIDO (null), nunca 0 % / risco humano 100 %. A API manda null
   // nesse caso; para o operador, a soma dos envios das campanhas confirma (backend anterior mandava 0).
@@ -820,6 +848,7 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
   }));
   return {
     technicalRisk,
+    riskTrend,
     humanRisk,
     kpis: {
       openVulnerabilities: raw.kpis.vulnerabilidadesAbertas,

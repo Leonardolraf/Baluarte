@@ -28,6 +28,21 @@ export const SEVERIDADES = ['Crítico', 'Alto', 'Médio', 'Baixo'];
 export const STATUS_FINDING = ['Aberta', 'Em revisão', 'Em remediação', 'Resolvida', 'Risco aceito'];
 /** Status de achado que NAO contam como risco em aberto no dashboard. */
 export const STATUS_FINDING_ENCERRADO = ['Resolvida', 'Risco aceito'];
+/** Status com que todo achado nasce (default de Finding.status; CHECK FindingStatusChange_criacao_check). */
+export const STATUS_INICIAL_FINDING = 'Aberta';
+
+/**
+ * Peso de cada achado ABERTO por severidade: o UNICO lugar que define a escala de risco (B25b).
+ * Usado pela nota de risco por ativo (services/riscoAtivo.service.ts), pelo indice de risco
+ * tecnico global do dashboard (`kpis.indiceRiscoTecnico`) e pela evolucao do risco em 30 dias
+ * (services/indiceRisco.service.ts). O frontend nao tem formula propria: le os numeros prontos.
+ *
+ * PROPOSTA, pendente da escolha do Leo (cartao DT07 no Trello): 10/7/4/1, o piso da faixa
+ * CVSS 3.1 de cada severidade (Critico 9,0 arredondado para 10; Alto 7,0; Medio 4,0; Baixo 0,1
+ * arredondado para 1). Ate o B25b o indice global do frontend usava 10/6/3/1. Trocar a escala
+ * e mudar SO esta constante (e o teste de unidade que a fixa); nota, indice e evolucao acompanham.
+ */
+export const PESO_SEVERIDADE: Readonly<Record<string, number>> = { 'Crítico': 10, 'Alto': 7, 'Médio': 4, 'Baixo': 1 };
 
 /** Perfis que operam a plataforma (varreduras, ativos, campanhas, listas tecnicas). */
 export const OPERADORES = ['Administrador', 'Analista'];

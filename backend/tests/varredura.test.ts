@@ -119,6 +119,14 @@ describe('status da varredura pelo tempo decorrido', () => {
 
     const vulns = await chamar('GET', `/vulnerabilidades?q=${ativo.host}`, { token: analista });
     assert.equal(vulns.body.resumo.total, scan._count.findings, 'os achados aparecem na lista de vulnerabilidades');
+
+    // B25b: na mesma transacao, cada achado ganha o evento de criacao (NULL -> Aberta) no instante da conclusao.
+    const eventos = await prisma.findingStatusChange.findMany({ where: { finding: { scanId } } });
+    assert.equal(eventos.length, scan._count.findings);
+    for (const ev of eventos) {
+      assert.deepEqual([ev.de, ev.para, ev.usuarioId], [null, 'Aberta', null]);
+      assert.equal(ev.registradaEm.getTime(), criadoEm.getTime() + DURACAO_VARREDURA_MS);
+    }
   });
 
   it('vai direto de EM_FILA a CONCLUIDA se ninguém leu no meio, e o dashboard é quem percebe', async () => {
@@ -148,6 +156,7 @@ describe('status da varredura pelo tempo decorrido', () => {
     assert.ok(qtd >= 2 && qtd <= 4, `achados: ${qtd}`);
     await lerScan(scanId);
     assert.equal(await prisma.finding.count({ where: { scanId } }), qtd);
+    assert.equal(await prisma.findingStatusChange.count({ where: { finding: { scanId } } }), qtd, 'um evento de criação por achado (B25b)');
   });
 
   it('varredura antiga que já tinha achados conclui sem ganhar achados novos', async () => {

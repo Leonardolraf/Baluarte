@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import type {
   FiltrosVulnerabilidade,
@@ -89,10 +89,78 @@ export async function buscar(id: string): Promise<FindingComOrigem | null> {
   return prisma.finding.findUnique({ where: { id }, include: COM_ATIVO });
 }
 
-export function existe(id: string) {
-  return prisma.finding.findUnique({ where: { id } });
+/**
+ * Muda o status e grava o evento do historico (B25b) na MESMA transacao. A linha do achado e
+ * travada (FOR UPDATE) antes de ler o status anterior: duas mudancas simultaneas ficam em fila
+ * e a cadeia de eventos nunca registra um `de` que ja nao era o status. Repetir o status atual
+ * nao grava evento. Devolve null se o achado nao existe.
+ */
+export async function alterarStatus(
+  id: string,
+  status: string,
+  usuarioId: string | null,
+): Promise<{ anterior: string; finding: FindingComOrigem } | null> {
+  return prisma.$transaction(async (tx) => {
+    const [linha] = await tx.$queryRaw<Array<{ status: string }>>`SELECT "status" FROM "Finding" WHERE "id" = ${id} FOR UPDATE`;
+    if (!linha) return null;
+    const finding = await tx.finding.update({ where: { id }, data: { status }, include: COM_ATIVO });
+    if (linha.status !== status)
+      await tx.findingStatusChange.create({ data: { findingId: id, de: linha.status, para: status, usuarioId } });
+    return { anterior: linha.status, finding };
+  });
 }
 
-export async function alterarStatus(id: string, status: string): Promise<FindingComOrigem> {
-  return prisma.finding.update({ where: { id }, data: { status }, include: COM_ATIVO });
+// ---- Historico de status (B25b) ---------------------------------------------------
+
+/**
+ * Evento de criacao (de NULL -> status inicial) dos achados de uma varredura, no instante em que
+ * cada um nasceu. Chamado dentro da transacao que grava os achados (conclusao da varredura
+ * simulada e cruzamento do B14), sempre numa varredura cujos achados acabaram de ser criados.
+ */
+export async function registrarCriacaoDosAchados(tx: Prisma.TransactionClient, scanId: string): Promise<void> {
+  const achados = await tx.finding.findMany({ where: { scanId }, select: { id: true, status: true, criadoEm: true } });
+  if (!achados.length) return;
+  await tx.findingStatusChange.createMany({
+    data: achados.map((a) => ({ findingId: a.id, de: null, para: a.status, registradaEm: a.criadoEm })),
+  });
+}
+
+/** Eventos de status de um achado, em ordem cronologica (o id sequencial desempata o mesmo instante). */
+export function historicoStatus(findingId: string) {
+  return prisma.findingStatusChange.findMany({ where: { findingId }, orderBy: [{ registradaEm: 'asc' }, { id: 'asc' }] });
+}
+
+/**
+ * Achados abertos por severidade ao fim de cada dia (evolucao do risco, B25b), numa consulta so.
+ * `fins` sao os instantes em que os dias terminam, do mais antigo ao mais recente; o ultimo e
+ * "agora". Um achado conta no dia se foi criado ate o fim dele e o ultimo evento ate ali o deixa
+ * num status aberto (fora de `encerrados`). No ultimo dia (agora) vale o status gravado no
+ * achado, que e o fato atual: assim o ultimo ponto bate com os KPIs mesmo quando a cadeia de
+ * eventos de algum achado esta incompleta. Achado sem nenhum evento ate o dia (inserido por
+ * fora da API) usa o status gravado.
+ *
+ * Custo: para cada dia, uma busca pelo indice (findingId, registradaEm) por achado criado ate
+ * ali, ou seja ~30 x achados buscas por leitura do dashboard. Adequado ate dezenas de milhares
+ * de achados; acima disso, guardar uma foto diaria (o que este item evitou de proposito).
+ * `dia` e a posicao em `fins` (1 = o mais antigo).
+ */
+export function abertosPorDia(fins: Date[], encerrados: readonly string[]) {
+  const instantes = fins.map((f) => f.toISOString());
+  return prisma.$queryRaw<Array<{ dia: number; severidade: string; total: number }>>`
+    WITH dias AS (
+      SELECT t."fim"::timestamp(3) AS "fim", t."ordem"::int AS "dia", t."ordem" = ${instantes.length} AS "atual"
+      FROM unnest(${instantes}::text[]) WITH ORDINALITY AS t("fim", "ordem")
+    )
+    SELECT d."dia", f."severidade", COUNT(*)::int AS "total"
+    FROM dias d
+    JOIN "Finding" f ON f."criadoEm" <= d."fim"
+    LEFT JOIN LATERAL (
+      SELECT e."para"
+      FROM "FindingStatusChange" e
+      WHERE e."findingId" = f."id" AND e."registradaEm" <= d."fim"
+      ORDER BY e."registradaEm" DESC, e."id" DESC
+      LIMIT 1
+    ) u ON NOT d."atual"
+    WHERE (CASE WHEN d."atual" THEN f."status" ELSE COALESCE(u."para", f."status") END) NOT IN (${Prisma.join([...encerrados])})
+    GROUP BY d."dia", f."severidade"`;
 }

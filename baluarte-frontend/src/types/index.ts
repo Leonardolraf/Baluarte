@@ -446,9 +446,32 @@ export interface DashboardKpis {
   maliciousFiles: number | null;
 }
 
+/**
+ * Um dia da evolução do risco (B25b): vulnerabilidades abertas por severidade ao fim do dia,
+ * arquivos com ameaça na janela de 30 dias que terminava nele, ativos que já existiam e o
+ * índice de risco técnico daquele dia, calculado pelo servidor (o último ponto é hoje).
+ */
+export interface RiskTrendPoint {
+  /** AAAA-MM-DD (dia no fuso de Brasília). */
+  date: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  maliciousFiles: number;
+  assets: number;
+  /** 0–100, maior = pior; a mesma fórmula do `technicalRisk`. */
+  index: number;
+}
+
 export interface DashboardMetrics {
-  /** Risco técnico agregado (0–100, maior = pior); `null` para o Colaborador (RN-006). */
+  /**
+   * Risco técnico agregado (0–100, maior = pior), calculado pelo servidor (`kpis.indiceRiscoTecnico`,
+   * B25b); o frontend não tem fórmula própria. `null` para o Colaborador (RN-006).
+   */
   technicalRisk: number | null;
+  /** Evolução do risco nos últimos 30 dias, do mais antigo a hoje (B25b); `null` para o Colaborador. */
+  riskTrend: RiskTrendPoint[] | null;
   /** Risco humano agregado (0–100, maior = pior). */
   humanRisk: number;
   kpis: DashboardKpis;

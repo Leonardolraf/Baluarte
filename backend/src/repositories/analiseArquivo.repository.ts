@@ -58,3 +58,20 @@ export async function contarAmeacasDistintasDesde(desde: Date): Promise<number> 
   });
   return linhas.length;
 }
+
+/**
+ * Evolucao do risco (B25b): para cada janela [desde, ate], quantos arquivos DISTINTOS (por
+ * SHA-256) deram ameaca nela, numa consulta so. `dia` e a posicao da janela (1 = a primeira).
+ */
+export function contarAmeacasDistintasPorJanela(janelas: Array<{ desde: Date; ate: Date }>) {
+  const desde = janelas.map((j) => j.desde.toISOString());
+  const ate = janelas.map((j) => j.ate.toISOString());
+  return prisma.$queryRaw<Array<{ dia: number; total: number }>>`
+    SELECT t."ordem"::int AS "dia",
+           (SELECT COUNT(DISTINCT s."sha256")::int
+              FROM "FileScan" s
+             WHERE s."resultado" = 'AMEACA'
+               AND s."criadoEm" >= t."desde"::timestamp(3)
+               AND s."criadoEm" <= t."ate"::timestamp(3)) AS "total"
+    FROM unnest(${desde}::text[], ${ate}::text[]) WITH ORDINALITY AS t("desde", "ate", "ordem")`;
+}

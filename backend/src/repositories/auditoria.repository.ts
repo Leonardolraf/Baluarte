@@ -99,15 +99,3 @@ export async function acoesDistintas(): Promise<string[]> {
 export function usuariosPorIds(ids: string[]) {
   return prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true, email: true } });
 }
-
-/**
- * Registros de mudanca de status de UM achado (historico do detalhe, B25). O detalhe e
- * gravado pelo service como `<id do achado> (<host>, <categoria>): <de> → <para>`: o id vem
- * primeiro, seguido de " (", entao o prefixo identifica o achado sem casar outro id.
- */
-export function alteracoesDeStatus(acao: string, findingId: string) {
-  return prisma.auditLog.findMany({
-    where: { acao, detalhe: { startsWith: `${findingId} (` } },
-    orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
-  });
-}

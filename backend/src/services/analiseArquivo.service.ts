@@ -115,6 +115,22 @@ export async function listar(usuario: UsuarioAtual, f: FiltrosHistorico) {
  * o veredito e so do ClamAV, como no historico.
  */
 export function contarArquivosMaliciosos(agora = new Date()): Promise<number> {
-  const desde = new Date(agora.getTime() - JANELA_ARQUIVOS_MALICIOSOS_DIAS * 24 * 60 * 60 * 1000);
-  return repo.contarAmeacasDistintasDesde(desde);
+  return repo.contarAmeacasDistintasDesde(inicioDaJanela(agora));
+}
+
+/** Inicio da janela de 30 dias que termina em `fim`. */
+function inicioDaJanela(fim: Date): Date {
+  return new Date(fim.getTime() - JANELA_ARQUIVOS_MALICIOSOS_DIAS * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * A mesma contagem de `contarArquivosMaliciosos`, mas com a janela terminando em cada instante
+ * de `fins` (evolucao do risco, B25b): o KPI que o dashboard teria mostrado ao fim de cada dia.
+ * Devolve um numero por instante, na ordem de `fins`.
+ */
+export async function contarArquivosMaliciososAte(fins: Date[]): Promise<number[]> {
+  if (!fins.length) return [];
+  const linhas = await repo.contarAmeacasDistintasPorJanela(fins.map((fim) => ({ desde: inicioDaJanela(fim), ate: fim })));
+  const porDia = new Map(linhas.map((l) => [Number(l.dia), Number(l.total)]));
+  return fins.map((_, i) => porDia.get(i + 1) ?? 0);
 }

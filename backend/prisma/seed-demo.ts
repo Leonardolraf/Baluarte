@@ -6,6 +6,12 @@ import { gerarTokenLink, hashToken } from '../src/utils/tokens.js';
 
 // Popula o banco com dados de DEMONSTRACAO para o frontend ter conteudo realista.
 // Roda DEPOIS do seed de contrato. NAO deve rodar antes do Newman (use db:reset + seed).
+
+/** Instante de `dias` dias atras (mesma hora de agora). */
+function diasAtras(dias: number): Date {
+  return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+}
+
 async function main() {
   // limpa dados gerados (mantem usuarios/ativos de contrato u-000/u-001/u-002/ativo-001/ativo-002)
   await prisma.finding.deleteMany();
@@ -16,23 +22,51 @@ async function main() {
   await prisma.asset.deleteMany({ where: { id: { notIn: ['ativo-001', 'ativo-002'] } } });
 
   // ---- Ativos extras ----
+  // Datados no passado (os de contrato tambem), para a evolucao do risco em 30 dias (B25b) ter
+  // os ativos ja existentes em todos os dias da janela (sao a capacidade do indice).
+  const desde = diasAtras(60);
   const ativos = [
     { id: 'ativo-003', nome: 'Portal do Cliente', host: 'portal.empresa.com', tipo: 'Aplicacao', status: 'Ativo' },
     { id: 'ativo-004', nome: 'API de Pagamentos', host: 'api.empresa.com', tipo: 'Aplicacao', status: 'Ativo' },
     { id: 'ativo-005', nome: 'Banco de Dados Central', host: 'db.empresa.com', tipo: 'Banco de Dados', status: 'Ativo' },
   ];
-  for (const a of ativos) await prisma.asset.create({ data: a });
+  for (const a of ativos) await prisma.asset.create({ data: { ...a, criadoEm: desde } });
+  await prisma.asset.updateMany({ where: { id: { in: ['ativo-001', 'ativo-002'] } }, data: { criadoEm: desde } });
 
   // ---- Varreduras + achados (classificacao, nota e remediacao vem do catalogo) ----
-  const achados: Record<string, [ChaveAchado, string][]> = {
-    'ativo-003': [['injecao-sql', 'Aberta'], ['idor', 'Em revisão'], ['sem-bloqueio-login', 'Aberta']],
-    'ativo-004': [['sessao-sem-expiracao', 'Em remediação'], ['cors-curinga', 'Aberta']],
-    'ativo-001': [['componente-vulneravel', 'Resolvida'], ['injecao-comando', 'Aberta']],
+  // Cada achado nasce "Aberta" ha N dias e muda de status em datas passadas, gravando o
+  // historico como a API grava (B25b: evento de criacao + um evento por mudanca, com autor).
+  // Assim a aba de historico fica completa e a evolucao do risco tem subidas e descidas.
+  type Mudanca = [diasAtras: number, status: string];
+  const achados: Record<string, Array<[ChaveAchado, number, Mudanca[]]>> = {
+    'ativo-003': [
+      ['injecao-sql', 25, []],
+      ['idor', 18, [[6, 'Em revisão']]],
+      ['sem-bloqueio-login', 12, []],
+    ],
+    'ativo-004': [
+      ['sessao-sem-expiracao', 20, [[15, 'Em revisão'], [7, 'Em remediação']]],
+      ['cors-curinga', 9, []],
+    ],
+    'ativo-001': [
+      ['componente-vulneravel', 28, [[20, 'Em remediação'], [4, 'Resolvida']]],
+      ['injecao-comando', 3, []],
+    ],
+    'ativo-005': [['cookie-inseguro', 14, [[10, 'Risco aceito']]]],
   };
   for (const [assetId, lista] of Object.entries(achados)) {
-    const scan = await prisma.scan.create({ data: { assetId, status: 'CONCLUIDA', concluidoEm: new Date() } });
-    for (const [chave, status] of lista) {
-      await prisma.finding.create({ data: { ...dadosAchado(chave), scanId: scan.id, status } });
+    const inicio = diasAtras(Math.max(...lista.map(([, dias]) => dias)));
+    const scan = await prisma.scan.create({ data: { assetId, status: 'CONCLUIDA', criadoEm: inicio, concluidoEm: inicio } });
+    for (const [chave, dias, mudancas] of lista) {
+      const criadoEm = diasAtras(dias);
+      const status = mudancas.length ? mudancas[mudancas.length - 1][1] : 'Aberta';
+      const f = await prisma.finding.create({ data: { ...dadosAchado(chave), scanId: scan.id, status, criadoEm } });
+      let de = 'Aberta';
+      await prisma.findingStatusChange.create({ data: { findingId: f.id, de: null, para: de, registradaEm: criadoEm } });
+      for (const [quando, para] of mudancas) {
+        await prisma.findingStatusChange.create({ data: { findingId: f.id, de, para, usuarioId: 'u-001', registradaEm: diasAtras(quando) } });
+        de = para;
+      }
     }
   }
 

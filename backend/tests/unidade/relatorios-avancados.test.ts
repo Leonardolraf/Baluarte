@@ -1,9 +1,11 @@
-// B25 (parte sem migration), sem banco: nota de risco do ativo (formula, teto, ordem do
-// ranking), leitura do historico de status a partir do detalhe da auditoria e as regras
-// de paginacao compartilhadas (lista de vulnerabilidades e auditoria).
+// B25, sem banco: nota de risco do ativo (formula, teto, ordem do ranking), regra de historico
+// completo (B25b: a leitura do formato da auditoria passou para o backfill da migration, testado
+// em tests/migracao-historico.test.ts) e as regras de paginacao compartilhadas (lista de
+// vulnerabilidades e auditoria).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { NOTA_RISCO_MAXIMA, PESO_RISCO } from '../../src/models/ativo.model.js';
+import { NOTA_RISCO_MAXIMA } from '../../src/models/ativo.model.js';
+import { PESO_SEVERIDADE } from '../../src/models/dominio.model.js';
 import { CONSULTA_LISTA } from '../../src/models/vulnerabilidade.model.js';
 import {
   abertosVazio,
@@ -12,15 +14,15 @@ import {
   pontosDeRisco,
   riscoDe,
 } from '../../src/services/riscoAtivo.service.js';
-import { historicoCompleto, lerAlteracaoStatus } from '../../src/services/vulnerabilidade.service.js';
+import { historicoCompleto } from '../../src/services/vulnerabilidade.service.js';
 import { ErroNegocio } from '../../src/utils/resposta.js';
 import { validar } from '../../src/utils/esquemas.js';
 
 const abertos = (c: number, a: number, m: number, b: number) => ({ 'Crítico': c, 'Alto': a, 'Médio': m, 'Baixo': b });
 
 describe('nota de risco do ativo', () => {
-  it('pesos = piso da faixa CVSS 3.1 de cada severidade', () => {
-    assert.deepEqual(PESO_RISCO, { 'Crítico': 10, 'Alto': 7, 'Médio': 4, 'Baixo': 1 });
+  it('pesos = piso da faixa CVSS 3.1 de cada severidade (proposta pendente do DT07; trocar = mudar só a constante)', () => {
+    assert.deepEqual(PESO_SEVERIDADE, { 'Crítico': 10, 'Alto': 7, 'Médio': 4, 'Baixo': 1 });
   });
 
   it('soma ponderada dos abertos, com teto 100', () => {
@@ -52,29 +54,7 @@ describe('nota de risco do ativo', () => {
   });
 });
 
-describe('histórico de status lido da auditoria', () => {
-  const id = 'cmabc123';
-
-  it('lê de → para do fim do detalhe (a categoria tem ":")', () => {
-    assert.deepEqual(lerAlteracaoStatus(`${id} (10.0.0.1, A03:2021 - Injection): Aberta → Em revisão`, id), {
-      de: 'Aberta',
-      para: 'Em revisão',
-    });
-    assert.deepEqual(lerAlteracaoStatus(`${id} (app.empresa.com, A05:2021 - Security Misconfiguration): Em remediação → Risco aceito`, id), {
-      de: 'Em remediação',
-      para: 'Risco aceito',
-    });
-  });
-
-  it('ignora outro achado, prefixo parecido, status fora da lista e formato estranho', () => {
-    assert.equal(lerAlteracaoStatus(null, id), null);
-    assert.equal(lerAlteracaoStatus(`outro (h, c): Aberta → Resolvida`, id), null);
-    assert.equal(lerAlteracaoStatus(`${id}9 (h, c): Aberta → Resolvida`, id), null);
-    assert.equal(lerAlteracaoStatus(`${id} (h, c): Aberta → Fechada`, id), null);
-    assert.equal(lerAlteracaoStatus(`${id} (h, c): Aberta → Resolvida → Aberta`, id), null);
-    assert.equal(lerAlteracaoStatus(`${id} (h, c) Aberta → Resolvida`, id), null);
-  });
-
+describe('histórico de status (regra do completo)', () => {
   it('completo só quando a cadeia sai de "Aberta" e chega no status atual sem buraco', () => {
     assert.equal(historicoCompleto([], 'Aberta'), true);
     assert.equal(historicoCompleto([], 'Resolvida'), false, 'status mudou sem registro');

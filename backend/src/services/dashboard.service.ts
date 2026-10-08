@@ -4,6 +4,8 @@ import { contar as contarAtivos } from '../repositories/ativo.repository.js';
 import { listarComEventos } from '../repositories/campanha.repository.js';
 import { contarArquivosMaliciosos } from './analiseArquivo.service.js';
 import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
+import { evolucaoRisco } from './evolucaoRisco.service.js';
+import { indiceRiscoTecnico } from './indiceRisco.service.js';
 import { ativosMaiorRisco } from './riscoAtivo.service.js';
 import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.service.js';
 
@@ -18,8 +20,12 @@ import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.
 // SHA-256 com AMEACA do ClamAV nos ultimos 30 dias (services/analiseArquivo.service.ts). Cada um
 // pesa como um achado CRITICO: entra em `criticas` e em `distribuicaoSeveridade['Crítico']`,
 // mas NAO em `vulnerabilidadesAbertas` (arquivo malicioso nao e vulnerabilidade de ativo).
-// Logo: soma da distribuicao = vulnerabilidadesAbertas + arquivosMaliciosos. O risco tecnico
-// do frontend, que pondera a distribuicao, ja recebe o peso critico sem mudar a formula.
+// Logo: soma da distribuicao = vulnerabilidadesAbertas + arquivosMaliciosos.
+//
+// Indice de risco tecnico (B25b): `kpis.indiceRiscoTecnico` e calculado AQUI, com os pesos
+// unicos PESO_SEVERIDADE sobre a distribuicao (services/indiceRisco.service.ts); o frontend so
+// exibe. `evolucaoRisco` traz os ultimos 30 dias reconstruidos do historico de status
+// (services/evolucaoRisco.service.ts); o ultimo ponto e o KPI de hoje.
 
 /** Achado de estacao (B14) cita o CVE e o programa; o do scanner, a categoria OWASP. */
 function textoAlerta(f: { categoriaOwasp: string; cve: string | null; programa?: string | null; scan: { asset: { host: string } } }): string {
@@ -35,6 +41,9 @@ function textoAlerta(f: { categoriaOwasp: string; cve: string | null; programa?:
  * `ativosMaiorRisco` (B25): os 5 ativos de maior nota de risco (services/riscoAtivo.service.ts),
  * calculada nesta leitura. Nome e host de ativo vulneravel sao dado tecnico: para o Colaborador
  * a lista vem vazia, como as outras listas tecnicas.
+ *
+ * `kpis.indiceRiscoTecnico` e `evolucaoRisco` (B25b) tem o mesmo nivel de acesso dos KPIs
+ * tecnicos: `null` para o Colaborador.
  */
 export async function painel(perfil: string) {
   const operador = OPERADORES.includes(perfil);
@@ -53,8 +62,10 @@ export async function painel(perfil: string) {
         arquivosMaliciosos: null, // KPI tecnico (B17): fica com os operadores, como os demais
         resilienciaPhishing: resiliencia,
         ativosMonitorados: null,
+        indiceRiscoTecnico: null, // B25b: tecnico, como os demais
       },
       distribuicaoSeveridade: null,
+      evolucaoRisco: null,
       vulnerabilidadesRecentes: [],
       ativosMaiorRisco: [],
       alertas: [],
@@ -83,8 +94,11 @@ export async function painel(perfil: string) {
       arquivosMaliciosos,
       resilienciaPhishing: resiliencia,
       ativosMonitorados: ativos,
+      // B25b: pesos unicos (PESO_SEVERIDADE) sobre a distribuicao, que ja tem os arquivos no Critico.
+      indiceRiscoTecnico: indiceRiscoTecnico(sev, ativos),
     },
     distribuicaoSeveridade: sev,
+    evolucaoRisco: await evolucaoRisco(),
     vulnerabilidadesRecentes: emAberto.slice(0, 5).map(mapFinding),
     ativosMaiorRisco: await ativosMaiorRisco(),
     alertas: emAberto

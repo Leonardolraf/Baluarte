@@ -195,9 +195,30 @@ model Finding {
   programa            String?  // nome do programa (Windows: o da tabela de CPE) ou pacote-fonte (Linux)
   programaVersao      String?  // versao instalada quando o achado nasceu
   baseVulnerabilidade String?  // CHECK: OSV | NVD
+  historicoStatus     FindingStatusChange[]
 
   @@unique([workstationId, cve, programa])
   @@index([scanId])
+}
+
+// Historico de status do achado (B25b): um evento por mudanca, gravado na mesma transacao que
+// muda Finding.status, e um evento de criacao (de = NULL, para = 'Aberta') quando o achado nasce
+// (conclusao da varredura simulada e cruzamento do B14). E a fonte da aba de historico e da
+// evolucao do risco em 30 dias (reconstruida destes eventos, sem cron nem foto diaria).
+// Cascade: o evento so existe com o achado. usuarioId sem FK, como no AuditLog: o registro
+// sobrevive a exclusao da conta (o autor sai null na leitura). id sequencial: desempata
+// eventos do mesmo instante pela ordem de gravacao.
+model FindingStatusChange {
+  id           Int      @id @default(autoincrement())
+  findingId    String
+  finding      Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  de           String?  // CHECK: NULL (criacao) ou status da lista; diferente de `para`
+  para         String   // CHECK: status da lista (Finding_status_check); criacao so para 'Aberta'
+  usuarioId    String?  // quem mudou; NULL na criacao (o sistema detectou)
+  registradaEm DateTime @default(now())
+
+  @@index([findingId, registradaEm])
+  @@index([registradaEm])
 }
 
 model Campaign {

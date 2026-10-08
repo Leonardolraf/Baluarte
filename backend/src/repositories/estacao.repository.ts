@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
 import type { EstacaoComContagem, EstacaoComInventario } from '../models/estacao.model.js';
+import { registrarCriacaoDosAchados } from './vulnerabilidade.repository.js';
 
 // Acesso ao banco das estacoes: leitura do painel (B13) das tabelas que o agente osquery
 // preenche (Workstation, WorkstationSoftware, WorkstationPort) e as escritas do cruzamento
@@ -58,6 +59,7 @@ class NadaNovo extends Error {}
  * Grava os achados novos numa varredura propria (a "verificacao do inventario"), ja concluida,
  * no ativo da estacao. A unicidade workstationId + cve + programa descarta o que outra
  * verificacao simultanea ja gravou; se nada sobrar, a varredura vazia e desfeita (rollback).
+ * Cada achado novo ganha o evento de criacao do historico de status (B25b) na mesma transacao.
  */
 export async function registrarAchados(
   assetId: string,
@@ -74,6 +76,8 @@ export async function registrarAchados(
         skipDuplicates: true,
       });
       if (count === 0) throw new NadaNovo();
+      // B25b: o evento de criacao dos achados novos (a varredura acabou de nascer) na mesma transacao.
+      await registrarCriacaoDosAchados(tx, scan.id);
       return { scanId: scan.id, criados: count };
     });
   } catch (e) {
