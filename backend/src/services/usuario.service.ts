@@ -2,6 +2,7 @@ import type { AlteracaoUsuario, Ator, CadastroUsuario, UsuarioAtual } from '../m
 import { nomeDoDepartamento, resolverDepartamento } from '../repositories/departamento.repository.js';
 import * as repo from '../repositories/usuario.repository.js';
 import { falhar } from '../utils/resposta.js';
+import { normalizarEmail } from '../utils/validacao.js';
 import { registrarAuditoria } from './auditoria.service.js';
 import { emitirLinkConta, hashSemSenha } from './linkConta.service.js';
 
@@ -17,7 +18,7 @@ export async function criar(ator: Ator, entrada: CadastroUsuario) {
   const departmentId = await resolverDepartamento(entrada.departamento);
   if (departmentId === 'invalido') falhar(400, 'Departamento inválido', 'DEPARTAMENTO_INVALIDO');
 
-  const email = repo.normalizarEmail(entrada.email);
+  const email = normalizarEmail(entrada.email);
   if (await repo.emailEmUso(email)) falhar(409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
 
   // Nao existe senha provisoria: a conta nasce Pendente, sem senha utilizavel, e a

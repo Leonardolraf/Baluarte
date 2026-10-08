@@ -1,16 +1,13 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import type { AlteracaoUsuario } from '../models/usuario.model.js';
+import { normalizarEmail } from '../utils/validacao.js';
 
 // Acesso a dados de usuarios e helpers de e-mail compartilhados com o auth. As funcoes que
 // recebem `db` rodam no cliente padrao ou dentro de uma transacao (`emTransacao`).
 
 type Db = Prisma.TransactionClient;
 
-/** E-mail canonico: sem espacos nas pontas e em minusculas. */
-export function normalizarEmail(email: unknown): string {
-  return String(email ?? '').trim().toLowerCase();
-}
 
 /** Verifica se um e-mail ja pertence a outro usuario (a coluna e citext: ignora maiusculas). */
 export async function emailEmUso(email: string, excetoId?: string): Promise<boolean> {

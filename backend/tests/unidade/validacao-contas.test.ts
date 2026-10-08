@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
 import { emailFormatoValido, hostValido, queryString, textoPreenchido, validarSenha, vazio, POLITICA_SENHA } from '../../src/utils/validacao.js';
 import { gerarTokenLink, hashToken } from '../../src/utils/tokens.js';
-import { normalizarEmail, mapUsuario } from '../../src/repositories/usuario.repository.js';
+import { mapUsuario } from '../../src/repositories/usuario.repository.js';
+import { normalizarEmail } from '../../src/utils/validacao.js';
 import { hashSemSenha, VALIDADE_LINK_MS } from '../../src/services/linkConta.service.js';
 
 before(() => {

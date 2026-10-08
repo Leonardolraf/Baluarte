@@ -32,3 +32,8 @@ export function hostValido(v: unknown): boolean {
 export function validarSenha(senha: unknown): string | null {
   return senhaNova.safeParse(senha).success ? null : problemaDaSenha(senha);
 }
+
+/** E-mail canonico: sem espacos nas pontas e em minusculas. */
+export function normalizarEmail(email: unknown): string {
+  return String(email ?? '').trim().toLowerCase();
+}

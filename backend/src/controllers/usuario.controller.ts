@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
 import { CADASTRO, EDICAO, type AlteracaoUsuario } from '../models/usuario.model.js';
-import { normalizarEmail } from '../repositories/usuario.repository.js';
+import { normalizarEmail } from '../utils/validacao.js';
 import * as usuarioService from '../services/usuario.service.js';
 import { enviar, erro } from '../utils/resposta.js';
 import { validar } from '../utils/esquemas.js';
