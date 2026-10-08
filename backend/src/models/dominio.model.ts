@@ -7,7 +7,19 @@ export const TIPOS_ATIVO_CADASTRO = ['Servidor', 'Aplicacao', 'Rede', 'Banco de 
 export const TIPOS_ATIVO = [...TIPOS_ATIVO_CADASTRO, TIPO_ESTACAO];
 export const PERFIS = ['Administrador', 'Analista', 'Colaborador'];
 export const TEMPLATES = ['urgencia', 'autoridade', 'curiosidade'];
-export const DOMINIO_INTERNO = '@empresa.com';
+/** Dominio interno padrao dos destinatarios de campanha (o do contrato N2 AT1). */
+export const DOMINIO_INTERNO_PADRAO = '@empresa.com';
+
+/**
+ * Dominio interno aceito como destinatario de campanha: variavel de ambiente
+ * DOMINIO_INTERNO (ex.: `@minhaempresa.com.br` ou `minhaempresa.com.br`), com
+ * '@empresa.com' como padrao. Lido a cada chamada, sempre em minusculas e com '@'.
+ */
+export function dominioInterno(): string {
+  const valor = (process.env.DOMINIO_INTERNO ?? '').trim().toLowerCase();
+  if (!valor) return DOMINIO_INTERNO_PADRAO;
+  return valor.startsWith('@') ? valor : `@${valor}`;
+}
 
 // Constantes de dominio das rotas adicionais (fora do contrato da N2 AT1)
 export const STATUS_USUARIO = ['Ativo', 'Inativo', 'Pendente'];

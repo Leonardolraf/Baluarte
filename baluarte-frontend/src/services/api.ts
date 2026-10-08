@@ -360,11 +360,8 @@ export const realApi: BaluarteApi = {
 
   async createAsset(input: AssetInput): Promise<Asset> {
     const raw = await request<BackendAsset>({ method: 'POST', url: '/assets', data: fromAssetInput(input) });
-    return {
-      ...toAsset({ ...raw, criadoEm: raw.criadoEm ?? new Date().toISOString() }),
-      description: input.description ?? null,
-      ip: input.ip ?? null,
-    };
+    // IP e descrição vêm da resposta da API (B10), não do que o formulário mandou.
+    return toAsset({ ...raw, criadoEm: raw.criadoEm ?? new Date().toISOString() });
   },
 
   async listScans(): Promise<ScanReport[]> {

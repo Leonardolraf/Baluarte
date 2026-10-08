@@ -54,6 +54,7 @@ import { fileScanVerdict, MAX_FILE_SIZE_BYTES } from '@/lib/files';
 import { SCAN_DURATION_MS, scanProgressByTime } from './scanProgress';
 import { vulnerabilityReportFilename } from '@/lib/download';
 import { formatDate, formatDateTime, localDayRange } from '@/lib/format';
+import { normalizeAssetHost } from '@/lib/host';
 import { buildMockToken, decodeToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
 import {
@@ -751,22 +752,24 @@ export const mockApi: BaluarteApi = {
         ? state.campaigns.find((c) => c.id === pending.campaignId)
         : null;
 
+      // Colaborador (RN-006, B10): só a resiliência a phishing; nada técnico nem contagens de campanha.
       return {
-        technicalRisk,
+        technicalRisk: manager ? technicalRisk : null,
         humanRisk: totalSent > 0 ? humanRisk : 0,
         kpis: {
-          openVulnerabilities: open.length,
-          criticalVulnerabilities: open.filter((v) => v.severity === 'critical').length,
+          openVulnerabilities: manager ? open.length : null,
+          criticalVulnerabilities: manager ? open.filter((v) => v.severity === 'critical').length : null,
           phishingResilience: totalSent > 0 ? 100 - clickRate : null,
-          monitoredAssets: state.assets.filter((a) => a.status === 'active').length,
-          activeCampaigns: campaigns.filter((c) => c.status === 'active').length,
-          trainedCollaborators: campaigns.reduce((sum, c) => sum + c.metrics.trained, 0),
+          monitoredAssets: manager ? state.assets.filter((a) => a.status === 'active').length : null,
+          activeCampaigns: manager ? campaigns.filter((c) => c.status === 'active').length : null,
+          trainedCollaborators: manager ? campaigns.reduce((sum, c) => sum + c.metrics.trained, 0) : null,
         },
-        severityDistribution,
+        severityDistribution: manager ? severityDistribution : null,
         recentFindings: manager ? byDate(open, 'detectedAt').slice(0, 5).map(digest) : [],
         recentCampaigns: manager ? byDate(campaigns, 'createdAt').slice(0, 4) : [],
         recentScans: manager ? byDate(state.scans, 'startedAt').slice(0, 3) : [],
-        timeline: byDate(state.timeline, 'at').slice(0, 8),
+        // A linha do tempo mistura achados e campanhas: também é só dos operadores.
+        timeline: manager ? byDate(state.timeline, 'at').slice(0, 8) : [],
         pendingTraining: pending
           ? {
               id: pending.id,
@@ -798,12 +801,15 @@ export const mockApi: BaluarteApi = {
     const user = requireUser();
     requireRole(user, ['admin', 'analyst']);
     const name = input.name?.trim();
-    const host = input.host?.trim();
+    // Mesma normalização do backend (B10): https://host/caminho vira só o host.
+    const host = input.host === undefined ? undefined : normalizeAssetHost(input.host);
     if (!name) throw new HttpError(400, 'NOME_OBRIGATORIO', 'Nome do ativo é obrigatório');
     if (!['server', 'application', 'network', 'database'].includes(input.type))
       throw new HttpError(400, 'TIPO_INVALIDO', 'Tipo de ativo inválido');
     if (!host || !isValidHost(host)) throw new HttpError(400, 'HOST_INVALIDO', 'Host inválido');
     if (input.ip && !isValidIpv4(input.ip)) throw new HttpError(400, 'IP_INVALIDO', 'Endereço IP inválido');
+    if (input.description && input.description.trim().length > 500)
+      throw new HttpError(400, 'DESCRICAO_INVALIDA', 'A descrição deve ter no máximo 500 caracteres');
     if (state.assets.some((a) => a.host.toLowerCase() === host.toLowerCase()))
       throw new HttpError(409, 'ATIVO_DUPLICADO', 'Ativo já cadastrado');
 

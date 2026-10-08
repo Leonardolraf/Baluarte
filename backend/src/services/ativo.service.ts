@@ -1,15 +1,26 @@
+import type { CadastroAtivo } from '../models/ativo.model.js';
 import { falhar } from '../utils/resposta.js';
 import { STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
 import { registrarAuditoria } from './auditoria.service.js';
 import * as repo from '../repositories/ativo.repository.js';
 
-/** Cadastro de ativo (contrato N2 AT1). O host e unico. */
-export async function cadastrar(atorId: string, dados: { nome: string; tipo: string; host: string }) {
+/** Cadastro de ativo (contrato N2 AT1). O host e unico. `ip` e `descricao` sao extensao (B10). */
+export async function cadastrar(atorId: string, dados: CadastroAtivo) {
   if (await repo.buscarPorHost(dados.host)) falhar(409, 'Ativo já cadastrado', 'ATIVO_DUPLICADO');
   const ativo = await repo.criar(dados);
-  await registrarAuditoria(atorId, 'CRIAR_ATIVO', `${ativo.id} (${ativo.host}, ${ativo.tipo})`);
-  return { id: ativo.id, nome: ativo.nome, tipo: ativo.tipo, host: ativo.host, status: ativo.status };
+  // A descricao (texto livre, ate 500) fica fora do detalhe da auditoria; o IP entra quando houver.
+  await registrarAuditoria(atorId, 'CRIAR_ATIVO', `${ativo.id} (${ativo.host}, ${ativo.tipo}${ativo.ip ? `, IP ${ativo.ip}` : ''})`);
+  return {
+    id: ativo.id,
+    nome: ativo.nome,
+    tipo: ativo.tipo,
+    host: ativo.host,
+    status: ativo.status,
+    ip: ativo.ip,
+    descricao: ativo.descricao,
+    criadoEm: ativo.criadoEm,
+  };
 }
 
 /**

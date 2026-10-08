@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { INTERNAL_DOMAIN, internalDomain } from '@/lib/domain';
+import { normalizeAssetHost } from '@/lib/host';
 import {
   formatCvss,
   formatDate,
@@ -26,6 +28,24 @@ import { buildMockToken, decodeToken, isTokenExpired, userFromToken } from '@/li
 import { clearSession, tokenStorage, userStorage } from '@/lib/storage';
 import { errorMessage, HttpError, isHttpError, toApiError } from '@/lib/errors';
 import { cn } from '@/lib/cn';
+
+describe('lib/host e lib/domain (B10)', () => {
+  it('normalizeAssetHost: igual ao backend — tira http(s)://, caminho, query, porta e barra final', () => {
+    expect(normalizeAssetHost('https://portal.empresa.com/login')).toBe('portal.empresa.com');
+    expect(normalizeAssetHost(' HTTP://10.0.0.5:8080/ ')).toBe('10.0.0.5');
+    expect(normalizeAssetHost('https://a.empresa.com?x=1#y')).toBe('a.empresa.com');
+    expect(normalizeAssetHost(' exemplo.com/rota ')).toBe('exemplo.com/rota');
+    expect(normalizeAssetHost('ftp://x.com')).toBe('ftp://x.com');
+  });
+
+  it('internalDomain: VITE_DOMINIO_INTERNO normalizado, @empresa.com por padrão', () => {
+    expect(internalDomain(undefined)).toBe('@empresa.com');
+    expect(internalDomain('  ')).toBe('@empresa.com');
+    expect(internalDomain(' Filial.Exemplo.com.br ')).toBe('@filial.exemplo.com.br');
+    expect(internalDomain('@outra.com')).toBe('@outra.com');
+    expect(INTERNAL_DOMAIN).toBe('@empresa.com');
+  });
+});
 
 describe('lib/format', () => {
   const iso = '2026-09-10T15:30:00.000Z';

@@ -25,6 +25,7 @@ import {
   login,
   esperaErro,
   criarUsuario,
+  criarUsuarioPendente,
   emailUnico,
   ADMIN,
   ANALISTA,
@@ -290,5 +291,26 @@ describe('proteções da gestão de administradores', () => {
     esperaErro(await chamar('PATCH', '/users/u-000', { token: admin, body: { perfil: 'Analista' } }), 409, 'ULTIMO_ADMIN');
     // u-000 continua Administrador e operando normalmente.
     assert.equal((await chamar('GET', '/usuarios', { token: admin })).status, 200);
+  });
+
+  it('administrador Pendente não conta como outro admin: rebaixar ou excluir o único Ativo dá 409 ULTIMO_ADMIN (B10)', async () => {
+    // Convite não aceito: a conta existe como Administrador, mas não entra por login.
+    const pendente = await criarUsuarioPendente(admin, 'Administrador', 'authz-admin-pendente');
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: pendente.id } })).status, 'Pendente');
+
+    esperaErro(await chamar('PATCH', '/users/u-000', { token: admin, body: { perfil: 'Analista' } }), 409, 'ULTIMO_ADMIN');
+
+    // DELETE: pela API, quem exclui é outro admin Ativo (que já garantiria o acesso). A regra
+    // é exercida no service com o banco real, como faria um segundo admin.
+    const usuarioService = await import('../../src/services/usuario.service.js');
+    await assert.rejects(
+      usuarioService.excluir({ id: 'ator-externo', perfil: 'Administrador' }, 'u-000'),
+      (e: { status?: number; codigo?: string }) => e.status === 409 && e.codigo === 'ULTIMO_ADMIN',
+    );
+    const u000 = await prisma.user.findUniqueOrThrow({ where: { id: 'u-000' } });
+    assert.equal(u000.perfil, 'Administrador');
+
+    // O admin Pendente, por sua vez, não é protegido pela regra: pode ser excluído.
+    assert.equal((await chamar('DELETE', `/users/${pendente.id}`, { token: admin })).status, 200);
   });
 });

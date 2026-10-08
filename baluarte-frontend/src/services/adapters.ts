@@ -73,6 +73,9 @@ export interface BackendAsset {
   tipo: string;
   status: string;
   criadoEm: string;
+  /** Extensão compatível do B10 (opcionais; null quando não informados). */
+  ip?: string | null;
+  descricao?: string | null;
   achadosAbertos?: number;
   ultimaVarredura?: { id: string; status: string; criadoEm: string; concluidoEm?: string | null } | null;
   _count?: { scans?: number };
@@ -161,14 +164,18 @@ export interface BackendCampaignReport {
   }>;
 }
 
+/**
+ * GET /dashboard. Para o Colaborador (RN-006, B10) os KPIs técnicos e a distribuição vêm
+ * `null`; a resiliência vem `null` quando nada foi enviado (não medido).
+ */
 export interface BackendDashboard {
   kpis: {
-    vulnerabilidadesAbertas: number;
-    criticas: number;
-    resilienciaPhishing: number;
-    ativosMonitorados: number;
+    vulnerabilidadesAbertas: number | null;
+    criticas: number | null;
+    resilienciaPhishing: number | null;
+    ativosMonitorados: number | null;
   };
-  distribuicaoSeveridade: Record<string, number>;
+  distribuicaoSeveridade: Record<string, number> | null;
   vulnerabilidadesRecentes: BackendFinding[];
   alertas: Array<{ id: string; severidade: string; texto: string; cvss: number; quando: string }>;
   campanhas: BackendCampaign[];
@@ -371,8 +378,9 @@ export function toAsset(raw: BackendAsset): Asset {
     name: raw.nome,
     type: ASSET_TYPE_FROM_LABEL[norm(raw.tipo)] ?? 'server',
     host: raw.host,
-    ip: /^\d{1,3}(\.\d{1,3}){3}$/.test(raw.host) ? raw.host : null,
-    description: null,
+    // O IP informado no cadastro; sem ele, o host quando o próprio host é um IPv4.
+    ip: raw.ip ?? (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw.host) ? raw.host : null),
+    description: raw.descricao ?? null,
     status: norm(raw.status) === 'inativo' ? 'inactive' : 'active',
     createdAt: raw.criadoEm,
     // A API passou a devolver os dois; a tela não precisa mais derivar de outras listas.
@@ -615,23 +623,29 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
 }
 
 export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): DashboardMetrics {
-  const severityDistribution = emptySeverityMap();
-  for (const [label, count] of Object.entries(raw.distribuicaoSeveridade)) {
-    severityDistribution[severityFromLabel(label)] += count;
+  // Colaborador (RN-006, B10): a API não manda a parte técnica nem as campanhas; só a resiliência.
+  const technical = raw.distribuicaoSeveridade !== null && raw.kpis.vulnerabilidadesAbertas !== null;
+  let severityDistribution: Record<Severity, number> | null = null;
+  let technicalRisk: number | null = null;
+  if (raw.distribuicaoSeveridade !== null) {
+    const distribution = emptySeverityMap();
+    for (const [label, count] of Object.entries(raw.distribuicaoSeveridade)) {
+      distribution[severityFromLabel(label)] += count;
+    }
+    const weighted =
+      distribution.critical * 10 + distribution.high * 6 + distribution.medium * 3 + distribution.low * 1;
+    const capacity = Math.max(1, raw.kpis.ativosMonitorados ?? 0) * 20;
+    technicalRisk = Math.max(0, Math.min(100, Math.round((weighted / capacity) * 100)));
+    severityDistribution = distribution;
   }
-  const open = raw.kpis.vulnerabilidadesAbertas;
-  const weighted =
-    severityDistribution.critical * 10 +
-    severityDistribution.high * 6 +
-    severityDistribution.medium * 3 +
-    severityDistribution.low * 1;
-  const capacity = Math.max(1, raw.kpis.ativosMonitorados) * 20;
-  const technicalRisk = Math.max(0, Math.min(100, Math.round((weighted / capacity) * 100)));
   const campaigns = raw.campanhas.map(toCampaign);
-  // O backend devolve resiliência 0 tanto para "ninguém clicou" quanto para "nada foi enviado";
-  // sem envios o índice é NÃO MEDIDO (null), nunca 0 % / risco humano 100 %.
+  // Sem envios o índice é NÃO MEDIDO (null), nunca 0 % / risco humano 100 %. A API manda null
+  // nesse caso; para o operador, a soma dos envios das campanhas confirma (backend anterior mandava 0).
   const totalSent = campaigns.reduce((sum, c) => sum + c.metrics.sent, 0);
-  const phishingResilience = totalSent > 0 ? raw.kpis.resilienciaPhishing : null;
+  const phishingResilience =
+    raw.kpis.resilienciaPhishing === null || (technical && totalSent === 0)
+      ? null
+      : raw.kpis.resilienciaPhishing;
   const clickRate = phishingResilience === null ? 0 : Math.max(0, Math.min(100, 100 - phishingResilience));
   const humanRisk = Math.max(0, Math.min(100, Math.round(clickRate * 2.5)));
   const timeline: TimelineEvent[] = raw.alertas.map((a) => ({
@@ -647,12 +661,13 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
     technicalRisk,
     humanRisk,
     kpis: {
-      openVulnerabilities: open,
+      openVulnerabilities: raw.kpis.vulnerabilidadesAbertas,
       criticalVulnerabilities: raw.kpis.criticas,
       phishingResilience,
       monitoredAssets: raw.kpis.ativosMonitorados,
-      activeCampaigns: campaigns.filter((c) => c.status === 'active').length,
-      trainedCollaborators: campaigns.reduce((sum, c) => sum + c.metrics.trained, 0),
+      // Contagens de campanha só existem para quem recebe as campanhas (operadores).
+      activeCampaigns: technical ? campaigns.filter((c) => c.status === 'active').length : null,
+      trainedCollaborators: technical ? campaigns.reduce((sum, c) => sum + c.metrics.trained, 0) : null,
     },
     severityDistribution,
     recentFindings: raw.vulnerabilidadesRecentes.map(toVulnerability),
@@ -779,8 +794,23 @@ export function fromNotificationPreferences(
 
 // ---- Domínio -> backend (escritas) ------------------------------------------
 
-export function fromAssetInput(input: AssetInput): { nome: string; tipo: string; host: string } {
-  return { nome: input.name.trim(), tipo: ASSET_TYPE_TO_LABEL[input.type], host: input.host.trim() };
+export function fromAssetInput(input: AssetInput): {
+  nome: string;
+  tipo: string;
+  host: string;
+  ip?: string;
+  descricao?: string;
+} {
+  const ip = input.ip?.trim();
+  const descricao = input.description?.trim();
+  return {
+    nome: input.name.trim(),
+    tipo: ASSET_TYPE_TO_LABEL[input.type],
+    host: input.host.trim(),
+    // Extensão compatível do B10: só vão quando preenchidos (o corpo do contrato fica igual).
+    ...(ip ? { ip } : {}),
+    ...(descricao ? { descricao } : {}),
+  };
 }
 
 export function fromUserInput(input: UserInput): {

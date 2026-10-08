@@ -151,21 +151,26 @@ describe('DashboardPage', () => {
       `/training/${pendingTraining.id}`,
     );
 
-    expect(statCard('Vulnerabilidades abertas').tagName).toBe('DIV');
+    expect(statCard('Resiliência a phishing').tagName).toBe('DIV');
     expect(screen.queryByRole('link', { name: 'Ver todas' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Ver todos' })).not.toBeInTheDocument();
   });
 
-  it('para colaborador, oculta as listas técnicas vazias (vulnerabilidades e campanhas recentes)', async () => {
+  it('para colaborador, mostra só o risco humano e a resiliência: nada técnico, vazio ou zerado (RN-006, B10)', async () => {
     renderDashboard('collaborator');
 
-    await screen.findAllByRole('meter');
-
-    expect(screen.queryByRole('heading', { name: 'Vulnerabilidades recentes' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Campanhas recentes' })).not.toBeInTheDocument();
+    const meters = await screen.findAllByRole('meter');
+    expect(meters.map((meter) => meter.getAttribute('aria-label'))).toEqual(['Risco humano']);
+    expect(screen.getAllByTestId('stat-card')).toHaveLength(1);
+    expect(statCard('Resiliência a phishing')).toBeInTheDocument();
+    for (const label of KPI_LABELS.filter((l) => l !== 'Resiliência a phishing')) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+    for (const title of SECTION_TITLES) {
+      expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument();
+    }
     expect(screen.queryAllByTestId('severity-badge')).toHaveLength(0);
-    expect(screen.getByRole('heading', { name: 'Distribuição por severidade' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Ameaças recentes' })).toBeInTheDocument();
+    expect(screen.queryByText(/Risco técnico:/)).not.toBeInTheDocument();
   });
 
   it('para gestor com listas vazias, mantém os cards com estado vazio', async () => {

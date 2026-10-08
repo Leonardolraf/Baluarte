@@ -21,6 +21,7 @@ import { errorMessage, isHttpError } from '@/lib/errors';
 import { toDateTimeLocalValue } from '@/lib/format';
 import { notify, trackOperation } from '@/store/uiStore';
 import { cn } from '@/lib/cn';
+import { INTERNAL_DOMAIN } from '@/lib/domain';
 
 interface CampaignFormValues {
   name: string;
@@ -55,7 +56,6 @@ const TARGET_GROUPS: readonly string[] = [
 ];
 
 /** Mesma regra do backend: somente destinatários do domínio corporativo. */
-const INTERNAL_DOMAIN = '@empresa.com';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RECIPIENT_SEPARATOR_RE = /[\n\r,;]+/;
 const ONE_DAY_MS = 86_400_000;

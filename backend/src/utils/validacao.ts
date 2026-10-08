@@ -37,3 +37,21 @@ export function validarSenha(senha: unknown): string | null {
 export function normalizarEmail(email: unknown): string {
   return String(email ?? '').trim().toLowerCase();
 }
+
+/**
+ * Host de ativo como o usuario costuma colar (B10): com `http://` ou `https://`, tira o
+ * esquema, o caminho, a query, o fragmento, a porta e a barra final, e fica so o host
+ * ('https://portal.empresa.com:8443/login?x=1' -> 'portal.empresa.com'). Sem esquema, o
+ * valor passa igual (so o trim do contrato): 'exemplo.com/rota' continua invalido.
+ * Credenciais na URL (`user@host`) nao sao removidas, e o host resultante e recusado.
+ */
+export function normalizarHost(valor: unknown): unknown {
+  if (typeof valor !== 'string') return valor;
+  const v = valor.trim();
+  const esquema = /^https?:\/\//i.exec(v);
+  if (!esquema) return v;
+  return v
+    .slice(esquema[0].length)
+    .split(/[/?#]/, 1)[0]
+    .replace(/:\d{1,5}$/, '');
+}
