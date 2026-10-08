@@ -4,6 +4,7 @@ import { gerarTokenLink, hashToken } from '../utils/tokens.js';
 import {
   detalhesInscricao,
   eventoResultado,
+  FATOR_INTERVALO,
   INTERVALO_DEV_S,
   INTERVALO_MAX_S,
   INTERVALO_MIN_S,
@@ -13,6 +14,8 @@ import {
   linhaSistema,
   PROTOCOLOS,
   QUERIES,
+  SPLAY_PERCENTUAL,
+  type CategoriaQuery,
   type Estacao,
   type ItemPorta,
   type ItemPrograma,
@@ -45,24 +48,38 @@ export function segredoConfere(recebido: string, esperado: string): boolean {
   return timingSafeEqual(a, b);
 }
 
-/** Intervalo das queries em segundos: OSQUERY_INTERVALO_S, ou 1 h em producao e 5 min fora. */
+/**
+ * Intervalo-base das queries em segundos (o dos programas): OSQUERY_INTERVALO_S, ou 1 h em
+ * producao e 5 min fora. E tambem a base da janela de online/offline do painel (B13).
+ */
 export function intervaloQueries(): number {
   const bruto = Number(process.env.OSQUERY_INTERVALO_S);
   if (Number.isInteger(bruto) && bruto >= INTERVALO_MIN_S && bruto <= INTERVALO_MAX_S) return bruto;
   return process.env.NODE_ENV === 'production' ? INTERVALO_PRODUCAO_S : INTERVALO_DEV_S;
 }
 
+/** Intervalo de uma categoria (B08): base x FATOR_INTERVALO, entre o minimo e o maximo. */
+export function intervaloDaCategoria(categoria: CategoriaQuery, base: number = intervaloQueries()): number {
+  const s = Math.round(base * FATOR_INTERVALO[categoria]);
+  return Math.min(INTERVALO_MAX_S, Math.max(INTERVALO_MIN_S, s));
+}
+
 /** Configuracao do osquery (mesmo formato do arquivo osquery.conf). */
 export function configuracao() {
-  const intervalo = intervaloQueries();
+  const base = intervaloQueries();
   const schedule = Object.fromEntries(
     Object.entries(QUERIES).map(([nome, q]) => [
       nome,
-      { query: q.query, interval: intervalo, snapshot: true, ...(q.platform ? { platform: q.platform } : {}) },
+      {
+        query: q.query,
+        interval: intervaloDaCategoria(q.categoria, base),
+        snapshot: true,
+        ...(q.platform ? { platform: q.platform } : {}),
+      },
     ]),
   );
   // splay: espalha as execucoes para as estacoes nao consultarem todas no mesmo instante.
-  return { options: { schedule_splay_percent: 10 }, schedule };
+  return { options: { schedule_splay_percent: SPLAY_PERCENTUAL }, schedule };
 }
 
 function sistemaDe(linha: { name?: string | null; version?: string | null; build?: string | null; platform?: string | null } | undefined, reserva: string): SistemaOperacional {

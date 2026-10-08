@@ -158,9 +158,9 @@ As suítes de segurança em `backend/tests/seguranca/` exercitam a API com paylo
 Corpo fora do formato (chave que não é hexadecimal de 64 caracteres, `log_type` desconhecido, `data` que não é lista, `host_identifier` vazio ou com mais de 255 caracteres) recebe `400` com o envelope de erro e `node_invalid: true`. Chave desconhecida responde `200` de propósito: o osquery não lê o corpo de respostas fora de 2xx e só se reinscreve quando vê `node_invalid: true`.
 
 - **Inscrição:** o segredo vem de `OSQUERY_ENROLL_SECRET` (nunca do código) e é comparado em tempo constante (`crypto.timingSafeEqual` sobre o SHA-256 dos dois lados). A chave da estação é aleatória (256 bits) e só o hash SHA-256 vai para o banco (`Workstation.nodeKeyHash`). A estação inscrita vira um ativo do tipo **"Estação de trabalho"**, que só a inscrição cria (`POST /assets` continua recusando o tipo com `TIPO_INVALIDO`). O host do ativo é o hostname da máquina; se já houver ativo com esse host, ganha um sufixo. A mesma estação (`host_identifier`) pode se reinscrever: recebe chave nova e a anterior deixa de valer. Toda inscrição vai para o `AuditLog` (`INSCREVER_ESTACAO`, com o `host_identifier`). Desligar a variável só fecha novas inscrições; estações já inscritas continuam enviando.
-- **Configuração entregue:** seis queries agendadas como *snapshot* — programas instalados (`programs` no Windows, `deb_packages` (com o pacote-fonte, `source`) e `rpm_packages` (versão com a epoch) no Linux, `apps` no macOS, cada uma com o filtro `platform`), versão do SO (`os_version`) e portas em escuta (`listening_ports` + `processes`). Intervalo de 1 h em produção e 5 min fora dela; `OSQUERY_INTERVALO_S` (60 a 86400) muda.
+- **Configuração entregue:** seis queries agendadas como *snapshot* — programas instalados (`programs` no Windows, `deb_packages` (com o pacote-fonte, `source`) e `rpm_packages` (versão com a epoch) no Linux, `apps` no macOS, cada uma com o filtro `platform`), versão do SO (`os_version`) e portas em escuta (`listening_ports` + `processes`). Intervalos por categoria (B08), para a coleta não pesar na estação: **programas a cada 1 h, portas a cada 15 min e SO a cada 6 h** em produção (fora dela, 5 min, 75 s e 30 min), com `schedule_splay_percent` de 10% para as estações não coletarem juntas. O intervalo dos programas é o base: `OSQUERY_INTERVALO_S` (60 a 86400) muda; as portas rodam a 1/4 dele e o SO a 6x, sempre entre 60 s e 1 dia.
 - **Resultados guardados:** só o inventário mais recente por estação. Cada snapshot substitui o anterior da mesma fonte: `WorkstationSoftware` (nome, versão, fonte, fornecedor), `WorkstationPort` (porta, TCP/UDP, endereço, processo) e o SO nos campos `sistema`/`so*` da `Workstation`. Toda requisição com chave válida atualiza `vistaEm`; resultado de inventário atualiza também `inventarioEm`. Eventos de outras queries e resultados diferenciais são ignorados. Coluna ausente numa linha vale como vazia (a linha não é descartada). O cruzamento com vulnerabilidades está logo abaixo (B14).
-- **Corpo:** as rotas do agente aceitam até 2 MB (as demais, 64 kB) e qualquer `Content-Type`, inclusive gzip (`--logger_tls_compress`).
+- **Corpo:** as rotas do agente aceitam até 2 MB (as demais, 64 kB) e qualquer `Content-Type`, inclusive gzip (`--logger_tls_compress`). O caractere NUL, que as outras rotas recusam (`400 CARACTERE_INVALIDO`), é **removido** dos valores nestas: o osquery manda strings de C com o terminador (no Linux, o `cpu_brand` da inscrição), e recusar deixaria a estação sem se inscrever (achado na validação do B08).
 
 ### Cruzamento com bases públicas de vulnerabilidades (B14)
 
@@ -181,32 +181,7 @@ Os programas inventariados em cada estação são comparados com bases públicas
 
 ### Como apontar o osquery para o Baluarte
 
-O osquery só fala HTTPS e a API não termina TLS (o HTTPS é o B06). Em produção o TLS vem da plataforma (Railway/Vercel, certificado público, que o pacote do osquery já confia): basta `--tls_hostname=<domínio-da-api>`. Em desenvolvimento, ponha um proxy TLS na frente da API e entregue ao osquery a autoridade local com `--tls_server_certs`, por exemplo com o [mkcert](https://github.com/FiloSottile/mkcert):
-
-```bash
-mkcert localhost                                    # gera localhost.pem e localhost-key.pem
-npx local-ssl-proxy --source 8443 --target 8080 --cert localhost.pem --key localhost-key.pem
-mkcert -CAROOT                                      # pasta do rootCA.pem, para o --tls_server_certs
-```
-
-(ou `caddy reverse-proxy --from localhost:8443 --to localhost:8080`, com a raiz em `~/.local/share/caddy/pki/authorities/local/root.crt`). No `backend/.env`, defina `OSQUERY_ENROLL_SECRET` com um segredo longo (`openssl rand -hex 32`) e grave o mesmo valor num arquivo legível só pelo administrador da estação. Arquivo de flags do osquery (`osquery.flags`; no Windows, `C:\Program Files\osquery\osquery.flags`):
-
-```
---tls_hostname=localhost:8443
---tls_server_certs=/caminho/para/rootCA.pem
---host_identifier=uuid
---enroll_secret_path=/etc/osquery/baluarte.secret
---enroll_tls_endpoint=/api/agentes/osquery/enroll
---config_plugin=tls
---config_tls_endpoint=/api/agentes/osquery/config
---config_refresh=3600
---logger_plugin=tls
---logger_tls_endpoint=/api/agentes/osquery/logger
---logger_tls_period=60
---disable_distributed=true
-```
-
-`--host_identifier=uuid` é o recomendado: com o padrão (`hostname`), duas máquinas com o mesmo nome seriam a mesma estação. Para conferir na máquina: `osqueryd --flagfile osquery.flags --verbose` deve mostrar a inscrição e, depois de um intervalo, os envios do logger.
+Com os instaladores do B08 (pasta `agente/`): ver [Agente de estação](#agente-de-estação-osquery-b08), que instala o osquery oficial em versão fixa e grava as flags, a CA e o segredo. O modelo das flags, comentado, é [`agente/osquery.flags.modelo`](agente/osquery.flags.modelo).
 
 ### Estações monitoradas (B13)
 
@@ -300,7 +275,73 @@ openssl s_client -connect localhost:8443 -CAfile certs/ca.crt </dev/null | grep 
 --tls_server_certs=<caminho>/ca.crt   # ex.: C:\Program Files\osquery\certs\baluarte-ca.crt
 --tls_hostname=<host>:<porta>         # sem https://; precisa estar no certificado
 ```
-`<host>:<porta>` é `localhost:8443` com o agente na mesma máquina, `192.168.0.10:8443` (ou o nome da máquina) com o agente em outra máquina (gere o certificado com esse endereço em `EXTRA_SAN` e libere a 8443 no firewall) e `app:443` com o agente num contêiner da mesma rede do compose. Os caminhos de cadastro, configuração e envio de dados (`--enroll_tls_endpoint`, `--config_tls_endpoint`, `--logger_tls_endpoint`) são as rotas `/api/agentes/...` do servidor do osquery, encaminhadas à API pelo mesmo proxy `/api`.
+`<host>:<porta>` é `localhost:8443` com o agente na mesma máquina, `192.168.0.10:8443` (ou o nome da máquina) com o agente em outra máquina (gere o certificado com esse endereço em `EXTRA_SAN` e libere a 8443 no firewall) e `app:443` com o agente num contêiner da mesma rede do compose. Os caminhos de cadastro, configuração e envio de dados (`--enroll_tls_endpoint`, `--config_tls_endpoint`, `--logger_tls_endpoint`) são as rotas `/api/agentes/...` do servidor do osquery, encaminhadas à API pelo mesmo proxy `/api`. Quem grava isso tudo na estação são os instaladores da seção seguinte.
+
+## Agente de estação (osquery, B08)
+
+O agente é o [osquery](https://osquery.io) oficial, sem nada compilado por nós. A pasta [`agente/`](agente/) tem o que vai para a estação:
+
+| Arquivo | Para quê |
+|---|---|
+| `osquery-versao.conf` | versão **fixa** (5.23.1) e o SHA-256 de cada pacote oficial (`.deb` amd64/arm64 e `.msi`), conferidos contra o digest da release no GitHub e contra o pkg.osquery.io |
+| `osquery.flags.modelo` | flags comentadas: servidor, CA, segredo, plugins `tls` de configuração e logger, `--config_refresh`, `--disable_distributed`, extensões/eventos/carver desligados, watchdog |
+| `instalar-agente.sh` / `desinstalar-agente.sh` | Debian/Ubuntu: `.deb` oficial, flags em `/etc/osquery`, serviço `osqueryd` do systemd |
+| `instalar-agente.ps1` / `desinstalar-agente.ps1` | Windows: `.msi` oficial (hash **e** assinatura Authenticode da osquery/LF Projects), arquivos em `C:\Program Files\osquery\`, serviço `osqueryd` |
+
+**O que é coletado e quando** vem do servidor (B07), não da estação: programas instalados a cada 1 h, portas em escuta a cada 15 min e versão do SO a cada 6 h (com splay de 10%; ver "Configuração entregue" acima). Só o inventário mais recente fica guardado: cada ciclo substitui o anterior, sem duplicar (teste `B08: o mesmo inventário enviado a cada ciclo...` em `backend/tests/agente.test.ts`). No Linux, o serviço do pacote oficial ainda limita o `osqueryd` a 20% de uma CPU (`CPUQuota` do systemd) e o watchdog do osquery reinicia o processo de trabalho se ele passar dos limites de memória e CPU.
+
+**SO da demonstração:** os dois instaladores estão prontos; a escolha é do Leo. Linux (Ubuntu/Debian) é o caminho validado de ponta a ponta (abaixo) e o que mais rende no B14 (o OSV cobre todos os pacotes). No Windows, o B14 só consulta os 21 programas da tabela de CPE (NVD), e a instalação real ainda precisa ser feita numa máquina ou VM.
+
+### Instalar
+
+Pré-requisitos no servidor: HTTPS do B06 no ar (`sh scripts/gerar-certificados.sh`, com o endereço da estação em `EXTRA_SAN` se ela for outra máquina, e a 8443 liberada no firewall) e `OSQUERY_ENROLL_SECRET` no `.env` da API (`openssl rand -hex 32`). Leve para a estação a pasta `agente/` e **só** o `certs/ca.crt` (nunca a `ca.key`). O segredo nunca vai no comando nem no repositório: o instalador lê de `BALUARTE_ENROLL_SECRET`, de um arquivo (`--segredo-arquivo`, Linux) ou pergunta sem eco, e grava num arquivo legível só pelo administrador (Linux: `/etc/osquery/baluarte.secret`, root, 600; Windows: `C:\Program Files\osquery\baluarte.secret`, só SYSTEM e Administradores).
+
+```bash
+# Debian/Ubuntu (baixa o .deb oficial e confere o SHA-256; --pacote <arquivo.deb> usa um já baixado)
+sudo sh agente/instalar-agente.sh --servidor 192.168.0.10:8443 --ca certs/ca.crt
+```
+```powershell
+# Windows, PowerShell como Administrador (-Msi <arquivo.msi> usa um já baixado)
+powershell -ExecutionPolicy Bypass -File agente\instalar-agente.ps1 -Servidor 192.168.0.10:8443 -CaCert certs\ca.crt
+# Ensaio sem instalar nada (nem precisa de administrador): baixa, confere hash e assinatura e mostra as flags
+powershell -ExecutionPolicy Bypass -File agente\instalar-agente.ps1 -Servidor 192.168.0.10:8443 -CaCert certs\ca.crt -SomenteConferir
+```
+Com certificado público (API no Railway), omita `--ca`/`-CaCert` e use `--servidor <domínio>:443`: o agente confia nas autoridades do próprio pacote do osquery. Rodar o instalador de novo atualiza flags, CA e segredo e reinicia o serviço.
+
+**Conferir na estação:** Linux, `systemctl status osqueryd` e `journalctl -u osqueryd -f`; Windows, `Get-Service osqueryd`. Teste manual com o serviço parado: `osqueryd --flagfile <flags> --verbose` mostra a inscrição e os envios. No painel, a estação aparece em **Estações** logo após a inscrição, e o inventário chega no primeiro ciclo.
+
+### Validar sem instalar nada na máquina (contêiner)
+
+```bash
+sh scripts/validar-agente-docker.sh            # Git Bash; ~5 min na primeira vez (build das imagens)
+sh scripts/validar-agente-docker.sh --manter   # deixa a stack no ar para olhar
+```
+Sobe uma stack **descartável** (`scripts/validacao-agente/compose.yml`, projeto `baluarte-validacao-agente`): Postgres em tmpfs, a API e o Nginx (HTTPS do B06) deste repositório, OSV/NVD **simulados** e um Ubuntu 24.04 (imagem fixada por digest) que roda o `instalar-agente.sh` de verdade com o `.deb` oficial e depois o `osqueryd`, apontando para `https://app:443` com uma CA gerada só para a validação. Nenhuma porta é publicada e a rede não tem saída para a internet: não colide com a stack principal (8080, 5432, 8443) e o OSV/NVD de verdade nunca são consultados. A conferência (`conferir.mjs`) fala com a API pelo mesmo HTTPS e confere inscrição, inventário (programas, SO, portas), `GET /api/estacoes`, um segundo ciclo sem duplicar e a verificação do B14 (`POST /api/estacoes/:id/verificar`) duas vezes, contra uma vulnerabilidade **fictícia** (`CVE-2099-0001` no `glibc`). No fim, derruba tudo e apaga a CA, as chaves e os segredos.
+
+Uma consulta **real** ao OSV, se quiser (uma vez, fora da validação automática): com a stack principal e uma estação Ubuntu inscrita, `POST /api/estacoes/<id>/verificar` sem `OSV_API_URL` no ambiente da API. O resultado fica em cache por 24 h.
+
+### Desinstalar
+
+```bash
+sudo sh agente/desinstalar-agente.sh            # para o serviço, purge do pacote, apaga flags, CA, segredo e o banco local
+```
+```powershell
+powershell -ExecutionPolicy Bypass -File agente\desinstalar-agente.ps1          # -WhatIf mostra sem fazer
+```
+O banco local do osquery (`/var/osquery/osquery.db`, `C:\Program Files\osquery\osquery.db`) guarda a chave da estação, por isso também é apagado. No painel a estação continua listada, com o histórico e os achados, e passa a Offline depois de 3 intervalos.
+
+### Antivírus (Windows Defender): o que observar
+
+Só numa máquina real. Não crie exclusão de antivírus para o agente: se algo bloquear, registre e decida depois.
+1. Antes: `Get-MpComputerStatus | Select-Object AMRunningMode, RealTimeProtectionEnabled, AntivirusSignatureLastUpdated` (proteção em tempo real ligada e assinaturas em dia).
+2. Durante a instalação: aviso do SmartScreen ou do Defender. O instalador já recusa MSI com hash ou assinatura diferentes; `Get-AuthenticodeSignature "C:\Program Files\osquery\osqueryd\osqueryd.exe"` deve dar `Valid`, emitido para "OSQUERY a Series of LF Projects, LLC".
+3. Depois de 15 a 60 min de serviço no ar: `Get-Service osqueryd` continua `Running`; `Get-MpThreatDetection` não traz nada do osquery; **Segurança do Windows → Proteção contra vírus e ameaças → Histórico de proteção** sem itens; e no log do Defender nenhum evento de detecção (1006, 1007, 1116, 1117), de regra de redução da superfície de ataque (1121, 1122) ou de acesso controlado a pastas (1123, 1124):
+   ```powershell
+   Get-WinEvent -LogName 'Microsoft-Windows-Windows Defender/Operational' -MaxEvents 200 |
+     Where-Object { $_.Id -in 1006,1007,1116,1117,1121,1122,1123,1124 } | Format-List TimeCreated, Id, Message
+   ```
+4. No painel: a estação aparece, o inventário chega e ela segue Online.
+5. Se houve bloqueio: anote o evento (id, arquivo, regra), confira a assinatura do arquivo bloqueado e só então decida (restaurar, exclusão pontual documentada ou outro SO para a demonstração).
 
 ## Deploy da API no Railway
 
@@ -330,6 +371,8 @@ backend/            API real (Express + Prisma/PostgreSQL)
   tests/            unidade (tests/unidade, sem banco) + integração e pentest (node:test) com banco isolado
 baluarte-frontend/  SPA React do produto (mocks ou backend real) — ver README próprio
 frontend/           SPA legado (telas do Figma) — alvo das suítes Robot
+agente/             instaladores do agente osquery (Linux .sh, Windows .ps1), versão fixa + SHA-256, modelo de flags (B08)
+scripts/            gerar-certificados.sh (B06), validar-agente-docker.sh + validacao-agente/ (B08)
 e2e/                6 suítes Robot apontando para o frontend legado
 testes-api/         collection + environment do Postman
 testes/             materiais originais da N2 AT1 (stubs, evidências)

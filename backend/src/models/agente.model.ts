@@ -96,11 +96,27 @@ export const QUERIES: Record<string, QueryAgendada> = {
   },
 };
 
-/** Intervalo padrao das queries: 1 h em producao, 5 min fora dela. OSQUERY_INTERVALO_S muda. */
+/**
+ * Intervalo-base das queries (o dos programas): 1 h em producao, 5 min fora dela.
+ * OSQUERY_INTERVALO_S muda. As outras categorias derivam dele (FATOR_INTERVALO).
+ */
 export const INTERVALO_PRODUCAO_S = 3600;
 export const INTERVALO_DEV_S = 300;
 export const INTERVALO_MIN_S = 60;
 export const INTERVALO_MAX_S = 86400;
+
+/**
+ * Peso de cada categoria sobre o intervalo-base (B08), para a coleta nao pesar na maquina:
+ *  - portas: o que mais muda e o que mais interessa a seguranca (um servico novo escutando),
+ *    e a consulta e barata -> 1/4 do base (15 min em producao);
+ *  - programas: muda pouco e a lista e grande (Windows: registro; Linux: dpkg/rpm) -> o base (1 h);
+ *  - sistema: so muda com atualizacao do SO, e a inscricao ja manda a versao -> 6x o base (6 h).
+ * O resultado fica entre INTERVALO_MIN_S e INTERVALO_MAX_S (o SO e lido ao menos 1x por dia).
+ */
+export const FATOR_INTERVALO: Record<CategoriaQuery, number> = { portas: 0.25, programas: 1, sistema: 6 };
+
+/** Espalha cada execucao em ate +-10% do intervalo, para as estacoes nao coletarem juntas. */
+export const SPLAY_PERCENTUAL = 10;
 
 // ---- Formato dos dados recebidos ------------------------------------------------
 
