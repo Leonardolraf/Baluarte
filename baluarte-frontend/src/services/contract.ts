@@ -3,6 +3,7 @@ import type {
   Asset,
   AssetInput,
   AuditFilters,
+  AuditIntegrity,
   AuditListResponse,
   AuthUser,
   Campaign,
@@ -139,6 +140,8 @@ export interface BaluarteApi {
   // Auditoria (só Administrador)
   /** Trilha de auditoria filtrada e paginada no servidor, mais recente primeiro. */
   listAuditLog(filters?: AuditFilters): Promise<AuditListResponse>;
+  /** Recalcula a cadeia de hash da trilha e aponta o primeiro registro que não confere. */
+  verifyAuditIntegrity(): Promise<AuditIntegrity>;
 
   // Estações monitoradas (B13): só Administrador e Analista
   /** Estações inscritas pelo agente, com status online/offline e o total de cada um. */

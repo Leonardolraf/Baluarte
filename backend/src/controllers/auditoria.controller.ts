@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { CONSULTA, TAMANHO_PADRAO } from '../models/auditoria.model.js';
 import * as auditoriaService from '../services/auditoria.service.js';
+import { usuarioDe } from '../middlewares/auth.middleware.js';
 import { enviar } from '../utils/resposta.js';
 import { textoDeQuery, validar } from '../utils/esquemas.js';
 
@@ -28,4 +29,23 @@ export async function consultar(req: Request, res: Response) {
     tamanho: Number(q('tamanho') ?? TAMANHO_PADRAO),
   });
   enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
+}
+
+/**
+ * GET /auditoria/integridade (so Administrador): recalcula a cadeia de hash e diz se esta
+ * integra; na quebra, o primeiro registro que nao confere (id, quando e motivo).
+ */
+export async function verificarIntegridade(_req: Request, res: Response) {
+  const r = await auditoriaService.verificarIntegridade();
+  enviar(res, 200, {
+    status: 'sucesso',
+    mensagem: r.integra ? 'Cadeia de auditoria íntegra' : 'Cadeia de auditoria violada',
+    dados: r,
+  });
+}
+
+/** POST /auditoria/retencao (so Administrador): aplica a retencao de 12 meses. Sem corpo. */
+export async function aplicarRetencao(req: Request, res: Response) {
+  const r = await auditoriaService.aplicarRetencao(usuarioDe(req).id);
+  enviar(res, 200, { status: 'sucesso', mensagem: 'Política de retenção aplicada', dados: r });
 }

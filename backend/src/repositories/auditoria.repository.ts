@@ -1,9 +1,61 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
+import type { EloCadeia } from '../models/auditoria.model.js';
 
-/** Grava um registro na trilha de auditoria (tabela AuditLog). */
+/**
+ * Grava um registro na trilha de auditoria (tabela AuditLog). So insercao: `sequencia`,
+ * `hashAnterior` e `hash` sao do trigger de INSERT (migration auditoria_cadeia_hash), que
+ * serializa as gravacoes com um advisory lock; a aplicacao nunca os informa.
+ */
 export function criarRegistro(usuarioId: string | null, acao: string, detalhe: string | null) {
   return prisma.auditLog.create({ data: { usuarioId, acao, detalhe } });
+}
+
+/**
+ * Percorre a cadeia na ordem da `sequencia`, em lotes (paginacao por chave, sem OFFSET).
+ * Cada linha traz o hash recalculado pela funcao do banco auditoria_calcular_hash, a mesma
+ * do trigger: a formula do hash existe num lugar so. Como a sequencia e tirada dentro do
+ * lock e o lock so e solto no COMMIT, um registro novo nunca aparece atras de um ja lido.
+ */
+export async function* lotesDaCadeia(tamanho: number): AsyncGenerator<EloCadeia[]> {
+  let apos = 0n;
+  for (;;) {
+    const lote = await prisma.$queryRaw<EloCadeia[]>`
+      SELECT "id", "timestamp", "sequencia", "hash", "hashAnterior",
+             auditoria_calcular_hash("hashAnterior", "id", "usuarioId", "acao", "detalhe", "timestamp") AS "calculado"
+      FROM "AuditLog"
+      WHERE "sequencia" > ${apos}
+      ORDER BY "sequencia"
+      LIMIT ${tamanho}`;
+    if (lote.length === 0) return;
+    yield lote;
+    if (lote.length < tamanho) return;
+    apos = lote[lote.length - 1].sequencia;
+  }
+}
+
+/**
+ * Aplica a retencao pela funcao do banco auditoria_aplicar_retencao (apaga so o prefixo da
+ * cadeia mais antigo que `meses`; o banco recusa menos de 12). Devolve quantos sairam, o
+ * corte e a ancora (hash do ultimo apagado = `hashAnterior` do primeiro que ficou).
+ */
+export async function aplicarRetencao(meses: number) {
+  const [r] = await prisma.$queryRaw<{ apagados: bigint; corte: Date; ancora: string | null }[]>`
+    SELECT "apagados", "corte", "ancora" FROM auditoria_aplicar_retencao(${meses}::integer)`;
+  return { apagados: Number(r.apagados), corte: r.corte, ancora: r.ancora };
+}
+
+/**
+ * A trava no banco esta ligada? So quando os dois triggers da migration
+ * 20261008171000_auditoria_imutavel (branch feat/b29-trava) existem e nao estao desabilitados.
+ */
+export async function travaAtiva(): Promise<boolean> {
+  const [r] = await prisma.$queryRaw<{ ativos: bigint }[]>`
+    SELECT count(*) AS "ativos" FROM pg_trigger
+    WHERE tgrelid = '"AuditLog"'::regclass
+      AND tgname IN ('AuditLog_somente_insercao', 'AuditLog_sem_truncate')
+      AND tgenabled <> 'D'`;
+  return Number(r.ativos) === 2;
 }
 
 /** Criterio da consulta, ja resolvido pelo service (autor por id, periodo fechado). */

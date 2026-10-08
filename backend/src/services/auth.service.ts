@@ -6,7 +6,7 @@ import * as repo from '../repositories/auth.repository.js';
 import { localizarPorEmail } from '../repositories/usuario.repository.js';
 import { normalizarEmail } from '../utils/validacao.js';
 import { falhar } from '../utils/resposta.js';
-import { registrarAuditoria } from './auditoria.service.js';
+import { politicaAuditoria, registrarAuditoria } from './auditoria.service.js';
 import { emitirLinkConta, localizarLinkValido } from './linkConta.service.js';
 import { gerarToken, SESSAO_MAXIMA_MS } from './token.service.js';
 
@@ -144,14 +144,13 @@ export function renovar(usuario: UsuarioAtual, sessao: TokenPayload): string {
 }
 
 /** Politica de seguranca publicada (leitura). Publica so o que existe de fato. */
-export function politicaSeguranca() {
+export async function politicaSeguranca() {
   return {
     politicaSenha: { ...POLITICA_SENHA },
     // expiracaoMinutos: sem uso por esse tempo, a sessao expira (o frontend renova
     // enquanto ha uso); nenhuma sessao passa de sessaoMaximaHoras desde o login.
     sessao: { algoritmoToken: 'JWT HS256', expiracaoMinutos: 30, sessaoMaximaHoras: 8, limiteTentativasLogin: LOGIN_MAX_FALHAS, doisFatores: false },
-    // As acoes sao registradas, mas o log ainda nao e imutavel nem tem politica de
-    // retencao (B29 do backlog). Publicar o contrario seria falso.
-    auditoria: { registraAcoes: true, logImutavel: false, retencaoMeses: null },
+    // B29: retencao de 12 meses; `logImutavel` so com a trava do banco de fato ativa.
+    auditoria: await politicaAuditoria(),
   };
 }

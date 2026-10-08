@@ -440,7 +440,11 @@ function SecurityPolicySection({
           { label: 'Limite de tentativas de login', value: `${policy.loginAttemptLimit} tentativas` },
           { label: 'Autenticação em dois fatores', value: yesNo(policy.twoFactorEnabled) },
           { label: 'Ações registradas em auditoria', value: yesNo(policy.auditRegistersActions) },
-          { label: 'Log de auditoria imutável', value: yesNo(policy.auditLogImmutable) },
+          {
+            // Só "Sim" com a trava do banco ativa (a API consulta os triggers a cada leitura).
+            label: 'Auditoria imutável no banco (trava ativa)',
+            value: yesNo(policy.auditLogImmutable),
+          },
           {
             label: 'Retenção da auditoria',
             // A API devolve null quando ainda não há política de retenção definida.

@@ -1,12 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuditLogPage from '@/pages/Audit/AuditLogPage';
 import { configureMocks, mockApi, resetMockState } from '@/mocks/api';
 import { MOCK_AUDIT_LOG, MOCK_CREDENTIALS } from '@/mocks/data';
 import { httpClient, realApi } from '@/services/api';
-import { toAuditEntry, toAuditList } from '@/services/adapters';
+import { toAuditEntry, toAuditIntegrity, toAuditList } from '@/services/adapters';
 import { auditActionLabel } from '@/lib/audit';
 import { localDayRange } from '@/lib/format';
 import { HttpError } from '@/lib/errors';
@@ -14,6 +14,7 @@ import { tokenStorage, userStorage } from '@/lib/storage';
 
 // B12 — trilha de auditoria: rótulos, adapter, camada mock (RBAC, filtros, paginação),
 // chamada real (parâmetros de query) e a tela (filtro por ação, período e paginação).
+// B29 — verificação da cadeia de hash: adapter, mock, chamada real e o selo da tela.
 
 async function loginAs(email: string) {
   const cred = MOCK_CREDENTIALS.find((c) => c.email === email)!;
@@ -44,6 +45,7 @@ describe('auditActionLabel', () => {
     expect(auditActionLabel('CRIAR_ATIVO')).toBe('Ativo cadastrado');
     expect(auditActionLabel('ANALISAR_ARQUIVO')).toBe('Arquivo analisado');
     expect(auditActionLabel('INSCREVER_ESTACAO')).toBe('Estação inscrita');
+    expect(auditActionLabel('APLICAR_RETENCAO_AUDITORIA')).toBe('Retenção da auditoria aplicada');
     expect(auditActionLabel('COLETAR_INVENTARIO')).toBe('Coletar inventario');
     expect(auditActionLabel('INSCREVER__ESTACAO')).toBe('Inscrever estacao');
     expect(auditActionLabel('___')).toBe('___');
@@ -82,6 +84,61 @@ describe('adapters de auditoria', () => {
       page: 2,
       pageSize: 50,
       actions: [],
+    });
+  });
+});
+
+describe('B29: adapter da verificação da cadeia', () => {
+  it('cadeia íntegra, com a trava do banco', () => {
+    expect(toAuditIntegrity({ integra: true, registrosVerificados: 1234, travaNoBanco: true })).toEqual({
+      intact: true,
+      verifiedCount: 1234,
+      databaseLock: true,
+      firstBreak: null,
+    });
+  });
+
+  it('quebra com motivo conhecido, desconhecido e sem trava', () => {
+    const broken = toAuditIntegrity({
+      integra: false,
+      registrosVerificados: 7,
+      travaNoBanco: false,
+      primeiraQuebra: { id: 'a7', timestamp: '2026-10-08T12:00:00.000Z', motivo: 'CONTEUDO_ALTERADO' },
+    });
+    expect(broken).toEqual({
+      intact: false,
+      verifiedCount: 7,
+      databaseLock: false,
+      firstBreak: { id: 'a7', at: '2026-10-08T12:00:00.000Z', reason: 'content_altered' },
+    });
+    expect(
+      toAuditIntegrity({
+        integra: false,
+        registrosVerificados: 1,
+        primeiraQuebra: { id: 'x', timestamp: '2026-10-08T12:00:00.000Z', motivo: 'NOVO' },
+      }).firstBreak?.reason,
+    ).toBe('unknown');
+    expect(
+      toAuditIntegrity({
+        integra: false,
+        registrosVerificados: 1,
+        primeiraQuebra: { id: 'x', timestamp: '2026-10-08T12:00:00.000Z', motivo: 'ELO_QUEBRADO' },
+      }).firstBreak?.reason,
+    ).toBe('broken_link');
+  });
+});
+
+describe('B29: mockApi.verifyAuditIntegrity', () => {
+  it('só Administrador verifica; o mock responde cadeia íntegra, sem a trava do banco (como a main)', async () => {
+    await loginAs('analista@empresa.com');
+    await expectHttp(mockApi.verifyAuditIntegrity(), 403, 'PERFIL_SEM_PERMISSAO');
+    await loginAs('admin@empresa.com');
+    const result = await mockApi.verifyAuditIntegrity();
+    expect(result).toEqual({
+      intact: true,
+      verifiedCount: MOCK_AUDIT_LOG.length + 2,
+      databaseLock: false,
+      firstBreak: null,
     });
   });
 });
@@ -223,6 +280,40 @@ describe('realApi.listAuditLog', () => {
   });
 });
 
+describe('B29: realApi.verifyAuditIntegrity', () => {
+  const originalAdapter = httpClient.defaults.adapter;
+  afterEach(() => {
+    httpClient.defaults.adapter = originalAdapter;
+  });
+
+  it('chama GET /auditoria/integridade e converte o envelope', async () => {
+    const calls: InternalAxiosRequestConfig[] = [];
+    httpClient.defaults.adapter = async (config) => {
+      calls.push(config);
+      return {
+        data: {
+          status: 'sucesso',
+          mensagem: 'Cadeia de auditoria violada',
+          dados: {
+            integra: false,
+            registrosVerificados: 3,
+            travaNoBanco: true,
+            primeiraQuebra: { id: 'a3', timestamp: '2026-10-08T12:00:00.000Z', motivo: 'SEM_HASH' },
+          },
+        },
+        status: 200,
+        statusText: '',
+        headers: {},
+        config,
+      };
+    };
+    const result = await realApi.verifyAuditIntegrity();
+    expect(calls[0]!.method).toBe('get');
+    expect(calls[0]!.url).toBe('/auditoria/integridade');
+    expect(result.firstBreak).toEqual({ id: 'a3', at: '2026-10-08T12:00:00.000Z', reason: 'missing_hash' });
+  });
+});
+
 describe('AuditLogPage', () => {
   function renderPage() {
     return render(
@@ -280,6 +371,63 @@ describe('AuditLogPage', () => {
     const table = await screen.findByTestId('audit-table');
     fireEvent.change(await screen.findByLabelText('Ação'), { target: { value: 'CLIQUE_LINK_PHISHING' } });
     await waitFor(() => expect(within(table).getByText('Sem usuário')).toBeInTheDocument());
+  });
+
+  it('B29: mostra o selo "Cadeia íntegra" com a contagem e a trava do banco desligada', async () => {
+    await loginAs('admin@empresa.com');
+    renderPage();
+    const panel = await screen.findByTestId('audit-integrity');
+    await waitFor(() => expect(panel).toHaveAttribute('data-state', 'intact'));
+    expect(within(panel).getByText('Cadeia íntegra')).toBeInTheDocument();
+    expect(within(panel).getByText(/registros verificados/)).toHaveTextContent(/Trava do banco desligada/);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('B29: cadeia violada vira alerta com o registro e o motivo da quebra', async () => {
+    await loginAs('admin@empresa.com');
+    const spy = vi.spyOn(mockApi, 'verifyAuditIntegrity').mockResolvedValue({
+      intact: false,
+      verifiedCount: 42,
+      databaseLock: true,
+      firstBreak: { id: 'reg-adulterado', at: '2026-10-08T12:00:00.000Z', reason: 'content_altered' },
+    });
+    try {
+      renderPage();
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveAttribute('data-state', 'violated');
+      expect(alert).toHaveTextContent('Cadeia violada');
+      expect(alert).toHaveTextContent('reg-adulterado');
+      expect(alert).toHaveTextContent('registro alterado');
+      expect(alert).toHaveTextContent('42 registros verificados até a quebra');
+      expect(alert).toHaveTextContent('Trava do banco ativa');
+      // A trilha continua visível embaixo do alerta.
+      const table = await screen.findByTestId('audit-table');
+      await waitFor(() => expect(within(table).getAllByTestId('audit-row').length).toBeGreaterThan(0));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('B29: falha na verificação não esconde a trilha e permite verificar de novo', async () => {
+    await loginAs('admin@empresa.com');
+    const spy = vi
+      .spyOn(mockApi, 'verifyAuditIntegrity')
+      .mockRejectedValueOnce(new HttpError(500, 'ERRO_INTERNO', 'Erro interno no servidor'));
+    try {
+      renderPage();
+      const panel = await screen.findByTestId('audit-integrity');
+      await waitFor(() => expect(panel).toHaveAttribute('data-state', 'error'));
+      expect(panel).toHaveTextContent(
+        'Não foi possível verificar a integridade da trilha: Erro interno no servidor',
+      );
+      expect(await screen.findByTestId('audit-table')).toBeInTheDocument();
+      fireEvent.click(within(panel).getByRole('button', { name: 'Verificar de novo' }));
+      await waitFor(() =>
+        expect(screen.getByTestId('audit-integrity')).toHaveAttribute('data-state', 'intact'),
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('falha na primeira carga mostra o erro com nova tentativa', async () => {

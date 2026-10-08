@@ -11,6 +11,7 @@ import type {
   Asset,
   AssetInput,
   AuditFilters,
+  AuditIntegrity,
   AuditListResponse,
   AuthUser,
   Campaign,
@@ -60,6 +61,7 @@ import {
   fromUserInput,
   toAccountLink,
   toAsset,
+  toAuditIntegrity,
   toAuditList,
   toAuthUser,
   toAuthUserFromLogin,
@@ -84,6 +86,7 @@ import {
   type BackendAccountLink,
   type BackendAsset,
   type BackendAuditEntry,
+  type BackendAuditIntegrity,
   type BackendAuditSummary,
   type BackendCampaign,
   type BackendCampaignReport,
@@ -794,6 +797,12 @@ export const realApi: BaluarteApi = {
         method: 'POST',
         url: `/estacoes/${encodeURIComponent(id)}/verificar`,
       }),
+    );
+  },
+
+  async verifyAuditIntegrity(): Promise<AuditIntegrity> {
+    return toAuditIntegrity(
+      await request<BackendAuditIntegrity>({ method: 'GET', url: '/auditoria/integridade' }),
     );
   },
 

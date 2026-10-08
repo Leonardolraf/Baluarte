@@ -1,10 +1,11 @@
 import { useId, useMemo, useState } from 'react';
-import type { AuditEntry, AuditFilters } from '@/types';
+import type { AuditChainBreakReason, AuditEntry, AuditFilters, AuditIntegrity } from '@/types';
 import { api, AUDIT_PAGE_SIZE } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { auditActionLabel } from '@/lib/audit';
 import { formatDateTime, formatNumber, formatRelative } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { SEVERITY_BADGE_CLASS } from '@/lib/severity';
 import {
   Button,
   ErrorState,
@@ -24,12 +25,13 @@ import {
   THead,
   Tr,
 } from '@/components';
-import { CloseIcon } from '@/components/icons';
+import { AlertTriangleIcon, CheckCircleIcon, CloseIcon, RefreshIcon } from '@/components/icons';
 
 // Trilha de auditoria (RN-008), só Administrador. Filtro, período e paginação vão para o
 // servidor (GET /auditoria): a tela nunca carrega a trilha inteira. As opções de ação vêm
 // de `resumo.acoes`, então uma ação nova no backend aparece aqui sem mudança de código.
-// Tabela neutra: auditoria não é risco, então nada aqui leva cor (DESIGN.md).
+// Tabela neutra: auditoria não é risco, então nada aqui leva cor (DESIGN.md). A exceção é a
+// cadeia violada (B29): adulteração da trilha é risco e sai em vermelho; íntegra fica neutra.
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const COLUMN_COUNT = 4;
@@ -113,6 +115,110 @@ function FilterBar({ filters, actions, onChange }: FilterBarProps) {
   );
 }
 
+const BREAK_REASON_TEXT: Record<AuditChainBreakReason, string> = {
+  content_altered: 'o conteúdo do registro não confere com o hash gravado (registro alterado).',
+  broken_link:
+    'o registro não aponta para o anterior (um registro foi apagado, inserido ou reescrito antes dele).',
+  missing_hash: 'o registro não tem hash (foi gravado fora do encadeamento).',
+  unknown: 'o registro não confere com a cadeia.',
+};
+
+function lockText(integrity: AuditIntegrity): string {
+  return integrity.databaseLock
+    ? 'Trava do banco ativa: alteração e exclusão são recusadas, exceto a retenção de 12 meses.'
+    : 'Trava do banco desligada: a cadeia detecta adulteração, mas o banco ainda aceita alterações.';
+}
+
+/**
+ * Selo da cadeia de hash (B29): "Cadeia íntegra" ou "Cadeia violada" com o primeiro registro
+ * que não confere. A verificação é separada da lista: falhar aqui não esconde a trilha.
+ */
+function IntegrityPanel() {
+  const { data, error, loading, reload } = useAsync(() => api.verifyAuditIntegrity(), []);
+
+  if (loading && !data) {
+    return (
+      <div className="surface px-5 py-4" data-testid="audit-integrity" data-state="loading">
+        <p role="status" className="text-sm text-slate-600 dark:text-slate-300">
+          Verificando a cadeia de hash da auditoria…
+        </p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div
+        className="surface flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+        data-testid="audit-integrity"
+        data-state="error"
+      >
+        <p className="text-sm text-slate-700 dark:text-slate-200">
+          Não foi possível verificar a integridade da trilha{error ? `: ${error.message}` : '.'}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={<RefreshIcon size={14} />}
+          onClick={() => void reload()}
+        >
+          Verificar de novo
+        </Button>
+      </div>
+    );
+  }
+
+  const count = `${formatNumber(data.verifiedCount)} ${data.verifiedCount === 1 ? 'registro verificado' : 'registros verificados'}`;
+
+  if (data.intact) {
+    return (
+      <div
+        className="surface flex items-start gap-3 px-5 py-4"
+        data-testid="audit-integrity"
+        data-state="intact"
+      >
+        <CheckCircleIcon size={22} className="mt-0.5 shrink-0 text-ink dark:text-white" />
+        <div className="min-w-0 text-sm">
+          <p className="font-semibold text-ink dark:text-white">Cadeia íntegra</p>
+          <p className="mt-1 text-slate-600 dark:text-slate-300">
+            {count}: cada registro confere com o próprio hash e com o anterior. {lockText(data)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const brk = data.firstBreak;
+  return (
+    <div
+      role="alert"
+      data-testid="audit-integrity"
+      data-state="violated"
+      className={cn(
+        'flex items-start gap-3 rounded-lg px-5 py-4 ring-1 ring-inset',
+        SEVERITY_BADGE_CLASS.critical,
+      )}
+    >
+      <AlertTriangleIcon size={22} className="mt-0.5 shrink-0" />
+      <div className="min-w-0 text-sm">
+        <p className="text-base font-semibold">Cadeia violada</p>
+        {brk ? (
+          <p className="mt-1">
+            Primeira quebra no registro <span className="break-all font-mono font-semibold">{brk.id}</span>,
+            de <time dateTime={brk.at}>{formatDateTime(brk.at)}</time>: {BREAK_REASON_TEXT[brk.reason]}
+          </p>
+        ) : (
+          <p className="mt-1">A verificação encontrou um registro que não confere com a cadeia.</p>
+        )}
+        <p className="mt-1">
+          {count} até a quebra. {lockText(data)} Trate como incidente: preserve o banco e avise a equipe de
+          segurança.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AuditRow({ entry }: { entry: AuditEntry }) {
   return (
     <Tr data-testid="audit-row" data-id={entry.id}>
@@ -188,6 +294,8 @@ export default function AuditLogPage() {
           ) : null
         }
       />
+
+      <IntegrityPanel />
 
       {error && !data ? (
         <ErrorState
