@@ -1,6 +1,6 @@
 import type { AuditLog } from '@prisma/client';
 import { z } from 'zod';
-import { email, regra } from '../utils/esquemas.js';
+import { email, regra, seVeio } from '../utils/esquemas.js';
 
 // Model da trilha de auditoria (tabela AuditLog, RN-008): tipos do dominio, DTOs e as
 // regras zod da consulta (GET /api/auditoria). As acoes sao texto livre de proposito: uma
@@ -53,11 +53,6 @@ function inteiroDeQuery(min: number, max: number) {
     .string()
     .regex(/^\d{1,7}$/)
     .refine((v) => Number(v) >= min && Number(v) <= max);
-}
-
-/** Ausente ou vazio (`?acao=`) passa; o resto precisa cumprir o schema do campo. */
-function seVeio(esquema: z.ZodType) {
-  return z.unknown().refine((v) => v === undefined || v === '' || esquema.safeParse(v).success);
 }
 
 /** Regras da query de GET /auditoria, na ordem em que sao checadas. */

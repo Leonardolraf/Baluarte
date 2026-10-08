@@ -27,6 +27,7 @@ import type {
   Vulnerability,
   VulnerabilityFilters,
   VulnerabilityListResponse,
+  VulnerabilityReportFile,
   VulnerabilityStatus,
 } from '@/types';
 
@@ -83,6 +84,8 @@ export interface BaluarteApi {
   listVulnerabilities(filters?: VulnerabilityFilters): Promise<VulnerabilityListResponse>;
   getVulnerability(id: string): Promise<Vulnerability>;
   updateVulnerabilityStatus(id: string, status: VulnerabilityStatus, note?: string): Promise<Vulnerability>;
+  /** Relatório em PDF com os mesmos filtros da lista (B24; registra a exportação na auditoria). */
+  exportVulnerabilityReport(filters?: VulnerabilityFilters): Promise<VulnerabilityReportFile>;
 
   // Campanhas de phishing
   listCampaigns(filters?: CampaignFilters): Promise<Campaign[]>;

@@ -36,12 +36,14 @@ import type {
   Vulnerability,
   VulnerabilityFilters,
   VulnerabilityListResponse,
+  VulnerabilityReportFile,
   VulnerabilityStatus,
 } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
+import { filenameFromDisposition, vulnerabilityReportFilename } from '@/lib/download';
 import { userFromToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
 import {
@@ -65,6 +67,7 @@ import {
   toTrainingOverview,
   toUser,
   toVulnerability,
+  SEVERITY_TO_LABEL,
   VULN_STATUS_TO_LABEL,
   type BackendAccountLink,
   type BackendAsset,
@@ -155,11 +158,34 @@ interface BackendErrorBody {
   code?: string;
 }
 
+function blobText(blob: Blob): Promise<string> {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
+
+/** Num download (`responseType: 'blob'`) o envelope de erro do backend chega como Blob JSON. */
+async function readErrorBody(data: unknown): Promise<BackendErrorBody | undefined> {
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    try {
+      return JSON.parse(await blobText(data)) as BackendErrorBody;
+    } catch {
+      return undefined;
+    }
+  }
+  return data as BackendErrorBody | undefined;
+}
+
 httpClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<BackendErrorBody>) => {
+  async (error: AxiosError<BackendErrorBody>) => {
     if (error.response) {
-      const { status, data } = error.response;
+      const { status } = error.response;
+      const data = await readErrorBody(error.response.data);
       const message = data?.mensagem || data?.message || `Erro ${status}`;
       const code = data?.codigoErro || data?.code || `HTTP_${status}`;
       // Só derruba a sessão se havia uma sessão guardada (um 401 durante o próprio login não conta).
@@ -387,6 +413,41 @@ export const realApi: BaluarteApi = {
         byStatus,
         assets: new Set(items.map((v) => v.assetId)).size,
       },
+    };
+  },
+
+  // Relatório em PDF (B24): o servidor aplica os mesmos filtros da lista, gera o arquivo e
+  // registra a exportação na auditoria. Blob pelo mesmo cliente (o interceptor põe o token).
+  async exportVulnerabilityReport(filters: VulnerabilityFilters = {}): Promise<VulnerabilityReportFile> {
+    const params: Record<string, string> = {};
+    if (filters.severity && filters.severity !== 'all') {
+      const label = SEVERITY_TO_LABEL[filters.severity];
+      if (!label)
+        throw new HttpError(
+          400,
+          'SEVERIDADE_INVALIDA',
+          'Esta severidade não existe no relatório do servidor.',
+        );
+      params.severidade = label;
+    }
+    if (filters.status && filters.status !== 'all') params.status = VULN_STATUS_TO_LABEL[filters.status];
+    const query = filters.query?.trim();
+    if (query) params.q = query;
+    const response = await httpClient.request<Blob>({
+      method: 'GET',
+      url: '/vulnerabilidades/relatorio.pdf',
+      params,
+      responseType: 'blob',
+      headers: { Accept: 'application/pdf' },
+      // Gerar o PDF leva mais que uma leitura comum.
+      timeout: 60_000,
+    });
+    const disposition = response.headers?.['content-disposition'];
+    return {
+      blob: response.data,
+      filename:
+        filenameFromDisposition(typeof disposition === 'string' ? disposition : null) ??
+        vulnerabilityReportFilename(),
     };
   },
 

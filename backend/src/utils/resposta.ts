@@ -14,6 +14,22 @@ export function enviar(res: Response, status: number, obj: unknown): void {
   res.status(status).json(obj);
 }
 
+/**
+ * Arquivo para download (ex.: o relatorio em PDF). `no-store`: o conteudo e do usuario
+ * logado e nao deve ficar em cache de navegador ou proxy.
+ */
+export function enviarArquivo(res: Response, conteudo: Buffer, tipo: string, nomeArquivo: string): void {
+  res
+    .status(200)
+    .set({
+      'Content-Type': tipo,
+      'Content-Disposition': `attachment; filename="${nomeArquivo}"`,
+      'Content-Length': String(conteudo.length),
+      'Cache-Control': 'no-store',
+    })
+    .end(conteudo);
+}
+
 export function erro(res: Response, status: number, mensagem: string, codigoErro: string): void {
   enviar(res, status, { status: 'erro', mensagem, codigoErro, timestamp: agora() });
 }

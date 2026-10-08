@@ -159,3 +159,14 @@ export async function criarUsuario(token: string, perfil: Perfil, prefixo = 'tes
   assert.equal(r.status, 200, JSON.stringify(r.body));
   return { id, email };
 }
+
+export type Download = { status: number; headers: Headers; corpo: Buffer; body: any };
+
+/** GET de um arquivo (ex.: o relatorio em PDF): corpo em bytes; em erro, o envelope JSON em `body`. */
+export async function baixar(path: string, token?: string): Promise<Download> {
+  const res = await fetch(base + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const corpo = Buffer.from(await res.arrayBuffer());
+  let body: any = {};
+  if ((res.headers.get('content-type') ?? '').includes('application/json')) body = JSON.parse(corpo.toString('utf8'));
+  return { status: res.status, headers: res.headers, corpo, body };
+}

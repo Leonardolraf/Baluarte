@@ -62,17 +62,17 @@ npm run dev
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 380 testes. Unidade (78, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura, validações, política de senha, tokens, JWT/RBAC, erro de negócio, validação zod (ordem das regras do contrato), métricas de campanha, treinamento, e-mails). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (182): trilha de auditoria (ações novas registradas, consulta com filtros, paginação, RBAC e query inválida → 400), análise de arquivos (antivírus em fluxo, EICAR, limites, histórico por perfil), treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
+| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 401 testes. Unidade (87, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura, validações, política de senha, tokens, JWT/RBAC, erro de negócio, validação zod (ordem das regras do contrato), métricas de campanha, treinamento, e-mails, relatório em PDF (resumo, ordem por CVSS, fuso, WinAnsi, quebra de página)). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (194): relatório de vulnerabilidades em PDF (RBAC, cabeçalhos do download, conteúdo com acentos, filtros iguais aos da lista, filtro inválido → 400, auditoria da exportação), trilha de auditoria (ações novas registradas, consulta com filtros, paginação, RBAC e query inválida → 400), análise de arquivos (antivírus em fluxo, EICAR, limites, histórico por perfil), treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
-| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 447 testes |
+| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 464 testes |
 | **Frontend — ponta a ponta** (Playwright, modo mock, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 32 testes |
 | **Frontend — ponta a ponta em modo real** | `baluarte-frontend/e2e/real-backend.spec.ts` | `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; em dev use `:5174` com `VITE_USE_MOCKS=false`) | 10 testes |
 
 ### Cobertura e relatório de testes (roteiro 3.2)
 
 ```bash
-cd backend && npm run test:unidade      # só os 78 testes de unidade (sem banco, < 1 s)
+cd backend && npm run test:unidade      # só os 87 testes de unidade (sem banco, < 1 s)
 cd backend && npm run test:relatorio    # cobertura de unidade + completa e coverage/RELATORIO.md
 cd baluarte-frontend && npm run test:coverage
 ```
@@ -81,9 +81,9 @@ O `test:relatorio` mede a cobertura com o c8 e escreve `backend/coverage/RELATOR
 
 | Suíte | Testes | Taxa de sucesso | Linhas | Ramos | Funções |
 |---|---:|---:|---:|---:|---:|
-| Backend — unidade | 57 | 100% | 83,9% | 94,2% | 78,2% |
-| Backend — completa (unidade + integração + pentest) | 289 | 100% | 98,8% | 95,3% | 99,0% |
-| Frontend (Vitest) | 447 | 100% | 90,8% | 83,6% | 82,4% |
+| Backend — unidade | 87 | 100% | 91,3% | 93,0% | 82,3% |
+| Backend — completa (unidade + integração + pentest) | 401 | 100% | 99,1% | 95,9% | 99,2% |
+| Frontend (Vitest) | 464 | 100% | 91,1% | 83,5% | 83,0% |
 
 As três medidas das três suítes estão acima dos 70% do RNF-08 (as funções do frontend subiram de 63,2% para 81,8% no DT03).
 
@@ -107,7 +107,7 @@ Relatórios em `e2e/resultados/report.html` e `log.html`.
 
 **Contrato (testado pelo Postman — não muda):** `POST /login` · `POST /scans` · `POST /assets` · `POST /users` · `POST /campaigns` (aceita também `destinatarios[]`) · `GET /findings/classificacao?cvss=`
 
-**Leitura (alimentam as telas):** `GET /me` · `GET /dashboard` · `GET /assets` · `GET /scans` · `GET /vulnerabilidades[/:id]` (+ `PATCH`, inclusive status `Risco aceito`) · `GET /campanhas[/:id]` · `GET /usuarios` (com `departamento`) · `GET /departamentos` (Administrador/Analista) · `GET /configuracoes/seguranca` · `GET /treinamentos/:token` (protegido: o `:token` é o id do evento; Colaborador só o próprio)
+**Leitura (alimentam as telas):** `GET /me` · `GET /dashboard` · `GET /assets` · `GET /scans` · `GET /vulnerabilidades[/:id]` (+ `PATCH`, inclusive status `Risco aceito`) · `GET /vulnerabilidades/relatorio.pdf` (B24, ver abaixo) · `GET /campanhas[/:id]` · `GET /usuarios` (com `departamento`) · `GET /departamentos` (Administrador/Analista) · `GET /configuracoes/seguranca` · `GET /treinamentos/:token` (protegido: o `:token` é o id do evento; Colaborador só o próprio)
 
 **Achados:** cada vulnerabilidade traz `cwe`, `cve` (só em achado de componente), `cvssVetor` e `remediacao` (passos numerados com título, descrição e esforço). A nota `cvss` é calculada do vetor CVSS 3.1 (`src/cvss.ts`) e a severidade sai da nota; o scanner simulado sorteia tipos do catálogo em `src/catalogo.ts`.
 
@@ -119,9 +119,11 @@ Relatórios em `e2e/resultados/report.html` e `log.html`.
 
 **Conta e administração:** `POST /users` cria a conta `Pendente`, sem senha, e envia um **convite** por e-mail (link de 72 h para a pessoa criar a própria senha; conta pendente não entra por login) · `POST /users/:id/convite` (reenvia; Administrador/Analista) · `POST /users/:id/redefinir-senha` (Administrador envia o link de redefinição a uma conta ativa; não gasta o limite de pedidos do dono e audita quem pediu) · `POST /auth/link/verificar` (a tela confere o link antes de pedir a senha) · `POST /auth/change-password` (encerra as outras sessões e devolve um token novo para a atual) · `POST /auth/reset-password` (+ `/confirm`, que também aceita o convite e recusa a senha atual com `400 SENHA_REPETIDA`; link de uso único com validade de 30 min, 3 solicitações por e-mail a cada 15 min; redefinir encerra as sessões abertas antes e tira a conta do bloqueio) · `POST /auth/logout` (invalida os tokens emitidos antes, em todos os dispositivos) · `POST /auth/renovar` (sessão expira com 30 min sem uso; teto de 8 h desde o login) · `GET/PUT /configuracoes/notificacoes` · `POST /treinamentos/:token/concluir` · `PATCH/DELETE /users/:id` (Administrador; protege a própria conta e o último administrador ativo; quem tem histórico de campanha não é excluído, só inativado) · `DELETE /campanhas/:id` (Administrador/Analista) · `POST /departamentos` e `DELETE /departamentos/:id` (Administrador; departamento com usuários não é excluído)
 
+**Relatório de vulnerabilidades em PDF (B24, US-011; Administrador e Analista, os mesmos perfis da lista técnica):** `GET /vulnerabilidades/relatorio.pdf?severidade=&status=&q=` devolve `application/pdf` com `Content-Disposition: attachment; filename="baluarte-vulnerabilidades-AAAA-MM-DD.pdf"` e `Cache-Control: no-store`. Os filtros são os da lista (`severidade` Crítico/Alto/Médio/Baixo e `status` sem diferenciar maiúsculas; `q` no host ou na categoria, até 100 caracteres), mas validados: valor desconhecido, repetido ou objeto dá 400 (`SEVERIDADE_INVALIDA`, `STATUS_INVALIDO`, `BUSCA_INVALIDA`) em vez de um PDF que parece filtrado sem estar. O PDF (A4 paisagem, gerado em memória com o `pdfkit` 0.17.2, sem binário nativo e sem gravar nada em disco) traz cabeçalho (Baluarte, data e hora de geração no horário de Brasília, quem gerou e os filtros), resumo (achados, ativos afetados, CVSS médio e máximo, contagem por severidade e por status) e a tabela dos achados ordenados por CVSS, do maior para o menor (ativo e nome, categoria OWASP, CWE/CVE, nota e vetor, severidade, status e data), com o cabeçalho repetido a cada página e rodapé "Página X de Y". Não leva evidência, descrição nem remediação: só o que a lista já mostra. A exportação vai para a trilha como `EXPORTAR_RELATORIO_VULNERABILIDADES` (quantidade e filtros); filtro inválido e 403 não gravam. No frontend, o botão **Exportar PDF** da tela de vulnerabilidades baixa o arquivo com os filtros ativos.
+
 **Auditoria (RN-008, só Administrador):** `GET /auditoria?acao=&usuarioId=&email=&de=&ate=&pagina=&tamanho=` devolve a trilha mais recente primeiro, paginada no servidor (`tamanho` padrão 20, máximo 100): `dados: [{ id, acao, detalhe, quando, usuario: { id, nome, email } | null }]` e `resumo: { total, pagina, tamanho, acoes }` (`acoes` = ações distintas já registradas, para o filtro). `de`/`ate` em ISO 8601 (`AAAA-MM-DD` ou data e hora; `ate` só com o dia vai até o fim dele). Parâmetro inválido dá 400 com código próprio (`ACAO_INVALIDA`, `USUARIO_INVALIDO`, `EMAIL_INVALIDO`, `DATA_INVALIDA`, `PERIODO_INVALIDO`, `PAGINA_INVALIDA`, `TAMANHO_INVALIDO`); Analista e Colaborador recebem 403. O autor sai do cadastro atual (o `AuditLog` não tem FK para `User`, para o registro sobreviver à exclusão da conta): conta excluída ou ação sem autor vem com `usuario: null`. A tela é `/audit` no frontend.
 
-Erros seguem o envelope `{ status: "erro", mensagem, codigoErro, timestamp }`; sucessos, `{ status: "sucesso", mensagem?, dados, resumo? }`. Toda rota de escrita registra em `AuditLog`, inclusive as do contrato (`POST /assets` → `CRIAR_ATIVO`, `POST /scans` → `INICIAR_VARREDURA`, sem mudar a resposta), e a mudança de status de vulnerabilidade grava `ALTERAR_STATUS_VULNERABILIDADE` com status antigo → novo.
+Erros seguem o envelope `{ status: "erro", mensagem, codigoErro, timestamp }`; sucessos, `{ status: "sucesso", mensagem?, dados, resumo? }`. Toda rota de escrita registra em `AuditLog`, inclusive as do contrato (`POST /assets` → `CRIAR_ATIVO`, `POST /scans` → `INICIAR_VARREDURA`, sem mudar a resposta), e a mudança de status de vulnerabilidade grava `ALTERAR_STATUS_VULNERABILIDADE` com status antigo → novo. A exportação do relatório em PDF, embora seja leitura, também é registrada (`EXPORTAR_RELATORIO_VULNERABILIDADES`).
 
 As suítes de segurança em `backend/tests/seguranca/` exercitam a API com payloads reais (injeção, tokens adulterados, força bruta, corpos malformados); os achados que elas revelaram foram corrigidos no backend (coerção de query string, validação de tipo em campos obrigatórios, senha só como string, corpo grande com envelope 413, e o dashboard do colaborador sem métricas por campanha — RN-006).
 
@@ -174,8 +176,8 @@ mkcert -CAROOT                                      # pasta do rootCA.pem, para 
 | Perfil | Pode |
 |---|---|
 | **Administrador** | tudo, inclusive `GET /usuarios`, `PATCH/DELETE /users/:id` e `GET /auditoria` |
-| **Analista** | operar a plataforma (varreduras, ativos, campanhas, status de vulnerabilidade, criar Analista/Colaborador) e ler as listas técnicas; **não** lista nem edita usuários |
-| **Colaborador** | `GET /me`, `GET /dashboard` (só índices e KPIs, sem a lista de achados), `GET /configuracoes/seguranca`, as próprias notificações e o próprio treinamento |
+| **Analista** | operar a plataforma (varreduras, ativos, campanhas, status de vulnerabilidade, criar Analista/Colaborador), ler as listas técnicas e exportar o relatório de vulnerabilidades em PDF; **não** lista nem edita usuários |
+| **Colaborador** | `GET /me`, `GET /dashboard` (só índices e KPIs, sem a lista de achados), `GET /configuracoes/seguranca`, as próprias notificações e o próprio treinamento; nas listas técnicas e no relatório em PDF recebe 403 |
 
 O perfil vem do banco a cada requisição (um token emitido antes de um rebaixamento deixa de valer), contas `Inativo` perdem o acesso na hora (401 `USUARIO_INATIVO`) e o login de conta inativa é recusado (403 `USUARIO_INATIVO`). O login bloqueia após 5 falhas por conta em 15 minutos (429 `MUITAS_TENTATIVAS`), como a política de `GET /configuracoes/seguranca` anuncia.
 
@@ -268,7 +270,7 @@ backend/            API real (Express + Prisma/PostgreSQL)
     routes/         index.ts (roteador /api, ordem de registro) + <f>.routes.ts: caminho + middlewares + controller
     controllers/    <f>.controller.ts: uma função por endpoint (lê req, valida com o model, chama o service, responde)
     services/       <f>.service.ts: regra de negócio (+ token, linkConta, cvss, cicloVarredura, campanhaEmail,
-                    campanhaMetricas, auditoria)
+                    campanhaMetricas, auditoria, relatorioVulnerabilidade, relatorioPdf)
     models/         <f>.model.ts: tipos do domínio, DTOs e regras zod de entrada (+ dominio, catalogoAchado)
     repositories/   <f>.repository.ts: único acesso ao Prisma
     middlewares/    auth.middleware.ts: exigeToken, exigePerfil

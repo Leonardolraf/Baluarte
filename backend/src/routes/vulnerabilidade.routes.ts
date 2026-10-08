@@ -8,6 +8,8 @@ import { wrap } from '../utils/resposta.js';
 export function rotasVulnerabilidades(r: Router) {
   r.get('/findings/classificacao', wrap(vulnerabilidadeController.classificar));
   r.get('/vulnerabilidades', exigeToken, exigePerfil(...OPERADORES), wrap(vulnerabilidadeController.listar));
+  // Antes de /vulnerabilidades/:id, senao "relatorio.pdf" casaria como id.
+  r.get('/vulnerabilidades/relatorio.pdf', exigeToken, exigePerfil(...OPERADORES), wrap(vulnerabilidadeController.exportarRelatorio));
   r.get('/vulnerabilidades/:id', exigeToken, exigePerfil(...OPERADORES), wrap(vulnerabilidadeController.detalhe));
   r.patch('/vulnerabilidades/:id', exigeToken, exigePerfil(...OPERADORES), wrap(vulnerabilidadeController.alterarStatus));
 }

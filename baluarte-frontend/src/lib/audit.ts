@@ -21,6 +21,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   CRIAR_ATIVO: 'Ativo cadastrado',
   INICIAR_VARREDURA: 'Varredura iniciada',
   ALTERAR_STATUS_VULNERABILIDADE: 'Status de vulnerabilidade alterado',
+  EXPORTAR_RELATORIO_VULNERABILIDADES: 'Relatório de vulnerabilidades exportado',
   CRIAR_CAMPANHA: 'Campanha criada',
   ENVIAR_CAMPANHA: 'Campanha enviada',
   EXCLUIR_CAMPANHA: 'Campanha excluída',

@@ -57,13 +57,15 @@ A única porta de entrada das telas é `src/services/api.ts`, que exporta `api: 
 |---|---|
 | Autenticação | `POST /login`, `GET /me`, `POST /auth/change-password`, `POST /auth/reset-password`, `POST /auth/reset-password/confirm` |
 | Dashboard e ativos | `GET /dashboard`, `GET /scans`, `POST /scans`, `GET/POST /assets` |
-| Vulnerabilidades | `GET /vulnerabilidades[?q=]`, `GET/PATCH /vulnerabilidades/:id` (status inclui `Risco aceito`) |
+| Vulnerabilidades | `GET /vulnerabilidades[?q=]`, `GET/PATCH /vulnerabilidades/:id` (status inclui `Risco aceito`), `GET /vulnerabilidades/relatorio.pdf?severidade=&status=&q=` (B24: botão **Exportar PDF**, Administrador/Analista) |
 | Campanhas e treinamento | `GET /campanhas`, `GET /campanhas/:id`, `POST /campaigns` (`destinatario` + `destinatarios[]`), `GET /treinamentos/:token`, `POST /treinamentos/:token/concluir`; públicas, pelo link do e-mail: `GET /treinamentos/link/:token`, `POST /treinamentos/link/:token/concluir`, `POST /treinamentos/link/:token/reportar` (telas `/t/:token` e `/t/:token/reportar`) |
 | Usuários | `GET /usuarios`, `POST /users`, `PATCH/DELETE /users/:id` (Administrador) |
 | Configurações | `GET /configuracoes/seguranca`, `GET/PUT /configuracoes/notificacoes` |
 | Análise de arquivos (B04, backend em andamento) | `POST /arquivos/analise` (multipart, campo `arquivo`), `GET /arquivos/analises` |
 
 Todas, exceto as de análise de arquivos (contrato do B04, cujo backend vem em seguida), estão implementadas em `../backend` (testes em `../backend/tests`). `src/services/api.ts` exporta `FEATURES`, um mapa de capacidades hoje todo ligado; as telas continuam consultando-o para esconder uma ação (em vez de mostrar um 404 genérico) caso uma implantação desligue alguma capacidade. Se uma rota não existir no servidor, a camada real converte o 404 `ROTA_NAO_ENCONTRADA` em **501 `NAO_IMPLEMENTADO`**.
+
+**Relatório em PDF (B24).** O botão **Exportar PDF** da tela de vulnerabilidades (só Administrador e Analista) chama `api.exportVulnerabilityReport` com os filtros ativos na tela (severidade e status no rótulo do backend, a busca sem esperar o debounce), recebe o arquivo como Blob pelo `httpClient` (o interceptor põe o token e, em erro, lê o envelope JSON de dentro do Blob) e o entrega ao navegador com `saveBlob` (`src/lib/download.ts`), com o nome do `Content-Disposition`. Mostra "Gerando PDF…" enquanto espera e o erro num banner; sem achados nos filtros atuais, o botão fica desabilitado. **No modo mock** não há servidor para gerar o relatório: `src/mocks/pdf.ts` monta um PDF simples só de texto (cabeçalho, resumo e um achado por linha, com acentos e "Página X de Y"), marcado como modo demonstração, e a exportação entra na trilha de auditoria da sessão. O módulo fica em `src/mocks/` e não vai para o build de produção.
 
 O RBAC é do servidor, não só da interface: em modo real o colaborador recebe 403 nas listas técnicas e um dashboard sem a lista de achados, o analista não lista usuários, um token emitido antes de um rebaixamento deixa de valer e uma conta inativada cai na primeira requisição (401 e volta ao login).
 
