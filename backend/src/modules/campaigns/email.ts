@@ -1,5 +1,5 @@
-import { prisma } from './db.js';
-import { enviarEmail, urlFrontend, type Email } from './email.js';
+import { prisma } from '../../platform/db.js';
+import { enviarEmail, urlFrontend, type Email } from '../../platform/email.js';
 
 // E-mail da campanha de phishing SIMULADO (treinamento interno). Regras:
 //  - sai pelo mesmo canal dos e-mails de conta (src/email.ts): remetente da plataforma

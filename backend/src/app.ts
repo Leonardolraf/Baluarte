@@ -1,9 +1,11 @@
+// Fica em src/app.ts (e nao em src/http/) porque o preset Express da Vercel procura o app
+// neste caminho e exige que o arquivo importe o express.
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { erro, enviar } from './util.js';
-import { apiRouter } from './routes/api.js';
+import { erro, enviar } from './http/resposta.js';
+import { apiRouter } from './http/rotas.js';
 
 export const app = express();
 

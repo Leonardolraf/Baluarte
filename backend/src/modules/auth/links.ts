@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { prisma } from './db.js';
-import { enviarEmail, urlFrontend } from './email.js';
-import { gerarTokenLink, hashToken } from './tokens.js';
+import { prisma } from '../../platform/db.js';
+import { enviarEmail, urlFrontend } from '../../platform/email.js';
+import { gerarTokenLink, hashToken } from '../../platform/tokens.js';
 
 // Links de conta entregues por e-mail. CONVITE: quem o administrador cadastra nasce
 // Pendente, sem senha utilizavel, e cria a propria senha pelo link (nao existe senha

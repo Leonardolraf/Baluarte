@@ -64,3 +64,12 @@ export function cweValido(cwe: unknown): cwe is string {
 export function cveValido(cve: unknown): cve is string {
   return typeof cve === 'string' && /^CVE-\d{4}-\d{4,7}$/.test(cve);
 }
+
+// Classifica um CVSS (0.0–10.0) na faixa de severidade do projeto.
+// Retorna os rotulos ACENTUADOS, exatamente como o contrato dos testes espera.
+export function faixaCvss(cvss: number): 'Baixo' | 'Médio' | 'Alto' | 'Crítico' {
+  if (cvss <= 3.9) return 'Baixo';
+  if (cvss <= 6.9) return 'Médio';
+  if (cvss <= 8.9) return 'Alto';
+  return 'Crítico';
+}

@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { app } from './app.js';
-import { validarSegredoJwt } from './auth.js';
+import { app } from '../app.js';
+import { validarSegredoJwt } from '../modules/auth/jwt.js';
 
 // Em producao, sem JWT_SECRET adequado o processo nem sobe.
 validarSegredoJwt();

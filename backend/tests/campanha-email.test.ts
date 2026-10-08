@@ -20,9 +20,9 @@ import {
 prepararBanco(import.meta.url);
 
 const { app } = await import('../src/app.js');
-const { prisma } = await import('../src/db.js');
-const { caixaDeSaida } = await import('../src/email.js');
-const { hashToken } = await import('../src/tokens.js');
+const { prisma } = await import('../src/platform/db.js');
+const { caixaDeSaida } = await import('../src/platform/email.js');
+const { hashToken } = await import('../src/platform/tokens.js');
 
 const FRONTEND = 'http://localhost:5173';
 const LINK = new RegExp(`${FRONTEND}/t/([0-9a-f]{64})(?!/)`);

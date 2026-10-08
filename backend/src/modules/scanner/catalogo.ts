@@ -1,6 +1,6 @@
 import { notaCvss, cweValido, cveValido } from './cvss.js';
 import type { Prisma } from '@prisma/client';
-import { faixaCvss } from './util.js';
+import { faixaCvss } from './cvss.js';
 
 // Catalogo de tipos de falha do scanner simulado (e do seed de demonstracao).
 // Cada tipo traz a classificacao (OWASP, CWE, vetor CVSS 3.1, CVE quando houver) e os

@@ -10,10 +10,11 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'segredo-unitario-de-teste';
 process.env.FRONTEND_URL = 'http://localhost:5173/';
 
-const { gerarToken, exigeToken, exigePerfil, validarSegredoJwt } = await import('../../src/auth.js');
-const { agora, enviar, erro, wrap } = await import('../../src/util.js');
-const { caixaDeSaida, enviarEmail, urlFrontend } = await import('../../src/email.js');
-const { linksCampanha, mensagemCampanha } = await import('../../src/campanhaEmail.js');
+const { gerarToken, validarSegredoJwt } = await import('../../src/modules/auth/jwt.js');
+const { exigeToken, exigePerfil } = await import('../../src/http/middlewares.js');
+const { agora, enviar, erro, wrap } = await import('../../src/http/resposta.js');
+const { caixaDeSaida, enviarEmail, urlFrontend } = await import('../../src/platform/email.js');
+const { linksCampanha, mensagemCampanha } = await import('../../src/modules/campaigns/email.js');
 
 /** Response falso: guarda status e corpo. */
 function resposta() {

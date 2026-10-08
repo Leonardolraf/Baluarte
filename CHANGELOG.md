@@ -181,6 +181,14 @@ A demo pública estava lenta no navegador e pior no celular. Medido antes de mex
 - **Uma requisição por tela** ([`de254c5`](https://github.com/Leonardolraf/Baluarte/commit/de254c5)) — a tela de treinamentos consumia os agregados de `GET /treinamentos/consolidado` em vez de pedir o relatório de cada campanha e somar no cliente (1+N → 1 requisição: ~9 s → ~1,5 s); a de ativos passou de 3 requisições para 1, usando `achadosAbertos` e `ultimaVarredura` que a API já entrega (~1,2 s). O dashboard deixou de pedir `/scans` para o perfil Colaborador, que não usa esse dado.
 - **Ajustes de interface no mesmo lote** ([`664a457`](https://github.com/Leonardolraf/Baluarte/commit/664a457)) — a placa de indicadores do dashboard segue o tema claro/escuro (antes era sempre escura), o cabeçalho saúda o usuário logado pelo nome e "Cadastrar ativo" saiu da tela de vulnerabilidades, onde não pertencia.
 
+## 2026-10-08 — Backend separado em módulos por domínio (B01)
+
+Fase 0 do `backend/PLANO.md`: a regra de negócio saiu dos três arquivos de rota (`routes/api.ts`, `read.ts`, `manage.ts`) para módulos de domínio, sem mudar nenhuma rota, mensagem ou código de erro.
+
+- **Estrutura** — `src/app.ts` (o app Express) e `src/http` (servidor, roteador, middlewares de token e perfil, envelope de resposta), `src/platform` (Prisma, e-mail, tokens de link), `src/shared` (validações de entrada e constantes) e `src/modules/<domínio>/{routes,service,repository}.ts` para auth, users, departments, assets, scanner, reports (vulnerabilidades), campaigns, training, dashboard, notifications e audit.
+- **Padrão** — a rota valida o formato e responde; o serviço tem a regra e lança `falhar(status, mensagem, código)`; o `wrap` converte esse erro de negócio no mesmo envelope do contrato; o repositório fala com o Prisma.
+- **Testes** — 289 no backend (eram 279): 10 testes de unidade novos para as peças criadas (erro de negócio no `wrap`, métricas de campanha, conteúdo e permissão do treinamento, constantes). Unidade 57/57 (83,9% de linhas); completa 289/289 (98,8% de linhas, 95,3% de ramos). Contra a API refatorada: Newman 35 requisições / 70 asserções e Robot 29/29, sem falhas.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -188,7 +196,7 @@ A demo pública estava lenta no navegador e pior no celular. Medido antes de mex
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 279 no backend (47 unidade + 7 banco + 112 integração + 113 pentest; 98,7% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 289 no backend (57 unidade + 7 banco + 112 integração + 113 pentest; 98,8% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`). Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |

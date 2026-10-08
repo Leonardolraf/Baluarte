@@ -1,6 +1,7 @@
-import { prisma } from './db.js';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '../../platform/db.js';
 
-// Helpers de conta compartilhados pelas rotas (api.ts, manage.ts).
+// Acesso a dados de usuarios e helpers de e-mail compartilhados com o modulo auth.
 
 /** E-mail canonico: sem espacos nas pontas e em minusculas. */
 export function normalizarEmail(email: unknown): string {
@@ -18,17 +19,8 @@ export async function localizarPorEmail(email: string) {
   return prisma.user.findUnique({ where: { email: normalizarEmail(email) } });
 }
 
-/**
- * Departamento informado no cadastro/edicao de usuario, pelo NOME (o frontend trabalha com
- * o nome; ele e unico na tabela). `undefined` = nao mexer; `null` ou '' = sem departamento;
- * nome desconhecido ou tipo errado = 'invalido'. A coluna e citext: ignora maiusculas.
- */
-export async function resolverDepartamento(valor: unknown): Promise<string | null | undefined | 'invalido'> {
-  if (valor === undefined) return undefined;
-  if (valor === null || (typeof valor === 'string' && valor.trim() === '')) return null;
-  if (typeof valor !== 'string') return 'invalido';
-  const dep = await prisma.department.findUnique({ where: { name: valor.trim() }, select: { id: true } });
-  return dep?.id ?? 'invalido';
+export function buscarPorId(id: string) {
+  return prisma.user.findUnique({ where: { id } });
 }
 
 /** Usuario como a API devolve: departamento achatado para o nome (ou null). */
@@ -40,4 +32,22 @@ export const SELECT_USUARIO = {
 export function mapUsuario<T extends { department: { name: string } | null }>(u: T) {
   const { department, ...resto } = u;
   return { ...resto, departamento: department?.name ?? null };
+}
+
+export async function listar() {
+  return (await prisma.user.findMany({ select: SELECT_USUARIO, orderBy: { criadoEm: 'asc' } })).map(mapUsuario);
+}
+
+export function criar(dados: { nome: string; email: string; perfil: string; senhaHash: string; departmentId: string | null }) {
+  return prisma.user.create({ data: { ...dados, status: 'Pendente' }, include: { department: true } });
+}
+
+/** Transacao para as regras que dependem do estado atual (check-then-act atomico). */
+export function emTransacao<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return prisma.$transaction(fn);
+}
+
+/** Administradores ativos (nao Inativo) alem do usuario informado. */
+export function contarOutrosAdmins(tx: Prisma.TransactionClient, excetoId: string) {
+  return tx.user.count({ where: { perfil: 'Administrador', status: { not: 'Inativo' }, id: { not: excetoId } } });
 }

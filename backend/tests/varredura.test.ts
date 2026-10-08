@@ -8,9 +8,9 @@ import { ANALISTA, chamar, encerrarServidor, esperaErro, iniciarServidor, login,
 prepararBanco(import.meta.url);
 
 const { app } = await import('../src/app.js');
-const { prisma } = await import('../src/db.js');
-const { dadosAchado } = await import('../src/catalogo.js');
-const { statusPorTempo, DURACAO_VARREDURA_MS, TEMPO_EM_FILA_MS } = await import('../src/varredura.js');
+const { prisma } = await import('../src/platform/db.js');
+const { dadosAchado } = await import('../src/modules/scanner/catalogo.js');
+const { statusPorTempo, DURACAO_VARREDURA_MS, TEMPO_EM_FILA_MS } = await import('../src/modules/scanner/ciclo.js');
 
 let analista: string;
 let hostSeq = 0;

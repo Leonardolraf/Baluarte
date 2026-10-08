@@ -8,9 +8,9 @@ import { prepararBanco } from './helpers.js';
 
 prepararBanco(import.meta.url);
 
-const { prisma } = await import('../src/db.js');
-const { dadosAchado } = await import('../src/catalogo.js');
-const { PERFIS, STATUS_USUARIO, TIPOS_ATIVO, STATUS_FINDING, TEMPLATES } = await import('../src/util.js');
+const { prisma } = await import('../src/platform/db.js');
+const { dadosAchado } = await import('../src/modules/scanner/catalogo.js');
+const { PERFIS, STATUS_USUARIO, TIPOS_ATIVO, STATUS_FINDING, TEMPLATES } = await import('../src/shared/dominio.js');
 
 after(() => prisma.$disconnect());
 
@@ -29,7 +29,7 @@ const usuario = (extra: Record<string, unknown> = {}) =>
   prisma.user.create({ data: { nome: 'U', email: email(), senhaHash: 'x', ...extra } });
 
 describe('CHECK: valores fixos garantidos pelo banco', () => {
-  it('aceita todos os valores das listas de src/util.ts', async () => {
+  it('aceita todos os valores das listas de src/shared/dominio.ts', async () => {
     for (const perfil of PERFIS) for (const status of STATUS_USUARIO) await usuario({ perfil, status });
     for (const tipo of TIPOS_ATIVO) await prisma.asset.create({ data: { nome: 'A', host: `h${++seq}.empresa.com`, tipo } });
     for (const template of TEMPLATES) await prisma.campaign.create({ data: { nome: 'C', template } });

@@ -6,7 +6,7 @@
 //
 // Os achados so nascem na conclusao: varredura em fila ou em andamento nao tem achado,
 // entao nenhuma tela ou indicador precisa filtrar "achado de varredura nao concluida".
-import { prisma } from './db.js';
+import { prisma } from '../../platform/db.js';
 import { CATALOGO_ACHADOS, dadosAchado, type ChaveAchado } from './catalogo.js';
 
 /** Tempo na fila antes de "comecar". */
