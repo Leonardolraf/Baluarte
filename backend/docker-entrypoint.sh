@@ -27,7 +27,13 @@ if [ -z "${JWT_SECRET:-}" ]; then
 fi
 
 npx prisma migrate deploy
-npm run --silent seed
+
+# SEED_CONTRATO=0 desliga o seed de contrato: ele cria admin/analista/colaborador com as
+# senhas publicas do README (as suites Newman/Robot precisam delas). Em producao, com
+# banco proprio, as contas vem da migracao dos dados ou do convite, nunca de senha publica.
+if [ "${SEED_CONTRATO:-1}" = "1" ]; then
+  npm run --silent seed
+fi
 
 MARCADOR="$DATA_DIR/.seed-demo-ok"
 if [ "${SEED_DEMO:-1}" = "1" ] && [ ! -f "$MARCADOR" ]; then
