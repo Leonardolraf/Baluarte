@@ -264,6 +264,6 @@ describe('aba Histórico do detalhe', () => {
 
   it('avisa quando os registros não explicam o status atual', async () => {
     await openHistory(vuln({ historyComplete: false }));
-    expect(screen.getByRole('note')).toHaveTextContent('Histórico completo de status ainda não registrado');
+    expect(screen.getByRole('note')).toHaveTextContent('Histórico incompleto');
   });
 });

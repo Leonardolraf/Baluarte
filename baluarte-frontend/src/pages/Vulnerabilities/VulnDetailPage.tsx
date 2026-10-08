@@ -230,8 +230,8 @@ function RemediationTab({ vuln }: { vuln: Vulnerability }) {
 }
 
 /**
- * Histórico só com o que o dado sustenta (B25): a detecção, as mudanças de status registradas
- * e o status atual. Quando os registros não explicam o status atual (`historyComplete`
+ * Histórico só com o que o dado sustenta (B25/B25b): a detecção e as mudanças de status gravadas
+ * pelo servidor no histórico do achado, e o status atual. Quando os registros não explicam o status atual (`historyComplete`
  * false), avisa em vez de completar a sequência por conta própria.
  */
 function HistoryTab({ vuln }: { vuln: Vulnerability }) {
@@ -288,8 +288,8 @@ function HistoryTab({ vuln }: { vuln: Vulnerability }) {
           role="note"
           className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400"
         >
-          Histórico completo de status ainda não registrado: houve mudança de status sem registro na trilha de
-          auditoria (por exemplo, anterior a ela), então a sequência acima não chega ao status atual.
+          Histórico incompleto: houve mudança de status sem registro no histórico (por exemplo, feita fora da
+          plataforma ou antes de a trilha existir), então a sequência acima não chega ao status atual.
         </p>
       )}
     </div>

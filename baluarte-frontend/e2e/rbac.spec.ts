@@ -38,6 +38,29 @@ test.describe('RBAC', () => {
     await expect(nav.getByRole('link', { name: 'Usuários' })).toBeVisible();
   });
 
+  test('evolução do risco (B25b): analista vê o gráfico e percorre os dias pelo teclado; colaborador não vê', async ({
+    page,
+  }) => {
+    await login(page, 'analyst');
+    await page.goto('/dashboard');
+    await expect(page.getByRole('heading', { name: 'Evolução do risco' })).toBeVisible();
+    const slider = page.getByRole('slider', { name: /Dia da evolução do risco/ });
+    await expect(slider).toHaveAttribute('aria-valuenow', '30');
+    await slider.focus();
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(slider).toHaveAttribute('aria-valuenow', '29');
+    await expect(page.getByTestId('risk-trend-tooltip')).toBeVisible();
+    await page.getByText('Ver os 30 dias em tabela').click();
+    await expect(page.getByTestId('risk-trend-table').getByRole('row')).toHaveCount(31);
+
+    await clearSession(page);
+    await login(page, 'collaborator');
+    await page.goto('/dashboard');
+    await expect(page.getByRole('meter', { name: 'Risco humano' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Evolução do risco' })).toHaveCount(0);
+  });
+
   test('token adulterado no storage não concede privilégios', async ({ page }) => {
     await login(page, 'collaborator');
     await page.evaluate(() => {

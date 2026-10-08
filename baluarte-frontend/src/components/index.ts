@@ -3,6 +3,8 @@ export { SeverityBadge } from '@/components/Badge/SeverityBadge';
 export type { SeverityBadgeProps } from '@/components/Badge/SeverityBadge';
 
 export { CircularGauge } from '@/components/Gauge/CircularGauge';
+export { RiskTrendChart } from '@/components/Chart/RiskTrendChart';
+export type { RiskTrendChartProps } from '@/components/Chart/RiskTrendChart';
 export type { CircularGaugeProps } from '@/components/Gauge/CircularGauge';
 
 export { VulnTable } from '@/components/Table/VulnTable';

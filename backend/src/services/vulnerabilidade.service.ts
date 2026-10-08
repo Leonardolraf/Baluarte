@@ -1,5 +1,5 @@
 import { falhar } from '../utils/resposta.js';
-import { SEVERIDADES, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
+import { SEVERIDADES, STATUS_FINDING, STATUS_FINDING_ENCERRADO, STATUS_INICIAL_FINDING } from '../models/dominio.model.js';
 import { lerRemediacao } from '../models/catalogoAchado.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
 import { faixaCvss } from './cvss.service.js';
@@ -7,7 +7,7 @@ import { registrarAuditoria } from './auditoria.service.js';
 import { desenharRelatorioPdf } from './relatorioPdf.service.js';
 import { descreverFiltros, montarRelatorio, nomeDoArquivo } from './relatorioVulnerabilidade.service.js';
 import * as repo from '../repositories/vulnerabilidade.repository.js';
-import { alteracoesDeStatus, usuariosPorIds } from '../repositories/auditoria.repository.js';
+import { usuariosPorIds } from '../repositories/auditoria.repository.js';
 import type {
   AlteracaoStatus,
   AutorRelatorio,
@@ -101,32 +101,17 @@ export async function exportarRelatorio(autor: AutorRelatorio & { id: string }, 
   return { pdf, nomeArquivo: nomeDoArquivo(relatorio.geradoEm), total };
 }
 
-// ---- Historico do achado (B25, sem tabela propria) -------------------------------
+// ---- Historico do achado (B25b, tabela FindingStatusChange) ---------------------------
 
 /** Acao da auditoria que registra a mudanca de status (ver `alterarStatus`). */
 export const ACAO_ALTERAR_STATUS = 'ALTERAR_STATUS_VULNERABILIDADE';
 
-/** Status com que o scanner cria todo achado (default da coluna Finding.status). */
-export const STATUS_INICIAL = 'Aberta';
+/** Status com que todo achado nasce (default de Finding.status). */
+export const STATUS_INICIAL = STATUS_INICIAL_FINDING;
 
 /**
- * Le "de -> para" de um registro ALTERAR_STATUS_VULNERABILIDADE. O detalhe e gravado por
- * `alterarStatus` como `<id> (<host>, <categoria>): <de> → <para>`; a categoria tem ":" (ex.:
- * "A03:2021 - Injection"), por isso o par e lido do FIM, e so vale com status da lista oficial.
- * Detalhe de outro achado ou fora do formato devolve null (o registro e ignorado).
- */
-export function lerAlteracaoStatus(detalhe: string | null, findingId: string): { de: string; para: string } | null {
-  if (!detalhe || !detalhe.startsWith(`${findingId} (`)) return null;
-  const separador = detalhe.lastIndexOf(': ');
-  if (separador < 0) return null;
-  const [de, para, ...resto] = detalhe.slice(separador + 2).split(' → ');
-  if (resto.length || !STATUS_FINDING.includes(de) || !STATUS_FINDING.includes(para)) return null;
-  return { de, para };
-}
-
-/**
- * As mudancas explicam o status atual? Partindo de "Aberta", cada mudanca precisa sair do
- * status em que a anterior deixou o achado, e a ultima precisa chegar no status atual.
+ * As mudancas explicam o status atual? Partindo de "Aberta" (o evento de criacao), cada mudanca
+ * precisa sair do status em que a anterior deixou o achado, e a ultima precisa chegar no atual.
  */
 export function historicoCompleto(alteracoes: Array<{ de: string; para: string }>, statusAtual: string): boolean {
   let status = STATUS_INICIAL;
@@ -138,26 +123,35 @@ export function historicoCompleto(alteracoes: Array<{ de: string; para: string }
 }
 
 /**
- * Historico honesto do achado: so o que o dado sustenta. A deteccao vem do proprio achado
- * (data e a varredura que o gerou); as mudancas de status vem da trilha de auditoria. Nao ha
- * tabela de historico (pendencia B25b): quando a trilha nao explica o status atual,
- * `completo` sai false e a tela avisa, em vez de inventar a sequencia.
+ * Historico do achado lido da tabela propria (B25b): o evento de criacao vira a deteccao (com a
+ * varredura e o ativo de origem) e cada mudanca de status vem com autor, de e para. Os eventos
+ * sao gravados na mesma transacao da mudanca (repository), e os anteriores ao B25b vieram da
+ * trilha de auditoria pelo backfill da migration. `completo` sai false so quando a cadeia nao
+ * explica o status atual (achado inserido por fora da API ou status mudado sem registro antes
+ * da trilha), e a tela avisa em vez de inventar a sequencia.
  */
 export async function historico(f: FindingComOrigem): Promise<HistoricoVulnerabilidade> {
-  const registros = await alteracoesDeStatus(ACAO_ALTERAR_STATUS, f.id);
-  const lidos = registros.flatMap((r) => {
-    const mudanca = lerAlteracaoStatus(r.detalhe, f.id);
-    return mudanca ? [{ quando: r.timestamp, usuarioId: r.usuarioId, ...mudanca }] : [];
-  });
-  const ids = [...new Set(lidos.map((x) => x.usuarioId).filter((id): id is string => id !== null))];
+  const registros = await repo.historicoStatus(f.id);
+  const criacao = registros.find((r) => r.de === null);
+  const mudancas = registros.flatMap((r) => (r.de === null ? [] : [{ ...r, de: r.de }]));
+  const ids = [...new Set(mudancas.map((m) => m.usuarioId).filter((id): id is string => id !== null))];
   const autores = new Map((ids.length ? await usuariosPorIds(ids) : []).map((u) => [u.id, { id: u.id, nome: u.nome }]));
-  const alteracoes: AlteracaoStatus[] = lidos.map(({ usuarioId, ...a }) => ({
-    ...a,
-    autor: (usuarioId ? autores.get(usuarioId) : undefined) ?? null,
+  const alteracoes: AlteracaoStatus[] = mudancas.map((m) => ({
+    quando: m.registradaEm,
+    de: m.de,
+    para: m.para,
+    autor: (m.usuarioId ? autores.get(m.usuarioId) : undefined) ?? null,
   }));
   return {
     eventos: [
-      { tipo: 'DETECTADO', quando: f.criadoEm, varreduraId: f.scan.id, ativo: f.scan.asset.host, ativoNome: f.scan.asset.nome },
+      {
+        tipo: 'DETECTADO',
+        // Sem evento de criacao (achado inserido por fora da API), a data e a do proprio achado.
+        quando: criacao?.registradaEm ?? f.criadoEm,
+        varreduraId: f.scan.id,
+        ativo: f.scan.asset.host,
+        ativoNome: f.scan.asset.nome,
+      },
       ...alteracoes.map((a) => ({ tipo: 'STATUS_ALTERADO' as const, ...a })),
     ],
     statusAtual: f.status,
@@ -186,15 +180,20 @@ export async function detalhe(id: string) {
 }
 
 export async function alterarStatus(atorId: string, id: string, status: string) {
-  const atual = await repo.existe(id);
-  if (!atual) falhar(404, 'Vulnerabilidade não encontrada', 'FINDING_NAO_ENCONTRADO');
-  const f = await repo.alterarStatus(id, status);
+  // O evento do historico (B25b) e gravado na mesma transacao que muda o status (repository).
+  const r = await repo.alterarStatus(id, status, atorId);
+  if (!r) falhar(404, 'Vulnerabilidade não encontrada', 'FINDING_NAO_ENCONTRADO');
   // RN-008: so registra mudanca de fato (repetir o mesmo status nao e evento).
-  // O historico do detalhe le este formato (`lerAlteracaoStatus`): mudar aqui exige mudar la.
-  if (atual.status !== status)
-    await registrarAuditoria(atorId, ACAO_ALTERAR_STATUS, `${id} (${f.scan.asset.host}, ${f.categoriaOwasp}): ${atual.status} → ${status}`);
+  // O backfill da migration historico_status_achado leu este formato da trilha; o historico
+  // agora vem da tabela, entao o texto pode mudar sem afetar a aba de historico.
+  if (r.anterior !== status)
+    await registrarAuditoria(
+      atorId,
+      ACAO_ALTERAR_STATUS,
+      `${id} (${r.finding.scan.asset.host}, ${r.finding.categoriaOwasp}): ${r.anterior} → ${status}`,
+    );
   // Devolve o detalhe (o historico ja conta esta mudanca), como GET /vulnerabilidades/:id.
-  return detalheCompleto(f);
+  return detalheCompleto(r.finding);
 }
 
 /** Classificacao publica do contrato: faixa de severidade de uma nota CVSS. */

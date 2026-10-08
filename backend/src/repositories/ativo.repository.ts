@@ -46,3 +46,16 @@ export function listarResumoPorIds(ids: string[]) {
 export function contar() {
   return prisma.asset.count();
 }
+
+/**
+ * Evolucao do risco (B25b): quantos ativos ja existiam em cada instante de `fins` (a capacidade
+ * do indice global naquele dia), numa consulta so. `dia` e a posicao em `fins` (1 = o primeiro).
+ * Como `contar`, conta todos os ativos (o status do ativo nao tem historico).
+ */
+export function contarCriadosAte(fins: Date[]) {
+  const instantes = fins.map((f) => f.toISOString());
+  return prisma.$queryRaw<Array<{ dia: number; total: number }>>`
+    SELECT t."ordem"::int AS "dia",
+           (SELECT COUNT(*)::int FROM "Asset" a WHERE a."criadoEm" <= t."fim"::timestamp(3)) AS "total"
+    FROM unnest(${instantes}::text[]) WITH ORDINALITY AS t("fim", "ordem")`;
+}

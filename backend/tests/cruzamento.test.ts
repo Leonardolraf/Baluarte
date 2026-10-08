@@ -230,6 +230,14 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
       assert.equal(f.scan.assetId, e.assetId, 'a varredura é do ativo da estação');
       assert.equal(f.scan.status, 'CONCLUIDA');
     }
+    // B25b: cada achado novo nasce com o evento de criacao do historico (NULL -> Aberta), no instante do achado.
+    const eventos = await prisma.findingStatusChange.findMany({ where: { findingId: { in: achados.map((f) => f.id) } } });
+    assert.equal(eventos.length, achados.length);
+    for (const f of achados) {
+      const ev = eventos.find((x) => x.findingId === f.id)!;
+      assert.deepEqual([ev.de, ev.para, ev.usuarioId], [null, 'Aberta', null]);
+      assert.equal(ev.registradaEm.getTime(), f.criadoEm.getTime());
+    }
     assert.equal(achados[1].cwe, 'CWE-834', 'CWE do NVD quando o OSV não traz');
     assert.match(achados[0].evidencia, /deb_packages: libssl3, openssl; OSV Ubuntu:22\.04:LTS/);
     assert.match(JSON.stringify(achados[2].remediacao), /7\.81\.0-1ubuntu1\.14 ou mais nova/);
@@ -274,6 +282,7 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.equal(await prisma.finding.count({ where: { workstationId: e.id } }), 3);
     assert.equal(await prisma.scan.count({ where: { assetId: e.assetId } }), scansAntes);
     assert.equal(pedidos.length, 0, 'tudo veio do cache do banco');
+    assert.equal(await prisma.findingStatusChange.count({ where: { finding: { workstationId: e.id } } }), 3, 'nenhum evento de criação repetido (B25b)');
   });
 
   it('cache vencido: consulta de novo, guarda com validade nova e continua sem duplicar', async () => {

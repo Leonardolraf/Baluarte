@@ -4,7 +4,8 @@
 // - o PDF do B24 continua exportando TODOS os achados do filtro, nao so uma pagina;
 // - nota de risco por ativo em GET /assets (calculada na leitura) e os 5 ativos de maior
 //   risco no dashboard (ordem, empate, RBAC);
-// - historico honesto no detalhe do achado (deteccao + mudancas da trilha de auditoria).
+// - historico honesto no detalhe do achado (deteccao + mudancas; desde o B25b, da tabela
+//   FindingStatusChange, nao mais da trilha de auditoria).
 // Banco Postgres isolado (baluarte_test_relatorios_avancados) — ver helpers.ts.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -391,27 +392,25 @@ describe('histórico honesto do achado', () => {
     assert.equal(d.historico.completo, true);
   });
 
-  it('registro de outro achado, com prefixo parecido ou fora do formato, é ignorado', async () => {
+  it('B25b: a mudança vai para a tabela de histórico com autor; a aba lê a tabela, não a trilha de auditoria', async () => {
     const id = achado.kappaMedio;
-    await prisma.auditLog.createMany({
-      data: [
-        { acao: 'ALTERAR_STATUS_VULNERABILIDADE', usuarioId: 'u-001', detalhe: `${id}x (10.25.0.10, A01:2021 - Broken Access Control): Em remediação → Resolvida` },
-        { acao: 'ALTERAR_STATUS_VULNERABILIDADE', usuarioId: 'u-001', detalhe: `${id} (10.25.0.10, A01:2021 - Broken Access Control): Em remediação → Fechada` },
-        { acao: 'OUTRA_ACAO', usuarioId: 'u-001', detalhe: `${id} (10.25.0.10, x): Em remediação → Resolvida` },
-      ],
+    const eventos = await prisma.findingStatusChange.findMany({ where: { findingId: id }, orderBy: { id: 'asc' } });
+    assert.deepEqual(
+      eventos.map((e) => [e.de, e.para, e.usuarioId]),
+      [['Aberta', 'Em revisão', 'u-001'], ['Em revisão', 'Em remediação', 'u-001']],
+    );
+    // Um registro de auditoria no formato antigo nao vira evento: a fonte agora e a tabela.
+    await prisma.auditLog.create({
+      data: { acao: 'ALTERAR_STATUS_VULNERABILIDADE', usuarioId: 'u-001', detalhe: `${id} (10.25.0.10, A01:2021 - Broken Access Control): Em remediação → Resolvida` },
     });
     const d = await detalhe(id);
     assert.equal(d.historico.eventos.filter((e) => e.tipo === 'STATUS_ALTERADO').length, 2);
     assert.equal(d.historico.completo, true);
   });
 
-  it('autor que não existe mais sai como null; a trilha que explica o status atual torna o histórico completo', async () => {
-    await prisma.auditLog.create({
-      data: {
-        acao: 'ALTERAR_STATUS_VULNERABILIDADE',
-        usuarioId: 'conta-excluida',
-        detalhe: `${achado.kappaBaixo} (10.25.0.10, A05:2021 - Security Misconfiguration): Aberta → Em revisão`,
-      },
+  it('autor que não existe mais sai como null; a cadeia que explica o status atual torna o histórico completo', async () => {
+    await prisma.findingStatusChange.create({
+      data: { findingId: achado.kappaBaixo, de: 'Aberta', para: 'Em revisão', usuarioId: 'conta-excluida' },
     });
     const d = await detalhe(achado.kappaBaixo);
     const [mudanca] = d.historico.eventos.filter((e) => e.tipo === 'STATUS_ALTERADO');

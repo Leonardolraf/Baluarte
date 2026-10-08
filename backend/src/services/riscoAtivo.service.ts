@@ -1,31 +1,24 @@
 import { SEVERIDADES, STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
-import {
-  LIMITE_MAIOR_RISCO,
-  NOTA_RISCO_MAXIMA,
-  PESO_RISCO,
-  type AbertosPorSeveridade,
-  type RiscoAtivo,
-} from '../models/ativo.model.js';
+import { LIMITE_MAIOR_RISCO, NOTA_RISCO_MAXIMA, type AbertosPorSeveridade, type RiscoAtivo } from '../models/ativo.model.js';
 import * as repo from '../repositories/ativo.repository.js';
+import { pontosDeRisco } from './indiceRisco.service.js';
+
+export { pontosDeRisco };
 
 // Nota de risco por ativo (B25), calculada NA LEITURA e nunca gravada:
 //
-//   pontos = 10 x Criticos + 7 x Altos + 4 x Medios + 1 x Baixos   (so achados abertos)
+//   pontos = soma de PESO_SEVERIDADE x abertos da severidade   (proposta 10/7/4/1; so abertos)
 //   nota   = min(100, pontos)
 //
 // "Aberto" e a mesma regra dos KPIs do dashboard: "Resolvida" e "Risco aceito" nao contam.
 // Como nada e persistido, a nota acompanha qualquer mudanca (varredura concluida, status
 // alterado) ja na leitura seguinte: e o "recalculada a cada mudanca" do requisito, sem
-// gatilho nem coluna nova. Os pesos estao em models/ativo.model.ts (PESO_RISCO).
+// gatilho nem coluna nova. Os pesos sao PESO_SEVERIDADE (models/dominio.model.ts), os mesmos do
+// indice global e da evolucao do risco (B25b); os pontos saem de services/indiceRisco.service.ts.
 
 /** As quatro severidades zeradas, na ordem oficial. */
 export function abertosVazio(): AbertosPorSeveridade {
   return Object.fromEntries(SEVERIDADES.map((s) => [s, 0]));
-}
-
-/** Pontos de risco sem teto (desempate do ranking quando duas notas batem no teto). */
-export function pontosDeRisco(abertos: AbertosPorSeveridade): number {
-  return SEVERIDADES.reduce((soma, s) => soma + (PESO_RISCO[s] ?? 0) * (abertos[s] ?? 0), 0);
 }
 
 /** Nota de 0 a 100 do ativo. */

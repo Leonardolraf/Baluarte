@@ -35,6 +35,17 @@ const HOSTS_LOCAIS = new Set(['localhost', '127.0.0.1', '::1', 'db']);
 
 /** Aponta DATABASE_URL para um banco exclusivo deste arquivo de teste e o recria com o seed de contrato. */
 export function prepararBanco(testFileUrl: string): void {
+  configurarBancoDeTeste(testFileUrl);
+  // migrate reset cria o banco se faltar, apaga tudo e reaplica as migrations (testa as migrations de verdade).
+  npx('prisma migrate reset --force --skip-seed --skip-generate');
+  npx('tsx prisma/seed.ts');
+}
+
+/**
+ * So aponta o ambiente para o banco exclusivo do arquivo (sem criar nem semear): quem precisa
+ * montar o banco de outro jeito (ex.: o teste do backfill de uma migration) usa isto. Devolve a URL.
+ */
+export function configurarBancoDeTeste(testFileUrl: string): string {
   const nome = basename(fileURLToPath(testFileUrl)).replace(/\.test\.ts$/, '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
   const base = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
   if (!base?.startsWith('postgres')) throw new Error('defina DATABASE_URL (ou TEST_DATABASE_URL) apontando para o Postgres local');
@@ -62,9 +73,12 @@ export function prepararBanco(testFileUrl: string): void {
   process.env.NVD_API_URL = 'http://127.0.0.1:9';
   delete process.env.NVD_API_KEY;
   delete process.env.CRUZAMENTO_AUTOMATICO;
-  // migrate reset cria o banco se faltar, apaga tudo e reaplica as migrations (testa as migrations de verdade).
-  npx('prisma migrate reset --force --skip-seed --skip-generate');
-  npx('tsx prisma/seed.ts');
+  return url.toString();
+}
+
+/** Roda `npx <args>` (falha com a saida do comando). */
+export function rodarNpx(args: string): void {
+  npx(args);
 }
 
 let server: Server | null = null;

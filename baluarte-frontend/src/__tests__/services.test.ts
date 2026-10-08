@@ -264,8 +264,8 @@ describe('services/adapters', () => {
       openVulnerabilities: 4,
     });
     expect(comArquivos.severityDistribution!.critical).toBe(3);
-    // Cada arquivo pesa 10 (crítico) sobre a capacidade de 3 ativos × 20.
-    expect(comArquivos.technicalRisk! - base.technicalRisk!).toBe(Math.round((20 / 60) * 100));
+    // B25b: o peso dos arquivos entra no índice calculado pelo servidor; aqui não há fórmula.
+    expect(comArquivos.technicalRisk).toBeNull();
 
     const invalido = toDashboard(
       backendDashboard({
@@ -294,6 +294,77 @@ describe('services/adapters', () => {
       }),
     );
     expect(colaborador.kpis.maliciousFiles).toBeNull();
+  });
+
+  it('toDashboard (B25b): o índice de risco técnico e a evolução vêm prontos do servidor, sem fórmula no frontend', () => {
+    const ponto = {
+      data: '2026-10-08',
+      critico: 1,
+      alto: 2,
+      medio: 0,
+      baixo: 3,
+      arquivosMaliciosos: 1,
+      ativos: 4,
+      indice: 43,
+    };
+    const dashboard = toDashboard(
+      backendDashboard({
+        // Distribuição que, com a fórmula antiga do frontend (10/6/3/1), daria outro número.
+        kpis: {
+          vulnerabilidadesAbertas: 4,
+          criticas: 1,
+          resilienciaPhishing: 0,
+          ativosMonitorados: 3,
+          indiceRiscoTecnico: 37,
+        },
+        evolucaoRisco: [{ ...ponto, data: '2026-10-07', indice: 50 }, ponto],
+      }),
+    );
+    expect(dashboard.technicalRisk).toBe(37);
+    expect(dashboard.riskTrend).toEqual([
+      {
+        date: '2026-10-07',
+        critical: 1,
+        high: 2,
+        medium: 0,
+        low: 3,
+        maliciousFiles: 1,
+        assets: 4,
+        index: 50,
+      },
+      {
+        date: '2026-10-08',
+        critical: 1,
+        high: 2,
+        medium: 0,
+        low: 3,
+        maliciousFiles: 1,
+        assets: 4,
+        index: 43,
+      },
+    ]);
+
+    // API anterior ao B25b (sem os campos): sem índice nem evolução, nunca um número inventado.
+    const antigo = toDashboard(backendDashboard());
+    expect(antigo.technicalRisk).toBeNull();
+    expect(antigo.riskTrend).toBeNull();
+
+    // Colaborador (B10): null nos dois, mesmo se viesse algo.
+    const colaborador = toDashboard(
+      backendDashboard({
+        kpis: {
+          vulnerabilidadesAbertas: null,
+          criticas: null,
+          resilienciaPhishing: 80,
+          ativosMonitorados: null,
+          indiceRiscoTecnico: null,
+        },
+        distribuicaoSeveridade: null,
+        evolucaoRisco: null,
+      }),
+    );
+    expect(colaborador.technicalRisk).toBeNull();
+    expect(colaborador.riskTrend).toBeNull();
   });
 
   it('VULN_STATUS_TO_LABEL não confunde "Risco aceito" com "Resolvida" (ida e volta)', () => {

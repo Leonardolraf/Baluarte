@@ -33,12 +33,8 @@ export const CADASTRO = [
 
 // ---- Nota de risco do ativo (B25) ------------------------------------------------
 
-/**
- * Peso de cada achado ABERTO na nota de risco do ativo. Cada peso e o piso da faixa CVSS 3.1
- * da severidade (Critico 9,0 arredondado para 10; Alto 7,0; Medio 4,0; Baixo 0,1 arredondado
- * para 1): um achado critico pesa dez baixos.
- */
-export const PESO_RISCO: Readonly<Record<string, number>> = { 'Crítico': 10, 'Alto': 7, 'Médio': 4, 'Baixo': 1 };
+// Os pesos por severidade ficam em models/dominio.model.ts (PESO_SEVERIDADE, B25b): os mesmos
+// da nota do ativo, do indice global e da evolucao do risco.
 
 /** Teto da nota: 100 = dez criticos abertos (ou combinacao de mesmo peso) ou mais. */
 export const NOTA_RISCO_MAXIMA = 100;

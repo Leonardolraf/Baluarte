@@ -97,9 +97,9 @@ export function rotuloDaLista(lista: readonly string[], valor: string | undefine
   return lista.find((item) => item.toLowerCase() === valor.toLowerCase());
 }
 
-// ---- Historico do achado (B25, sem tabela propria) ------------------------------
+// ---- Historico do achado (B25b, tabela FindingStatusChange) ---------------------
 
-/** Mudanca de status lida da trilha de auditoria (ALTERAR_STATUS_VULNERABILIDADE). */
+/** Mudanca de status registrada no historico do achado. */
 export interface AlteracaoStatus {
   quando: Date;
   de: string;
@@ -108,10 +108,10 @@ export interface AlteracaoStatus {
 }
 
 /**
- * Historico como a API devolve: a deteccao (fato do proprio achado) e as mudancas de status
- * registradas na auditoria. `completo` diz se essas mudancas explicam o status atual a partir
- * de "Aberta" (o status com que o scanner cria todo achado); quando nao explicam (achado
- * carregado por seed, mudanca anterior a trilha ou registro perdido), a tela avisa.
+ * Historico como a API devolve: a deteccao (evento de criacao) e as mudancas de status da tabela
+ * FindingStatusChange. `completo` diz se essas mudancas explicam o status atual a partir de
+ * "Aberta" (o status com que todo achado nasce); quando nao explicam (achado inserido por fora
+ * da API, ou status mudado sem registro antes da trilha de auditoria), a tela avisa.
  */
 export interface HistoricoVulnerabilidade {
   eventos: Array<

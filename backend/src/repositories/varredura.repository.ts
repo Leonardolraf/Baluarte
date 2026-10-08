@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
+import { registrarCriacaoDosAchados } from './vulnerabilidade.repository.js';
 
 /**
  * Cria a varredura em fila, se o ativo nao tiver outra em curso (RN-003). A linha do ativo
@@ -57,5 +58,7 @@ export function concluirComAchados(scanId: string, concluidoEm: Date, gerarAchad
     // Varredura criada antes desta regra ja nasceu com achados: nao duplica.
     if ((await tx.finding.count({ where: { scanId } })) > 0) return;
     await tx.finding.createMany({ data: gerarAchados() });
+    // B25b: o evento de criacao de cada achado entra na mesma transacao.
+    await registrarCriacaoDosAchados(tx, scanId);
   });
 }

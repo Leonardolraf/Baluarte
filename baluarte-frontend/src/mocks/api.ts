@@ -35,6 +35,7 @@ import type {
   NotificationPreferences,
   PhishingReportResult,
   RBACRole,
+  RiskTrendPoint,
   ScanReport,
   SecurityPolicy,
   Severity,
@@ -346,8 +347,10 @@ function isOpen(v: Vulnerability): boolean {
   return v.status !== 'resolved' && v.status !== 'accepted';
 }
 
-// ---- Nota de risco por ativo (espelha backend/src/services/riscoAtivo.service.ts) ----
-// pontos = 10 × crítica + 7 × alta + 4 × média + 1 × baixa (abertas); nota = min(100, pontos).
+// ---- Pesos de severidade (espelham PESO_SEVERIDADE em backend/src/models/dominio.model.ts) ----
+// Os mesmos para a nota por ativo, o índice global e a evolução do risco (B25b). Proposta
+// 10/7/4/1, pendente da escolha do Leo (DT07): se mudar no backend, muda aqui.
+// Nota do ativo: pontos = 10 × crítica + 7 × alta + 4 × média + 1 × baixa (abertas); nota = min(100, pontos).
 const RISK_WEIGHT: Record<Severity, number> = { critical: 10, high: 7, medium: 4, low: 1, info: 0 };
 const RISK_MAX = 100;
 /** Quantos ativos o dashboard mostra no ranking de maior risco. */
@@ -495,7 +498,61 @@ function advanceScans(now = Date.now()): void {
   }
 }
 
-const SEVERITY_WEIGHT: Record<Severity, number> = { critical: 10, high: 6, medium: 3, low: 1, info: 0 };
+/** Índice global (espelha backend/src/services/indiceRisco.service.ts): pontos / (ativos × 20) × 100, teto 100. */
+function technicalRiskIndex(open: Record<Severity, number>, assets: number): number {
+  return clampPct((riskPoints(open) / (Math.max(1, assets) * 20)) * 100);
+}
+
+/** Status do achado ao fim de `end` pelo histórico (sem mudança registrada até ali: o de antes da primeira). */
+function statusAt(v: Vulnerability, end: number): VulnerabilityStatus {
+  const changes = v.history
+    .filter((h) => h.action === 'status_changed' && h.to)
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const done = changes.filter((h) => Date.parse(h.at) <= end);
+  if (done.length) return done[done.length - 1]!.to!;
+  return changes[0]?.from ?? v.status;
+}
+
+/** Dia local AAAA-MM-DD. */
+function localDate(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Evolução do risco nos últimos 30 dias (espelha backend/src/services/evolucaoRisco.service.ts):
+ * abertas por severidade ao fim de cada dia (pelo histórico), arquivos com ameaça na janela de 30
+ * dias que termina no dia, ativos já criados e o índice do dia; hoje termina agora.
+ */
+function riskTrend(now = Date.now()): RiskTrendPoint[] {
+  const today = new Date(now);
+  return Array.from({ length: 30 }, (_, i) => {
+    const back = 29 - i;
+    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back);
+    const end =
+      back === 0
+        ? now
+        : new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate() + 1).getTime() - 1;
+    const open = emptySeverityMap();
+    for (const v of state.vulnerabilities) {
+      if (Date.parse(v.detectedAt) > end) continue;
+      const status = back === 0 ? v.status : statusAt(v, end);
+      if (status !== 'resolved' && status !== 'accepted') open[v.severity] += 1;
+    }
+    const maliciousFiles = countMaliciousFiles(end, end);
+    const assets = state.assets.filter((a) => Date.parse(a.createdAt) <= end).length;
+    return {
+      date: localDate(dayStart.getTime()),
+      critical: open.critical,
+      high: open.high,
+      medium: open.medium,
+      low: open.low,
+      maliciousFiles,
+      assets,
+      index: technicalRiskIndex({ ...open, critical: open.critical + maliciousFiles }, assets),
+    };
+  });
+}
 
 function clampPct(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -719,11 +776,13 @@ function mockSecondOpinion(sha256: string, threat: boolean): SecondOpinion {
 export const MALICIOUS_FILES_WINDOW_DAYS = 30;
 
 /** Arquivos distintos (por SHA-256) com ameaça nos últimos 30 dias, de todos os usuários. */
-function countMaliciousFiles(now = Date.now()): number {
+function countMaliciousFiles(now = Date.now(), until = Infinity): number {
   const since = now - MALICIOUS_FILES_WINDOW_DAYS * 24 * HOUR_MS;
   const hashes = new Set(
     state.fileScans
-      .filter((s) => s.result === 'threat' && Date.parse(s.scannedAt) >= since)
+      .filter(
+        (s) => s.result === 'threat' && Date.parse(s.scannedAt) >= since && Date.parse(s.scannedAt) <= until,
+      )
       .map((s) => s.sha256),
   );
   return hashes.size;
@@ -862,17 +921,12 @@ export const mockApi: BaluarteApi = {
       const vulns = state.vulnerabilities;
       const open = vulns.filter(isOpen);
       const severityDistribution = emptySeverityMap();
-      let weighted = 0;
-      for (const v of open) {
-        severityDistribution[v.severity] += 1;
-        weighted += SEVERITY_WEIGHT[v.severity];
-      }
+      for (const v of open) severityDistribution[v.severity] += 1;
       // B17: arquivo malicioso pesa como crítico (distintos por SHA-256, últimos 30 dias, de todos).
       const maliciousFiles = countMaliciousFiles();
       severityDistribution.critical += maliciousFiles;
-      weighted += SEVERITY_WEIGHT.critical * maliciousFiles;
-      const capacity = Math.max(1, state.assets.length) * 20;
-      const technicalRisk = clampPct((weighted / capacity) * 100);
+      // B25b: o "servidor" (este mock) calcula o índice com os pesos únicos; a tela só exibe.
+      const technicalRisk = technicalRiskIndex(severityDistribution, state.assets.length);
 
       const campaigns = state.campaigns.map(refreshCampaignMetrics);
       const measured = campaigns.filter((c) => c.metrics.sent > 0);
@@ -909,6 +963,7 @@ export const mockApi: BaluarteApi = {
       // Colaborador (RN-006, B10): só a resiliência a phishing; nada técnico nem contagens de campanha.
       return {
         technicalRisk: manager ? technicalRisk : null,
+        riskTrend: manager ? riskTrend() : null,
         humanRisk: totalSent > 0 ? humanRisk : 0,
         kpis: {
           openVulnerabilities: manager ? open.length : null,

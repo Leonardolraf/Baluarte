@@ -44,6 +44,7 @@ import {
   LoadingSpinner,
   PageHeader,
   Plate,
+  RiskTrendChart,
   SeverityBadge,
   StatCard,
   StatusPill,
@@ -611,7 +612,7 @@ export default function DashboardPage() {
         </div>
         <p className="mt-5 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500 dark:border-white/10 dark:text-slate-400">
           {technicalRisk !== null &&
-            'Risco técnico: severidade ponderada das vulnerabilidades abertas por ativo monitorado; cada arquivo com ameaça nos últimos 30 dias pesa como uma vulnerabilidade crítica. '}
+            'Risco técnico (calculado pelo servidor): severidade ponderada das vulnerabilidades abertas por ativo monitorado, com os mesmos pesos da nota de risco dos ativos; cada arquivo com ameaça nos últimos 30 dias pesa como uma vulnerabilidade crítica. '}
           Risco humano: taxas de clique e de submissão de credenciais nas simulações de phishing, medidas
           pessoa a pessoa.
         </p>
@@ -666,6 +667,22 @@ export default function DashboardPage() {
             <SeverityDistribution distribution={severityDistribution} />
           </Card>
         </div>
+      )}
+
+      {/* Evolução do risco (B25b): parte técnica; o Colaborador recebe null e não vê o card */}
+      {data.riskTrend && data.riskTrend.length > 0 && (
+        <Card
+          title="Evolução do risco"
+          subtitle="Últimos 30 dias, reconstruídos do histórico de status das vulnerabilidades"
+          footer={
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Cada dia mostra o que estava aberto ao fim dele; o índice usa a mesma fórmula do risco técnico,
+              com os ativos que já existiam no dia. Hoje é o estado atual.
+            </p>
+          }
+        >
+          <RiskTrendChart points={data.riskTrend} />
+        </Card>
       )}
 
       {/* Ativos de maior risco (B25): lista técnica, só para quem opera a plataforma */}
