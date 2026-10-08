@@ -240,6 +240,62 @@ describe('services/adapters', () => {
     expect(dashboard.recentCampaigns[0]?.metrics).toMatchObject({ sent: 100, clicked: 20, clickRate: 20 });
   });
 
+  it('toDashboard: arquivos maliciosos (B17) chegam como KPI próprio e pesam pelo crítico da distribuição', () => {
+    const base = toDashboard(backendDashboard());
+    // Backend anterior ao B17 (sem o campo): zero, nunca NaN.
+    expect(base.kpis.maliciousFiles).toBe(0);
+
+    const comArquivos = toDashboard(
+      backendDashboard({
+        // O backend já somou os 2 arquivos em `criticas` e no Crítico; não em vulnerabilidadesAbertas.
+        kpis: {
+          vulnerabilidadesAbertas: 4,
+          criticas: 3,
+          resilienciaPhishing: 0,
+          ativosMonitorados: 3,
+          arquivosMaliciosos: 2,
+        },
+        distribuicaoSeveridade: { Crítico: 3, Alto: 1, Médio: 2 },
+      }),
+    );
+    expect(comArquivos.kpis).toMatchObject({
+      maliciousFiles: 2,
+      criticalVulnerabilities: 3,
+      openVulnerabilities: 4,
+    });
+    expect(comArquivos.severityDistribution!.critical).toBe(3);
+    // Cada arquivo pesa 10 (crítico) sobre a capacidade de 3 ativos × 20.
+    expect(comArquivos.technicalRisk! - base.technicalRisk!).toBe(Math.round((20 / 60) * 100));
+
+    const invalido = toDashboard(
+      backendDashboard({
+        kpis: {
+          vulnerabilidadesAbertas: 4,
+          criticas: 1,
+          resilienciaPhishing: 0,
+          ativosMonitorados: 3,
+          arquivosMaliciosos: -1,
+        },
+      }),
+    );
+    expect(invalido.kpis.maliciousFiles).toBe(0);
+
+    // Colaborador (B10): a parte técnica vem null, e o KPI de arquivos maliciosos também.
+    const colaborador = toDashboard(
+      backendDashboard({
+        kpis: {
+          vulnerabilidadesAbertas: null,
+          criticas: null,
+          resilienciaPhishing: 80,
+          ativosMonitorados: null,
+          arquivosMaliciosos: null,
+        },
+        distribuicaoSeveridade: null,
+      }),
+    );
+    expect(colaborador.kpis.maliciousFiles).toBeNull();
+  });
+
   it('VULN_STATUS_TO_LABEL não confunde "Risco aceito" com "Resolvida" (ida e volta)', () => {
     expect(VULN_STATUS_TO_LABEL.accepted).toBe('Risco aceito');
     expect(VULN_STATUS_TO_LABEL.resolved).toBe('Resolvida');

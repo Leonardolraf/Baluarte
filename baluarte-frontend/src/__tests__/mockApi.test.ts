@@ -160,8 +160,10 @@ describe('mockApi — dashboard e vulnerabilidades', () => {
     expect(d.technicalRisk).toBeLessThanOrEqual(100);
     expect(d.humanRisk).toBeGreaterThanOrEqual(0);
     expect(d.humanRisk).toBeLessThanOrEqual(100);
-    const open = Object.values(d.severityDistribution ?? {}).reduce((a, b) => a + b, 0);
-    expect(open).toBe(d.kpis.openVulnerabilities);
+    // B17: arquivos maliciosos entram no crítico da distribuição, não nas vulnerabilidades abertas.
+    const distributed = Object.values(d.severityDistribution ?? {}).reduce((a, b) => a + b, 0);
+    expect(distributed).toBe((d.kpis.openVulnerabilities ?? 0) + (d.kpis.maliciousFiles ?? 0));
+    expect(d.kpis.maliciousFiles).not.toBeNull();
     expect(d.recentFindings.length).toBeLessThanOrEqual(5);
     expect(d.recentFindings.every((v) => v.status !== 'resolved' && v.status !== 'accepted')).toBe(true);
     // Há campanhas com envios no seed: resiliência medida (0–100) e coerente com a taxa de clique.
@@ -187,6 +189,7 @@ describe('mockApi — dashboard e vulnerabilidades', () => {
     expect(d.kpis).toMatchObject({
       openVulnerabilities: null,
       criticalVulnerabilities: null,
+      maliciousFiles: null,
       monitoredAssets: null,
       activeCampaigns: null,
       trainedCollaborators: null,

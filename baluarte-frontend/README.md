@@ -110,7 +110,7 @@ VITE_USE_MOCKS=
 | `/scans` | Varreduras: iniciar por ativo e acompanhar o status (Em fila → Em andamento → Concluída), com consulta automática a cada 3 s enquanto houver varredura em curso | Admin, Analista |
 | `/stations`, `/stations/:id` | Estações monitoradas pelo agente osquery: lista com sistema, último contato e status online/offline; detalhe com abas Programas instalados (filtro, 25 por página) · Portas abertas | Admin, Analista |
 | `/campaigns`, `/campaigns/new`, `/campaigns/:id` | Campanhas de phishing: lista, criação, relatório (KPIs, funil, gauge de cliques, destinatários) | Admin, Analista |
-| `/files` | Análise de arquivos: enviar (arrastar e soltar ou escolher), veredito do antivírus, SHA-256 e histórico (o colaborador vê só as próprias análises; operadores veem quem enviou) | todos |
+| `/files` | Análise de arquivos: enviar (arrastar e soltar ou escolher), veredito do antivírus, SHA-256 e histórico paginado com filtro por resultado (o colaborador vê só as próprias análises; operadores veem quem enviou) | todos |
 | `/training/:id` | Treinamento contextual pós-clique (marcar como concluído) | todos |
 | `/users`, `/users/new`, `/users/:id/edit` | Gestão de usuários e perfis | Admin |
 | `/settings` | Senha, notificações, tema, política de segurança | todos |

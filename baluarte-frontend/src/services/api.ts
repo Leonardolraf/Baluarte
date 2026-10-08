@@ -20,7 +20,8 @@ import type {
   ChangePasswordInput,
   CreatedUser,
   DashboardMetrics,
-  FileScan,
+  FileScanFilters,
+  FileScanListResponse,
   FileScanOutcome,
   LoginCredentials,
   LoginResponse,
@@ -62,6 +63,7 @@ import {
   toCampaignReport,
   toDashboard,
   toFileScan,
+  toFileScanList,
   toNotificationPreferences,
   toScan,
   toSecurityPolicy,
@@ -81,6 +83,7 @@ import {
   type BackendCampaignReport,
   type BackendDashboard,
   type BackendFileScan,
+  type BackendFileScanSummary,
   type BackendFinding,
   type BackendLogin,
   type BackendNotificationPreferences,
@@ -238,6 +241,9 @@ function rethrowAsNotImplemented(error: unknown): never {
 
 /** Tamanho padrão da página da trilha de auditoria (o servidor aceita até 100). */
 export const AUDIT_PAGE_SIZE = 20;
+
+/** Tamanho padrão da página do histórico de análises de arquivo (o servidor aceita até 100). */
+export const FILE_SCAN_PAGE_SIZE = 20;
 
 const GENERIC_RESET_MESSAGE =
   'Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha em instantes.';
@@ -715,10 +721,18 @@ export const realApi: BaluarteApi = {
     }
   },
 
-  async listFileScans(): Promise<FileScan[]> {
+  async listFileScans(filters: FileScanFilters = {}): Promise<FileScanListResponse> {
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? FILE_SCAN_PAGE_SIZE;
+    const params: Record<string, string> = { pagina: String(page), tamanho: String(pageSize) };
+    if (filters.result) params.resultado = filters.result === 'threat' ? 'AMEACA' : 'LIMPO';
     try {
-      const raw = await request<BackendFileScan[]>({ method: 'GET', url: '/arquivos/analises' });
-      return raw.map(toFileScan);
+      const { dados, resumo } = await requestWithSummary<BackendFileScan[]>({
+        method: 'GET',
+        url: '/arquivos/analises',
+        params,
+      });
+      return toFileScanList(dados, resumo as BackendFileScanSummary | undefined, { page, pageSize });
     } catch (error) {
       rethrowAsNotImplemented(error);
     }

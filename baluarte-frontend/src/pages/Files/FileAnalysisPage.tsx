@@ -1,6 +1,14 @@
-import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
-import type { FileScan, FileScanOutcome, SecondOpinion, SecondOpinionStatus } from '@/types';
-import { api } from '@/services/api';
+import { useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import type {
+  FileScan,
+  FileScanFilters,
+  FileScanListResponse,
+  FileScanOutcome,
+  FileScanResult,
+  SecondOpinion,
+  SecondOpinionStatus,
+} from '@/types';
+import { api, FILE_SCAN_PAGE_SIZE } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { useAuth } from '@/contexts/useAuth';
 import { cn } from '@/lib/cn';
@@ -22,10 +30,14 @@ import {
   EmptyState,
   ErrorState,
   FormErrorBanner,
+  FormField,
   KeyValueList,
   LoadingSpinner,
   PageHeader,
+  Pagination,
+  Select,
   StatusPill,
+  TableEmptyRow,
   TBody,
   Table,
   Td,
@@ -205,7 +217,45 @@ function ResultCard({ outcome }: { outcome: FileScanOutcome }) {
   );
 }
 
-function HistoryTable({ items, showUser }: { items: FileScan[]; showUser: boolean }) {
+type ResultFilter = '' | FileScanResult;
+
+const RESULT_FILTER_LABEL: Record<FileScanResult, string> = {
+  threat: 'Com ameaça',
+  clean: 'Sem ameaça conhecida',
+};
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+function ResultFilterBar({
+  value,
+  onChange,
+}: {
+  value: ResultFilter;
+  onChange: (value: ResultFilter) => void;
+}) {
+  const id = `${useId()}-result`;
+  return (
+    <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+      <FormField label="Resultado" htmlFor={id} className="sm:max-w-xs">
+        <Select id={id} value={value} onChange={(event) => onChange(event.target.value as ResultFilter)}>
+          <option value="">Todos os resultados</option>
+          <option value="threat">{RESULT_FILTER_LABEL.threat}</option>
+          <option value="clean">{RESULT_FILTER_LABEL.clean}</option>
+        </Select>
+      </FormField>
+    </div>
+  );
+}
+
+function HistoryTable({
+  items,
+  showUser,
+  emptyRow,
+}: {
+  items: FileScan[];
+  showUser: boolean;
+  emptyRow: ReactNode;
+}) {
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -220,8 +270,9 @@ function HistoryTable({ items, showUser }: { items: FileScan[]; showUser: boolea
           </tr>
         </THead>
         <TBody>
+          {items.length === 0 && <TableEmptyRow colSpan={showUser ? 6 : 5}>{emptyRow}</TableEmptyRow>}
           {items.map((scan) => (
-            <Tr key={scan.id}>
+            <Tr key={scan.id} data-testid="file-history-row" data-result={scan.result}>
               <Td>
                 <div className="break-all font-medium text-ink dark:text-white">{scan.name}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">{formatBytes(scan.size)}</div>
@@ -293,8 +344,30 @@ function HistoryTable({ items, showUser }: { items: FileScan[]; showUser: boolea
 export default function FileAnalysisPage() {
   const { hasRole } = useAuth();
   const operator = hasRole('admin', 'analyst');
-  const history = useAsync<FileScan[]>(() => api.listFileScans(), []);
-  const { data, error, loading, reload, setData } = history;
+  // B17: filtro por resultado e paginação vão para o servidor (o histórico não vem inteiro).
+  const [resultFilter, setResultFilter] = useState<ResultFilter>('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(FILE_SCAN_PAGE_SIZE);
+  const query = useMemo<FileScanFilters>(
+    () => ({ result: resultFilter || undefined, page, pageSize }),
+    [resultFilter, page, pageSize],
+  );
+  const queryKey = JSON.stringify(query);
+  const { data, error, loading, reload, setData } = useAsync<FileScanListResponse>(
+    () => api.listFileScans(query),
+    [queryKey],
+    { keepPreviousData: true },
+  );
+
+  // Filtro novo ou tamanho novo: volta para a primeira página.
+  const changeResultFilter = (next: ResultFilter) => {
+    setResultFilter(next);
+    setPage(1);
+  };
+  const changePageSize = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -328,11 +401,23 @@ export default function FileAnalysisPage() {
         },
       });
       setOutcome(result);
-      try {
-        setData(await api.listFileScans());
-      } catch {
-        // Lista indisponível agora: a análise nova entra no topo do que já estava na tela.
-        setData((previous) => [result.scan, ...(previous ?? [])]);
+      // A análise nova é a mais recente: aparece no topo da primeira página (se passar no filtro).
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        try {
+          setData(await api.listFileScans(query));
+        } catch {
+          // Lista indisponível agora: a análise nova entra no topo do que já estava na tela.
+          if (!resultFilter || result.scan.result === resultFilter) {
+            setData((previous) => ({
+              items: [result.scan, ...(previous?.items ?? [])].slice(0, pageSize),
+              total: (previous?.total ?? 0) + 1,
+              page: 1,
+              pageSize,
+            }));
+          }
+        }
       }
     } catch (err) {
       setUploadError(fileScanErrorMessage(err));
@@ -373,7 +458,9 @@ export default function FileAnalysisPage() {
         }`
       : '';
 
-  const items = data ?? [];
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const filterLabel = resultFilter ? RESULT_FILTER_LABEL[resultFilter].toLowerCase() : '';
 
   return (
     <div className="space-y-6">
@@ -504,7 +591,7 @@ export default function FileAnalysisPage() {
         />
       ) : !data ? (
         <LoadingSpinner label="Carregando análises…" />
-      ) : items.length === 0 ? (
+      ) : total === 0 && !resultFilter && !loading ? (
         <EmptyState
           icon={<FileScanIcon size={28} />}
           title="Nenhuma análise ainda"
@@ -519,8 +606,49 @@ export default function FileAnalysisPage() {
               : 'Suas análises, mais recentes primeiro'
           }
           flush
+          aria-busy={loading || undefined}
+          data-testid="file-history"
         >
-          <HistoryTable items={items} showUser={operator} />
+          <ResultFilterBar value={resultFilter} onChange={changeResultFilter} />
+          {error && (
+            <p
+              role="alert"
+              className="border-b border-slate-100 px-5 py-3 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200"
+            >
+              {error.message}
+            </p>
+          )}
+          <div className={cn(loading && 'opacity-60 transition-opacity')}>
+            <HistoryTable
+              items={items}
+              showUser={operator}
+              emptyRow={
+                <>
+                  <p>{filterLabel ? `Nenhuma análise ${filterLabel}.` : 'Nenhuma análise nesta página.'}</p>
+                  {resultFilter && (
+                    <Button variant="ghost" size="sm" className="mt-2" onClick={() => changeResultFilter('')}>
+                      Limpar filtro
+                    </Button>
+                  )}
+                </>
+              }
+            />
+          </div>
+          {loading && (
+            <p role="status" className="sr-only">
+              Carregando análises…
+            </p>
+          )}
+          {total > 0 && (
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={changePageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+            />
+          )}
         </Card>
       )}
     </div>

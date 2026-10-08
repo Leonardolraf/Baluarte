@@ -1,9 +1,12 @@
 import type { Request, Response } from 'express';
 import busboy from 'busboy';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
-import { CAMPO_ARQUIVO, LIMITE_ARQUIVO_BYTES } from '../models/analiseArquivo.model.js';
+import {
+  CAMPO_ARQUIVO, CONSULTA_HISTORICO, LIMITE_ARQUIVO_BYTES, TAMANHO_PAGINA_PADRAO, type ResultadoAnalise,
+} from '../models/analiseArquivo.model.js';
 import * as analiseService from '../services/analiseArquivo.service.js';
 import type { FluxoArquivo } from '../services/analiseArquivo.service.js';
+import { textoDeQuery, validar } from '../utils/esquemas.js';
 import { ErroNegocio, enviar } from '../utils/resposta.js';
 
 // Controller da analise de arquivos (B04). O corpo multipart e lido em fluxo pelo busboy: o
@@ -55,10 +58,19 @@ export async function analisar(req: Request, res: Response) {
   return enviar(res, 201, { status: 'sucesso', mensagem, dados });
 }
 
-/** GET /arquivos/analises (historico; o Colaborador ve so o proprio). */
+/**
+ * GET /arquivos/analises?resultado=&pagina=&tamanho= (historico; o Colaborador ve so o proprio).
+ * `dados` continua sendo a lista; o `resumo` traz total, pagina e tamanho (B17).
+ */
 export async function listar(req: Request, res: Response) {
-  enviar(res, 200, { status: 'sucesso', dados: await analiseService.listar(usuarioDe(req)) });
+  validar(req.query, CONSULTA_HISTORICO);
+  // Depois de validar, todo parametro presente e string; vazio conta como ausente.
+  const q = (campo: string) => textoDeQuery.parse(req.query[campo])?.trim() || undefined;
+  const { lista, resumo } = await analiseService.listar(usuarioDe(req), {
+    resultado: q('resultado') as ResultadoAnalise | undefined,
+    pagina: Number(q('pagina') ?? 1),
+    tamanho: Number(q('tamanho') ?? TAMANHO_PAGINA_PADRAO),
+  });
+  enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
 }
-
-
 

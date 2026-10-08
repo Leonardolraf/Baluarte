@@ -1,6 +1,6 @@
 import type { AuditLog } from '@prisma/client';
 import { z } from 'zod';
-import { email, regra, seVeio } from '../utils/esquemas.js';
+import { email, regra, regrasDePaginacao, seVeio } from '../utils/esquemas.js';
 
 // Model da trilha de auditoria (tabela AuditLog, RN-008): tipos do dominio, DTOs e as
 // regras zod da consulta (GET /api/auditoria). As acoes sao texto livre de proposito: uma
@@ -47,14 +47,6 @@ export const dataIso = z
     return dia.getUTCMonth() === m - 1 && dia.getUTCDate() === d && !Number.isNaN(Date.parse(v));
   });
 
-/** Inteiro positivo em texto (sem sinal, sem decimal), dentro do limite dado. */
-function inteiroDeQuery(min: number, max: number) {
-  return z
-    .string()
-    .regex(/^\d{1,7}$/)
-    .refine((v) => Number(v) >= min && Number(v) <= max);
-}
-
 /** Regras da query de GET /auditoria, na ordem em que sao checadas. */
 export const CONSULTA = [
   regra('acao', seVeio(z.string().max(64)), 'Filtro de ação inválido', 'ACAO_INVALIDA'),
@@ -62,11 +54,5 @@ export const CONSULTA = [
   regra('email', seVeio(email), 'Formato de e-mail inválido', 'EMAIL_INVALIDO'),
   regra('de', seVeio(dataIso), 'Data inicial inválida: use AAAA-MM-DD ou data e hora ISO 8601', 'DATA_INVALIDA'),
   regra('ate', seVeio(dataIso), 'Data final inválida: use AAAA-MM-DD ou data e hora ISO 8601', 'DATA_INVALIDA'),
-  regra('pagina', seVeio(inteiroDeQuery(1, 1_000_000)), 'Página inválida: use um inteiro a partir de 1', 'PAGINA_INVALIDA'),
-  regra(
-    'tamanho',
-    seVeio(inteiroDeQuery(1, TAMANHO_MAXIMO)),
-    `Tamanho inválido: use um inteiro de 1 a ${TAMANHO_MAXIMO}`,
-    'TAMANHO_INVALIDO',
-  ),
+  ...regrasDePaginacao(TAMANHO_MAXIMO),
 ];

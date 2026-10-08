@@ -362,9 +362,16 @@ export default function DashboardPage() {
   // Colaborador (RN-006, B10): a API não manda a parte técnica (null). Nada de cards vazios ou zerados.
   const severityDistribution = data.severityDistribution;
   const technicalRisk = data.technicalRisk;
-  const openTotal = severityDistribution
+  // B17: o crítico da distribuição (e o KPI de críticas) já inclui os arquivos com ameaça dos
+  // últimos 30 dias; o total de vulnerabilidades abertas, não.
+  const maliciousFiles = kpis.maliciousFiles ?? 0;
+  const distributedTotal = severityDistribution
     ? SEVERITIES.reduce((sum, severity) => sum + severityDistribution[severity], 0)
     : 0;
+  const openTotal = Math.max(0, distributedTotal - maliciousFiles);
+  const maliciousFilesText = `${formatNumber(maliciousFiles)} ${
+    maliciousFiles === 1 ? 'arquivo com ameaça' : 'arquivos com ameaça'
+  }`;
   const manageHref = (path: string) => (canManage ? path : undefined);
   const showFindings = canManage || data.recentFindings.length > 0;
   const showCampaigns = canManage || data.recentCampaigns.length > 0;
@@ -392,6 +399,7 @@ export default function DashboardPage() {
       label="Críticas"
       value={formatNumber(value)}
       tone="critical"
+      hint={maliciousFiles > 0 ? `inclui ${maliciousFilesText}` : undefined}
       icon={<XCircleIcon size={16} />}
       href={manageHref('/vulnerabilities')}
     />
@@ -517,7 +525,7 @@ export default function DashboardPage() {
         </div>
         <p className="mt-5 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500 dark:border-white/10 dark:text-slate-400">
           {technicalRisk !== null &&
-            'Risco técnico: severidade ponderada das vulnerabilidades abertas por ativo monitorado. '}
+            'Risco técnico: severidade ponderada das vulnerabilidades abertas por ativo monitorado; cada arquivo com ameaça nos últimos 30 dias pesa como uma vulnerabilidade crítica. '}
           Risco humano: taxas de clique e de submissão de credenciais nas simulações de phishing, medidas
           pessoa a pessoa.
         </p>
@@ -543,15 +551,30 @@ export default function DashboardPage() {
           )}
           <Card
             title="Distribuição por severidade"
-            subtitle="Vulnerabilidades abertas"
+            subtitle={
+              maliciousFiles > 0
+                ? 'Vulnerabilidades abertas e arquivos com ameaça (30 dias)'
+                : 'Vulnerabilidades abertas'
+            }
             footer={
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Total:{' '}
-                <span className="font-semibold tabular-nums text-ink dark:text-white">
-                  {formatNumber(openTotal)}
-                </span>{' '}
-                {openTotal === 1 ? 'vulnerabilidade aberta' : 'vulnerabilidades abertas'}
-              </p>
+              <div className="space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <p>
+                  Total:{' '}
+                  <span className="font-semibold tabular-nums text-ink dark:text-white">
+                    {formatNumber(openTotal)}
+                  </span>{' '}
+                  {openTotal === 1 ? 'vulnerabilidade aberta' : 'vulnerabilidades abertas'}
+                </p>
+                {maliciousFiles > 0 && (
+                  <p data-testid="malicious-files-note">
+                    Crítico inclui{' '}
+                    <span className="font-semibold tabular-nums text-ink dark:text-white">
+                      {maliciousFilesText}
+                    </span>{' '}
+                    nos últimos 30 dias (cada arquivo conta uma vez).
+                  </p>
+                )}
+              </div>
             }
           >
             <SeverityDistribution distribution={severityDistribution} />

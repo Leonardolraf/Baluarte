@@ -335,6 +335,7 @@ describe('realApi — dashboard, ativos e varreduras', () => {
         kpis: {
           vulnerabilidadesAbertas: null,
           criticas: null,
+          arquivosMaliciosos: null,
           resilienciaPhishing: 75,
           ativosMonitorados: null,
         },
@@ -352,6 +353,7 @@ describe('realApi — dashboard, ativos e varreduras', () => {
     expect(metrics.kpis).toEqual({
       openVulnerabilities: null,
       criticalVulnerabilities: null,
+      maliciousFiles: null,
       phishingResilience: 75,
       monitoredAssets: null,
       activeCampaigns: null,

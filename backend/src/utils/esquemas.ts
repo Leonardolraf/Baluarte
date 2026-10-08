@@ -99,6 +99,27 @@ export const idRecurso = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 /** Parametro de query: so string passa; objeto/array (`?q[$ne]=x`) vira undefined. */
 export const textoDeQuery = z.string().optional().catch(undefined);
 
+/** Inteiro positivo em texto de query (sem sinal, sem decimal), dentro do limite dado. */
+export function inteiroDeQuery(min: number, max: number) {
+  return z
+    .string()
+    .regex(/^\d{1,7}$/)
+    .refine((v) => Number(v) >= min && Number(v) <= max);
+}
+
+/** Regras de `pagina` e `tamanho` das consultas paginadas no servidor (400 com codigo proprio). */
+export function regrasDePaginacao(tamanhoMaximo: number): Regra[] {
+  return [
+    regra('pagina', seVeio(inteiroDeQuery(1, 1_000_000)), 'Página inválida: use um inteiro a partir de 1', 'PAGINA_INVALIDA'),
+    regra(
+      'tamanho',
+      seVeio(inteiroDeQuery(1, tamanhoMaximo)),
+      `Tamanho inválido: use um inteiro de 1 a ${tamanhoMaximo}`,
+      'TAMANHO_INVALIDO',
+    ),
+  ];
+}
+
 // ---- Regras e validacao --------------------------------------------------------
 
 export interface Regra {
