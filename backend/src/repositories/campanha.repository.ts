@@ -25,6 +25,11 @@ export function buscar(id: string) {
   return prisma.campaign.findUnique({ where: { id } });
 }
 
+/** Quantos anexos analisados (B23) estao ligados aos eventos da campanha. */
+export function contarAnalisesDaCampanha(id: string) {
+  return prisma.fileScan.count({ where: { campaignEvent: { campaignId: id } } });
+}
+
 export function excluir(id: string) {
   return prisma.$transaction([
     prisma.campaignEvent.deleteMany({ where: { campaignId: id } }),
