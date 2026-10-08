@@ -49,7 +49,7 @@ test.describe('Vulnerabilidades', () => {
     await page.getByRole('tab', { name: /Remediação/ }).click();
     await expect(page.getByRole('tabpanel')).toContainText(/2\.17|Atualiz/);
     await page.getByRole('tab', { name: /Histórico/ }).click();
-    await expect(page.getByRole('tabpanel')).toContainText(/Detectada pelo scanner/);
+    await expect(page.getByRole('tabpanel')).toContainText(/Detectada pela varredura/);
 
     const select = page.locator('#status');
     const current = await select.inputValue();
