@@ -173,6 +173,14 @@ Item 3.2 do roteiro do professor: teste de unidade com percentual de cobertura e
 - **Cobertura com c8** — `npm run cobertura:unidade`, `npm run cobertura` e `npm run test:relatorio`, que escreve `coverage/RELATORIO.md` com taxa de sucesso e % de linhas, ramos e funções. Metas mínimas no c8 e no Vitest do frontend (o comando falha abaixo delas).
 - **Números:** backend unidade 47/47 (80,5% linhas, 93,0% ramos); backend completo 279/279 (98,7% linhas, 94,2% ramos, 98,8% funções); frontend 340/340 (84,1% linhas, 79,9% ramos, 63,2% funções).
 
+## 2026-10-08 — Latência da demo: função junto do banco e uma requisição por tela
+
+A demo pública estava lenta no navegador e pior no celular. Medido antes de mexer: o peso não era o JavaScript (118 KB gzip no primeiro carregamento, maior resposta da API com 41 KB) — era **ida e volta até o banco**. A função serverless rodava em `iad1` (Virginia) e o PostgreSQL do Supabase está em `us-west-2` (Oregon), então cada consulta atravessava os Estados Unidos, e as telas faziam várias consultas em sequência.
+
+- **Função na mesma região do banco** — região das funções da API mudada de `iad1` para `pdx1` (Oregon). Medido em produção, 5 amostras por rota: dashboard 2,61 s → 0,44 s; usuários 1,35 s → 0,42 s; vulnerabilidades 1,78 s → 0,40 s (**3 a 6×**; o pico de 13× que apareceu em preview não se sustentou em produção). Confirmado pelo `X-Vercel-Id` (`gru1::pdx1::…`). **Esse ajuste é configuração do projeto na Vercel, não está no repositório** — se o projeto for recriado, precisa ser refeito.
+- **Uma requisição por tela** ([`de254c5`](https://github.com/Leonardolraf/Baluarte/commit/de254c5)) — a tela de treinamentos consumia os agregados de `GET /treinamentos/consolidado` em vez de pedir o relatório de cada campanha e somar no cliente (1+N → 1 requisição: ~9 s → ~1,5 s); a de ativos passou de 3 requisições para 1, usando `achadosAbertos` e `ultimaVarredura` que a API já entrega (~1,2 s). O dashboard deixou de pedir `/scans` para o perfil Colaborador, que não usa esse dado.
+- **Ajustes de interface no mesmo lote** ([`664a457`](https://github.com/Leonardolraf/Baluarte/commit/664a457)) — a placa de indicadores do dashboard segue o tema claro/escuro (antes era sempre escura), o cabeçalho saúda o usuário logado pelo nome e "Cadastrar ativo" saiu da tela de vulnerabilidades, onde não pertencia.
+
 ## 2026-10-08 — Backend separado em módulos por domínio (B01)
 
 Fase 0 do `backend/PLANO.md`: a regra de negócio saiu dos três arquivos de rota (`routes/api.ts`, `read.ts`, `manage.ts`) para módulos de domínio, sem mudar nenhuma rota, mensagem ou código de erro.
@@ -189,6 +197,6 @@ Fase 0 do `backend/PLANO.md`: a regra de negócio saiu dos três arquivos de rot
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
 | Testes | 289 no backend (57 unidade + 7 banco + 112 integração + 113 pentest; 98,8% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
-| Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. Deploy automático a cada push na `main` | 2026-10-08 |
+| Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`). Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |
