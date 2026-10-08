@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../src/platform/db.js';
+import { prisma } from '../src/config/db.js';
 
 // Dados de seed — mesmos IDs/credenciais que o contrato dos testes da N2 AT1 assume:
 //  - usuario analista@empresa.com / Senha@123  (login e dup de e-mail)

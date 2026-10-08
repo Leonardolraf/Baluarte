@@ -29,7 +29,7 @@ import {
 
 prepararBanco(import.meta.url);
 const { app } = await import('../../src/app.js');
-const { prisma } = await import('../../src/platform/db.js');
+const { prisma } = await import('../../src/config/db.js');
 
 before(async () => {
   await iniciarServidor(app);
@@ -404,7 +404,7 @@ describe('dashboard do Colaborador nao vaza dados tecnicos no payload', () => {
   });
 
   // ACHADO (A05 / A01): o dashboard entrega `campanhas[]` (nome, template, taxaClique, destinatarios),
-  // `funil` e `campanhaAtiva` a QUALQUER perfil — o flag `operador` em src/modules/dashboard/service.ts so filtra
+  // `funil` e `campanhaAtiva` a QUALQUER perfil — o flag `operador` em src/services/dashboard.service.ts so filtra
   // `vulnerabilidadesRecentes` e `alertas`. Um Colaborador ve, pela API, metricas por campanha de
   // phishing (nomes, taxa de clique, funil enviados/abertos/clicados) que a tela nao mostra.
   // Correcao: em GET /dashboard, condicionar `campanhas`, `funil` e `campanhaAtiva` ao `operador`

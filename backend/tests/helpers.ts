@@ -48,7 +48,7 @@ export function prepararBanco(testFileUrl: string): void {
   process.env.DIRECT_URL = url.toString();
   process.env.JWT_SECRET = 'segredo-somente-para-testes';
   process.env.NODE_ENV = 'test';
-  // Com NODE_ENV=test os e-mails vao para a caixa em memoria (src/platform/email.ts), nunca para SMTP.
+  // Com NODE_ENV=test os e-mails vao para a caixa em memoria (src/config/email.ts), nunca para SMTP.
   delete process.env.SMTP_HOST;
   process.env.FRONTEND_URL = 'http://localhost:5173';
   // migrate reset cria o banco se faltar, apaga tudo e reaplica as migrations (testa as migrations de verdade).
@@ -129,7 +129,7 @@ type Perfil = 'Administrador' | 'Analista' | 'Colaborador';
  * rota do link: 'definir-senha' (convite) ou 'reset-password' (redefinicao).
  */
 export async function tokenDoEmail(email: string, rota?: 'definir-senha' | 'reset-password'): Promise<string | null> {
-  const { caixaDeSaida } = await import('../src/platform/email.js');
+  const { caixaDeSaida } = await import('../src/config/email.js');
   const padrao = new RegExp(`/(${rota ?? 'definir-senha|reset-password'})\\?token=([0-9a-f]{64})`);
   for (let i = caixaDeSaida.length - 1; i >= 0; i--) {
     const m = caixaDeSaida[i].para.toLowerCase() === email.toLowerCase() ? caixaDeSaida[i].texto.match(padrao) : null;

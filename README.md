@@ -135,7 +135,7 @@ O perfil vem do banco a cada requisição (um token emitido antes de um rebaixam
 
 ### Limitações conhecidas (decisões conscientes de escopo)
 
-- **E-mail.** Convite, redefinição de senha e o e-mail simulado da campanha saem por um de três transportes (`src/platform/email.ts`): **Brevo** (API HTTPS, com `BREVO_API_KEY`; usado no Railway, que bloqueia as portas de SMTP no plano Hobby), **SMTP** (`SMTP_HOST`: Mailpit do Compose em dev, caixa em `http://localhost:8025`, e o Gmail na Vercel) ou o log da API em dev sem nada configurado. O remetente vem de `EMAIL_REMETENTE` e, no Brevo, precisa estar verificado na conta. Sem SMTP, fora de produção, o e-mail inteiro vai para o log da API; em produção sem SMTP nada é enviado. O e-mail simulado da campanha segue a mesma regra (o `TREINAMENTO_LINK_CONSOLE` saiu): sem SMTP em dev o e-mail inteiro, com o link, vai para o log; em produção sem SMTP nada sai e o link nunca é impresso.
+- **E-mail.** Convite, redefinição de senha e o e-mail simulado da campanha saem por um de três transportes (`src/config/email.ts`): **Brevo** (API HTTPS, com `BREVO_API_KEY`; usado no Railway, que bloqueia as portas de SMTP no plano Hobby), **SMTP** (`SMTP_HOST`: Mailpit do Compose em dev, caixa em `http://localhost:8025`, e o Gmail na Vercel) ou o log da API em dev sem nada configurado. O remetente vem de `EMAIL_REMETENTE` e, no Brevo, precisa estar verificado na conta. Sem SMTP, fora de produção, o e-mail inteiro vai para o log da API; em produção sem SMTP nada é enviado. O e-mail simulado da campanha segue a mesma regra (o `TREINAMENTO_LINK_CONSOLE` saiu): sem SMTP em dev o e-mail inteiro, com o link, vai para o log; em produção sem SMTP nada sai e o link nunca é impresso.
 - **Phishing simulado, não um teste cego.** O rodapé do e-mail diz que é simulação, então mede reconhecimento e hábito de reportar mais do que "cair" num golpe realista. Só texto: **não há pixel de abertura** (a abertura é registrada no clique ou no reporte). O envio é síncrono, em sequência, dentro do `POST /campaigns` — adequado a campanhas internas pequenas; com SMTP fora do ar cada destinatário espera o timeout (5 s) e a campanha é criada mesmo assim (`emailsEnviados` menor). Abrir `/t/<token>` registra o clique no carregamento da página: um antivírus que pré-visite links pode contar um clique falso (o reporte, por isso, exige confirmação).
 - **Trocar a própria senha** (`/auth/change-password`) não derruba as outras sessões do mesmo usuário; a redefinição por token, sim. Todo token expira em 30 minutos.
 
@@ -178,12 +178,20 @@ Roteiro completo (serviço, variáveis, migração dos dados do Supabase, troca 
 ```
 backend/            API real (Express + Prisma/PostgreSQL)
   prisma/           schema + seed (contrato) + seed-demo
-  src/app.ts        o app Express (a Vercel o procura neste caminho)
-  src/http/         servidor, roteador, middlewares (token e perfil) e envelope de resposta
-  src/platform/     Prisma, e-mail (SMTP/Mailpit) e tokens de link
-  src/shared/       validações de entrada e constantes de domínio
-  src/modules/      um módulo por domínio (routes → service → repository): auth, users, departments,
-                    assets, scanner, reports, campaigns, training, dashboard, notifications, audit
+  src/              arquitetura em camadas: rota → controller → service → repository
+                    (um arquivo por funcionalidade em cada camada: auth, usuario, departamento, ativo,
+                    varredura, vulnerabilidade, campanha, treinamento, dashboard, notificacao, auditoria)
+    app.ts          o app Express (fica aqui porque a Vercel o procura neste caminho)
+    server.ts       sobe o servidor HTTP
+    routes/         index.ts (roteador /api, ordem de registro) + <f>.routes.ts: caminho + middlewares + controller
+    controllers/    <f>.controller.ts: uma função por endpoint (lê req, valida com o model, chama o service, responde)
+    services/       <f>.service.ts: regra de negócio (+ token, linkConta, cvss, cicloVarredura, campanhaEmail,
+                    campanhaMetricas, auditoria)
+    models/         <f>.model.ts: tipos do domínio, DTOs e regras zod de entrada (+ dominio, catalogoAchado)
+    repositories/   <f>.repository.ts: único acesso ao Prisma
+    middlewares/    auth.middleware.ts: exigeToken, exigePerfil
+    config/         cliente Prisma e transportes de e-mail (Brevo/SMTP/Mailpit)
+    utils/          envelope de resposta, schemas zod, validação e tokens de link
   tests/            unidade (tests/unidade, sem banco) + integração e pentest (node:test) com banco isolado
 baluarte-frontend/  SPA React do produto (mocks ou backend real) — ver README próprio
 frontend/           SPA legado (telas do Figma) — alvo das suítes Robot

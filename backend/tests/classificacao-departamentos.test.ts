@@ -18,10 +18,10 @@ import {
 prepararBanco(import.meta.url);
 
 const { app } = await import('../src/app.js');
-const { prisma } = await import('../src/platform/db.js');
-const { notaCvss, vetorCvssValido, cweValido, cveValido } = await import('../src/modules/scanner/cvss.js');
-const { CATALOGO_ACHADOS, dadosAchado, lerRemediacao } = await import('../src/modules/scanner/catalogo.js');
-const { faixaCvss } = await import('../src/modules/scanner/cvss.js');
+const { prisma } = await import('../src/config/db.js');
+const { notaCvss, vetorCvssValido, cweValido, cveValido } = await import('../src/services/cvss.service.js');
+const { CATALOGO_ACHADOS, dadosAchado, lerRemediacao } = await import('../src/models/catalogoAchado.model.js');
+const { faixaCvss } = await import('../src/services/cvss.service.js');
 
 let admin: string;
 let analista: string;

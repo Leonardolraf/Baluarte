@@ -49,8 +49,8 @@ for (const s of SUITES) {
 
 linhas.push(
   '',
-  'Cobertura medida pelo c8 (V8) sobre `src/`. Na suíte de unidade entram só os módulos de domínio',
-  '(rotas, `app.ts` e `server.ts` são exercitados pela integração). Relatório navegável por arquivo:',
+  'Cobertura medida pelo c8 (V8) sobre `src/`. Na suíte de unidade entram só os arquivos sem banco',
+  '(rotas, controllers, `app.ts` e `server.ts` são exercitados pela integração). Relatório navegável por arquivo:',
   '`coverage/index.html` e `coverage-unidade/index.html`.',
   '',
 );

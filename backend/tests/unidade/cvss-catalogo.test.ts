@@ -2,10 +2,10 @@
 // catalogo de achados e ciclo da varredura simulada.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { cveValido, cweValido, notaCvss, vetorCvssValido } from '../../src/modules/scanner/cvss.js';
-import { CATALOGO_ACHADOS, dadosAchado, lerRemediacao, type ChaveAchado } from '../../src/modules/scanner/catalogo.js';
-import { DURACAO_VARREDURA_MS, TEMPO_EM_FILA_MS, gerarFindings, statusPorTempo } from '../../src/modules/scanner/ciclo.js';
-import { faixaCvss } from '../../src/modules/scanner/cvss.js';
+import { cveValido, cweValido, notaCvss, vetorCvssValido } from '../../src/services/cvss.service.js';
+import { CATALOGO_ACHADOS, dadosAchado, lerRemediacao, type ChaveAchado } from '../../src/models/catalogoAchado.model.js';
+import { DURACAO_VARREDURA_MS, TEMPO_EM_FILA_MS, gerarFindings, statusPorTempo } from '../../src/services/cicloVarredura.service.js';
+import { faixaCvss } from '../../src/services/cvss.service.js';
 
 describe('notaCvss: nota base CVSS v3.1 (valores da calculadora oficial do FIRST)', () => {
   const casos: [string, number][] = [
