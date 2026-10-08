@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { rotasAnaliseArquivo } from './analiseArquivo.routes.js';
+import { rotasAgente } from './agente.routes.js';
 import { rotasAtivos } from './ativo.routes.js';
 import { rotasAuth } from './auth.routes.js';
 import { rotasCampanhas } from './campanha.routes.js';
@@ -28,3 +29,4 @@ rotasTreinamento(apiRouter);
 rotasDashboard(apiRouter);
 rotasNotificacoes(apiRouter);
 rotasAnaliseArquivo(apiRouter);
+rotasAgente(apiRouter);
