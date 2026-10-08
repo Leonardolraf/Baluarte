@@ -1,89 +1,25 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { toast } from './helpers';
+import { expect, test } from '@playwright/test';
+import { toast } from '../helpers';
+import {
+  ADMIN,
+  ANALYST,
+  API_URL,
+  SENHA_CONTA,
+  aceitarConvite,
+  apiCreateUser,
+  apiDelete,
+  apiToken,
+  signIn,
+  unique,
+} from './apoio';
 
-// Integração com o backend Express REAL (../backend em :8080), sem mocks.
-// Só roda com E2E_REAL=1 e um frontend servido contra a API real, por exemplo:
-//   dev:    VITE_USE_MOCKS=false npx vite --port 5174
-//           E2E_REAL=1 E2E_BASE_URL=http://localhost:5174 npx playwright test e2e/real-backend.spec.ts
-//   docker: docker compose up --build -d backend app
-//           E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts
-// Credenciais do seed do backend: analista@empresa.com / Senha@123 e admin@empresa.com / Admin@123.
+// Integração com o backend Express REAL, sem mocks: conta, sessão, vulnerabilidades,
+// campanhas, usuários, preferências e RBAC. Roda pelo orquestrador (`npm run test:e2e:real`,
+// scripts/e2e-real.mjs), que sobe banco descartável, API e Vite em portas próprias; ou contra
+// a stack Docker: E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test
 // Tudo que os testes criam recebe nome/e-mail únicos e é removido no fim (ida e volta).
 
-const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8080/api';
-const ADMIN = { email: 'admin@empresa.com', password: 'Admin@123' };
-const ANALYST = { email: 'analista@empresa.com', password: 'Senha@123' };
-/** Senha que a conta nova ganha ao aceitar o convite (não existe senha provisória). */
-const SENHA_CONTA = 'Conta@1234';
-/** Mailpit do Compose: é por onde o convite chega em desenvolvimento. */
-const MAILPIT_URL = process.env.E2E_MAILPIT_URL ?? 'http://localhost:8025';
-
-function unique(prefix: string): string {
-  return `${prefix}.${Date.now()}.${Math.floor(Math.random() * 10_000)}`;
-}
-
-async function signIn(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/login');
-  await page.evaluate(() => window.localStorage.clear());
-  await page.reload();
-  await page.locator('#email').fill(email);
-  await page.locator('#senha').fill(password);
-  await page.locator('#btnEntrar').click();
-  await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole('heading', { name: 'Visão geral de risco' })).toBeVisible();
-}
-
-async function apiToken(request: APIRequestContext, email: string, password: string): Promise<string> {
-  const response = await request.post(`${API_URL}/login`, { data: { email, senha: password } });
-  expect(response.ok(), `login de ${email} na API`).toBeTruthy();
-  const body = (await response.json()) as { dados: { token: string } };
-  return body.dados.token;
-}
-
-async function apiCreateUser(
-  request: APIRequestContext,
-  token: string,
-  perfil: 'Administrador' | 'Analista' | 'Colaborador',
-): Promise<{ id: string; email: string }> {
-  const email = `${unique('e2e')}@empresa.com`;
-  const response = await request.post(`${API_URL}/users`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { nome: 'Conta E2E', email, perfil },
-  });
-  expect(response.status()).toBe(201);
-  const body = (await response.json()) as { dados: { idUsuario: string } };
-  return { id: body.dados.idUsuario, email };
-}
-
-/**
- * Aceita o convite da conta recém-criada: lê o e-mail no Mailpit, extrai o token do link
- * e define a senha. Sem isso a conta fica `Pendente` e o login é recusado (CONTA_PENDENTE).
- */
-async function aceitarConvite(request: APIRequestContext, email: string): Promise<void> {
-  const busca = await request.get(`${MAILPIT_URL}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`);
-  expect(busca.ok(), `Mailpit respondeu a busca do convite de ${email}`).toBeTruthy();
-  const { messages } = (await busca.json()) as { messages: Array<{ ID: string }> };
-  expect(messages.length, `convite de ${email} no Mailpit`).toBeGreaterThan(0);
-
-  const mensagem = await request.get(`${MAILPIT_URL}/api/v1/message/${messages[0]!.ID}`);
-  expect(mensagem.ok()).toBeTruthy();
-  const { Text } = (await mensagem.json()) as { Text: string };
-  const token = /definir-senha\?token=([\w-]+)/.exec(Text)?.[1];
-  expect(token, `token no corpo do convite de ${email}`).toBeTruthy();
-
-  const confirma = await request.post(`${API_URL}/auth/reset-password/confirm`, {
-    data: { token, novaSenha: SENHA_CONTA },
-  });
-  expect(confirma.ok(), `aceite do convite de ${email}`).toBeTruthy();
-}
-
-async function apiDelete(request: APIRequestContext, token: string, path: string): Promise<void> {
-  await request.delete(`${API_URL}${path}`, { headers: { Authorization: `Bearer ${token}` } });
-}
-
 test.describe('Modo real (backend Express)', () => {
-  test.skip(process.env.E2E_REAL !== '1', 'defina E2E_REAL=1 com o backend e o frontend em modo real no ar');
-
   test('login sem bloco de demonstração e dashboard alimentado pela API', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByText('Ambiente de demonstração')).toHaveCount(0);

@@ -1,6 +1,6 @@
 # Baluarte V2
 
-Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia de Software — UCB), construída como sistema **real** para a disciplina de **Teste de Software**: backend + frontend de verdade, contra os quais rodam as suítes de teste de API (Postman/Newman) e de UI (Robot Framework + Selenium) da N2 AT1 — não mais contra stubs.
+Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia de Software — UCB), construída como sistema **real** para a disciplina de **Teste de Software**: backend + frontend de verdade, contra os quais rodam as suítes de teste de API (Postman/Newman) e de UI (Robot Framework + Selenium) da N2 AT1 — não mais contra stubs — e a **suíte funcional oficial do produto** (Playwright, em modo mock e contra a API real).
 
 > ⚠️ **Escopo honesto:** a *plataforma* é real (autenticação JWT, RBAC, persistência, dashboard com agregações reais, trilha de auditoria). O **scanner OWASP** e o **disparo de phishing** são **simulados no servidor** (criar varredura gera achados realistas) — nenhum ataque real é executado. A campanha de phishing envia de verdade um **e-mail simulado** a cada destinatário interno cadastrado, identificado no rodapé como simulação da plataforma, sem anexo, sem pedido de senha e só com links para o próprio frontend (treinamento e "reportar"). Esse e-mail e os de conta (convite e redefinição de senha) vão para o Mailpit do Docker Compose (`http://localhost:8025`), que não entrega nada para fora.
 
@@ -66,8 +66,8 @@ npm run dev
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
 | **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 567 testes |
-| **Frontend — ponta a ponta** (Playwright, modo mock, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 35 testes |
-| **Frontend — ponta a ponta em modo real** | `baluarte-frontend/e2e/real-backend.spec.ts` | `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; em dev use `:5174` com `VITE_USE_MOCKS=false`) | 10 testes |
+| **Funcional — Playwright, modo mock** (suíte funcional oficial, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 39 testes (+14 capturas de tela de referência, só com `E2E_SCREENSHOTS=1`) |
+| **Funcional — Playwright, modo real** (suíte funcional oficial contra a API real) | `baluarte-frontend/e2e/real/` | `cd baluarte-frontend && npm run test:e2e:real` (sobe e derruba tudo; ver abaixo) | 19 testes (com ClamAV: 18 + 1 na 2ª rodada; sem ClamAV: 15, e os 4 que dependem dele ficam como *skipped*) |
 
 ### Cobertura e relatório de testes (roteiro 3.2)
 
@@ -102,6 +102,29 @@ python -m robot --outputdir e2e/resultados e2e/*.robot
 # => 29 tests, 29 passed, 0 failed
 ```
 Relatórios em `e2e/resultados/report.html` e `log.html`.
+
+### Funcional — Playwright (suíte funcional oficial do produto, B15)
+O Playwright é a **suíte funcional oficial** do frontend do produto (`baluarte-frontend/`). O Robot continua sendo a suíte da N2 AT1, contra o frontend legado (`:3000`); as duas não se misturam. Usa o Chrome instalado na máquina (canal `chrome`), sem baixar navegadores.
+
+| Modo | Comando | Onde | O que cobre |
+|---|---|---|---|
+| **Mock** | `cd baluarte-frontend && npm run test:e2e` | `e2e/*.spec.ts` | 39 testes na camada mock (dev server na `5173`; `E2E_PORT` troca a porta): login/logout, redefinição de senha, RBAC por perfil, vulnerabilidades, campanhas, usuários, configurações, treinamento, estações (lista, detalhe, RBAC), análise de arquivos (envio, veredito, segunda opinião, histórico com filtro, limite de 10 MB, colaborador só com as próprias) e layout mobile |
+| **Real** | `cd baluarte-frontend && npm run test:e2e:real` | `e2e/real/*.spec.ts` | 19 testes contra a API real e o PostgreSQL: conta e operação (10: sessão, "Risco aceito", campanha, usuários, convite pelo Mailpit, troca de senha, conta inativada, preferências, redefinição, RBAC do colaborador na API), análise de arquivos (5: sem ClamAV → 503 na tela; com ClamAV: arquivo limpo com SHA-256 e segunda opinião desligada (B20), EICAR, histórico filtrado no servidor (B17), colaborador) e estações (4: inscrição simulando o osquery, lista e detalhe com programas e portas, "Verificar vulnerabilidades" (B14) contra OSV/NVD falsos, base fora do ar, RBAC) |
+
+O modo real roda pelo orquestrador [`scripts/e2e-real.mjs`](scripts/e2e-real.mjs) (`node scripts/e2e-real.mjs` na raiz faz o mesmo; argumentos extras vão para o `playwright test`). Ele **sobe, roda e derruba** tudo, isolado da stack de desenvolvimento (nunca usa a `8080`, a `5173` nem o banco `baluarte`):
+
+1. banco descartável `baluarte_e2e` no Postgres local (o `DATABASE_URL` do `backend/.env` com outro nome de banco; recusa servidor que não seja local): `prisma migrate reset` + `seed` + `seed:demo`;
+2. OSV e NVD **falsos** em `127.0.0.1:8098` ([`scripts/e2e/bases-falsas.mjs`](scripts/e2e/bases-falsas.mjs)): o botão "Verificar vulnerabilidades" nunca consulta as bases públicas;
+3. API em `:8097` com segredo do osquery gerado na hora (só desta instância), `JWT_SECRET` próprio, VirusTotal desligado (sem chave), cruzamento automático desligado e e-mail pelo Mailpit do Compose (`:1025`/`:8025`; sobe o serviço `mailpit` se ele não estiver no ar);
+4. Vite em `:5200` com `VITE_USE_MOCKS=false` e proxy `/api` para a `8097`;
+5. Playwright com `E2E_REAL=1`. **Com ClamAV** (clamd respondendo em `127.0.0.1:3310`), roda tudo com o antivírus e depois reinicia a API **sem** `CLAMAV_HOST` para o teste do 503 (tag `@sem-antivirus`). **Sem ClamAV**, uma rodada só e os testes que dependem dele ficam como *skipped*;
+6. para API, Vite e bases falsas, apaga o banco e para o que tiver subido no Docker.
+
+Variáveis: `E2E_CLAMAV` (`auto` padrão: usa se o clamd responder; `1` exige e sobe o perfil `antivirus` do Compose, que precisa de 3 a 4 GiB de RAM e baixa as assinaturas na primeira vez; `0` nunca), `E2E_DB_NAME` (precisa começar com `baluarte_e2e`), `E2E_API_PORT`, `E2E_WEB_PORT`, `E2E_BASES_PORT`, `E2E_MAILPIT_URL`, `E2E_KEEP_DB=1` (mantém o banco para investigar). Logs da API e do Vite em `%TEMP%/baluarte-e2e-real/`.
+
+O arquivo de teste **EICAR** é montado **em memória** dentro do teste (`Buffer` a partir da string padrão, escrita em partes) e entregue direto ao `<input type="file">`: o repositório não contém a assinatura inteira e nada é gravado em disco (o antivírus da máquina não tem o que bloquear). A estação é inscrita pelas próprias rotas do agente (`/agentes/osquery/enroll` e `logger`), como o osquery faria.
+
+Contra a stack Docker (sem o orquestrador): `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test` roda os 10 testes de conta e operação; os de arquivos pedem `E2E_CLAMAV` e os de estações pedem `E2E_OSQUERY_SECRET` (e `E2E_BASES_URL` para o "Verificar"), senão ficam como *skipped*.
 
 ## Endpoints (sob `/api`)
 
