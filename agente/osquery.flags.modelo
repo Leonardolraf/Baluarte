@@ -1,0 +1,47 @@
+# Flags do osquery para o agente do Baluarte (B08).
+# Modelo: instalar-agente.sh e instalar-agente.ps1 trocam os três marcadores (SERVIDOR, CA e
+# SEGREDO, entre sublinhados duplos) e gravam o resultado em /etc/osquery/osquery.flags (Linux) ou
+# C:\Program Files\osquery\osquery.flags (Windows). Para mudar algo numa estação, rode o
+# instalador de novo em vez de editar à mão. Este arquivo não leva segredo: o segredo fica num
+# arquivo à parte, legível só pelo administrador (--enroll_secret_path).
+
+# Servidor: host:porta, sem https://. O nome precisa estar no certificado do servidor
+# (scripts/gerar-certificados.sh, EXTRA_SAN para outra máquina).
+--tls_hostname=__SERVIDOR__
+# Autoridade em que o agente confia: certs/ca.crt (CA local do B06) ou, com certificado
+# público (Railway), o pacote de autoridades que vem com o osquery.
+--tls_server_certs=__CA__
+
+# Identidade da estação: o UUID do hardware (com o hostname, duas máquinas de mesmo nome
+# virariam a mesma estação). Inscrição com o segredo compartilhado (OSQUERY_ENROLL_SECRET).
+--host_identifier=uuid
+--enroll_secret_path=__SEGREDO__
+--enroll_tls_endpoint=/api/agentes/osquery/enroll
+
+# O que coletar e de quanto em quanto tempo vem do servidor (schedule do B07/B08: programas
+# a cada 1 h, portas a cada 15 min e SO a cada 6 h em produção, com splay de 10%). O agente
+# busca a configuração de novo a cada hora.
+--config_plugin=tls
+--config_tls_endpoint=/api/agentes/osquery/config
+--config_refresh=3600
+
+# Resultados: enviados ao servidor a cada 60 s (só quando há resultado novo), comprimidos.
+# Logs de status só a partir de aviso (os informativos não interessam ao servidor).
+--logger_plugin=tls
+--logger_tls_endpoint=/api/agentes/osquery/logger
+--logger_tls_period=60
+--logger_tls_compress=true
+--logger_min_status=1
+
+# Superfície mínima: o servidor não manda consultas sob demanda (distributed), o agente não
+# carrega extensões, não liga o subsistema de eventos nem coleta arquivos (carver).
+--disable_distributed=true
+--disable_extensions=true
+--disable_events=true
+--disable_carver=true
+
+# Watchdog do osquery no perfil normal (o padrão, explícito aqui): reinicia o processo de
+# trabalho se ele passar do limite de memória ou ficar com a CPU alta por vários segundos
+# seguidos (--watchdog_memory_limit e --watchdog_utilization_limit sobrescrevem). No Linux, o
+# serviço do pacote oficial ainda limita o osqueryd a 20% de uma CPU (CPUQuota do systemd).
+--watchdog_level=0

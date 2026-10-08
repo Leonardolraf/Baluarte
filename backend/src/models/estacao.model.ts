@@ -17,9 +17,10 @@ export type StatusConexao = 'Online' | 'Offline';
 /**
  * Quantos intervalos de coleta sem contato fazem a estacao virar "Offline".
  *
- * O osquery fala com o servidor pelo menos uma vez por intervalo das queries agendadas
- * (OSQUERY_INTERVALO_S: 1 h em producao, 5 min fora dela), porque cada execucao gera um
- * snapshot que o logger envia; a busca da configuracao (--config_refresh) tambem conta.
+ * O osquery fala com o servidor pelo menos uma vez por intervalo-base das queries
+ * (OSQUERY_INTERVALO_S: 1 h em producao, 5 min fora dela; e o dos programas, e as portas
+ * rodam a cada 1/4 dele, B08), porque cada execucao gera um snapshot que o logger envia;
+ * a busca da configuracao (--config_refresh) tambem conta.
  * Com 3 intervalos, uma coleta perdida ou atrasada (splay de 10%, --logger_tls_period,
  * rede instavel) nao derruba o status; tres seguidas, sim. Janela: 3 h em producao e
  * 15 min fora dela. O status e calculado na leitura, nada e gravado.

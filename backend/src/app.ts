@@ -43,7 +43,13 @@ app.use(cors({ origin: ORIGENS.includes('*') ? true : ORIGENS }));
 // O agente osquery manda o inventario inteiro (snapshot) num envio so: as rotas dele aceitam
 // corpo maior e qualquer Content-Type (o corpo e sempre JSON; gzip e aceito). Registrado antes
 // do parser geral, que pula o corpo ja lido.
-app.use('/api/agentes/osquery', express.json({ limit: '2mb', type: () => true }));
+// O osquery copia strings de C com o terminador junto: no Linux, system_info.cpu_brand chega
+// como "AMD Ryzen ... Processor   \u0000" na inscricao (achado na validacao real do B08). Nas
+// rotas do agente o NUL e removido dos valores na leitura, em vez de recusar o corpo inteiro
+// (400 CARACTERE_INVALIDO deixaria a estacao sem se inscrever para sempre). Chave com NUL
+// continua barrada pela regra geral abaixo. Nas demais rotas nada muda.
+const semNul = (_chave: string, valor: unknown) => (typeof valor === 'string' && valor.includes('\u0000') ? valor.replaceAll('\u0000', '') : valor);
+app.use('/api/agentes/osquery', express.json({ limit: '2mb', type: () => true, reviver: semNul }));
 // Corpo JSON pequeno: nenhuma outra rota recebe payload grande (limita abuso de memoria).
 app.use(express.json({ limit: '64kb' }));
 

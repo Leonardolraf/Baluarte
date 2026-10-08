@@ -161,6 +161,38 @@ describe('inscrição (enroll)', () => {
     assert.ok(estacao.asset.host.startsWith(`${host}-`));
   });
 
+  it('B08: NUL que o osquery manda nos valores (cpu_brand no Linux) é removido, não recusa a inscrição', async () => {
+    // Corpo real do osquery 5.23.1 num Ubuntu 24.04 (validação em contêiner): o cpu_brand vem
+    // com o terminador de string C. Antes, a regra geral de NUL devolvia 400 e o agente nunca
+    // se inscrevia.
+    const hostIdentifier = hostIdUnico();
+    const d = detalhes('estacao-nul.empresa.local', { name: 'Ubuntu\u0000', version: '24.04.5 LTS (Noble Numbat)', platform: 'ubuntu', build: '' });
+    const r = await chamar('POST', ENROLL, {
+      body: {
+        enroll_secret: SEGREDO,
+        host_identifier: hostIdentifier,
+        host_details: { ...d, system_info: { ...d.system_info, cpu_brand: 'AMD Ryzen 7 5700X 8-Core Processor             \u0000' } },
+      },
+    });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const estacao = await prisma.workstation.findUniqueOrThrow({ where: { hostIdentifier } });
+    assert.equal(estacao.soNome, 'Ubuntu');
+    // O mesmo vale para os resultados do logger.
+    const l = await chamar('POST', LOGGER, {
+      body: { node_key: r.body.node_key, log_type: 'result', data: [snapshot('baluarte_programas_deb', hostIdentifier, [{ name: 'libfoo\u0000', version: '1.0\u0000' }])] },
+    });
+    assert.equal(l.status, 200, JSON.stringify(l.body));
+    const programas = await prisma.workstationSoftware.findMany({ where: { workstationId: estacao.id } });
+    assert.deepEqual(programas.map((p) => [p.nome, p.versao]), [['libfoo', '1.0']]);
+  });
+
+  it('B08: chave com NUL continua barrada nas rotas do agente, e as demais rotas seguem recusando NUL', async () => {
+    const r = await chamar('POST', ENROLL, { body: { enroll_secret: SEGREDO, host_identifier: hostIdUnico(), 'x\u0000': '1' } });
+    esperaErro(r, 400, 'CARACTERE_INVALIDO');
+    const login = await chamar('POST', '/login', { body: { email: 'a\u0000@empresa.com', senha: 'x' } });
+    esperaErro(login, 400, 'CARACTERE_INVALIDO');
+  });
+
   it('aceita o corpo sem Content-Type JSON (o servidor não depende do cabeçalho)', async () => {
     const res = await fetch(urlBase() + ENROLL, {
       method: 'POST',
@@ -202,10 +234,13 @@ describe('configuração (config)', () => {
     assert.equal(s.baluarte_programas_macos.platform, 'darwin');
     assert.match(s.baluarte_sistema.query, /FROM os_version/);
     assert.match(s.baluarte_portas.query, /listening_ports.*processes/);
-    for (const q of Object.values(s) as { interval: number; snapshot: boolean }[]) {
-      assert.equal(q.interval, 300, 'fora de produção o padrão é 5 min');
-      assert.equal(q.snapshot, true);
-    }
+    for (const q of Object.values(s) as { snapshot: boolean }[]) assert.equal(q.snapshot, true);
+    // B08: fora de produção o base é 5 min; portas a 1/4 dele, SO a 6x.
+    assert.equal(s.baluarte_programas_windows.interval, 300);
+    assert.equal(s.baluarte_programas_deb.interval, 300);
+    assert.equal(s.baluarte_portas.interval, 75);
+    assert.equal(s.baluarte_sistema.interval, 1800);
+    assert.equal(r.body.options.schedule_splay_percent, 10);
     const estacao = await prisma.workstation.findUniqueOrThrow({ where: { hostIdentifier } });
     assert.ok(estacao.vistaEm.getTime() > Date.now() - 60_000);
   });
@@ -214,10 +249,37 @@ describe('configuração (config)', () => {
     const { nodeKey } = await inscrever();
     process.env.OSQUERY_INTERVALO_S = '3600';
     let r = await chamar('POST', CONFIG, { body: { node_key: nodeKey } });
-    assert.equal(r.body.schedule.baluarte_sistema.interval, 3600);
+    assert.equal(r.body.schedule.baluarte_programas_windows.interval, 3600);
     process.env.OSQUERY_INTERVALO_S = '5';
     r = await chamar('POST', CONFIG, { body: { node_key: nodeKey } });
-    assert.equal(r.body.schedule.baluarte_sistema.interval, 300);
+    assert.equal(r.body.schedule.baluarte_programas_windows.interval, 300);
+  });
+
+  it('B08: em produção, programas a cada 1 h, portas a cada 15 min e SO a cada 6 h, com splay', async () => {
+    const { nodeKey } = await inscrever();
+    const anterior = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const r = await chamar('POST', CONFIG, { body: { node_key: nodeKey } });
+      const s = r.body.schedule;
+      for (const nome of ['baluarte_programas_windows', 'baluarte_programas_deb', 'baluarte_programas_rpm', 'baluarte_programas_macos'])
+        assert.equal(s[nome].interval, 3600, nome);
+      assert.equal(s.baluarte_portas.interval, 900);
+      assert.equal(s.baluarte_sistema.interval, 21600);
+      assert.equal(r.body.options.schedule_splay_percent, 10);
+    } finally {
+      process.env.NODE_ENV = anterior;
+    }
+  });
+
+  it('B08: cada categoria fica entre 60 s e 1 dia, qualquer que seja o base', async () => {
+    const { nodeKey } = await inscrever();
+    process.env.OSQUERY_INTERVALO_S = '60';
+    let s = (await chamar('POST', CONFIG, { body: { node_key: nodeKey } })).body.schedule;
+    assert.deepEqual([s.baluarte_portas.interval, s.baluarte_programas_deb.interval, s.baluarte_sistema.interval], [60, 60, 360]);
+    process.env.OSQUERY_INTERVALO_S = '86400';
+    s = (await chamar('POST', CONFIG, { body: { node_key: nodeKey } })).body.schedule;
+    assert.deepEqual([s.baluarte_portas.interval, s.baluarte_programas_deb.interval, s.baluarte_sistema.interval], [21600, 86400, 86400]);
   });
 
   it('chave desconhecida: 200 { node_invalid: true } (o osquery se reinscreve)', async () => {
@@ -305,6 +367,42 @@ describe('recebimento de resultados (logger)', () => {
         ['curl', '7.81.0-1', 'deb_packages'],
       ],
     );
+  });
+
+  it('B08: o mesmo inventário enviado a cada ciclo não duplica programas, portas nem a estação', async () => {
+    const { nodeKey, hostIdentifier } = await inscrever();
+    const data = [
+      snapshot('baluarte_programas_deb', hostIdentifier, [
+        { name: 'libc6', version: '2.39-0ubuntu8.4', fornecedor: 'Ubuntu Developers', origem: 'glibc' },
+        { name: 'bash', version: '5.2.21-2ubuntu4', fornecedor: 'Ubuntu Developers', origem: 'bash' },
+      ]),
+      snapshot('baluarte_portas', hostIdentifier, [{ port: '22', protocol: '6', address: '0.0.0.0', processo: 'sshd' }]),
+      snapshot('baluarte_sistema', hostIdentifier, [{ name: 'Ubuntu', version: '24.04.3 LTS (Noble Numbat)', build: '', platform: 'ubuntu' }]),
+    ];
+    const enviar = () => chamar('POST', LOGGER, { body: { node_key: nodeKey, log_type: 'result', data } });
+    for (let ciclo = 0; ciclo < 3; ciclo++) assert.equal((await enviar()).status, 200);
+    // O osquery também se reinscreve com a mesma identidade quando perde a chave.
+    const nova = await chamar('POST', ENROLL, {
+      body: { enroll_secret: SEGREDO, host_identifier: hostIdentifier, host_details: detalhes('outra.empresa.local') },
+    });
+    assert.equal(nova.status, 200);
+    await chamar('POST', LOGGER, { body: { node_key: nova.body.node_key, log_type: 'result', data } });
+
+    assert.equal(await prisma.workstation.count({ where: { hostIdentifier } }), 1);
+    const estacao = await prisma.workstation.findUniqueOrThrow({
+      where: { hostIdentifier },
+      include: { programas: { orderBy: { nome: 'asc' } }, portas: true },
+    });
+    assert.deepEqual(
+      estacao.programas.map((p) => [p.nome, p.versao, p.pacoteOrigem]),
+      [
+        ['bash', '5.2.21-2ubuntu4', null],
+        ['libc6', '2.39-0ubuntu8.4', 'glibc'],
+      ],
+    );
+    assert.deepEqual(estacao.portas.map((p) => [p.porta, p.protocolo, p.processo]), [[22, 'TCP', 'sshd']]);
+    assert.equal(estacao.sistema, 'Ubuntu 24.04.3 LTS (Noble Numbat)');
+    assert.equal(await prisma.asset.count({ where: { id: estacao.assetId } }), 1);
   });
 
   it('B14: deb guarda o pacote-fonte; linha sem a coluna nova (configuração antiga) continua aceita', async () => {

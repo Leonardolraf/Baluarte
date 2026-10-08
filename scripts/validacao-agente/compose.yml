@@ -1,0 +1,111 @@
+# Stack DESCARTÁVEL da validação do agente (B08). Quem sobe é scripts/validar-agente-docker.sh,
+# que gera as variáveis VAL_* (senhas e segredo aleatórios, CA e pacote em pasta temporária).
+# Não publica nenhuma porta e não usa o banco nem os volumes da stack principal: projeto
+# próprio, Postgres em tmpfs, e a rede `interna` não tem saída para a internet (internal: true),
+# então a API não alcança o OSV/NVD de verdade nem que quisesse.
+name: baluarte-validacao-agente
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=baluarte
+      - POSTGRES_PASSWORD=${VAL_DB_SENHA:?}
+      - POSTGRES_DB=baluarte_validacao
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U baluarte -d baluarte_validacao"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [interna]
+
+  # A API deste worktree (build de ../../backend), como no compose principal.
+  backend:
+    build: ../../backend
+    image: baluarte-validacao-agente/api:local
+    environment:
+      - DATABASE_URL=postgresql://baluarte:${VAL_DB_SENHA}@db:5432/baluarte_validacao?schema=public
+      - DIRECT_URL=postgresql://baluarte:${VAL_DB_SENHA}@db:5432/baluarte_validacao?schema=public
+      - JWT_SECRET=${VAL_JWT_SECRET:?}
+      - PORT=8080
+      - NODE_ENV=development
+      - SEED_DEMO=0
+      - OSQUERY_ENROLL_SECRET=${VAL_ENROLL_SECRET:?}
+      # Base de 60 s: programas a cada 60 s, portas a cada 60 s (piso) e SO a cada 6 min.
+      - OSQUERY_INTERVALO_S=60
+      # B14 contra as bases SIMULADAS; o cruzamento é pedido pela conferência, não automático.
+      - OSV_API_URL=http://bases-simuladas:8090/osv
+      - NVD_API_URL=http://bases-simuladas:8090/nvd
+      - CRUZAMENTO_AUTOMATICO=0
+      - VULN_TIMEOUT_MS=5000
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
+    networks: [interna]
+
+  # O Nginx do produto (build de ../../baluarte-frontend), com o HTTPS do B06 na 443.
+  app:
+    build: ../../baluarte-frontend
+    image: baluarte-validacao-agente/app:local
+    volumes:
+      - ${VAL_CERTS_SERVIDOR:?}:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [interna]
+
+  # OSV e NVD simulados (mesma imagem da API: só precisa do node).
+  bases-simuladas:
+    image: baluarte-validacao-agente/api:local
+    pull_policy: never
+    command: ["node", "/validacao/bases-simuladas.mjs"]
+    volumes:
+      - ./:/validacao:ro
+    networks: [interna]
+
+  # A estação: Ubuntu 24.04 (imagem fixada pelo digest) + instalador do agente + osqueryd.
+  agente:
+    image: ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+    hostname: estacao-validacao
+    environment:
+      - BALUARTE_ENROLL_SECRET=${VAL_ENROLL_SECRET}
+      - SERVIDOR=app:443
+    volumes:
+      - ../../agente:/baluarte/agente:ro
+      - ./iniciar-estacao.sh:/baluarte/iniciar-estacao.sh:ro
+      - ${VAL_CA:?}:/baluarte/ca.crt:ro
+      - ${VAL_PACOTE:?}:/baluarte/osquery.deb:ro
+    command: ["sh", "/baluarte/iniciar-estacao.sh"]
+    depends_on:
+      app:
+        condition: service_started
+      bases-simuladas:
+        condition: service_started
+    networks: [interna]
+
+  # Conferência pela API (docker compose run --rm conferencia), pelo HTTPS do app.
+  conferencia:
+    image: baluarte-validacao-agente/api:local
+    pull_policy: never
+    profiles: ["conferencia"]
+    environment:
+      - NODE_EXTRA_CA_CERTS=/baluarte/ca.crt
+      - API=https://app/api
+      - BASES=http://bases-simuladas:8090
+    volumes:
+      - ./:/validacao:ro
+      - ${VAL_CA:?}:/baluarte/ca.crt:ro
+    command: ["node", "/validacao/conferir.mjs"]
+    networks: [interna]
+
+networks:
+  interna:
+    internal: true
