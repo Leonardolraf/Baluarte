@@ -90,24 +90,37 @@ export async function buscar(id: string): Promise<FindingComOrigem | null> {
 }
 
 /**
- * Muda o status e grava o evento do historico (B25b) na MESMA transacao. A linha do achado e
- * travada (FOR UPDATE) antes de ler o status anterior: duas mudancas simultaneas ficam em fila
- * e a cadeia de eventos nunca registra um `de` que ja nao era o status. Repetir o status atual
- * nao grava evento. Devolve null se o achado nao existe.
+ * Muda o status e grava o evento do historico (B25b) numa UNICA instrucao SQL. O CTE trava a
+ * linha do achado (FOR UPDATE; em READ COMMITTED, quem espera a trava rele a versao mais nova
+ * da linha), atualiza e insere o evento so se o status mudou. Duas mudancas simultaneas ficam
+ * em fila e a cadeia de eventos nunca registra um `de` que ja nao era o status. Repetir o status
+ * atual nao grava evento. Devolve null se o achado nao existe.
+ *
+ * Nao e uma transacao interativa ($transaction com callback) de proposito: com varias mudancas
+ * simultaneas no mesmo achado, as transacoes interativas ficavam esperando a trava segurando a
+ * conexao e estouravam o maxWait do Prisma ("Unable to start a transaction in the given time").
  */
 export async function alterarStatus(
   id: string,
   status: string,
   usuarioId: string | null,
 ): Promise<{ anterior: string; finding: FindingComOrigem } | null> {
-  return prisma.$transaction(async (tx) => {
-    const [linha] = await tx.$queryRaw<Array<{ status: string }>>`SELECT "status" FROM "Finding" WHERE "id" = ${id} FOR UPDATE`;
-    if (!linha) return null;
-    const finding = await tx.finding.update({ where: { id }, data: { status }, include: COM_ATIVO });
-    if (linha.status !== status)
-      await tx.findingStatusChange.create({ data: { findingId: id, de: linha.status, para: status, usuarioId } });
-    return { anterior: linha.status, finding };
-  });
+  const linhas = await prisma.$queryRaw<Array<{ anterior: string }>>`
+    WITH alvo AS (
+      SELECT "id", "status" FROM "Finding" WHERE "id" = ${id} FOR UPDATE
+    ), mudou AS (
+      UPDATE "Finding" AS f SET "status" = ${status}
+      FROM alvo WHERE f."id" = alvo."id"
+      RETURNING alvo."status" AS anterior
+    ), evento AS (
+      INSERT INTO "FindingStatusChange" ("findingId", "de", "para", "usuarioId")
+      SELECT ${id}, anterior, ${status}, ${usuarioId}::text FROM mudou WHERE anterior <> ${status}
+    )
+    SELECT anterior FROM mudou`;
+  if (!linhas.length) return null;
+  const finding = await prisma.finding.findUnique({ where: { id }, include: COM_ATIVO });
+  if (!finding) return null;
+  return { anterior: linhas[0].anterior, finding };
 }
 
 // ---- Historico de status (B25b) ---------------------------------------------------
