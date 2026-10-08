@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { CampaignReport } from '@/types';
+import type { TrainingOverview } from '@/types';
 import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { cn } from '@/lib/cn';
@@ -9,7 +9,6 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  FormErrorBanner,
   LoadingSpinner,
   PageHeader,
   StatCard,
@@ -21,88 +20,6 @@ import {
   Tr,
 } from '@/components';
 import { GraduationIcon, MouseClickIcon, RefreshIcon, UsersIcon } from '@/components/icons';
-
-interface TrainedCollaborator {
-  email: string;
-  name: string;
-  department: string;
-  /** Uma entrada por treinamento concluído (um colaborador pode ser treinado em várias campanhas). */
-  campaigns: Array<{ id: string; name: string }>;
-}
-
-interface TrainingOverview {
-  /** Conclusões pelas métricas da campanha — mesma fonte do indicador do dashboard. */
-  completions: number;
-  clicked: number;
-  /** Clicaram na simulação e ainda não concluíram o treinamento. */
-  pendingAfterClick: number;
-  /**
-   * Quem aparece nominalmente na tabela de status dos destinatários. É uma amostra:
-   * as campanhas reportam centenas de destinatários, mas só parte tem linha individual.
-   */
-  people: TrainedCollaborator[];
-  namedCompletions: number;
-  byDepartment: Array<{ department: string; completions: number }>;
-  campaigns: number;
-  /** Campanhas cujo relatório não pôde ser carregado (os números acima as excluem). */
-  failed: number;
-}
-
-/**
- * Consolida as campanhas: o backend expõe a conclusão de treinamento por campanha
- * (`/campanhas/:id`), não numa lista global de colaboradores. Os totais saem de
- * `metrics` (a mesma fonte do indicador do dashboard); a tabela de destinatários
- * dá os nomes, mas cobre só parte da população.
- */
-function consolidar(reports: CampaignReport[], failed: number): TrainingOverview {
-  const porPessoa = new Map<string, TrainedCollaborator>();
-  const porDepartamento = new Map<string, number>();
-  let completions = 0;
-  let clicked = 0;
-  let namedCompletions = 0;
-
-  for (const report of reports) {
-    completions += report.campaign.metrics.trained;
-    clicked += report.campaign.metrics.clicked;
-
-    for (const recipient of report.recipients) {
-      if (!recipient.trainingCompleted) continue;
-      namedCompletions += 1;
-      porDepartamento.set(recipient.department, (porDepartamento.get(recipient.department) ?? 0) + 1);
-
-      const chave = recipient.email.toLowerCase();
-      const existente = porPessoa.get(chave);
-      const campanha = { id: report.campaign.id, name: report.campaign.name };
-      if (existente) {
-        existente.campaigns.push(campanha);
-      } else {
-        porPessoa.set(chave, {
-          email: recipient.email,
-          name: recipient.name,
-          department: recipient.department,
-          campaigns: [campanha],
-        });
-      }
-    }
-  }
-
-  const people = [...porPessoa.values()].sort(
-    (a, b) => b.campaigns.length - a.campaigns.length || a.name.localeCompare(b.name, 'pt-BR'),
-  );
-
-  return {
-    completions,
-    clicked,
-    pendingAfterClick: Math.max(0, clicked - completions),
-    people,
-    namedCompletions,
-    byDepartment: [...porDepartamento.entries()]
-      .map(([department, total]) => ({ department, completions: total }))
-      .sort((a, b) => b.completions - a.completions || a.department.localeCompare(b.department, 'pt-BR')),
-    campaigns: reports.length,
-    failed,
-  };
-}
 
 /** Barras neutras: conclusão de treinamento é volume, não risco — não recebe cor de severidade. */
 function DepartmentBars({ items }: { items: TrainingOverview['byDepartment'] }) {
@@ -134,21 +51,9 @@ function DepartmentBars({ items }: { items: TrainingOverview['byDepartment'] }) 
 
 /** Destino do indicador "Colaboradores treinados" do dashboard. */
 export default function TrainedCollaboratorsPage() {
-  // A conclusão de treinamento vive no relatório de cada campanha: são 1+N requisições.
-  // `allSettled` evita que uma campanha indisponível derrube a página inteira — o que
-  // falhou é contado e avisado, em vez de zerar o consolidado.
-  const { data, error, loading, reload } = useAsync<TrainingOverview>(async () => {
-    const campaigns = await api.listCampaigns();
-    const settled = await Promise.allSettled(campaigns.map((campaign) => api.getCampaignReport(campaign.id)));
-    const reports = settled
-      .filter((result): result is PromiseFulfilledResult<CampaignReport> => result.status === 'fulfilled')
-      .map((result) => result.value);
-    const rejected = settled.find((result) => result.status === 'rejected');
-    if (campaigns.length > 0 && reports.length === 0 && rejected?.status === 'rejected') {
-      throw rejected.reason;
-    }
-    return consolidar(reports, settled.length - reports.length);
-  }, []);
+  // Uma requisição: o servidor consolida (GET /treinamentos/consolidado). Antes a tela
+  // pedia o relatório de cada campanha e somava aqui, o que custava 1+N idas à API.
+  const { data, error, loading, reload } = useAsync<TrainingOverview>(() => api.getTrainingOverview(), []);
 
   if (!data) {
     if (error)
@@ -186,12 +91,6 @@ export default function TrainedCollaboratorsPage() {
           </span>
         }
       />
-
-      {data.failed > 0 && (
-        <FormErrorBanner
-          message={`${formatNumber(data.failed)} ${data.failed === 1 ? 'campanha não pôde' : 'campanhas não puderam'} ser carregada${data.failed === 1 ? '' : 's'}: os números abaixo excluem esse período. Atualize para tentar de novo.`}
-        />
-      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard

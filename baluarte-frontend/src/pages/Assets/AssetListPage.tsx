@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { Asset, ScanReport, Vulnerability } from '@/types';
+import type { Asset } from '@/types';
 import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { ASSET_STATUS_CLASS, ASSET_STATUS_LABEL, ASSET_TYPE_LABEL } from '@/lib/severity';
@@ -76,47 +76,9 @@ function AssetRows({ items }: { items: Asset[] }) {
   );
 }
 
-/** Achado que ainda conta como aberto (os dois últimos status são encerramento). */
-function emAberto(vuln: Vulnerability): boolean {
-  return vuln.status !== 'resolved' && vuln.status !== 'accepted';
-}
-
-/**
- * `GET /assets` devolve só o cadastro: nem a última varredura, nem quantos achados o
- * ativo tem em aberto. Os dois saem das listas que a própria tela já pode ler — sem
- * isso a coluna mostraria 0 para todo mundo, contradizendo o dashboard.
- */
-function consolidar(assets: Asset[], vulns: Vulnerability[], scans: ScanReport[]): Asset[] {
-  // Chave é o host: a API identifica o ativo do achado pelo host, não pelo id.
-  const abertosPorHost = new Map<string, number>();
-  for (const vuln of vulns) {
-    if (!emAberto(vuln)) continue;
-    abertosPorHost.set(vuln.assetHost, (abertosPorHost.get(vuln.assetHost) ?? 0) + 1);
-  }
-  const ultimaVarredura = new Map<string, string>();
-  for (const scan of scans) {
-    const quando = scan.finishedAt ?? scan.startedAt;
-    if (!quando) continue;
-    const atual = ultimaVarredura.get(scan.assetId);
-    if (!atual || quando > atual) ultimaVarredura.set(scan.assetId, quando);
-  }
-  return assets.map((asset) => ({
-    ...asset,
-    openFindings: abertosPorHost.get(asset.host) ?? 0,
-    lastScanAt: ultimaVarredura.get(asset.id) ?? null,
-  }));
-}
-
 /** Listagem dos ativos monitorados (destino do indicador "Ativos monitorados" do dashboard). */
 export default function AssetListPage() {
-  const { data, error, loading, reload } = useAsync<Asset[]>(async () => {
-    const [assets, vulns, scans] = await Promise.all([
-      api.listAssets(),
-      api.listVulnerabilities({ status: 'all' }).then((r) => r.items),
-      api.listScans().catch(() => [] as ScanReport[]),
-    ]);
-    return consolidar(assets, vulns, scans);
-  }, []);
+  const { data, error, loading, reload } = useAsync<Asset[]>(() => api.listAssets(), []);
 
   const assets = data ?? [];
   const active = assets.filter((asset) => asset.status === 'active').length;

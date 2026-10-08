@@ -25,6 +25,7 @@ import type {
   Severity,
   TimelineEvent,
   Training,
+  TrainingOverview,
   User,
   UserInput,
   Vulnerability,
@@ -985,6 +986,52 @@ export const mockApi: BaluarteApi = {
   },
 
   // ---- Treinamento ----
+  // Espelha o /treinamentos/consolidado: o mesmo cálculo que a tela fazia no cliente.
+  async getTrainingOverview(): Promise<TrainingOverview> {
+    return simulate(() => {
+      const ator = requireUser();
+      requireRole(ator, ['admin', 'analyst']);
+      const campanhas = state.campaigns;
+      const conclusoes = campanhas.reduce((soma, c) => soma + c.metrics.trained, 0);
+      const cliques = campanhas.reduce((soma, c) => soma + c.metrics.clicked, 0);
+
+      const porPessoa = new Map<string, TrainingOverview['people'][number]>();
+      const porDepartamento = new Map<string, number>();
+      let conclusoesNominais = 0;
+      for (const r of state.recipients) {
+        if (!r.trainingCompleted) continue;
+        conclusoesNominais += 1;
+        porDepartamento.set(r.department, (porDepartamento.get(r.department) ?? 0) + 1);
+        const campanha = campanhas.find((c) => c.id === r.campaignId);
+        const chave = r.email.toLowerCase();
+        const existente = porPessoa.get(chave);
+        const entrada = { id: r.campaignId, name: campanha?.name ?? r.campaignId };
+        if (existente) existente.campaigns.push(entrada);
+        else
+          porPessoa.set(chave, {
+            name: r.name,
+            email: r.email,
+            department: r.department,
+            campaigns: [entrada],
+          });
+      }
+
+      return clone({
+        campaigns: campanhas.length,
+        completions: conclusoes,
+        clicked: cliques,
+        pendingAfterClick: Math.max(0, cliques - conclusoes),
+        namedCompletions: conclusoesNominais,
+        people: [...porPessoa.values()].sort(
+          (a, b) => b.campaigns.length - a.campaigns.length || a.name.localeCompare(b.name, 'pt-BR'),
+        ),
+        byDepartment: [...porDepartamento.entries()]
+          .map(([department, completions]) => ({ department, completions }))
+          .sort((a, b) => b.completions - a.completions || a.department.localeCompare(b.department, 'pt-BR')),
+      });
+    });
+  },
+
   async getTraining(id: string): Promise<Training> {
     return simulate(() => {
       requireUser();

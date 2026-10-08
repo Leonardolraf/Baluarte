@@ -22,6 +22,7 @@ import type {
   Severity,
   TimelineEvent,
   Training,
+  TrainingOverview,
   User,
   UserInput,
   UserStatus,
@@ -64,6 +65,8 @@ export interface BackendAsset {
   tipo: string;
   status: string;
   criadoEm: string;
+  achadosAbertos?: number;
+  ultimaVarredura?: { id: string; status: string; criadoEm: string; concluidoEm?: string | null } | null;
   _count?: { scans?: number };
 }
 
@@ -345,8 +348,9 @@ export function toAsset(raw: BackendAsset): Asset {
     description: null,
     status: norm(raw.status) === 'inativo' ? 'inactive' : 'active',
     createdAt: raw.criadoEm,
-    lastScanAt: null,
-    openFindings: 0,
+    // A API passou a devolver os dois; a tela não precisa mais derivar de outras listas.
+    lastScanAt: raw.ultimaVarredura?.concluidoEm ?? raw.ultimaVarredura?.criadoEm ?? null,
+    openFindings: raw.achadosAbertos ?? 0,
   };
 }
 
@@ -670,6 +674,41 @@ export function toAccountLink(raw: BackendAccountLink): AccountLink {
     name: raw.nome,
     email: raw.email,
     expiresAt: raw.expiraEm,
+  };
+}
+
+export interface BackendTrainingOverview {
+  campanhas: number;
+  conclusoes: number;
+  cliques: number;
+  pendentesAposClique: number;
+  conclusoesNominais: number;
+  colaboradores: Array<{
+    nome: string;
+    email: string;
+    departamento: string;
+    campanhas: Array<{ id: string; nome: string }>;
+  }>;
+  porDepartamento: Array<{ departamento: string; conclusoes: number }>;
+}
+
+export function toTrainingOverview(raw: BackendTrainingOverview): TrainingOverview {
+  return {
+    campaigns: raw.campanhas,
+    completions: raw.conclusoes,
+    clicked: raw.cliques,
+    pendingAfterClick: raw.pendentesAposClique,
+    namedCompletions: raw.conclusoesNominais,
+    people: raw.colaboradores.map((c) => ({
+      name: c.nome,
+      email: c.email,
+      department: c.departamento,
+      campaigns: c.campanhas.map((x) => ({ id: x.id, name: x.nome })),
+    })),
+    byDepartment: raw.porDepartamento.map((d) => ({
+      department: d.departamento,
+      completions: d.conclusoes,
+    })),
   };
 }
 

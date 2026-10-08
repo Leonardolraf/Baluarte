@@ -435,6 +435,22 @@ export interface AccountLink {
   expiresAt: string;
 }
 
+/** Consolidado de treinamentos concluídos, calculado pela API numa só consulta. */
+export interface TrainingOverview {
+  campaigns: number;
+  completions: number;
+  clicked: number;
+  pendingAfterClick: number;
+  namedCompletions: number;
+  people: Array<{
+    name: string;
+    email: string;
+    department: string;
+    campaigns: Array<{ id: string; name: string }>;
+  }>;
+  byDepartment: Array<{ department: string; completions: number }>;
+}
+
 /** Usuário recém-criado: `inviteSent` diz se o convite saiu por e-mail. */
 export interface CreatedUser extends User {
   inviteSent: boolean;

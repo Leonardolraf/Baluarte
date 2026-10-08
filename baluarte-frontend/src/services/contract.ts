@@ -9,6 +9,7 @@ import type {
   CampaignReport,
   ChangePasswordInput,
   CreatedUser,
+  TrainingOverview,
   DashboardMetrics,
   LoginCredentials,
   LoginResponse,
@@ -80,6 +81,8 @@ export interface BaluarteApi {
   createCampaign(input: CampaignInput): Promise<Campaign>;
 
   // Treinamento
+  /** Consolidado de quem concluiu treinamento (uma requisição, calculada no servidor). */
+  getTrainingOverview(): Promise<TrainingOverview>;
   getTraining(id: string): Promise<Training>;
   completeTraining(id: string): Promise<Training>;
   /** Link público do e-mail da campanha (/t/:token): abre o treinamento e registra o clique. */
