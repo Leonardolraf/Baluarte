@@ -19,6 +19,7 @@ import type {
   CampaignInput,
   CampaignMetrics,
   CampaignRecipient,
+  CampaignAttachments,
   CampaignReport,
   CampaignTimelineEvent,
   ChangePasswordInput,
@@ -28,6 +29,7 @@ import type {
   FileScanFilters,
   FileScanListResponse,
   FileScanOutcome,
+  ReceivedCampaignsResponse,
   FunnelStage,
   SecondOpinion,
   LoginCredentials,
@@ -63,7 +65,7 @@ import type {
 import { SEVERITIES, VULN_PAGE_SIZE } from '@/types';
 import { HttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
-import { fileScanVerdict, MAX_FILE_SIZE_BYTES } from '@/lib/files';
+import { fileScanVerdict, isOwnRule, MAX_ATTACHMENTS_PER_CAMPAIGN, MAX_FILE_SIZE_BYTES } from '@/lib/files';
 import { SCAN_DURATION_MS, scanProgressByTime } from './scanProgress';
 import { vulnerabilityReportFilename } from '@/lib/download';
 import { formatDate, formatDateTime, localDayRange } from '@/lib/format';
@@ -798,11 +800,77 @@ function countMaliciousFiles(now = Date.now(), until = Infinity): number {
   return hashes.size;
 }
 
+/** Campanha de onde veio o anexo (B23): pelo destinatário; campanha excluída = sem origem. */
+function campaignOf(campaignEventId: string | null | undefined): FileScan['campaign'] {
+  const recipient = campaignEventId ? state.recipients.find((r) => r.id === campaignEventId) : undefined;
+  const campaign = recipient ? state.campaigns.find((c) => c.id === recipient.campaignId) : undefined;
+  return campaign ? { id: campaign.id, name: campaign.name } : null;
+}
+
 function fileScanView(entry: MockFileScan, withUser: boolean): FileScan {
-  const { userId, ...scan } = entry;
-  if (!withUser) return { ...scan };
+  const { userId, campaignEventId, ...rest } = entry;
+  const scan: FileScan = {
+    ...rest,
+    ownRule: rest.result === 'threat' && isOwnRule(rest.threat),
+    campaign: campaignOf(campaignEventId),
+  };
+  if (!withUser) return scan;
   const owner = state.users.find((u) => u.id === userId);
   return { ...scan, uploadedBy: { name: owner?.name ?? 'Usuário removido', email: owner?.email ?? '—' } };
+}
+
+// ---- Regras YARA próprias e anexo de campanha (B23) ---------------------------
+
+/**
+ * Detecções simuladas das regras de antivirus/regras: o marcador de teste do Baluarte e o par
+ * "gatilho automático + chamada ao sistema" da regra de macro. Os textos são montados em partes.
+ */
+const MOCK_OWN_RULES: Array<{ name: string; matches: (bytes: Uint8Array) => boolean }> = [
+  {
+    name: 'YARA.BaluarteMarcadorTeste.UNOFFICIAL',
+    matches: (bytes) => containsAscii(bytes, ['BALUARTE', 'TESTE', 'AMEACA', '0001'].join('-')),
+  },
+  {
+    name: 'YARA.BaluarteMacroSuspeita.UNOFFICIAL',
+    matches: (bytes) =>
+      (containsAscii(bytes, 'Document_Open') || containsAscii(bytes, 'AutoOpen')) &&
+      (containsAscii(bytes, 'CreateObject') || containsAscii(bytes, 'WScript.Shell')),
+  },
+];
+
+/** Destinatário da campanha que o usuário recebeu (o e-mail saiu); senão 404, como o backend. */
+function receivedRecipient(campaignEventId: string, email: string): CampaignRecipient {
+  const recipient = state.recipients.find(
+    (r) => r.id === campaignEventId && r.email.toLowerCase() === email.toLowerCase() && r.sentAt,
+  );
+  if (!recipient || !state.campaigns.some((c) => c.id === recipient.campaignId))
+    throw new HttpError(404, 'CAMPANHA_NAO_RECEBIDA', 'Campanha não encontrada entre as que você recebeu');
+  return recipient;
+}
+
+function campaignAttachments(campaignId: string): CampaignAttachments {
+  const recipients = new Map(
+    state.recipients.filter((r) => r.campaignId === campaignId).map((r) => [r.id, r] as const),
+  );
+  const items = state.fileScans
+    .filter((s) => s.campaignEventId && recipients.has(s.campaignEventId))
+    .sort((a, b) => Date.parse(b.scannedAt) - Date.parse(a.scannedAt))
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      sha256: s.sha256,
+      result: s.result,
+      threat: s.threat,
+      ownRule: s.result === 'threat' && isOwnRule(s.threat),
+      scannedAt: s.scannedAt,
+      recipient: recipients.get(s.campaignEventId!)!.email,
+    }));
+  return {
+    total: items.length,
+    threats: items.filter((a) => a.result === 'threat').length,
+    ownRules: items.filter((a) => a.ownRule).length,
+    items,
+  };
 }
 
 export const mockApi: BaluarteApi = {
@@ -1311,6 +1379,7 @@ export const mockApi: BaluarteApi = {
             clickRate: pct(d.clicked, d.recipients),
           }))
           .sort((a, b) => b.clickRate - a.clickRate),
+        attachments: campaignAttachments(id),
       };
     });
   },
@@ -1696,22 +1765,41 @@ export const mockApi: BaluarteApi = {
         'ANTIVIRUS_INDISPONIVEL',
         'O antivírus não está disponível neste ambiente. Tente mais tarde.',
       );
+    // B23: a origem (campanha recebida) é conferida antes de ler o arquivo, como no backend.
+    const campaignEventId = options.campaignEventId?.trim() || null;
+    if (campaignEventId) {
+      receivedRecipient(campaignEventId, user.email);
+      if (
+        state.fileScans.filter((s) => s.campaignEventId === campaignEventId).length >=
+        MAX_ATTACHMENTS_PER_CAMPAIGN
+      )
+        throw new HttpError(
+          429,
+          'LIMITE_ANEXOS_CAMPANHA',
+          `Limite de ${MAX_ATTACHMENTS_PER_CAMPAIGN} anexos por campanha atingido`,
+        );
+    }
     options.onProgress?.(100);
     const bytes = await readFileBytes(file);
     // Arquivo de teste EICAR: pelo nome (eicar.com, eicar.txt…) ou pela assinatura no conteúdo.
-    const threat = /eicar/i.test(file.name) || containsAscii(bytes, 'EICAR');
+    const eicar = /eicar/i.test(file.name) || containsAscii(bytes, 'EICAR');
+    // Regras YARA próprias do Baluarte (B23), depois das assinaturas oficiais.
+    const ownRule = eicar ? undefined : MOCK_OWN_RULES.find((rule) => rule.matches(bytes));
+    const threat = eicar ? EICAR_SIGNATURE : (ownRule?.name ?? null);
     const sha256 = await mockSha256(bytes);
     const entry: MockFileScan = {
       id: nextId('arq'),
       userId: user.id,
+      campaignEventId,
       name: file.name,
       size: file.size,
       sha256,
       result: threat ? 'threat' : 'clean',
-      threat: threat ? EICAR_SIGNATURE : null,
+      threat,
       scannedAt: nowIso(),
-      // Depois do antivírus, só pelo hash; não muda o veredito acima.
-      secondOpinion: mockSecondOpinion(sha256, threat),
+      // Depois do antivírus, só pelo hash; não muda o veredito acima. Regra própria é do
+      // Baluarte: o VirusTotal não a conhece (o arquivo novo sai como desconhecido).
+      secondOpinion: mockSecondOpinion(sha256, eicar),
     };
     state.fileScans.unshift(entry);
     state.fileScanTimes.set(user.id, [...recent, now]);
@@ -1743,6 +1831,26 @@ export const mockApi: BaluarteApi = {
         page,
         pageSize,
       };
+    });
+  },
+
+  async listReceivedCampaigns(link?: string): Promise<ReceivedCampaignsResponse> {
+    return simulate(() => {
+      const user = requireUser();
+      const items = state.recipients
+        .filter((r) => r.email.toLowerCase() === user.email.toLowerCase() && r.sentAt)
+        .map((r) => ({ recipient: r, campaign: state.campaigns.find((c) => c.id === r.campaignId) }))
+        .filter((x): x is { recipient: CampaignRecipient; campaign: Campaign } => Boolean(x.campaign))
+        .sort((a, b) => Date.parse(b.recipient.sentAt!) - Date.parse(a.recipient.sentAt!))
+        .map(({ recipient, campaign }) => ({
+          id: recipient.id,
+          campaign: { id: campaign.id, name: campaign.name },
+          receivedAt: recipient.sentAt ?? null,
+          attachmentsSent: state.fileScans.filter((s) => s.campaignEventId === recipient.id).length,
+        }));
+      // No modo mock o token do link é o id do destinatário.
+      const selected = link && items.some((c) => c.id === link.trim()) ? link.trim() : null;
+      return { items, selected };
     });
   },
 

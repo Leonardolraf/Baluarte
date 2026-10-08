@@ -1534,6 +1534,9 @@ function buildRecipients(plan: RecipientPlan): CampaignRecipient[] {
 
 const CAMPAIGN_BY_ID: Record<string, Campaign> = Object.fromEntries(MOCK_CAMPAIGNS.map((c) => [c.id, c]));
 
+/** Destinatário semeado do colaborador de demonstração (B23): campanha recebida, com anexo enviado. */
+export const COLLAB_RECIPIENT_ID = 'camp-002-r-colab';
+
 export const MOCK_RECIPIENTS: CampaignRecipient[] = [
   ...buildRecipients({
     campaign: CAMPAIGN_BY_ID['camp-001'],
@@ -1579,6 +1582,22 @@ export const MOCK_RECIPIENTS: CampaignRecipient[] = [
     trained: 2,
     trainingId: TEMPLATE_TRAINING_ID.curiosity,
   }),
+  // B23: o colaborador de demonstração recebeu a campanha de junho, não clicou, reportou o e-mail
+  // e enviou o anexo para análise (MOCK_FILE_SCANS, arq-000). No modo mock o token do link é o id.
+  {
+    id: COLLAB_RECIPIENT_ID,
+    campaignId: 'camp-002',
+    name: 'João Pereira',
+    email: 'colaborador@empresa.com',
+    department: 'Comercial',
+    sentAt: new Date(Date.parse(daysAgo(92)) + HOUR_MS).toISOString(),
+    openedAt: new Date(Date.parse(daysAgo(92)) + 2 * HOUR_MS).toISOString(),
+    clickedAt: null,
+    submittedAt: null,
+    reportedAt: new Date(Date.parse(daysAgo(92)) + 3 * HOUR_MS).toISOString(),
+    trainingCompleted: false,
+    trainingId: null,
+  },
 ];
 
 // -----------------------------------------------------------------------------
@@ -1841,9 +1860,14 @@ export const MOCK_NOTIFICATION_PREFERENCES: NotificationPreferences = {
 
 // ---- Análise de arquivos (B05) ------------------------------------------------
 
-/** Análise guardada no mock: o modelo da tela mais o dono (o arquivo em si nunca é guardado). */
-export interface MockFileScan extends Omit<FileScan, 'uploadedBy'> {
+/**
+ * Análise guardada no mock: o modelo da tela mais o dono (o arquivo em si nunca é guardado).
+ * O rótulo de regra própria e a campanha saem na leitura (como no backend), não ficam guardados.
+ */
+export interface MockFileScan extends Omit<FileScan, 'uploadedBy' | 'ownRule' | 'campaign'> {
   userId: string;
+  /** B23: destinatário na campanha de onde veio o anexo. */
+  campaignEventId?: string | null;
 }
 
 /** Relatório público do hash no VirusTotal (segunda opinião, B20). */
@@ -1922,6 +1946,28 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     scannedAt: daysAgo(6),
     // Análise anterior à segunda opinião (B20).
     secondOpinion: null,
+  },
+  // B23: anexo da campanha de junho enviado pelo colaborador para análise. Sem ameaça conhecida
+  // (a detecção por regra própria se demonstra ao vivo, com o marcador de teste do Baluarte).
+  {
+    id: 'arq-000',
+    userId: 'u-002',
+    campaignEventId: COLLAB_RECIPIENT_ID,
+    name: 'fatura-junho.pdf',
+    size: 48_211,
+    sha256: '9c1f0e3a7b5d2c4e6f8a0b1c3d5e7f9a2b4c6d8e0f1a3b5c7d9e1f2a4b6c8d0e',
+    result: 'clean',
+    threat: null,
+    scannedAt: daysAgo(90),
+    secondOpinion: {
+      source: 'VirusTotal',
+      status: 'unknown',
+      reason: null,
+      detections: null,
+      total: null,
+      checkedAt: daysAgo(90),
+      link: vtLink('9c1f0e3a7b5d2c4e6f8a0b1c3d5e7f9a2b4c6d8e0f1a3b5c7d9e1f2a4b6c8d0e'),
+    },
   },
 ];
 

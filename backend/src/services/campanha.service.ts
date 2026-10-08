@@ -6,6 +6,7 @@ import { registrarAuditoria } from './auditoria.service.js';
 import { enviarEmailsCampanha } from './campanhaEmail.service.js';
 import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
 import * as repo from '../repositories/campanha.repository.js';
+import { anexosDaCampanha } from './analiseArquivo.service.js';
 
 // Campanhas de phishing SIMULADO: criacao com e-mail por destinatario, lista com metricas,
 // relatorio (funil, treinamentos, reportes, por departamento) e exclusao.
@@ -97,6 +98,8 @@ export async function relatorio(id: string) {
         taxaClique: g.enviados ? Math.round((g.clicados / g.enviados) * 100) : 0,
       }))
       .sort((a, b) => b.destinatarios - a.destinatarios || a.departamento.localeCompare(b.departamento, 'pt-BR')),
+    // Anexos suspeitos que os destinatarios enviaram para analise, com os vereditos (B23).
+    anexos: await anexosDaCampanha(c.id),
   };
 }
 

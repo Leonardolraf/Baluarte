@@ -373,6 +373,8 @@ export interface CampaignReport {
   funnel: FunnelStage[];
   timeline: CampaignTimelineEvent[];
   byDepartment: Array<{ department: string; recipients: number; clicked: number; clickRate: number }>;
+  /** B23: anexos suspeitos que os destinatários enviaram para análise, com os vereditos. */
+  attachments: CampaignAttachments;
 }
 
 export interface CampaignFilters {
@@ -598,8 +600,52 @@ export interface FileScan {
   scannedAt: string;
   /** Segunda opinião do VirusTotal; null nas análises anteriores a ela (B20). */
   secondOpinion: SecondOpinion | null;
+  /**
+   * B23: a detecção veio de uma regra YARA própria do Baluarte (`YARA.Baluarte*.UNOFFICIAL`),
+   * não de uma assinatura oficial do ClamAV. A tela mostra "regra própria do Baluarte".
+   */
+  ownRule: boolean;
+  /** B23: anexo suspeito recebido numa campanha de phishing simulado; null no envio avulso. */
+  campaign: { id: string; name: string } | null;
   /** Quem enviou: só vem para Administrador e Analista. */
   uploadedBy?: { name: string; email: string };
+}
+
+/**
+ * Campanha de phishing simulado que o usuário recebeu (B23): o anexo suspeito pode ser ligado
+ * a ela. `id` é o do destinatário na campanha (evento), o que vai no envio.
+ */
+export interface ReceivedCampaign {
+  id: string;
+  campaign: { id: string; name: string };
+  receivedAt: string | null;
+  attachmentsSent: number;
+}
+
+export interface ReceivedCampaignsResponse {
+  items: ReceivedCampaign[];
+  /** Evento do link do e-mail (página pública do treinamento/reporte), se for do próprio usuário. */
+  selected: string | null;
+}
+
+/** Anexo reportado numa campanha, como o relatório mostra aos operadores (B23). */
+export interface CampaignAttachment {
+  id: string;
+  name: string;
+  sha256: string;
+  result: FileScanResult;
+  threat: string | null;
+  ownRule: boolean;
+  scannedAt: string;
+  /** E-mail do destinatário que enviou o anexo para análise. */
+  recipient: string;
+}
+
+export interface CampaignAttachments {
+  total: number;
+  threats: number;
+  ownRules: number;
+  items: CampaignAttachment[];
 }
 
 /** Filtros do histórico de análises (B17): resultado e paginação vão para o servidor. */

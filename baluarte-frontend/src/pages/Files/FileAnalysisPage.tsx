@@ -1,10 +1,21 @@
-import { useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type {
   FileScan,
   FileScanFilters,
   FileScanListResponse,
   FileScanOutcome,
   FileScanResult,
+  ReceivedCampaignsResponse,
   SecondOpinion,
   SecondOpinionStatus,
 } from '@/types';
@@ -20,9 +31,10 @@ import {
   fileScanVerdict,
   formatBytes,
   isTooLarge,
+  OWN_RULE_LABEL,
   secondOpinionText,
 } from '@/lib/files';
-import { formatDateTime, formatNumber, formatRelative } from '@/lib/format';
+import { formatDate, formatDateTime, formatNumber, formatRelative } from '@/lib/format';
 import { SEVERITY_BADGE_CLASS } from '@/lib/severity';
 import {
   Button,
@@ -53,7 +65,9 @@ import {
   FileScanIcon,
   InfoIcon,
   LockIcon,
+  MailIcon,
   RefreshIcon,
+  ShieldIcon,
   UploadIcon,
 } from '@/components/icons';
 
@@ -81,6 +95,32 @@ function Sha256({ value }: { value: string }) {
   );
 }
 
+/** Pílula da detecção que veio de uma regra YARA própria do Baluarte (B23), não do ClamAV. */
+function OwnRulePill() {
+  return (
+    <StatusPill
+      label={OWN_RULE_LABEL}
+      title="Detectado por uma regra YARA escrita pela equipe do Baluarte, não por uma assinatura oficial do ClamAV"
+      colorClass={CLEAN_PILL_CLASS}
+      icon={<ShieldIcon size={12} />}
+      data-testid="own-rule-label"
+    />
+  );
+}
+
+function OwnRuleNote() {
+  return (
+    <div className="mt-2 space-y-1">
+      <OwnRulePill />
+      <p className="text-sm">
+        Esta detecção vem de uma regra própria do Baluarte para ameaças que as assinaturas oficiais não
+        reconhecem (macro que roda ao abrir, script que baixa e executa, carga escondida em base64). É um
+        padrão suspeito, não uma assinatura de vírus conhecido: a equipe de segurança confirma.
+      </p>
+    </div>
+  );
+}
+
 function Verdict({ scan }: { scan: FileScan }) {
   if (scan.result === 'threat') {
     return (
@@ -98,6 +138,7 @@ function Verdict({ scan }: { scan: FileScan }) {
           <p className="mt-1 break-all font-mono text-sm font-semibold">
             {scan.threat ?? 'Não identificada'}
           </p>
+          {scan.ownRule && <OwnRuleNote />}
           <p className="mt-2 text-sm">
             Não abra nem repasse este arquivo. Apague as cópias e avise a equipe de segurança.
           </p>
@@ -210,6 +251,14 @@ function ResultCard({ outcome }: { outcome: FileScanOutcome }) {
             },
             { label: 'Analisado em', value: formatDateTime(scan.scannedAt) },
             { label: 'SHA-256', value: <Sha256 value={scan.sha256} /> },
+            ...(scan.campaign
+              ? [
+                  {
+                    label: 'Anexo da campanha',
+                    value: <span data-testid="result-campaign">{scan.campaign.name}</span>,
+                  },
+                ]
+              : []),
           ]}
         />
       </div>
@@ -276,14 +325,26 @@ function HistoryTable({
               <Td>
                 <div className="break-all font-medium text-ink dark:text-white">{scan.name}</div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">{formatBytes(scan.size)}</div>
+                {scan.campaign && (
+                  <div
+                    className="mt-0.5 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"
+                    data-testid="history-campaign"
+                  >
+                    <MailIcon size={12} className="shrink-0" />
+                    <span>Anexo da campanha {scan.campaign.name}</span>
+                  </div>
+                )}
               </Td>
               <Td>
                 {scan.result === 'threat' ? (
-                  <StatusPill
-                    label={`Ameaça: ${scan.threat ?? 'não identificada'}`}
-                    colorClass={SEVERITY_BADGE_CLASS.critical}
-                    icon={<AlertTriangleIcon size={12} />}
-                  />
+                  <div className="flex flex-col items-start gap-1">
+                    <StatusPill
+                      label={`Ameaça: ${scan.threat ?? 'não identificada'}`}
+                      colorClass={SEVERITY_BADGE_CLASS.critical}
+                      icon={<AlertTriangleIcon size={12} />}
+                    />
+                    {scan.ownRule && <OwnRulePill />}
+                  </div>
                 ) : (
                   <StatusPill label="Sem ameaça conhecida" colorClass={CLEAN_PILL_CLASS} />
                 )}
@@ -369,6 +430,35 @@ export default function FileAnalysisPage() {
     setPage(1);
   };
 
+  // B23: anexo suspeito recebido numa campanha. `?campanha=<id do destinatário>` (tela do
+  // treinamento, com login) ou `?link=<token do e-mail>` (páginas públicas do treinamento e do
+  // reporte, depois do login) pré-selecionam a campanha. Os dois saem da barra depois de usados.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [initialLink] = useState(() => searchParams.get('link')?.trim() || undefined);
+  const [initialEvent] = useState(() => searchParams.get('campanha')?.trim() || '');
+  const received = useAsync<ReceivedCampaignsResponse>(() => api.listReceivedCampaigns(initialLink), []);
+  const receivedCampaigns = received.data?.items ?? [];
+  const [campaignEventId, setCampaignEventId] = useState('');
+  const [campaignNotFound, setCampaignNotFound] = useState(false);
+  const preselected = useRef(false);
+  const campaignSelectId = `${useId()}-campaign`;
+
+  useEffect(() => {
+    if (preselected.current || (!received.data && !received.error)) return;
+    preselected.current = true;
+    const items = received.data?.items ?? [];
+    const wanted = items.some((c) => c.id === initialEvent) ? initialEvent : (received.data?.selected ?? '');
+    if (wanted) setCampaignEventId(wanted);
+    // Só o link do e-mail avisa: `?campanha=` que não casa (ex.: treinamento sem campanha) só não pré-seleciona.
+    else if (initialLink) setCampaignNotFound(true);
+    if (searchParams.has('link') || searchParams.has('campanha')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('link');
+      next.delete('campanha');
+      setSearchParams(next, { replace: true });
+    }
+  }, [received.data, received.error, initialEvent, initialLink, searchParams, setSearchParams]);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -393,37 +483,43 @@ export default function FileAnalysisPage() {
     }
     setPhase('uploading');
     setProgress(0);
+    let result: FileScanOutcome;
     try {
-      const result = await api.analyzeFile(file, {
+      result = await api.analyzeFile(file, {
         onProgress: (percent) => {
           setProgress(percent);
           if (percent >= 100) setPhase('analyzing');
         },
+        campaignEventId: campaignEventId || undefined,
       });
       setOutcome(result);
-      // A análise nova é a mais recente: aparece no topo da primeira página (se passar no filtro).
-      if (page !== 1) {
-        setPage(1);
-      } else {
-        try {
-          setData(await api.listFileScans(query));
-        } catch {
-          // Lista indisponível agora: a análise nova entra no topo do que já estava na tela.
-          if (!resultFilter || result.scan.result === resultFilter) {
-            setData((previous) => ({
-              items: [result.scan, ...(previous?.items ?? [])].slice(0, pageSize),
-              total: (previous?.total ?? 0) + 1,
-              page: 1,
-              pageSize,
-            }));
-          }
-        }
-      }
     } catch (err) {
       setUploadError(fileScanErrorMessage(err));
+      return;
     } finally {
+      // O veredito já está na tela: a próxima escolha de arquivo vale desde já, sem esperar o
+      // histórico recarregar (antes, um arquivo escolhido nesse intervalo era ignorado).
       setPhase('idle');
       if (inputRef.current) inputRef.current.value = '';
+    }
+    if (campaignEventId) void received.reload();
+    // A análise nova é a mais recente: aparece no topo da primeira página (se passar no filtro).
+    if (page !== 1) {
+      setPage(1);
+      return;
+    }
+    try {
+      setData(await api.listFileScans(query));
+    } catch {
+      // Lista indisponível agora: a análise nova entra no topo do que já estava na tela.
+      if (!resultFilter || result.scan.result === resultFilter) {
+        setData((previous) => ({
+          items: [result.scan, ...(previous?.items ?? [])].slice(0, pageSize),
+          total: (previous?.total ?? 0) + 1,
+          page: 1,
+          pageSize,
+        }));
+      }
     }
   }
 
@@ -493,6 +589,48 @@ export default function FileAnalysisPage() {
               arquivo nunca é enviado a ele.
             </span>
           </p>
+
+          {receivedCampaigns.length > 0 && (
+            <FormField
+              label="Este arquivo veio num e-mail de campanha?"
+              htmlFor={campaignSelectId}
+              hint="Ligue o anexo à campanha em que você o recebeu: a equipe de segurança vê de onde ele veio e o veredito no relatório da campanha."
+              className="sm:max-w-xl"
+            >
+              <Select
+                id={campaignSelectId}
+                value={campaignEventId}
+                disabled={busy}
+                data-testid="file-campaign"
+                aria-describedby={`${campaignSelectId}-hint`}
+                onChange={(event) => {
+                  setCampaignEventId(event.target.value);
+                  setCampaignNotFound(false);
+                }}
+              >
+                <option value="">Não, é um envio avulso</option>
+                {receivedCampaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.campaign.name}
+                    {c.receivedAt ? ` · recebida em ${formatDate(c.receivedAt)}` : ''}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
+          {campaignNotFound && (
+            <p
+              role="status"
+              data-testid="file-campaign-missing"
+              className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"
+            >
+              <InfoIcon size={16} className="mt-0.5 shrink-0" />
+              <span>
+                A campanha do link não está entre as que você recebeu nesta conta. Você ainda pode enviar o
+                arquivo como envio avulso.
+              </span>
+            </p>
+          )}
 
           <div
             role="button"

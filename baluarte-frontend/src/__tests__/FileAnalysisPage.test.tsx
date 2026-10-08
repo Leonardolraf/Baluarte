@@ -239,6 +239,32 @@ describe('FileAnalysisPage (B05)', () => {
     expect(zone).not.toHaveAttribute('data-dragging');
   });
 
+  it('arquivo escolhido enquanto o histórico ainda recarrega também é analisado', async () => {
+    renderAs('analyst');
+    await historyTable();
+    const analyze = vi.spyOn(mockApi, 'analyzeFile');
+    // A partir daqui o histórico demora: a recarga depois do 1.º envio fica pendente.
+    let liberar: () => void = () => undefined;
+    const original = mockApi.listFileScans.bind(mockApi);
+    vi.spyOn(mockApi, 'listFileScans').mockImplementation(async (filters) => {
+      await new Promise<void>((resolve) => {
+        liberar = resolve;
+      });
+      return original(filters);
+    });
+
+    choose(new File(['primeiro'], 'primeiro.txt'));
+    await waitFor(() => expect(screen.getByTestId('file-verdict')).toBeInTheDocument());
+    choose(new File(['segundo'], 'segundo.txt'));
+    await waitFor(() => expect(analyze).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Resultado da análise' }).closest('section')!,
+      ).toHaveTextContent('segundo.txt'),
+    );
+    liberar();
+  });
+
   it('mostra a barra de envio enquanto o arquivo sobe e o antivírus analisa', async () => {
     let finish: () => void = () => undefined;
     vi.spyOn(mockApi, 'analyzeFile').mockImplementation(async (file, options) => {
@@ -257,6 +283,8 @@ describe('FileAnalysisPage (B05)', () => {
           threat: null,
           scannedAt: new Date().toISOString(),
           secondOpinion: null,
+          ownRule: false,
+          campaign: null,
         },
         message: 'Nenhuma ameaça conhecida encontrada',
       };

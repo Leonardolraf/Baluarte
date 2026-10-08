@@ -24,6 +24,7 @@ import type {
   FileScanFilters,
   FileScanListResponse,
   FileScanOutcome,
+  ReceivedCampaignsResponse,
   LoginCredentials,
   LoginResponse,
   MonitoringAcknowledgementFilters,
@@ -77,6 +78,7 @@ import {
   toMonitoringAcknowledgementList,
   toMonitoringAcknowledgementResult,
   toMonitoringNotice,
+  toReceivedCampaigns,
   toNotificationPreferences,
   toScan,
   toSecurityPolicy,
@@ -100,6 +102,7 @@ import {
   type BackendDashboard,
   type BackendFileScan,
   type BackendFileScanSummary,
+  type BackendReceivedCampaign,
   type BackendFinding,
   type BackendLogin,
   type BackendMonitoringAcknowledgement,
@@ -739,6 +742,8 @@ export const realApi: BaluarteApi = {
       const response = await httpClient.request<ApiEnvelope<BackendFileScan>>({
         method: 'POST',
         url: '/arquivos/analise',
+        // B23: a origem vai na query para o servidor conferir a campanha antes de ler o arquivo.
+        params: options.campaignEventId ? { eventoCampanha: options.campaignEventId } : undefined,
         data: form,
         headers: { 'Content-Type': 'multipart/form-data' },
         // A varredura do ClamAV leva mais que uma requisição comum.
@@ -771,6 +776,19 @@ export const realApi: BaluarteApi = {
         params,
       });
       return toFileScanList(dados, resumo as BackendFileScanSummary | undefined, { page, pageSize });
+    } catch (error) {
+      rethrowAsNotImplemented(error);
+    }
+  },
+
+  async listReceivedCampaigns(link?: string): Promise<ReceivedCampaignsResponse> {
+    try {
+      const { dados, resumo } = await requestWithSummary<BackendReceivedCampaign[]>({
+        method: 'GET',
+        url: '/arquivos/campanhas-recebidas',
+        params: link ? { link } : undefined,
+      });
+      return toReceivedCampaigns(dados, resumo as { selecionada?: string | null } | undefined);
     } catch (error) {
       rethrowAsNotImplemented(error);
     }

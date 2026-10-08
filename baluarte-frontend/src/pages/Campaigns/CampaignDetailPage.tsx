@@ -2,6 +2,7 @@ import { useMemo, useState, type ComponentType } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
   Campaign,
+  CampaignAttachments,
   CampaignMetrics,
   CampaignRecipient,
   CampaignReport,
@@ -14,6 +15,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { usePagination } from '@/hooks/usePagination';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatNumber, formatPercent, formatRelative } from '@/lib/format';
+import { OWN_RULE_LABEL } from '@/lib/files';
 import {
   CAMPAIGN_STATUS_CLASS,
   CAMPAIGN_STATUS_DOT_CLASS,
@@ -22,6 +24,7 @@ import {
   RECIPIENT_STAGE_CLASS,
   RECIPIENT_STAGE_DOT_CLASS,
   RECIPIENT_STAGE_LABEL,
+  SEVERITY_BADGE_CLASS,
   SEVERITY_DOT_CLASS,
   SEVERITY_TEXT_CLASS,
   USER_STATUS_CLASS,
@@ -51,6 +54,7 @@ import {
   Tr,
 } from '@/components';
 import {
+  AlertTriangleIcon,
   CalendarIcon,
   CheckCircleIcon,
   EyeIcon,
@@ -61,6 +65,7 @@ import {
   PlayIcon,
   SearchIcon,
   SendIcon,
+  ShieldIcon,
   type IconProps,
 } from '@/components/icons';
 
@@ -233,6 +238,85 @@ function FunnelCard({ funnel }: { funnel: FunnelStage[] }) {
 }
 
 // ---- Por departamento -------------------------------------------------------
+
+/** Pílula neutra: "sem ameaça conhecida" não é garantia, e a regra própria é informação, não risco. */
+const NEUTRAL_PILL_CLASS =
+  'bg-slate-50 text-slate-700 ring-slate-600/20 dark:bg-slate-800/60 dark:text-slate-200 dark:ring-slate-500/30';
+
+/**
+ * B23: anexos suspeitos que os destinatários enviaram para análise a partir desta campanha, com o
+ * veredito do antivírus. Só o hash e o resultado existem: o arquivo foi descartado na análise.
+ */
+function AttachmentsCard({ attachments }: { attachments: CampaignAttachments }) {
+  const { total, threats, ownRules, items } = attachments;
+  const subtitle =
+    total === 0
+      ? 'Arquivos que os destinatários enviaram para análise a partir desta campanha'
+      : `${formatNumber(total)} ${total === 1 ? 'anexo reportado' : 'anexos reportados'} · ${formatNumber(threats)} com ameaça · ${formatNumber(ownRules)} por ${OWN_RULE_LABEL}`;
+  return (
+    <Card title="Anexos reportados" subtitle={subtitle} flush data-testid="campaign-attachments">
+      {items.length === 0 ? (
+        <EmptyState
+          compact
+          title="Nenhum anexo reportado"
+          description="Quando um destinatário enviar para análise um anexo recebido nesta campanha, o veredito aparece aqui."
+        />
+      ) : (
+        <div className="overflow-x-auto">
+          <Table dense>
+            <THead>
+              <tr>
+                <Th>Arquivo</Th>
+                <Th>Enviado por</Th>
+                <Th>Veredito</Th>
+                <Th>Analisado</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {items.map((a) => (
+                <Tr key={a.id} data-testid="campaign-attachment-row" data-result={a.result}>
+                  <Td>
+                    <div className="break-all font-medium text-ink dark:text-white">{a.name}</div>
+                    <div className="font-mono text-xs text-slate-500 dark:text-slate-400" title={a.sha256}>
+                      {a.sha256.slice(0, 12)}…
+                    </div>
+                  </Td>
+                  <Td className="font-mono text-xs">{a.recipient}</Td>
+                  <Td>
+                    {a.result === 'threat' ? (
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusPill
+                          label={`Ameaça: ${a.threat ?? 'não identificada'}`}
+                          colorClass={SEVERITY_BADGE_CLASS.critical}
+                          icon={<AlertTriangleIcon size={12} />}
+                        />
+                        {a.ownRule && (
+                          <StatusPill
+                            label={OWN_RULE_LABEL}
+                            colorClass={NEUTRAL_PILL_CLASS}
+                            icon={<ShieldIcon size={12} />}
+                            data-testid="own-rule-label"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <StatusPill label="Sem ameaça conhecida" colorClass={NEUTRAL_PILL_CLASS} />
+                    )}
+                  </Td>
+                  <Td className="whitespace-nowrap text-slate-500 dark:text-slate-400">
+                    <time dateTime={a.scannedAt} title={formatDateTime(a.scannedAt)}>
+                      {formatRelative(a.scannedAt)}
+                    </time>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 // Cartão de meia largura: a taxa de clique é a coluna que importa; os contadores entram
 // conforme a largura ("Destinatários" a partir de xl, "Clicaram" a partir de 2xl).
@@ -563,6 +647,8 @@ export default function CampaignDetailPage() {
           <DepartmentCard rows={report.byDepartment} />
           <TimelineCard events={report.timeline} />
         </div>
+
+        <AttachmentsCard attachments={report.attachments} />
 
         <RecipientsCard recipients={report.recipients} trainingId={trainingId} />
       </div>

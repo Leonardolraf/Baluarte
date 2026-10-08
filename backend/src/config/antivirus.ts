@@ -17,11 +17,25 @@ export function antivirusConfigurado(): boolean {
   return Boolean(process.env.CLAMAV_HOST);
 }
 
-function escrever(socket: Socket, dados: Buffer): Promise<void> {
+/**
+ * Escreve um bloco respeitando a contrapressao do socket. Os ouvintes de `drain` e `error` saem
+ * juntos assim que um dos dois acontece: sem isso, cada bloco que esperava o `drain` deixava um
+ * ouvinte de `error` pendurado e um arquivo grande passava do limite de 10 ouvintes do Node
+ * (MaxListenersExceededWarning).
+ */
+export function escrever(socket: Socket, dados: Buffer): Promise<void> {
   return new Promise((ok, falha) => {
     if (socket.write(dados)) return ok();
-    socket.once('drain', ok);
-    socket.once('error', (e) => falha(new AntivirusIndisponivel(e.message)));
+    const aoDrenar = () => {
+      socket.off('error', aoFalhar);
+      ok();
+    };
+    const aoFalhar = (e: Error) => {
+      socket.off('drain', aoDrenar);
+      falha(new AntivirusIndisponivel(e.message));
+    };
+    socket.once('drain', aoDrenar);
+    socket.once('error', aoFalhar);
   });
 }
 

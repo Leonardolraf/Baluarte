@@ -16,6 +16,7 @@
 //   ou, em baluarte-frontend/: npm run test:e2e:real -- [argumentos]
 // Variáveis (padrões entre parênteses):
 //   E2E_DB_NAME (baluarte_e2e)  E2E_API_PORT (8097)  E2E_WEB_PORT (5200)  E2E_BASES_PORT (8098)
+//   (B23) com ClamAV, E2E_CLAMAV_REGRAS=1 vai aos specs quando o clamd tem as regras YARA do Baluarte.
 //   E2E_CLAMAV: auto (usa se o clamd responder) | 1 (exige; sobe o perfil antivirus do Compose
 //     se preciso) | 0 (nunca)       E2E_CLAMAV_HOST (127.0.0.1)  E2E_CLAMAV_PORT (3310)
 //   E2E_MAILPIT_URL (http://localhost:8025)  E2E_SMTP_HOST (127.0.0.1)  E2E_SMTP_PORT (1025)
@@ -168,6 +169,26 @@ function clamdResponde() {
   });
 }
 
+/**
+ * B23: o clamd carregou as regras YARA do Baluarte (antivirus/regras)? Manda o marcador de teste
+ * (inofensivo, montado em partes, em memória) por INSTREAM e confere o nome da regra na resposta.
+ */
+function clamdTemRegrasBaluarte() {
+  return new Promise((ok) => {
+    const marcador = Buffer.from(['BALUARTE', 'TESTE', 'AMEACA', '0001', 'ARQUIVO', 'INOFENSIVO'].join('-'));
+    const tamanho = Buffer.alloc(4);
+    tamanho.writeUInt32BE(marcador.length);
+    const s = connect({ port: CLAMAV_PORT, host: CLAMAV_HOST });
+    let texto = '';
+    s.setTimeout(30_000);
+    s.once('connect', () => s.end(Buffer.concat([Buffer.from('zINSTREAM\0'), tamanho, marcador, Buffer.alloc(4)])));
+    s.on('data', (d) => (texto += d.toString()));
+    s.once('end', () => ok(texto.includes('YARA.BaluarteMarcadorTeste.UNOFFICIAL')));
+    s.once('timeout', () => (s.destroy(), ok(false)));
+    s.once('error', () => ok(false));
+  });
+}
+
 async function respondeHttp(url) {
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(2000) });
@@ -311,7 +332,7 @@ async function iniciarVite() {
  * Roda o Playwright e devolve o código de saída. Assíncrono de propósito: as bases falsas
  * vivem neste processo e precisam do laço de eventos livre para responder à API.
  */
-function playwright(extra, { comClamav, segredo }) {
+function playwright(extra, { comClamav, comRegras = false, segredo }) {
   const cli = join(FRONTEND, 'node_modules', '@playwright', 'test', 'cli.js');
   const filho = spawn(process.execPath, [cli, 'test', ...argsPlaywright, ...extra], {
     cwd: FRONTEND,
@@ -325,6 +346,7 @@ function playwright(extra, { comClamav, segredo }) {
       E2E_OSQUERY_SECRET: segredo.osquery,
       E2E_BASES_URL: `http://127.0.0.1:${BASES_PORT}`,
       E2E_CLAMAV: comClamav ? '1' : '0',
+      E2E_CLAMAV_REGRAS: comRegras ? '1' : '0',
     },
   });
   filhos.set('playwright', filho);
@@ -362,6 +384,9 @@ async function principal() {
 
   await garantirMailpit();
   const comClamav = await prepararClamav();
+  const comRegras = comClamav && (await clamdTemRegrasBaluarte());
+  if (comClamav)
+    log(comRegras ? 'regras YARA do Baluarte carregadas no clamd' : 'clamd sem as regras YARA do Baluarte (os testes delas só conferem a ligação com a campanha)');
   prepararBanco();
   pararBases = await iniciarBasesFalsas(BASES_PORT);
   log(`OSV/NVD falsos em http://127.0.0.1:${BASES_PORT}`);
@@ -369,7 +394,7 @@ async function principal() {
   await iniciarApi({ comClamav, segredo });
   await iniciarVite();
 
-  let codigo = await playwright([], { comClamav, segredo });
+  let codigo = await playwright([], { comClamav, comRegras, segredo });
   if (comClamav) {
     log('2ª rodada: API sem ClamAV, só os testes @sem-antivirus');
     await pararFilho('api');
