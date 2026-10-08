@@ -10,6 +10,8 @@ import type {
   ApiEnvelope,
   Asset,
   AssetInput,
+  AuditFilters,
+  AuditListResponse,
   AuthUser,
   Campaign,
   CampaignFilters,
@@ -49,6 +51,7 @@ import {
   fromUserInput,
   toAccountLink,
   toAsset,
+  toAuditList,
   toAuthUser,
   toAuthUserFromLogin,
   toCampaign,
@@ -65,6 +68,8 @@ import {
   VULN_STATUS_TO_LABEL,
   type BackendAccountLink,
   type BackendAsset,
+  type BackendAuditEntry,
+  type BackendAuditSummary,
   type BackendCampaign,
   type BackendCampaignReport,
   type BackendDashboard,
@@ -197,6 +202,9 @@ function rethrowAsNotImplemented(error: unknown): never {
   }
   throw error;
 }
+
+/** Tamanho padrão da página da trilha de auditoria (o servidor aceita até 100). */
+export const AUDIT_PAGE_SIZE = 20;
 
 const GENERIC_RESET_MESSAGE =
   'Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha em instantes.';
@@ -644,6 +652,24 @@ export const realApi: BaluarteApi = {
     } catch (error) {
       rethrowAsNotImplemented(error);
     }
+  },
+
+  async listAuditLog(filters: AuditFilters = {}): Promise<AuditListResponse> {
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? AUDIT_PAGE_SIZE;
+    const params: Record<string, string> = { pagina: String(page), tamanho: String(pageSize) };
+    if (filters.action) params.acao = filters.action;
+    // Dias locais viram instantes ISO: o servidor compara em UTC.
+    const from = localDayRange(filters.from);
+    if (from) params.de = new Date(from.start).toISOString();
+    const to = localDayRange(filters.to);
+    if (to) params.ate = new Date(to.end).toISOString();
+    const { dados, resumo } = await requestWithSummary<BackendAuditEntry[]>({
+      method: 'GET',
+      url: '/auditoria',
+      params,
+    });
+    return toAuditList(dados, resumo as BackendAuditSummary | undefined, { page, pageSize });
   },
 
   async getNotificationPreferences(): Promise<NotificationPreferences> {

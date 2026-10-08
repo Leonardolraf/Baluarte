@@ -482,6 +482,38 @@ export interface FileScanOutcome {
   message: string;
 }
 
+// ---- Auditoria --------------------------------------------------------------
+
+/**
+ * Registro da trilha de auditoria (RN-008). A ação é o código gravado pelo servidor
+ * (ex.: `CRIAR_ATIVO`): texto aberto, para que ações novas apareçam sem mudar o frontend.
+ */
+export interface AuditEntry {
+  id: string;
+  action: string;
+  detail: string | null;
+  /** ISO 8601. */
+  at: string;
+  /** Autor; `null` quando a conta foi excluída ou a ação não tem autor. */
+  user: { id: string; name: string; email: string } | null;
+}
+
+export interface AuditFilters {
+  /** Código da ação; vazio ou ausente = todas. */
+  action?: string;
+  /** Período em dias locais (yyyy-mm-dd), inclusivo. */
+  from?: string;
+  to?: string;
+  /** Página (a partir de 1) e tamanho (máximo 100): a paginação é do servidor. */
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AuditListResponse extends Paginated<AuditEntry> {
+  /** Ações distintas já registradas (opções do filtro). */
+  actions: string[];
+}
+
 // ---- Infra / API ------------------------------------------------------------
 
 export interface ApiError {

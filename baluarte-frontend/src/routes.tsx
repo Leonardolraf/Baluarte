@@ -26,6 +26,7 @@ const ReportPhishingPage = lazy(() => import('@/pages/Training/ReportPhishingPag
 const TrainedCollaboratorsPage = lazy(() => import('@/pages/Training/TrainedCollaboratorsPage'));
 const UserManagementPage = lazy(() => import('@/pages/Users/UserManagementPage'));
 const UserFormPage = lazy(() => import('@/pages/Users/UserFormPage'));
+const AuditLogPage = lazy(() => import('@/pages/Audit/AuditLogPage'));
 const SettingsPage = lazy(() => import('@/pages/Settings/SettingsPage'));
 
 function page(element: ReactNode): ReactNode {
@@ -49,7 +50,7 @@ function NotFound() {
  *    /t/:token e /t/:token/reportar (links do e-mail simulado da campanha)
  *  - Protegidas (qualquer perfil): /dashboard, /files, /training/:id, /settings
  *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /scans, /trainings, /campaigns[/new|/:id]
- *  - Admin: /users, /users/new, /users/:id/edit
+ *  - Admin: /users, /users/new, /users/:id/edit, /audit
  */
 export const routes: RouteObject[] = [
   {
@@ -97,6 +98,10 @@ export const routes: RouteObject[] = [
               { path: '/users/new', element: page(<UserFormPage />) },
               { path: '/users/:id/edit', element: page(<UserFormPage />) },
             ],
+          },
+          {
+            element: <ProtectedRoute roles={ROUTE_ROLES.audit} />,
+            children: [{ path: '/audit', element: page(<AuditLogPage />) }],
           },
           { path: '*', element: <NotFound /> },
         ],

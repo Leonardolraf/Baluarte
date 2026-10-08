@@ -1,12 +1,14 @@
 import { falhar } from '../utils/resposta.js';
 import { STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
+import { registrarAuditoria } from './auditoria.service.js';
 import * as repo from '../repositories/ativo.repository.js';
 
 /** Cadastro de ativo (contrato N2 AT1). O host e unico. */
-export async function cadastrar(dados: { nome: string; tipo: string; host: string }) {
+export async function cadastrar(atorId: string, dados: { nome: string; tipo: string; host: string }) {
   if (await repo.buscarPorHost(dados.host)) falhar(409, 'Ativo já cadastrado', 'ATIVO_DUPLICADO');
   const ativo = await repo.criar(dados);
+  await registrarAuditoria(atorId, 'CRIAR_ATIVO', `${ativo.id} (${ativo.host}, ${ativo.tipo})`);
   return { id: ativo.id, nome: ativo.nome, tipo: ativo.tipo, host: ativo.host, status: ativo.status };
 }
 

@@ -12,6 +12,7 @@
 // -----------------------------------------------------------------------------
 
 import type {
+  AuditEntry,
   Asset,
   Campaign,
   CampaignRecipient,
@@ -1866,3 +1867,172 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     scannedAt: daysAgo(6),
   },
 ];
+
+// -----------------------------------------------------------------------------
+// Auditoria (RN-008) — trilha de exemplo, mais recente primeiro. As ações são os mesmos
+// códigos que o servidor grava; `user: null` = conta excluída ou ação sem autor.
+// -----------------------------------------------------------------------------
+
+const ADMIN_REF = { id: 'u-000', name: 'Leonardo Rodrigues', email: 'admin@empresa.com' };
+const ANALYST_REF = { id: 'u-001', name: 'Rafael Nunes', email: 'analista@empresa.com' };
+const COLLAB_REF = { id: 'u-002', name: 'João Pereira', email: 'colaborador@empresa.com' };
+const EDSON_REF = { id: 'u-003', name: 'Edson Marcelino', email: 'edson.marcelino@empresa.com' };
+
+export const MOCK_AUDIT_LOG: AuditEntry[] = [
+  { id: 'aud-030', action: 'LOGIN', detail: null, at: hoursAgo(3), user: ADMIN_REF },
+  {
+    id: 'aud-029',
+    action: 'ALTERAR_STATUS_VULNERABILIDADE',
+    detail: 'vuln-002 (portal.empresa.com, A03:2021): Aberta → Em remediação',
+    at: hoursAgo(5),
+    user: ANALYST_REF,
+  },
+  {
+    id: 'aud-028',
+    action: 'INICIAR_VARREDURA',
+    detail: 'scan-014 no ativo asset-003 (portal.empresa.com)',
+    at: hoursAgo(8),
+    user: ANALYST_REF,
+  },
+  { id: 'aud-027', action: 'LOGIN', detail: null, at: hoursAgo(9), user: ANALYST_REF },
+  {
+    id: 'aud-026',
+    action: 'REPORTAR_PHISHING',
+    detail: 'Simulação Q3 – Financeiro / colaborador@empresa.com',
+    at: hoursAgo(20),
+    user: COLLAB_REF,
+  },
+  {
+    id: 'aud-025',
+    action: 'CONCLUIR_TREINAMENTO',
+    detail: 'Simulação Q3 – Financeiro / ana.souza@empresa.com',
+    at: daysAgo(1),
+    user: { id: 'u-004', name: 'Ana Souza', email: 'ana.souza@empresa.com' },
+  },
+  {
+    id: 'aud-024',
+    action: 'CLIQUE_LINK_PHISHING',
+    detail: 'Simulação Q3 – Financeiro / ana.souza@empresa.com',
+    at: daysAgo(1.05),
+    user: { id: 'u-004', name: 'Ana Souza', email: 'ana.souza@empresa.com' },
+  },
+  {
+    id: 'aud-023',
+    action: 'ENVIAR_CAMPANHA',
+    detail: 'camp-001: 24 de 24 e-mail(s) enviado(s)',
+    at: daysAgo(2),
+    user: ANALYST_REF,
+  },
+  {
+    id: 'aud-022',
+    action: 'CRIAR_CAMPANHA',
+    detail: 'camp-001 (Simulação Q3 – Financeiro, urgencia, 24 destinatário(s))',
+    at: daysAgo(2.01),
+    user: ANALYST_REF,
+  },
+  {
+    id: 'aud-021',
+    action: 'LOGIN_BLOQUEADO',
+    detail: '5 falhas em 15 min',
+    at: daysAgo(2.5),
+    user: COLLAB_REF,
+  },
+  {
+    id: 'aud-020',
+    action: 'ALTERAR_STATUS_VULNERABILIDADE',
+    detail: 'vuln-013 (db.empresa.com, A06:2021): Em remediação → Resolvida',
+    at: daysAgo(3),
+    user: ANALYST_REF,
+  },
+  {
+    id: 'aud-019',
+    action: 'ATUALIZAR_USUARIO',
+    detail: 'u-005: perfil, departamento',
+    at: daysAgo(4),
+    user: ADMIN_REF,
+  },
+  {
+    id: 'aud-018',
+    action: 'ENVIAR_RESET_SENHA',
+    detail: 'bruno.lima@empresa.com',
+    at: daysAgo(4.2),
+    user: ADMIN_REF,
+  },
+  {
+    id: 'aud-017',
+    action: 'INICIAR_VARREDURA',
+    detail: 'scan-012 no ativo asset-005 (db.empresa.com)',
+    at: daysAgo(5),
+    user: EDSON_REF,
+  },
+  {
+    id: 'aud-016',
+    action: 'CRIAR_ATIVO',
+    detail: 'asset-006 (192.168.0.20, Servidor)',
+    at: daysAgo(6),
+    user: EDSON_REF,
+  },
+  { id: 'aud-015', action: 'LOGOUT', detail: null, at: daysAgo(6.5), user: EDSON_REF },
+  {
+    id: 'aud-014',
+    action: 'ACEITAR_CONVITE',
+    detail: null,
+    at: daysAgo(8),
+    user: { id: 'u-007', name: 'Marina Costa', email: 'marina.costa@empresa.com' },
+  },
+  {
+    id: 'aud-013',
+    action: 'ENVIAR_CONVITE',
+    detail: 'marina.costa@empresa.com',
+    at: daysAgo(9),
+    user: ADMIN_REF,
+  },
+  {
+    id: 'aud-012',
+    action: 'CRIAR_USUARIO',
+    detail: 'u-007 (marina.costa@empresa.com, Colaborador)',
+    at: daysAgo(9.01),
+    user: ADMIN_REF,
+  },
+  { id: 'aud-011', action: 'CRIAR_DEPARTAMENTO', detail: 'Jurídico', at: daysAgo(10), user: ADMIN_REF },
+  {
+    id: 'aud-010',
+    action: 'EXCLUIR_USUARIO',
+    detail: 'u-099 (estagiario@empresa.com)',
+    at: daysAgo(12),
+    user: ADMIN_REF,
+  },
+  {
+    id: 'aud-009',
+    action: 'CLIQUE_LINK_PHISHING',
+    detail: 'Campanha Junho 2026 – Urgência / ex.colaborador@empresa.com',
+    at: daysAgo(14),
+    user: null,
+  },
+  { id: 'aud-008', action: 'ALTERAR_SENHA', detail: null, at: daysAgo(15), user: COLLAB_REF },
+  { id: 'aud-007', action: 'SOLICITAR_RESET_SENHA', detail: null, at: daysAgo(15.1), user: COLLAB_REF },
+  { id: 'aud-006', action: 'REDEFINIR_SENHA', detail: null, at: daysAgo(15.05), user: COLLAB_REF },
+  {
+    id: 'aud-005',
+    action: 'EXCLUIR_CAMPANHA',
+    detail: 'camp-090 (Rascunho antigo)',
+    at: daysAgo(20),
+    user: ANALYST_REF,
+  },
+  { id: 'aud-004', action: 'EXCLUIR_DEPARTAMENTO', detail: 'Temporário', at: daysAgo(25), user: ADMIN_REF },
+  {
+    id: 'aud-003',
+    action: 'CRIAR_ATIVO',
+    detail: 'asset-005 (db.empresa.com, Banco de Dados)',
+    at: daysAgo(30),
+    user: ANALYST_REF,
+  },
+  {
+    id: 'aud-002',
+    action: 'CRIAR_ATIVO',
+    detail: 'asset-003 (portal.empresa.com, Aplicacao)',
+    at: daysAgo(31),
+    user: ANALYST_REF,
+  },
+  { id: 'aud-001', action: 'LOGIN', detail: null, at: daysAgo(31.1), user: ANALYST_REF },
+].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));

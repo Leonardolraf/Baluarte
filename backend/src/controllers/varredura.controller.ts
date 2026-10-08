@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { usuarioDe } from '../middlewares/auth.middleware.js';
 import { INICIO } from '../models/varredura.model.js';
 import * as varreduraService from '../services/varredura.service.js';
 import { enviar } from '../utils/resposta.js';
@@ -9,7 +10,7 @@ import { validar } from '../utils/esquemas.js';
 /** POST /scans (contrato N2 AT1; Administrador/Analista). */
 export async function iniciar(req: Request, res: Response) {
   const { ativoId } = validar(req.body, INICIO);
-  const dados = await varreduraService.iniciar(String(ativoId));
+  const dados = await varreduraService.iniciar(usuarioDe(req).id, String(ativoId));
   return enviar(res, 201, { status: 'sucesso', mensagem: 'Varredura enfileirada com sucesso', dados });
 }
 
