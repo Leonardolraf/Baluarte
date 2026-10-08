@@ -22,9 +22,9 @@ export default defineConfig({
       reporter: ['text', 'html', 'json-summary'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/__tests__/**', 'src/main.tsx', 'src/vite-env.d.ts'],
-      // Meta minima (B03): abaixo disso `npm run test:coverage` falha. Linhas e ramos acima
-      // dos 70% do RNF-08; funcoes ainda abaixo (63%) — meta atual para nao regredir.
-      thresholds: { lines: 80, statements: 80, branches: 75, functions: 60 },
+      // Meta minima (B03): abaixo disso `npm run test:coverage` falha. Linhas, ramos e funcoes
+      // acima dos 70% do RNF-08 (funcoes subiram de 63% para 82% no DT03, com os testes da API real).
+      thresholds: { lines: 80, statements: 80, branches: 75, functions: 70 },
     },
   },
 });
