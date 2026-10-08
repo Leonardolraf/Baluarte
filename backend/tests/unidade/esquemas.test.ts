@@ -3,10 +3,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
-import { ErroNegocio } from '../../src/http/resposta.js';
+import { ErroNegocio } from '../../src/utils/resposta.js';
 import {
   email, host, notaCvss, opcional, preenchido, problemaDaSenha, regra, senhaNova, texto, textoDeQuery, umDe, validar,
-} from '../../src/shared/esquemas.js';
+} from '../../src/utils/esquemas.js';
 
 function erroDe(fn: () => unknown): ErroNegocio {
   try {

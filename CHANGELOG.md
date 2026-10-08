@@ -212,6 +212,17 @@ As funções do frontend estavam em 63,2%, abaixo dos 70% do RNF-08.
 - **Testes novos (59)** — `realApi.test.ts` (35): a implementação real da API (axios) contra um adapter falso no `httpClient`, sem rede: JWT no cabeçalho, erros normalizados e eventos 401/403, tempo esgotado e falha de rede, caminhos, corpos em português e conversão dos envelopes de todas as rotas. `tables.test.tsx` (12): ordenação, filtros, estado vazio, esqueleto, paginação e clique nas tabelas de vulnerabilidades e campanhas. `AssetFormPage.test.tsx` (5): validação do cadastro de ativo, envio e erro da API no campo certo ou no banner. `uiStore.test.tsx` (7): tema, barra lateral, indicador de operações e toasts.
 - **Números** — frontend 399/399 (eram 340): linhas 84,1% → 90,0%, ramos 79,9% → 82,2%, funções 63,2% → 81,8%. A meta mínima de funções no `vitest.config.ts` sobe de 60% para 70%.
 
+## 2026-10-08 — Backend em camadas: rotas, controllers, services, models e repositories
+
+Pedido do professor: o backend passa de módulos por domínio (`src/modules/<domínio>/{routes,service,repository}.ts`) para uma **arquitetura em camadas**, com uma pasta por camada e, dentro dela, um arquivo por funcionalidade (nomes em português, no singular). Nenhuma rota, mensagem, código de erro, status, ordem de validação ou formato de resposta mudou.
+
+- **`routes/`** — `index.ts` (o roteador `/api`, na mesma ordem de registro) e `<f>.routes.ts`, que só declaram caminho + `exigeToken`/`exigePerfil` + `wrap(controller.funcao)`.
+- **`controllers/`** — uma função por endpoint: lê a requisição, valida a entrada com as regras do model, chama o service e monta a resposta. As checagens que ficavam no código da rota (domínio interno dos destinatários da campanha, `AUTO_INATIVACAO`, "nenhuma preferência informada") estão aqui.
+- **`services/`** — regra de negócio, chamando o repository direto. Os auxiliares viraram services com nome próprio: `token` (JWT), `linkConta`, `cvss`, `cicloVarredura`, `campanhaEmail`, `campanhaMetricas`, `auditoria`. As consultas ao Prisma que ainda estavam em services (links de conta, ciclo da varredura, marcação de envio da campanha, transações de usuário) e no middleware de token desceram para os repositories.
+- **`models/`** — como o banco é do Prisma, o model não é ORM: tipos do domínio derivados do `@prisma/client`, DTOs, as listas de regras zod de entrada e os dados estáticos (`dominio.model.ts`, `catalogoAchado.model.ts`, `treinamento.model.ts`).
+- **`repositories/`** — único acesso ao Prisma. **`middlewares/`**, **`config/`** (Prisma, e-mail) e **`utils/`** (envelope de resposta, schemas zod, validação, tokens de link) completam a árvore; `app.ts` fica em `src/` por causa do preset Express da Vercel e o servidor vai para `src/server.ts`.
+- **Testes** — backend 303/303 contra PostgreSQL, cobertura de unidade dentro das metas (linhas 87,6%, ramos 93,7%, funções 76,7%), Newman 35 requisições / 70 asserções sem falhas, `tsc --noEmit` limpo.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -222,4 +233,4 @@ As funções do frontend estavam em 63,2%, abaixo dos 70% do RNF-08.
 | Testes | 303 no backend (71 unidade + 7 banco + 112 integração + 113 pentest; 98,8% de linhas cobertas) · 399 no frontend (Vitest+RTL+axe; 81,8% das funções cobertas) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`). Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
-| Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |
+| Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

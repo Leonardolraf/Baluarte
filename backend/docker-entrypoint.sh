@@ -40,4 +40,4 @@ if [ "${SEED_DEMO:-1}" = "1" ] && [ ! -f "$MARCADOR" ]; then
   npm run --silent seed:demo && touch "$MARCADOR"
 fi
 
-exec npx tsx src/http/server.ts
+exec npx tsx src/server.ts

@@ -4,7 +4,7 @@ import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { enviarEmail, lerRemetente } from '../../src/platform/email.js';
+import { enviarEmail, lerRemetente } from '../../src/config/email.js';
 
 type Recebido = { headers: IncomingMessage['headers']; corpo: any };
 let servidor: Server;

@@ -8,9 +8,13 @@ O backend já roda de verdade: Node + Express + TypeScript + **Prisma sobre Post
 
 | Camada | Arquivo | Estado |
 |---|---|---|
-| App/HTTP | `src/app.ts` + `src/http/` | app (CORS restrito, helmet, JSON 64kb, envelope de erro 400/413, 404), roteador, middlewares `exigeToken`/`exigePerfil` (relê o usuário no banco), `ErroNegocio` + `wrap` |
-| Plataforma | `src/platform/` | Prisma, e-mail (SMTP/Mailpit/memória), tokens de link (SHA-256) |
-| Módulos | `src/modules/` | auth, users, departments, assets, scanner, reports, campaigns, training, dashboard, notifications, audit — cada um com `routes` → `service` → `repository` (Fase 0 concluída em 08/10/2026, B01) |
+| App | `src/app.ts` + `src/server.ts` | app (CORS restrito, helmet, JSON 64kb, envelope de erro 400/413, 404) e o servidor; `app.ts` fica na raiz de `src` porque o preset Express da Vercel o procura ali |
+| Rotas | `src/routes/` | `index.ts` (roteador `/api`, ordem de registro) + `<f>.routes.ts`: só caminho + middlewares + `wrap(controller)` |
+| Controllers | `src/controllers/` | uma função por endpoint: lê a requisição, valida com as regras zod do model, chama o service e responde |
+| Services | `src/services/` | regra de negócio, chamando o repository direto; lança `ErroNegocio` (`falhar`). Auxiliares: token (JWT), linkConta, cvss, cicloVarredura, campanhaEmail, campanhaMetricas, auditoria |
+| Models | `src/models/` | tipos do domínio (derivados do `@prisma/client`), DTOs, regras zod de entrada e dados estáticos (domínio, catálogo de achados, conteúdo do treinamento) |
+| Repositories | `src/repositories/` | único acesso ao Prisma, um por funcionalidade |
+| Middlewares, config, utils | `src/middlewares/`, `src/config/`, `src/utils/` | `exigeToken`/`exigePerfil` (relê o usuário no banco); Prisma e e-mail (Brevo/SMTP/Mailpit/memória); envelope de resposta, `wrap`, schemas zod, tokens de link (SHA-256) |
 | Dados | `prisma/schema.prisma` | User, Asset, Scan, Finding, Campaign, CampaignEvent, AuditLog, NotificationPreference, PasswordResetToken |
 | Testes | `tests/` | 38 de integração + 106 de pentest, banco isolado por arquivo |
 
@@ -86,4 +90,4 @@ Cada módulo: `routes` (Express) → `service` (regra de negócio) → `reposito
 
 ## 7. Próximo passo concreto
 
-Fase 0 — modularização **concluída em 08/10/2026 (B01)**: as rotas saíram de `routes/{api,read,manage}.ts` para `modules/<domínio>/{routes,service,repository}.ts`, sem mudar rota, mensagem nem código de erro (backend 289/289, Newman 70/70). A validação com zod na borda (B09) entrou em seguida: **Fase 0 concluída**.
+Fase 0 — modularização **concluída em 08/10/2026 (B01)**: as rotas saíram de `routes/{api,read,manage}.ts` para `modules/<domínio>/{routes,service,repository}.ts`, sem mudar rota, mensagem nem código de erro (backend 289/289, Newman 70/70). A validação com zod na borda (B09) entrou em seguida: **Fase 0 concluída**. Ainda em 08/10/2026, a pedido do professor, os módulos viraram **camadas** (`routes` → `controllers` → `services` → `repositories`, com `models` para tipos, DTOs e regras zod), um arquivo por funcionalidade em cada pasta; a árvore da seção 4 é o alvo funcional por domínio, que hoje se distribui por essas camadas.

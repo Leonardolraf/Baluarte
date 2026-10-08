@@ -3,10 +3,10 @@
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
-import { emailFormatoValido, hostValido, queryString, textoPreenchido, validarSenha, vazio, POLITICA_SENHA } from '../../src/shared/validacao.js';
-import { gerarTokenLink, hashToken } from '../../src/platform/tokens.js';
-import { normalizarEmail, mapUsuario } from '../../src/modules/users/repository.js';
-import { hashSemSenha, VALIDADE_LINK_MS } from '../../src/modules/auth/links.js';
+import { emailFormatoValido, hostValido, queryString, textoPreenchido, validarSenha, vazio, POLITICA_SENHA } from '../../src/utils/validacao.js';
+import { gerarTokenLink, hashToken } from '../../src/utils/tokens.js';
+import { normalizarEmail, mapUsuario } from '../../src/repositories/usuario.repository.js';
+import { hashSemSenha, VALIDADE_LINK_MS } from '../../src/services/linkConta.service.js';
 
 before(() => {
   process.env.NODE_ENV = 'test';

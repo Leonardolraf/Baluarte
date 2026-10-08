@@ -4,10 +4,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Request, Response } from 'express';
-import { ErroNegocio, falhar, wrap } from '../../src/http/resposta.js';
-import { funilDe, mapCampaign, totais } from '../../src/modules/campaigns/metricas.js';
-import { dadosTreinamento, podeVerTreinamento } from '../../src/modules/training/conteudo.js';
-import { OPERADORES, PERFIS, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../../src/shared/dominio.js';
+import { ErroNegocio, falhar, wrap } from '../../src/utils/resposta.js';
+import { funilDe, mapCampaign, totais } from '../../src/services/campanhaMetricas.service.js';
+import { dadosTreinamento, podeVerTreinamento } from '../../src/models/treinamento.model.js';
+import { OPERADORES, PERFIS, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../../src/models/dominio.model.js';
 
 function resposta(jaEnviada = false) {
   const r = {
@@ -21,7 +21,7 @@ function resposta(jaEnviada = false) {
 }
 const esperar = () => new Promise((ok) => setImmediate(ok));
 
-describe('erro de negócio (http/resposta)', () => {
+describe('erro de negócio (utils/resposta)', () => {
   it('falhar lança ErroNegocio com status, mensagem e código', () => {
     assert.throws(() => falhar(409, 'Ativo já cadastrado', 'ATIVO_DUPLICADO'), (e: unknown) =>
       e instanceof ErroNegocio && e.status === 409 && e.mensagem === 'Ativo já cadastrado' && e.codigo === 'ATIVO_DUPLICADO');

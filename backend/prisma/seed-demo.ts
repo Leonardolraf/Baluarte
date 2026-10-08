@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../src/platform/db.js';
-import { dadosAchado, type ChaveAchado } from '../src/modules/scanner/catalogo.js';
-import { gerarTokenLink, hashToken } from '../src/platform/tokens.js';
+import { prisma } from '../src/config/db.js';
+import { dadosAchado, type ChaveAchado } from '../src/models/catalogoAchado.model.js';
+import { gerarTokenLink, hashToken } from '../src/utils/tokens.js';
 
 // Popula o banco com dados de DEMONSTRACAO para o frontend ter conteudo realista.
 // Roda DEPOIS do seed de contrato. NAO deve rodar antes do Newman (use db:reset + seed).
