@@ -296,3 +296,18 @@ export const SpinnerIcon = (p: IconProps) => (
     <path d="M12 3a9 9 0 1 0 9 9" />
   </svg>
 );
+export const FileScanIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4" />
+    <path d="M14 3l5 5h-5V3z" />
+    <path d="M19 8v3" />
+    <circle cx="16.5" cy="16.5" r="3" />
+    <path d="M18.7 18.7L21 21" />
+  </svg>
+);
+export const UploadIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 16V4M7 9l5-5 5 5" />
+    <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+  </svg>
+);

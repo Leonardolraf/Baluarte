@@ -15,6 +15,7 @@ import { VULN_STATUS_CLASS, VULN_STATUS_LABEL } from '@/lib/severity';
 import { formatCvss, formatDateTime, isHttpUrl } from '@/lib/format';
 import { errorMessage } from '@/lib/errors';
 import { notify, trackOperation } from '@/store/uiStore';
+import { copyToClipboard } from '@/lib/clipboard';
 import {
   Button,
   Card,
@@ -270,17 +271,6 @@ function HistoryTab({ items }: { items: VulnerabilityHistoryEntry[] }) {
       })}
     </ol>
   );
-}
-
-function copyToClipboard(text: string, successMessage: string): void {
-  if (typeof navigator === 'undefined' || !navigator.clipboard) {
-    notify.error('A área de transferência não está disponível neste navegador.');
-    return;
-  }
-  navigator.clipboard
-    .writeText(text)
-    .then(() => notify.success(successMessage))
-    .catch(() => notify.error('Não foi possível copiar para a área de transferência.'));
 }
 
 export default function VulnDetailPage() {

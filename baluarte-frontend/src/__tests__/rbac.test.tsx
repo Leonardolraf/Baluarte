@@ -116,8 +116,8 @@ describe('RBAC — itens de navegação por perfil', () => {
   const pathsFor = (role: RBACRole | null) =>
     navGroupsForRole(role).flatMap((group) => group.items.map((item) => item.to));
 
-  it('colaborador vê apenas Dashboard e Configurações', () => {
-    expect(pathsFor('collaborator')).toEqual(['/dashboard', '/settings']);
+  it('colaborador vê apenas Dashboard, Análise de arquivos e Configurações', () => {
+    expect(pathsFor('collaborator')).toEqual(['/dashboard', '/files', '/settings']);
   });
 
   it('analista vê análise e conscientização, mas não Usuários', () => {
@@ -130,6 +130,7 @@ describe('RBAC — itens de navegação por perfil', () => {
         '/assets/new',
         '/campaigns',
         '/campaigns/new',
+        '/files',
         '/settings',
       ]),
     );

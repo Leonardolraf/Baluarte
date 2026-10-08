@@ -1,4 +1,9 @@
-import type { BaluarteApi, ChangePasswordResult, MessageResponse } from '@/services/contract';
+import type {
+  AnalyzeFileOptions,
+  BaluarteApi,
+  ChangePasswordResult,
+  MessageResponse,
+} from '@/services/contract';
 import type {
   AccountLink,
   Asset,
@@ -14,6 +19,8 @@ import type {
   ChangePasswordInput,
   CreatedUser,
   DashboardMetrics,
+  FileScan,
+  FileScanOutcome,
   FunnelStage,
   LoginCredentials,
   LoginResponse,
@@ -36,6 +43,7 @@ import type {
 } from '@/types';
 import { HttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { fileScanVerdict, MAX_FILE_SIZE_BYTES } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { buildMockToken, decodeToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
@@ -44,6 +52,7 @@ import {
   MOCK_ASSETS,
   MOCK_CAMPAIGNS,
   MOCK_CREDENTIALS,
+  MOCK_FILE_SCANS,
   MOCK_NOTIFICATION_PREFERENCES,
   MOCK_RECIPIENTS,
   MOCK_SCANS,
@@ -52,6 +61,7 @@ import {
   MOCK_TRAININGS,
   MOCK_USERS,
   MOCK_VULNERABILITIES,
+  type MockFileScan,
 } from '@/mocks/data';
 
 // -----------------------------------------------------------------------------
@@ -127,6 +137,12 @@ interface MockState {
   runtimeCampaigns: Set<string>;
   /** Varreduras iniciadas nesta sessão: só elas avançam de status pelo tempo (as do seed ficam como estão). */
   runtimeScans: Set<string>;
+  /** Análises de arquivo (só hash e resultado; o arquivo nunca é guardado). */
+  fileScans: MockFileScan[];
+  /** Instantes (ms) das análises feitas nesta sessão, por usuário: base do limite por hora. */
+  fileScanTimes: Map<string, number[]>;
+  /** Simula o motor ClamAV fora do ar (503 ANTIVIRUS_INDISPONIVEL). */
+  antivirusAvailable: boolean;
 }
 
 function clone<T>(value: T): T {
@@ -157,6 +173,9 @@ function createState(): MockState {
     sequence: 1000,
     runtimeCampaigns: new Set<string>(),
     runtimeScans: new Set<string>(),
+    fileScans: clone(MOCK_FILE_SCANS),
+    fileScanTimes: new Map<string, number[]>(),
+    antivirusAvailable: true,
   };
 }
 
@@ -165,6 +184,11 @@ let state: MockState = createState();
 /** Restaura o estado inicial (usado em testes). */
 export function resetMockState(): void {
   state = createState();
+}
+
+/** Liga/desliga o antivírus simulado (testes e demonstração do 503). Volta a ligar com `resetMockState`. */
+export function setMockAntivirusAvailable(available: boolean): void {
+  state.antivirusAvailable = available;
 }
 
 // ---- Infra interna ----------------------------------------------------------
@@ -457,6 +481,60 @@ function pushTimeline(event: Omit<TimelineEvent, 'id' | 'at'>): void {
 /** Token da sessao mock, usado pelo login, pela renovacao e pela troca de senha. */
 function emitirToken(user: { id: string; email: string; name: string; role: RBACRole }): string {
   return buildMockToken({ sub: user.id, email: user.email, name: user.name, role: user.role });
+}
+
+// ---- Análise de arquivos (B05, contrato do B04) -------------------------------
+
+/** Limite simulado de análises por usuário por hora (429 MUITAS_ANALISES acima disso). */
+export const MOCK_FILE_SCANS_PER_HOUR = 20;
+const HOUR_MS = 3_600_000;
+export const EICAR_SIGNATURE = 'Eicar-Signature';
+
+function readFileBytes(file: Blob): Promise<Uint8Array> {
+  // O jsdom não implementa Blob.arrayBuffer; o FileReader existe nos dois ambientes.
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer().then((b) => new Uint8Array(b));
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = () => reject(reader.error ?? new Error('Falha ao ler o arquivo'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** SHA-256 pelo Web Crypto; sem ele (contexto não seguro), um hash FNV-1a de 256 bits só para a demonstração. */
+export async function mockSha256(bytes: Uint8Array): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    const copy = new Uint8Array(bytes);
+    return toHex(new Uint8Array(await subtle.digest('SHA-256', copy.buffer)));
+  }
+  let out = '';
+  for (let round = 0; round < 8; round += 1) {
+    let hash = (0x811c9dc5 ^ (round * 0x9e3779b1)) >>> 0;
+    for (const byte of bytes) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
+    out += hash.toString(16).padStart(8, '0');
+  }
+  return out;
+}
+
+function containsAscii(bytes: Uint8Array, needle: string): boolean {
+  const pattern = Array.from(needle, (c) => c.charCodeAt(0));
+  outer: for (let i = 0; i + pattern.length <= bytes.length; i += 1) {
+    for (let j = 0; j < pattern.length; j += 1) if (bytes[i + j] !== pattern[j]) continue outer;
+    return true;
+  }
+  return false;
+}
+
+function fileScanView(entry: MockFileScan, withUser: boolean): FileScan {
+  const { userId, ...scan } = entry;
+  if (!withUser) return { ...scan };
+  const owner = state.users.find((u) => u.id === userId);
+  return { ...scan, uploadedBy: { name: owner?.name ?? 'Usuário removido', email: owner?.email ?? '—' } };
 }
 
 export const mockApi: BaluarteApi = {
@@ -1261,6 +1339,54 @@ export const mockApi: BaluarteApi = {
       title: 'Usuário removido',
       description: `${user.name} (${user.email})`,
       href: '/users',
+    });
+  },
+
+  // ---- Análise de arquivos ----
+  async analyzeFile(file: File, options: AnalyzeFileOptions = {}): Promise<FileScanOutcome> {
+    await delay();
+    const user = requireUser();
+    if (!file) throw new HttpError(400, 'ARQUIVO_OBRIGATORIO', 'Arquivo é obrigatório');
+    if (file.size > MAX_FILE_SIZE_BYTES)
+      throw new HttpError(413, 'ARQUIVO_MUITO_GRANDE', 'Arquivo excede o limite de 10 MB');
+    const now = Date.now();
+    const recent = (state.fileScanTimes.get(user.id) ?? []).filter((t) => now - t < HOUR_MS);
+    if (recent.length >= MOCK_FILE_SCANS_PER_HOUR)
+      throw new HttpError(429, 'MUITAS_ANALISES', 'Limite de análises por hora atingido. Tente mais tarde.');
+    if (!state.antivirusAvailable)
+      throw new HttpError(
+        503,
+        'ANTIVIRUS_INDISPONIVEL',
+        'O antivírus não está disponível neste ambiente. Tente mais tarde.',
+      );
+    options.onProgress?.(100);
+    const bytes = await readFileBytes(file);
+    // Arquivo de teste EICAR: pelo nome (eicar.com, eicar.txt…) ou pela assinatura no conteúdo.
+    const threat = /eicar/i.test(file.name) || containsAscii(bytes, 'EICAR');
+    const entry: MockFileScan = {
+      id: nextId('arq'),
+      userId: user.id,
+      name: file.name,
+      size: file.size,
+      sha256: await mockSha256(bytes),
+      result: threat ? 'threat' : 'clean',
+      threat: threat ? EICAR_SIGNATURE : null,
+      scannedAt: nowIso(),
+    };
+    state.fileScans.unshift(entry);
+    state.fileScanTimes.set(user.id, [...recent, now]);
+    const scan = fileScanView(entry, false);
+    return { scan, message: fileScanVerdict(scan) };
+  },
+
+  async listFileScans(): Promise<FileScan[]> {
+    return simulate(() => {
+      const user = requireUser();
+      const operator = user.role === 'admin' || user.role === 'analyst';
+      return state.fileScans
+        .filter((entry) => operator || entry.userId === user.id)
+        .sort((a, b) => new Date(b.scannedAt).getTime() - new Date(a.scannedAt).getTime())
+        .map((entry) => fileScanView(entry, operator));
     });
   },
 

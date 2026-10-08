@@ -16,6 +16,7 @@ import type {
   Campaign,
   CampaignRecipient,
   Evidence,
+  FileScan,
   NotificationPreferences,
   ScanReport,
   SecurityPolicy,
@@ -1814,3 +1815,54 @@ export const MOCK_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   weeklyDigest: true,
   campaignReports: true,
 };
+
+// ---- Análise de arquivos (B05) ------------------------------------------------
+
+/** Análise guardada no mock: o modelo da tela mais o dono (o arquivo em si nunca é guardado). */
+export interface MockFileScan extends Omit<FileScan, 'uploadedBy'> {
+  userId: string;
+}
+
+/** Histórico inicial, mais recente primeiro. O hash do EICAR é o real do arquivo de teste de 68 bytes. */
+export const MOCK_FILE_SCANS: MockFileScan[] = [
+  {
+    id: 'arq-004',
+    userId: 'u-002',
+    name: 'proposta-comercial-v3.pdf',
+    size: 245_812,
+    sha256: '41a8760770b6306e718f0b7a89eca7d188e9f4edfe519eccb1b136f6071e0a3e',
+    result: 'clean',
+    threat: null,
+    scannedAt: hoursAgo(5),
+  },
+  {
+    id: 'arq-003',
+    userId: 'u-001',
+    name: 'eicar.com',
+    size: 68,
+    sha256: '275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f',
+    result: 'threat',
+    threat: 'Eicar-Signature',
+    scannedAt: daysAgo(1),
+  },
+  {
+    id: 'arq-002',
+    userId: 'u-000',
+    name: 'orcamento-2027.xlsx',
+    size: 1_532_004,
+    sha256: 'a25c22a11d33d444ecb9aa93185aa15bf2b1e1264137dffc40b7cab7922deae9',
+    result: 'clean',
+    threat: null,
+    scannedAt: daysAgo(3),
+  },
+  {
+    id: 'arq-001',
+    userId: 'u-002',
+    name: 'nota-fiscal-setembro.zip',
+    size: 88_412,
+    sha256: '3549553e9afd4ef7fd5a5e81e7f5220a595a6132c1058e877db55fa473e3e5cf',
+    result: 'clean',
+    threat: null,
+    scannedAt: daysAgo(6),
+  },
+];

@@ -61,8 +61,9 @@ A única porta de entrada das telas é `src/services/api.ts`, que exporta `api: 
 | Campanhas e treinamento | `GET /campanhas`, `GET /campanhas/:id`, `POST /campaigns` (`destinatario` + `destinatarios[]`), `GET /treinamentos/:token`, `POST /treinamentos/:token/concluir`; públicas, pelo link do e-mail: `GET /treinamentos/link/:token`, `POST /treinamentos/link/:token/concluir`, `POST /treinamentos/link/:token/reportar` (telas `/t/:token` e `/t/:token/reportar`) |
 | Usuários | `GET /usuarios`, `POST /users`, `PATCH/DELETE /users/:id` (Administrador) |
 | Configurações | `GET /configuracoes/seguranca`, `GET/PUT /configuracoes/notificacoes` |
+| Análise de arquivos (B04, backend em andamento) | `POST /arquivos/analise` (multipart, campo `arquivo`), `GET /arquivos/analises` |
 
-Todas estão implementadas em `../backend` (testes em `../backend/tests`). `src/services/api.ts` exporta `FEATURES`, um mapa de capacidades hoje todo ligado; as telas continuam consultando-o para esconder uma ação (em vez de mostrar um 404 genérico) caso uma implantação desligue alguma capacidade. Se uma rota não existir no servidor, a camada real converte o 404 `ROTA_NAO_ENCONTRADA` em **501 `NAO_IMPLEMENTADO`**.
+Todas, exceto as de análise de arquivos (contrato do B04, cujo backend vem em seguida), estão implementadas em `../backend` (testes em `../backend/tests`). `src/services/api.ts` exporta `FEATURES`, um mapa de capacidades hoje todo ligado; as telas continuam consultando-o para esconder uma ação (em vez de mostrar um 404 genérico) caso uma implantação desligue alguma capacidade. Se uma rota não existir no servidor, a camada real converte o 404 `ROTA_NAO_ENCONTRADA` em **501 `NAO_IMPLEMENTADO`**.
 
 O RBAC é do servidor, não só da interface: em modo real o colaborador recebe 403 nas listas técnicas e um dashboard sem a lista de achados, o analista não lista usuários, um token emitido antes de um rebaixamento deixa de valer e uma conta inativada cai na primeira requisição (401 e volta ao login).
 
@@ -105,6 +106,7 @@ VITE_USE_MOCKS=
 | `/assets/new` | Cadastro de ativo | Admin, Analista |
 | `/scans` | Varreduras: iniciar por ativo e acompanhar o status (Em fila → Em andamento → Concluída), com consulta automática a cada 3 s enquanto houver varredura em curso | Admin, Analista |
 | `/campaigns`, `/campaigns/new`, `/campaigns/:id` | Campanhas de phishing: lista, criação, relatório (KPIs, funil, gauge de cliques, destinatários) | Admin, Analista |
+| `/files` | Análise de arquivos: enviar (arrastar e soltar ou escolher), veredito do antivírus, SHA-256 e histórico (o colaborador vê só as próprias análises; operadores veem quem enviou) | todos |
 | `/training/:id` | Treinamento contextual pós-clique (marcar como concluído) | todos |
 | `/users`, `/users/new`, `/users/:id/edit` | Gestão de usuários e perfis | Admin |
 | `/settings` | Senha, notificações, tema, política de segurança | todos |

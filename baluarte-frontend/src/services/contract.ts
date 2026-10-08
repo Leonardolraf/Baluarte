@@ -11,6 +11,8 @@ import type {
   CreatedUser,
   TrainingOverview,
   DashboardMetrics,
+  FileScan,
+  FileScanOutcome,
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
@@ -29,6 +31,11 @@ import type {
 export interface ChangePasswordResult extends MessageResponse {
   /** Token novo: o anterior deixa de valer assim que a senha muda. */
   token: string;
+}
+
+export interface AnalyzeFileOptions {
+  /** Progresso do envio (0–100). A análise em si começa quando chega a 100. */
+  onProgress?: (percent: number) => void;
 }
 
 export interface MessageResponse {
@@ -103,6 +110,12 @@ export interface BaluarteApi {
   deleteUser(id: string): Promise<void>;
   /** Nomes dos departamentos cadastrados (opções do cadastro de usuário). */
   listDepartments(): Promise<string[]>;
+
+  // Análise de arquivos (B04/B05)
+  /** Envia um arquivo (multipart, campo `arquivo`) para o antivírus. O servidor descarta o arquivo. */
+  analyzeFile(file: File, options?: AnalyzeFileOptions): Promise<FileScanOutcome>;
+  /** Análises anteriores, mais recente primeiro. Colaborador só recebe as próprias. */
+  listFileScans(): Promise<FileScan[]>;
 
   // Configurações
   getNotificationPreferences(): Promise<NotificationPreferences>;

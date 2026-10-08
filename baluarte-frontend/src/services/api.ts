@@ -1,5 +1,10 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
-import type { BaluarteApi, ChangePasswordResult, MessageResponse } from '@/services/contract';
+import type {
+  AnalyzeFileOptions,
+  BaluarteApi,
+  ChangePasswordResult,
+  MessageResponse,
+} from '@/services/contract';
 import type {
   AccountLink,
   ApiEnvelope,
@@ -13,6 +18,8 @@ import type {
   ChangePasswordInput,
   CreatedUser,
   DashboardMetrics,
+  FileScan,
+  FileScanOutcome,
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
@@ -31,6 +38,7 @@ import type {
 } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { fileScanVerdict } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { userFromToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
@@ -46,6 +54,7 @@ import {
   toCampaign,
   toCampaignReport,
   toDashboard,
+  toFileScan,
   toNotificationPreferences,
   toScan,
   toSecurityPolicy,
@@ -59,6 +68,7 @@ import {
   type BackendCampaign,
   type BackendCampaignReport,
   type BackendDashboard,
+  type BackendFileScan,
   type BackendFinding,
   type BackendLogin,
   type BackendNotificationPreferences,
@@ -595,6 +605,45 @@ export const realApi: BaluarteApi = {
   async listDepartments(): Promise<string[]> {
     const raw = await request<Array<{ id: string; nome: string }>>({ method: 'GET', url: '/departamentos' });
     return raw.map((d) => d.nome);
+  },
+
+  // Análise de arquivos (B04). Multipart pelo mesmo cliente HTTP (o interceptor põe o token).
+  // O Content-Type multipart impede o axios de serializar o FormData como JSON (o padrão do
+  // cliente é application/json); no navegador ele o remove para o boundary sair certo.
+  async analyzeFile(file: File, options: AnalyzeFileOptions = {}): Promise<FileScanOutcome> {
+    const form = new FormData();
+    form.append('arquivo', file, file.name);
+    try {
+      const response = await httpClient.request<ApiEnvelope<BackendFileScan>>({
+        method: 'POST',
+        url: '/arquivos/analise',
+        data: form,
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // A varredura do ClamAV leva mais que uma requisição comum.
+        timeout: 60_000,
+        onUploadProgress: (event) => {
+          if (options.onProgress && event.total) {
+            options.onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+          }
+        },
+      });
+      const scan = toFileScan(response.data.dados);
+      return {
+        scan,
+        message: response.data.mensagem || fileScanVerdict(scan),
+      };
+    } catch (error) {
+      rethrowAsNotImplemented(error);
+    }
+  },
+
+  async listFileScans(): Promise<FileScan[]> {
+    try {
+      const raw = await request<BackendFileScan[]>({ method: 'GET', url: '/arquivos/analises' });
+      return raw.map(toFileScan);
+    } catch (error) {
+      rethrowAsNotImplemented(error);
+    }
   },
 
   async getNotificationPreferences(): Promise<NotificationPreferences> {
