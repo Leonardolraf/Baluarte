@@ -39,6 +39,7 @@ model User {
   preferencias NotificationPreference?
   resetTokens  PasswordResetToken[]
   eventos      CampaignEvent[]
+  analises     FileScan[]
 
   @@index([departmentId])
 }
@@ -196,4 +197,23 @@ model ResetRequest {
 
   @@index([email, criadoEm])
   @@index([criadoEm])
+}
+
+// Analise de arquivo pelo antivirus (B04). O arquivo nunca e gravado: passa em fluxo pelo
+// ClamAV e e descartado; aqui fica so o registro (nome, tamanho, SHA-256 e o veredito).
+// Cascade: excluir o usuario apaga o historico dele (dado pessoal, LGPD).
+model FileScan {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nome      String   // nome original, so para exibir (nunca vira caminho de arquivo); CHECK ate 255
+  tamanho   Int      // bytes; CHECK >= 0
+  sha256    String   // CHECK: 64 hexadecimais
+  resultado String   // CHECK: LIMPO | AMEACA
+  ameaca    String?  // nome da assinatura encontrada (so com AMEACA)
+  criadoEm  DateTime @default(now())
+
+  @@index([userId, criadoEm])
+  @@index([criadoEm])
+  @@index([sha256])
 }
