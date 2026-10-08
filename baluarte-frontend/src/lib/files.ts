@@ -39,6 +39,11 @@ export function fileScanErrorMessage(error: unknown): string {
     if (error.code === 'ARQUIVO_OBRIGATORIO')
       return 'Nenhum arquivo chegou ao servidor. Escolha um arquivo e tente de novo.';
     if (error.status === 413 || error.code === 'ARQUIVO_MUITO_GRANDE') return FILE_TOO_LARGE_MESSAGE;
+    // B23: anexo de campanha (antes do 429 genérico: o teto por campanha também é 429).
+    if (error.code === 'CAMPANHA_NAO_RECEBIDA' || error.code === 'EVENTO_CAMPANHA_INVALIDO')
+      return 'Essa campanha não está entre as que você recebeu. Escolha outra ou envie o arquivo sem campanha.';
+    if (error.code === 'LIMITE_ANEXOS_CAMPANHA')
+      return `Você já enviou ${MAX_ATTACHMENTS_PER_CAMPAIGN} anexos desta campanha. Se recebeu mais, fale com a equipe de segurança.`;
     if (error.status === 429 || error.code === 'MUITAS_ANALISES')
       return 'Você atingiu o limite de análises por hora. Aguarde um pouco e tente de novo.';
     if (error.status === 503 || error.code === 'ANTIVIRUS_INDISPONIVEL')
@@ -49,8 +54,26 @@ export function fileScanErrorMessage(error: unknown): string {
 
 /** Veredito em uma linha (lista de análises e anúncio para leitores de tela). */
 export function fileScanVerdict(scan: Pick<FileScan, 'result' | 'threat'>): string {
-  return scan.result === 'threat' ? `Ameaça encontrada: ${scan.threat ?? 'não identificada'}` : CLEAN_VERDICT;
+  if (scan.result !== 'threat') return CLEAN_VERDICT;
+  const verdict = `Ameaça encontrada: ${scan.threat ?? 'não identificada'}`;
+  return isOwnRule(scan.threat) ? `${verdict} (${OWN_RULE_LABEL})` : verdict;
 }
+
+// ---- Regras YARA próprias e anexo de campanha (B23) --------------------------
+
+/** Rótulo da detecção que veio de uma regra YARA própria do Baluarte (antivirus/regras). */
+export const OWN_RULE_LABEL = 'regra própria do Baluarte';
+
+/**
+ * O ClamAV nomeia a detecção de regra YARA como `YARA.<regra>.UNOFFICIAL`; as do Baluarte começam
+ * com `Baluarte`. Mesma regra do backend (`ehRegraPropria`): YARA de terceiros não ganha o rótulo.
+ */
+export function isOwnRule(threat: string | null | undefined): boolean {
+  return typeof threat === 'string' && /^YARA\.Baluarte[A-Za-z0-9_]*\.UNOFFICIAL$/.test(threat);
+}
+
+/** Anexos por destinatário em cada campanha (o mesmo teto do backend). */
+export const MAX_ATTACHMENTS_PER_CAMPAIGN = 5;
 
 // ---- Segunda opinião do VirusTotal (B20) -------------------------------------
 

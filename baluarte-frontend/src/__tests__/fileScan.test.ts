@@ -70,6 +70,8 @@ describe('services/adapters — análise de arquivos', () => {
       threat: 'Eicar-Signature',
       scannedAt: '2026-10-08T12:00:00.000Z',
       secondOpinion: null,
+      ownRule: false,
+      campaign: null,
     });
   });
 

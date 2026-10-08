@@ -4,7 +4,8 @@ import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
-import { AntivirusIndisponivel, analisar, lerVeredito } from '../../src/config/antivirus.js';
+import { EventEmitter } from 'node:events';
+import { AntivirusIndisponivel, analisar, escrever, lerVeredito } from '../../src/config/antivirus.js';
 
 const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
 
@@ -125,5 +126,52 @@ describe('lerVeredito', () => {
     assert.deepEqual(lerVeredito('stream: Win.Test.EICAR_HDB-1 FOUND\0'), { resultado: 'AMEACA', ameaca: 'Win.Test.EICAR_HDB-1' });
     assert.throws(() => lerVeredito('INSTREAM size limit exceeded. ERROR'), AntivirusIndisponivel);
     assert.throws(() => lerVeredito(''), AntivirusIndisponivel);
+  });
+});
+
+describe('escrever: ouvintes do socket não acumulam (contrapressão)', () => {
+  /** Socket falso: `write` devolve false (buffer cheio), como num arquivo grande. */
+  function socketCheio() {
+    const s = new EventEmitter() as EventEmitter & { write: () => boolean };
+    s.write = () => false;
+    return s as unknown as Socket & EventEmitter;
+  }
+
+  it('depois de cada drain não sobra ouvinte de error nem de drain, em muitos blocos seguidos', async () => {
+    const s = socketCheio();
+    for (let i = 0; i < 50; i++) {
+      const escrita = escrever(s, Buffer.from('bloco'));
+      assert.equal(s.listenerCount('drain'), 1);
+      assert.equal(s.listenerCount('error'), 1);
+      s.emit('drain');
+      await escrita;
+      assert.equal(s.listenerCount('drain'), 0, `drain pendurado no bloco ${i}`);
+      assert.equal(s.listenerCount('error'), 0, `error pendurado no bloco ${i}`);
+    }
+  });
+
+  it('erro durante a espera vira AntivirusIndisponivel e tira o ouvinte de drain', async () => {
+    const s = socketCheio();
+    const escrita = escrever(s, Buffer.from('bloco'));
+    s.emit('error', new Error('conexão caiu'));
+    await assert.rejects(escrita, AntivirusIndisponivel);
+    assert.equal(s.listenerCount('drain'), 0);
+    assert.equal(s.listenerCount('error'), 0);
+  });
+
+  it('arquivo grande pelo clamd falso: nenhum MaxListenersExceededWarning', async () => {
+    const avisos: string[] = [];
+    const ouvir = (w: Error) => avisos.push(w.name);
+    process.on('warning', ouvir);
+    try {
+      async function* grande() {
+        for (let i = 0; i < 160; i++) yield Buffer.alloc(64 * 1024, 65); // 10 MB em blocos de 64 kB
+      }
+      assert.deepEqual(await analisar(grande()), { resultado: 'LIMPO', ameaca: null });
+      await new Promise((ok) => setImmediate(ok)); // avisos do Node saem no próximo tique
+    } finally {
+      process.off('warning', ouvir);
+    }
+    assert.ok(!avisos.includes('MaxListenersExceededWarning'), `avisos: ${avisos.join(', ')}`);
   });
 });

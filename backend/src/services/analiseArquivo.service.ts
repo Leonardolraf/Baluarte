@@ -4,8 +4,9 @@ import { AntivirusIndisponivel, analisar as analisarNoAntivirus, antivirusConfig
 import type { UsuarioAtual } from '../models/usuario.model.js';
 import { OPERADORES } from '../models/dominio.model.js';
 import {
-  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ARQUIVO_BYTES, MENSAGEM_LIMPO, mensagemAmeaca,
-  nomeParaExibir, type AnaliseDto, type FiltrosHistorico,
+  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES,
+  ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
+  type CampanhaRecebidaDto, type FiltrosHistorico, type ResultadoAnalise,
 } from '../models/analiseArquivo.model.js';
 import { segundaOpiniaoDto } from '../models/segundaOpiniao.model.js';
 import * as repo from '../repositories/analiseArquivo.repository.js';
@@ -21,11 +22,28 @@ import * as segundaOpiniao from './segundaOpiniao.service.js';
 const UMA_HORA_MS = 60 * 60 * 1000;
 const MSG_INDISPONIVEL = 'A análise de arquivos não está disponível neste ambiente';
 
-/** Antes de receber o corpo: antivirus no ar e limite por hora (barato, sem ler o arquivo). */
-export async function verificarAntesDeReceber(userId: string): Promise<void> {
+/** Evento de campanha ja conferido (do proprio usuario, com e-mail enviado), origem do anexo. */
+export interface OrigemCampanha {
+  eventoId: string;
+  campanha: CampanhaDeOrigem;
+}
+
+/**
+ * Antes de receber o corpo (barato, sem ler o arquivo): antivirus no ar, limite por hora e, no
+ * anexo de campanha (B23), a origem. A campanha tem de ser do proprio usuario e ja ter sido
+ * enviada a ele; evento inexistente e evento de outra pessoa dao o mesmo 404, para a rota nao
+ * servir de oraculo de ids. Devolve a origem conferida (ou null no envio avulso).
+ */
+export async function verificarAntesDeReceber(userId: string, eventoCampanha?: string): Promise<OrigemCampanha | null> {
   if (!antivirusConfigurado()) falhar(503, MSG_INDISPONIVEL, 'ANTIVIRUS_INDISPONIVEL');
   if ((await repo.contarDesde(userId, new Date(Date.now() - UMA_HORA_MS))) >= LIMITE_ANALISES_POR_HORA)
     falhar(429, 'Limite de análises por hora atingido. Tente novamente mais tarde.', 'MUITAS_ANALISES');
+  if (!eventoCampanha) return null;
+  const evento = await repo.eventoDoUsuario(eventoCampanha, userId);
+  if (!evento?.enviadoEm) falhar(404, 'Campanha não encontrada entre as que você recebeu', 'CAMPANHA_NAO_RECEBIDA');
+  if ((await repo.contarAnexosDoEvento(evento.id)) >= LIMITE_ANEXOS_POR_CAMPANHA)
+    falhar(429, `Limite de ${LIMITE_ANEXOS_POR_CAMPANHA} anexos por campanha atingido`, 'LIMITE_ANEXOS_CAMPANHA');
+  return { eventoId: evento.id, campanha: evento.campaign };
 }
 
 /** Fluxo do arquivo como recebido do multipart (busboy marca `truncated` ao passar do limite). */
@@ -47,7 +65,7 @@ async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: Return
 }
 
 /** Analisa, registra e audita. Devolve a mensagem e o registro no formato da API. */
-export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | undefined, fluxo: FluxoArquivo) {
+export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | undefined, fluxo: FluxoArquivo, origem: OrigemCampanha | null = null) {
   const medida = { bytes: 0, hash: createHash('sha256') };
   let veredito;
   try {
@@ -67,16 +85,20 @@ export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | und
     sha256,
     resultado: veredito.resultado,
     ameaca: veredito.ameaca,
+    campaignEventId: origem?.eventoId ?? null,
     ...(await segundaOpiniao.obter(sha256)),
   });
-  await registrarAuditoria(usuario.id, 'ANALISAR_ARQUIVO', `${registro.nome} (${registro.sha256}): ${registro.resultado}${registro.ameaca ? ` ${registro.ameaca}` : ''}; VirusTotal: ${registro.vtSituacao}`);
+  const deCampanha = origem ? `; anexo da campanha ${origem.campanha.nome} (${origem.campanha.id})` : '';
+  await registrarAuditoria(usuario.id, 'ANALISAR_ARQUIVO', `${registro.nome} (${registro.sha256}): ${registro.resultado}${registro.ameaca ? ` ${registro.ameaca}` : ''}; VirusTotal: ${registro.vtSituacao}${deCampanha}`);
   return {
-    mensagem: registro.ameaca ? mensagemAmeaca(registro.ameaca) : MENSAGEM_LIMPO,
+    mensagem: mensagemDoResultado(registro.ameaca),
     dados: paraDto(registro),
   };
 }
 
-function paraDto(r: Awaited<ReturnType<typeof repo.criar>>, usuario?: { nome: string; email: string }): AnaliseDto {
+type RegistroComCampanha = Awaited<ReturnType<typeof repo.criar>>;
+
+function paraDto(r: RegistroComCampanha, usuario?: { nome: string; email: string }): AnaliseDto {
   return {
     id: r.id,
     nome: r.nome,
@@ -86,6 +108,8 @@ function paraDto(r: Awaited<ReturnType<typeof repo.criar>>, usuario?: { nome: st
     ameaca: r.ameaca,
     analisadoEm: r.criadoEm,
     segundaOpiniao: segundaOpiniaoDto(r),
+    regraPropria: ehRegraPropria(r.ameaca),
+    campanha: r.campaignEvent?.campaign ?? null,
     ...(usuario ? { usuario } : {}),
   };
 }
@@ -133,4 +157,47 @@ export async function contarArquivosMaliciososAte(fins: Date[]): Promise<number[
   const linhas = await repo.contarAmeacasDistintasPorJanela(fins.map((fim) => ({ desde: inicioDaJanela(fim), ate: fim })));
   const porDia = new Map(linhas.map((l) => [Number(l.dia), Number(l.total)]));
   return fins.map((_, i) => porDia.get(i + 1) ?? 0);
+}
+
+// ---- Anexo suspeito de campanha (B23) ---------------------------------------------
+
+/** Quantas campanhas recebidas a tela lista (as mais recentes). */
+const CAMPANHAS_RECEBIDAS_MAXIMO = 50;
+
+/**
+ * Campanhas que o usuario recebeu, para ligar o anexo a uma delas. Com `link` (token do e-mail,
+ * vindo da pagina publica do treinamento ou do reporte), `selecionada` traz o evento desse link
+ * se ele for do proprio usuario; link alheio ou desconhecido da `null`, sem erro e sem dizer
+ * de quem e. O token so e comparado pelo hash, como no treinamento.
+ */
+export async function campanhasRecebidas(usuario: UsuarioAtual, link?: string) {
+  const eventos = await repo.campanhasRecebidas(usuario.id, CAMPANHAS_RECEBIDAS_MAXIMO);
+  const lista: CampanhaRecebidaDto[] = eventos.map((e) => ({
+    id: e.id,
+    campanha: e.campaign,
+    recebidaEm: e.enviadoEm,
+    anexosEnviados: e._count.anexos,
+  }));
+  const doLink = link ? await repo.eventoDoLink(link, usuario.id) : null;
+  return { lista, resumo: { selecionada: doLink && lista.some((c) => c.id === doLink) ? doLink : null } };
+}
+
+/** Anexos reportados numa campanha, com os vereditos (relatorio dos operadores). */
+export async function anexosDaCampanha(campaignId: string) {
+  const anexos: AnexoCampanhaDto[] = (await repo.anexosDaCampanha(campaignId)).map((a) => ({
+    id: a.id,
+    nome: a.nome,
+    sha256: a.sha256,
+    resultado: a.resultado as ResultadoAnalise,
+    ameaca: a.ameaca,
+    regraPropria: ehRegraPropria(a.ameaca),
+    analisadoEm: a.criadoEm,
+    destinatario: a.campaignEvent!.destinatario,
+  }));
+  return {
+    total: anexos.length,
+    ameacas: anexos.filter((a) => a.resultado === 'AMEACA').length,
+    regrasProprias: anexos.filter((a) => a.regraPropria).length,
+    lista: anexos,
+  };
 }

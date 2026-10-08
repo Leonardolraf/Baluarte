@@ -99,11 +99,30 @@ services:
   # 503 ANTIVIRUS_INDISPONIVEL. O freshclam atualiza as assinaturas sozinho (1x por dia) e as
   # guarda no volume, para não baixar tudo de novo a cada subida. A porta 3310 (clamd) fica só
   # em 127.0.0.1, para a API rodando fora do Docker; nada de fora da máquina a alcança.
+  #
+  # Regras YARA próprias do Baluarte (B23): antivirus/regras/baluarte_*.yar. O clamd só lê
+  # assinaturas do diretório de banco (/var/lib/clamav, sem subpastas), e o /init da imagem faz
+  # `chown -R` nele, o que falha num arquivo montado só para leitura. Por isso as regras são
+  # montadas em /regras-baluarte e copiadas para o banco a cada subida, antes do /init: o que
+  # sai do repositório sai do volume (apaga baluarte_*.yar e copia de novo). O freshclam só
+  # mexe nos bancos oficiais (main, daily, bytecode) e não apaga arquivos extras. Regra nova:
+  # `docker compose --profile antivirus restart clamav` (ver README, "Regras YARA").
   clamav:
     image: clamav/clamav:1.5
     profiles: ["antivirus"]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        rm -f /var/lib/clamav/baluarte_*.yar /var/lib/clamav/baluarte_*.yara
+        for regra in /regras-baluarte/baluarte_*.yar /regras-baluarte/baluarte_*.yara; do
+          [ -f "$$regra" ] && cp "$$regra" /var/lib/clamav/ && chmod 0644 "/var/lib/clamav/$${regra##*/}"
+        done
+        echo "Regras YARA do Baluarte: $$(ls /var/lib/clamav | grep -c '^baluarte_')"
+        exec /init
     volumes:
       - clamav-db:/var/lib/clamav
+      - ./antivirus/regras:/regras-baluarte:ro
     ports:
       - "127.0.0.1:3310:3310"
 

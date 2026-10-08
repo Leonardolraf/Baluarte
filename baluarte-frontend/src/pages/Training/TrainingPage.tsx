@@ -6,6 +6,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { useAuth } from '@/contexts/AuthContext';
 import { notify, trackOperation } from '@/store/uiStore';
 import { cn } from '@/lib/cn';
+import { SuspiciousAttachmentCard } from '@/pages/Training/SuspiciousAttachmentCard';
 import { errorMessage } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { SEVERITY_BADGE_CLASS, SEVERITY_DOT_CLASS, SEVERITY_TEXT_CLASS } from '@/lib/severity';
@@ -288,6 +289,15 @@ export default function TrainingPage({ viaLink = false }: { viaLink?: boolean })
               </div>
             </div>
           </Card>
+
+          <SuspiciousAttachmentCard
+            viaLink={viaLink}
+            to={
+              viaLink
+                ? `/files?link=${encodeURIComponent(trainingId)}`
+                : `/files?campanha=${encodeURIComponent(trainingId)}`
+            }
+          />
         </aside>
       </div>
     </div>

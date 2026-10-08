@@ -10,6 +10,7 @@ import type {
   AssetType,
   AuthUser,
   Campaign,
+  CampaignAttachments,
   CampaignInput,
   CampaignMetrics,
   CampaignRecipient,
@@ -24,6 +25,8 @@ import type {
   MonitoringAcknowledgementListResponse,
   MonitoringAcknowledgementResult,
   MonitoringNotice,
+  ReceivedCampaign,
+  ReceivedCampaignsResponse,
   SecondOpinion,
   SecondOpinionReason,
   SecondOpinionStatus,
@@ -53,6 +56,7 @@ import type {
   VulnerabilityListResponse,
   VulnerabilityStatus,
 } from '@/types';
+import { isOwnRule } from '@/lib/files';
 import { roleFromLabel } from '@/lib/roles';
 import { RECIPIENT_STAGE_LABEL, severityFromCvss } from '@/lib/severity';
 
@@ -226,6 +230,8 @@ export interface BackendCampaignReport {
     clicados: number;
     taxaClique: number;
   }>;
+  /** B23: anexos suspeitos enviados pelos destinatários, com os vereditos. */
+  anexos?: BackendCampaignAttachments;
 }
 
 /**
@@ -799,6 +805,7 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
       clicked: d.clicados,
       clickRate: d.taxaClique,
     })),
+    attachments: toCampaignAttachments(raw.anexos),
   };
 }
 
@@ -1060,6 +1067,73 @@ export interface BackendFileScan {
   segundaOpiniao?: BackendSecondOpinion | null;
   /** Só para Administrador e Analista em GET /arquivos/analises. */
   usuario?: { nome: string; email: string } | null;
+  /** B23: a detecção é de uma regra YARA própria do Baluarte. */
+  regraPropria?: boolean;
+  /** B23: campanha de onde veio o anexo; null no envio avulso. */
+  campanha?: { id: string; nome: string } | null;
+}
+
+/** Campanha recebida (GET /arquivos/campanhas-recebidas, B23). */
+export interface BackendReceivedCampaign {
+  id: string;
+  campanha: { id: string; nome: string };
+  recebidaEm: string | null;
+  anexosEnviados: number;
+}
+
+export function toReceivedCampaigns(
+  dados: BackendReceivedCampaign[],
+  resumo: { selecionada?: string | null } | undefined,
+): ReceivedCampaignsResponse {
+  const items: ReceivedCampaign[] = (dados ?? []).map((c) => ({
+    id: String(c.id),
+    campaign: { id: String(c.campanha.id), name: c.campanha.nome },
+    receivedAt: c.recebidaEm ?? null,
+    attachmentsSent: Number(c.anexosEnviados) || 0,
+  }));
+  const selected = resumo?.selecionada ?? null;
+  return { items, selected: selected && items.some((c) => c.id === selected) ? selected : null };
+}
+
+/** Anexos reportados no relatório da campanha (B23). */
+export interface BackendCampaignAttachments {
+  total: number;
+  ameacas: number;
+  regrasProprias: number;
+  lista: Array<{
+    id: string;
+    nome: string;
+    sha256: string;
+    resultado: string;
+    ameaca: string | null;
+    regraPropria: boolean;
+    analisadoEm: string;
+    destinatario: string;
+  }>;
+}
+
+export function toCampaignAttachments(
+  raw: BackendCampaignAttachments | undefined | null,
+): CampaignAttachments {
+  if (!raw) return { total: 0, threats: 0, ownRules: 0, items: [] };
+  return {
+    total: Number(raw.total) || 0,
+    threats: Number(raw.ameacas) || 0,
+    ownRules: Number(raw.regrasProprias) || 0,
+    items: (raw.lista ?? []).map((a) => {
+      const threat = String(a.resultado).toUpperCase() === 'AMEACA';
+      return {
+        id: String(a.id),
+        name: a.nome,
+        sha256: String(a.sha256).toLowerCase(),
+        result: threat ? 'threat' : 'clean',
+        threat: threat ? (a.ameaca ?? null) : null,
+        ownRule: threat && a.regraPropria === true,
+        scannedAt: a.analisadoEm,
+        recipient: a.destinatario,
+      };
+    }),
+  };
 }
 
 export interface BackendSecondOpinion {
@@ -1126,6 +1200,9 @@ export function toFileScan(raw: BackendFileScan): FileScan {
     threat: threat ? (raw.ameaca ?? null) : null,
     scannedAt: raw.analisadoEm,
     secondOpinion: null,
+    // Servidor antigo sem o campo: deriva do nome da ameaça pela mesma regra.
+    ownRule: threat && (typeof raw.regraPropria === 'boolean' ? raw.regraPropria : isOwnRule(raw.ameaca)),
+    campaign: raw.campanha ? { id: String(raw.campanha.id), name: raw.campanha.nome } : null,
   };
   scan.secondOpinion = toSecondOpinion(raw.segundaOpiniao, scan.sha256);
   if (raw.usuario) scan.uploadedBy = { name: raw.usuario.nome, email: raw.usuario.email };

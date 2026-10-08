@@ -5,7 +5,7 @@ import { api } from '@/services/api';
 import { errorMessage, isHttpError } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { Button, FormErrorBanner, LinkButton } from '@/components';
-import { AlertTriangleIcon, ArrowLeftIcon, CheckCircleIcon } from '@/components/icons';
+import { AlertTriangleIcon, ArrowLeftIcon, CheckCircleIcon, UploadIcon } from '@/components/icons';
 
 // /t/:token/reportar — rodapé do e-mail simulado da campanha ("Achou este e-mail
 // suspeito? Reporte aqui"). Abrir a página não registra nada: o reporte só vale com
@@ -91,7 +91,26 @@ export default function ReportPhishingPage() {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-10">
-      <div className="surface w-full max-w-md p-6 sm:p-8">{content}</div>
+      <div className="surface w-full max-w-md p-6 sm:p-8">
+        {content}
+        {/* B23: o anexo suspeito vai para análise com login; o token pré-seleciona a campanha. */}
+        {!invalid && (
+          <div className="mt-6 border-t border-slate-100 pt-5 text-center dark:border-slate-800">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              A mensagem trazia um anexo? Não o abra: entre na sua conta e envie-o para análise.
+            </p>
+            <LinkButton
+              to={`/files?link=${encodeURIComponent(token)}`}
+              variant="outline"
+              className="mt-3 w-full"
+              leftIcon={<UploadIcon size={16} />}
+              data-testid="send-attachment"
+            >
+              Enviar anexo para análise
+            </LinkButton>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

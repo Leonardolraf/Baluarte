@@ -2,7 +2,8 @@ import type { Request, Response } from 'express';
 import busboy from 'busboy';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
 import {
-  CAMPO_ARQUIVO, CONSULTA_HISTORICO, LIMITE_ARQUIVO_BYTES, TAMANHO_PAGINA_PADRAO, type ResultadoAnalise,
+  CAMPO_ARQUIVO, CONSULTA_CAMPANHAS_RECEBIDAS, CONSULTA_HISTORICO, LIMITE_ARQUIVO_BYTES, ORIGEM_ANALISE,
+  TAMANHO_PAGINA_PADRAO, type ResultadoAnalise,
 } from '../models/analiseArquivo.model.js';
 import * as analiseService from '../services/analiseArquivo.service.js';
 import type { FluxoArquivo } from '../services/analiseArquivo.service.js';
@@ -49,12 +50,20 @@ function receberArquivo<T>(req: Request, processar: (nome: string | undefined, f
   });
 }
 
-/** POST /arquivos/analise (os tres perfis). */
+/** Parametro de query ja validado: string (vazio conta como ausente). */
+const daQuery = (req: Request, campo: string) => textoDeQuery.parse(req.query[campo])?.trim() || undefined;
+
+/**
+ * POST /arquivos/analise[?eventoCampanha=<id do evento>] (os tres perfis). Com `eventoCampanha`
+ * (B23), o arquivo e um anexo suspeito recebido naquela campanha; a origem e conferida antes de
+ * ler o corpo.
+ */
 export async function analisar(req: Request, res: Response) {
   const usuario = usuarioDe(req);
-  await analiseService.verificarAntesDeReceber(usuario.id);
+  validar(req.query, ORIGEM_ANALISE);
+  const origem = await analiseService.verificarAntesDeReceber(usuario.id, daQuery(req, 'eventoCampanha'));
   if (!/^multipart\/form-data/i.test(req.headers['content-type'] ?? '')) throw SEM_ARQUIVO();
-  const { mensagem, dados } = await receberArquivo(req, (nome, fluxo) => analiseService.analisar(usuario, nome, fluxo));
+  const { mensagem, dados } = await receberArquivo(req, (nome, fluxo) => analiseService.analisar(usuario, nome, fluxo, origem));
   return enviar(res, 201, { status: 'sucesso', mensagem, dados });
 }
 
@@ -65,7 +74,7 @@ export async function analisar(req: Request, res: Response) {
 export async function listar(req: Request, res: Response) {
   validar(req.query, CONSULTA_HISTORICO);
   // Depois de validar, todo parametro presente e string; vazio conta como ausente.
-  const q = (campo: string) => textoDeQuery.parse(req.query[campo])?.trim() || undefined;
+  const q = (campo: string) => daQuery(req, campo);
   const { lista, resumo } = await analiseService.listar(usuarioDe(req), {
     resultado: q('resultado') as ResultadoAnalise | undefined,
     pagina: Number(q('pagina') ?? 1),
@@ -74,3 +83,12 @@ export async function listar(req: Request, res: Response) {
   enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
 }
 
+/**
+ * GET /arquivos/campanhas-recebidas[?link=<token do e-mail>] (os tres perfis, B23): as campanhas
+ * que o proprio usuario recebeu, para ligar o anexo suspeito a uma delas.
+ */
+export async function campanhasRecebidas(req: Request, res: Response) {
+  validar(req.query, CONSULTA_CAMPANHAS_RECEBIDAS);
+  const { lista, resumo } = await analiseService.campanhasRecebidas(usuarioDe(req), daQuery(req, 'link'));
+  enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
+}

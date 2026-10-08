@@ -1,5 +1,6 @@
 import type { FileScan } from '@prisma/client';
-import { regra, regrasDePaginacao, seVeio, umDe } from '../utils/esquemas.js';
+import { z } from 'zod';
+import { idRecurso, regra, regrasDePaginacao, seVeio, umDe } from '../utils/esquemas.js';
 import type { SegundaOpiniaoDto } from './segundaOpiniao.model.js';
 
 // Analise de arquivo pelo antivirus (B04). O arquivo nunca e gravado: passa em fluxo pelo
@@ -68,6 +69,10 @@ export interface AnaliseDto {
   analisadoEm: Date;
   /** Segunda opiniao do VirusTotal (B20); null nas analises anteriores a ela. Nao muda `resultado`. */
   segundaOpiniao: SegundaOpiniaoDto | null;
+  /** B23: a deteccao veio de uma regra YARA propria do Baluarte (antivirus/regras), nao do ClamAV. */
+  regraPropria: boolean;
+  /** B23: anexo suspeito de uma campanha de phishing simulado; null no envio avulso. */
+  campanha: CampanhaDeOrigem | null;
   usuario?: { nome: string; email: string };
 }
 
@@ -79,4 +84,79 @@ export function nomeParaExibir(original: string | undefined): string {
   const base = (original ?? '').split(/[\\/]/).pop() ?? '';
   const limpo = base.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 255);
   return limpo || 'arquivo-sem-nome';
+}
+
+// ---- Regras YARA proprias (B23) -------------------------------------------------------
+
+/**
+ * O ClamAV nomeia a deteccao de uma regra YARA como `YARA.<regra>.UNOFFICIAL`. As regras do
+ * Baluarte (antivirus/regras/baluarte_*.yar) comecam com `Baluarte`; so elas ganham o rotulo de
+ * regra propria. Regra YARA de terceiros que alguem jogue no diretorio de banco nao ganha.
+ */
+const DETECCAO_REGRA_PROPRIA = /^YARA\.Baluarte[A-Za-z0-9_]*\.UNOFFICIAL$/;
+
+/** A ameaca encontrada veio de uma regra propria do Baluarte? */
+export function ehRegraPropria(ameaca: string | null | undefined): boolean {
+  return typeof ameaca === 'string' && DETECCAO_REGRA_PROPRIA.test(ameaca);
+}
+
+/** Rotulo que acompanha a deteccao de regra propria na mensagem e na tela. */
+export const ROTULO_REGRA_PROPRIA = 'regra própria do Baluarte';
+
+/** Mensagem do resultado: a deteccao de regra propria diz de onde veio. */
+export function mensagemDoResultado(ameaca: string | null): string {
+  if (!ameaca) return MENSAGEM_LIMPO;
+  return ehRegraPropria(ameaca) ? `${mensagemAmeaca(ameaca)} (${ROTULO_REGRA_PROPRIA})` : mensagemAmeaca(ameaca);
+}
+
+// ---- Anexo suspeito de campanha (B23) -------------------------------------------------
+
+/** Campanha de onde veio o anexo (o id e o da campanha, para a tela; nunca o token do link). */
+export interface CampanhaDeOrigem {
+  id: string;
+  nome: string;
+}
+
+/**
+ * Anexos por destinatario em cada campanha. Um e-mail de phishing raramente traz mais que dois
+ * ou tres anexos; o teto impede que um envio repetido infle o relatorio da campanha. O limite
+ * por hora (LIMITE_ANALISES_POR_HORA) e o de tamanho continuam valendo.
+ */
+export const LIMITE_ANEXOS_POR_CAMPANHA = 5;
+
+/** Token do link do e-mail da campanha (gerarTokenLink: 32 bytes em hexadecimal). */
+const tokenDeLink = z.string().regex(/^[0-9a-f]{64}$/);
+
+/**
+ * Query de POST /arquivos/analise. A origem vai na query (e nao num campo do multipart) para ser
+ * conferida ANTES de ler o corpo: campanha alheia ou inexistente nem chega a ocupar o antivirus.
+ */
+export const ORIGEM_ANALISE = [
+  regra('eventoCampanha', seVeio(idRecurso), 'Campanha de origem inválida', 'EVENTO_CAMPANHA_INVALIDO'),
+];
+
+/** Query de GET /arquivos/campanhas-recebidas: `link` opcional (token do e-mail) para pre-selecionar. */
+export const CONSULTA_CAMPANHAS_RECEBIDAS = [
+  regra('link', seVeio(tokenDeLink), 'Link de campanha inválido', 'LINK_INVALIDO'),
+];
+
+/** Campanha recebida pelo usuario, como a tela de analise lista. */
+export interface CampanhaRecebidaDto {
+  /** id do evento (destinatario na campanha): e o que vai em `eventoCampanha` no envio. */
+  id: string;
+  campanha: CampanhaDeOrigem;
+  recebidaEm: Date | null;
+  anexosEnviados: number;
+}
+
+/** Anexo reportado, como o relatorio da campanha mostra aos operadores. */
+export interface AnexoCampanhaDto {
+  id: string;
+  nome: string;
+  sha256: string;
+  resultado: ResultadoAnalise;
+  ameaca: string | null;
+  regraPropria: boolean;
+  analisadoEm: Date;
+  destinatario: string;
 }

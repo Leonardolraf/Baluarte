@@ -16,6 +16,7 @@ import type {
   DashboardMetrics,
   FileScanFilters,
   FileScanListResponse,
+  ReceivedCampaignsResponse,
   FileScanOutcome,
   LoginCredentials,
   LoginResponse,
@@ -49,6 +50,11 @@ export interface ChangePasswordResult extends MessageResponse {
 export interface AnalyzeFileOptions {
   /** Progresso do envio (0–100). A análise em si começa quando chega a 100. */
   onProgress?: (percent: number) => void;
+  /**
+   * B23: id do destinatário na campanha (`ReceivedCampaign.id`) quando o arquivo é um anexo
+   * suspeito recebido nela. Ausente = envio avulso.
+   */
+  campaignEventId?: string;
 }
 
 export interface MessageResponse {
@@ -140,6 +146,11 @@ export interface BaluarteApi {
    * (B17). Colaborador só recebe as próprias.
    */
   listFileScans(filters?: FileScanFilters): Promise<FileScanListResponse>;
+  /**
+   * Campanhas que o próprio usuário recebeu, para ligar um anexo suspeito a uma delas (B23).
+   * Com `link` (token do e-mail), `selected` traz a campanha desse link, se for dele.
+   */
+  listReceivedCampaigns(link?: string): Promise<ReceivedCampaignsResponse>;
 
   // Auditoria (só Administrador)
   /** Trilha de auditoria filtrada e paginada no servidor, mais recente primeiro. */

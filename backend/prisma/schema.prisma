@@ -251,6 +251,8 @@ model CampaignEvent {
   reportouEm   DateTime? // reportou o e-mail suspeito ao time de TI
   treinou      Boolean   @default(false)
   treinouEm    DateTime? // quando concluiu o treinamento pos-clique
+  // Anexos suspeitos da campanha que o destinatario enviou para analise (B23).
+  anexos       FileScan[]
 
   @@unique([campaignId, userId]) // a mesma pessoa nao entra duas vezes na mesma campanha
   @@index([userId])
@@ -348,10 +350,16 @@ model FileScan {
   vtDeteccoes    Int?      // mecanismos que marcaram malicioso ou suspeito; so com veredito
   vtTotal        Int?      // mecanismos que deram veredito; so com veredito
   vtConsultadoEm DateTime? // quando o VirusTotal respondeu (copiado quando vem do cache)
+  // Origem (B23): anexo suspeito recebido numa campanha de phishing simulado e enviado pelo
+  // proprio destinatario (com login). Nulo = envio avulso. SetNull: excluir a campanha (que leva
+  // os eventos dela) preserva a analise, so perde a ligacao.
+  campaignEventId String?
+  campaignEvent   CampaignEvent? @relation(fields: [campaignEventId], references: [id], onDelete: SetNull)
 
   @@index([userId, criadoEm])
   @@index([criadoEm])
   @@index([sha256, vtConsultadoEm]) // cache da segunda opiniao (tambem serve a busca so por sha256)
+  @@index([campaignEventId]) // anexos reportados por campanha (relatorio) e limite por evento
 }
 
 // Consultas feitas ao VirusTotal (B20), para respeitar a cota gratuita (4 por minuto, 500 por
