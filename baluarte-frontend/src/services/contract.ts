@@ -13,7 +13,8 @@ import type {
   CreatedUser,
   TrainingOverview,
   DashboardMetrics,
-  FileScan,
+  FileScanFilters,
+  FileScanListResponse,
   FileScanOutcome,
   LoginCredentials,
   LoginResponse,
@@ -123,8 +124,11 @@ export interface BaluarteApi {
   // Análise de arquivos (B04/B05)
   /** Envia um arquivo (multipart, campo `arquivo`) para o antivírus. O servidor descarta o arquivo. */
   analyzeFile(file: File, options?: AnalyzeFileOptions): Promise<FileScanOutcome>;
-  /** Análises anteriores, mais recente primeiro. Colaborador só recebe as próprias. */
-  listFileScans(): Promise<FileScan[]>;
+  /**
+   * Análises anteriores, mais recente primeiro, filtradas por resultado e paginadas no servidor
+   * (B17). Colaborador só recebe as próprias.
+   */
+  listFileScans(filters?: FileScanFilters): Promise<FileScanListResponse>;
 
   // Auditoria (só Administrador)
   /** Trilha de auditoria filtrada e paginada no servidor, mais recente primeiro. */

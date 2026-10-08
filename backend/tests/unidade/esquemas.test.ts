@@ -5,9 +5,11 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { ErroNegocio } from '../../src/utils/resposta.js';
 import {
-  descricaoOpcional, email, host, ipOpcional, notaCvss, opcional, preenchido, problemaDaSenha, regra, senhaNova, texto, textoDeQuery, umDe, validar,
+  descricaoOpcional, email, host, ipOpcional, notaCvss, opcional, preenchido, problemaDaSenha, regra, regrasDePaginacao,
+  senhaNova, texto, textoDeQuery, umDe, validar,
 } from '../../src/utils/esquemas.js';
 import { normalizarHost } from '../../src/utils/validacao.js';
+import { CONSULTA_HISTORICO, TAMANHO_PAGINA_MAXIMO } from '../../src/models/analiseArquivo.model.js';
 
 function erroDe(fn: () => unknown): ErroNegocio {
   try {
@@ -111,5 +113,41 @@ describe('schemas de campo', () => {
     assert.equal(textoDeQuery.parse({ $ne: 'x' }), undefined);
     assert.equal(textoDeQuery.parse(['a']), undefined);
     assert.equal(textoDeQuery.parse(undefined), undefined);
+  });
+});
+
+describe('consulta do histórico de análises (B17): resultado e paginação', () => {
+  const codigo = (query: Record<string, unknown>) => {
+    try {
+      validar(query, CONSULTA_HISTORICO);
+      return null;
+    } catch (e) {
+      if (e instanceof ErroNegocio) return e.codigo;
+      throw e;
+    }
+  };
+
+  it('aceita ausente, vazio, LIMPO, AMEACA e os limites de página e tamanho', () => {
+    for (const q of [{}, { resultado: '' }, { resultado: 'LIMPO' }, { resultado: 'AMEACA' }, { pagina: '1', tamanho: '1' }, { pagina: '1000000', tamanho: '100' }]) {
+      assert.equal(codigo(q), null, JSON.stringify(q));
+    }
+  });
+
+  it('recusa valor fora da lista, caixa diferente, objeto e lista, cada um com o próprio código', () => {
+    assert.equal(codigo({ resultado: 'ameaca' }), 'RESULTADO_INVALIDO');
+    assert.equal(codigo({ resultado: { $ne: 'x' } }), 'RESULTADO_INVALIDO');
+    assert.equal(codigo({ resultado: ['LIMPO', 'AMEACA'] }), 'RESULTADO_INVALIDO');
+    assert.equal(codigo({ pagina: '0' }), 'PAGINA_INVALIDA');
+    assert.equal(codigo({ pagina: '2.5' }), 'PAGINA_INVALIDA');
+    assert.equal(codigo({ tamanho: '101' }), 'TAMANHO_INVALIDO');
+    assert.equal(codigo({ tamanho: { $gt: '0' } }), 'TAMANHO_INVALIDO');
+    // Ordem: o resultado é checado antes da paginação.
+    assert.equal(codigo({ resultado: 'x', pagina: '0' }), 'RESULTADO_INVALIDO');
+  });
+
+  it('a regra de paginação compartilhada mantém as mensagens da auditoria', () => {
+    const [pagina, tamanho] = regrasDePaginacao(TAMANHO_PAGINA_MAXIMO);
+    assert.equal(pagina.mensagem, 'Página inválida: use um inteiro a partir de 1');
+    assert.equal(tamanho.mensagem, 'Tamanho inválido: use um inteiro de 1 a 100');
   });
 });

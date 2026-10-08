@@ -393,6 +393,12 @@ export interface DashboardKpis {
   monitoredAssets: number | null;
   activeCampaigns: number | null;
   trainedCollaborators: number | null;
+  /**
+   * Arquivos distintos (por SHA-256) com ameaça nos últimos 30 dias (B17). Já estão somados em
+   * `criticalVulnerabilities` e no `critical` da distribuição; não em `openVulnerabilities`.
+   * KPI técnico: `null` para o Colaborador, como os demais.
+   */
+  maliciousFiles: number | null;
 }
 
 export interface DashboardMetrics {
@@ -520,6 +526,17 @@ export interface FileScan {
   /** Quem enviou: só vem para Administrador e Analista. */
   uploadedBy?: { name: string; email: string };
 }
+
+/** Filtros do histórico de análises (B17): resultado e paginação vão para o servidor. */
+export interface FileScanFilters {
+  /** Vazio ou ausente = todos os resultados. */
+  result?: FileScanResult;
+  /** Página (a partir de 1) e tamanho (máximo 100). */
+  page?: number;
+  pageSize?: number;
+}
+
+export type FileScanListResponse = Paginated<FileScan>;
 
 /** Resposta do envio: a análise e a mensagem do servidor ("Nenhuma ameaça conhecida encontrada"…). */
 export interface FileScanOutcome {

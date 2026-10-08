@@ -136,6 +136,80 @@ describe('FileAnalysisPage (B05)', () => {
     expect(within(table).getByText('proposta-comercial-v3.pdf')).toBeInTheDocument();
   });
 
+  it('filtro por resultado (B17): só ameaças, só sem ameaça, e estado vazio com "Limpar filtro"', async () => {
+    const user = userEvent.setup();
+    renderAs('admin');
+    const table = await historyTable();
+    expect(within(table).getAllByTestId('file-history-row').length).toBeGreaterThan(1);
+
+    const filter = screen.getByLabelText('Resultado');
+    await user.selectOptions(filter, 'threat');
+    await waitFor(() =>
+      expect(
+        within(table)
+          .getAllByTestId('file-history-row')
+          .every((row) => row.getAttribute('data-result') === 'threat'),
+      ).toBe(true),
+    );
+    expect(within(table).getByText('eicar.com')).toBeInTheDocument();
+
+    await user.selectOptions(filter, 'clean');
+    await waitFor(() => expect(within(table).queryByText('eicar.com')).not.toBeInTheDocument());
+    expect(
+      within(table)
+        .getAllByTestId('file-history-row')
+        .every((row) => row.getAttribute('data-result') === 'clean'),
+    ).toBe(true);
+  });
+
+  it('filtro sem resultado mostra a linha vazia e "Limpar filtro" volta a todos', async () => {
+    const user = userEvent.setup();
+    renderAs('collaborator');
+    const table = await historyTable();
+    // O colaborador do seed não tem análise com ameaça.
+    await user.selectOptions(screen.getByLabelText('Resultado'), 'threat');
+    expect(await within(table).findByText('Nenhuma análise com ameaça.')).toBeInTheDocument();
+    await user.click(within(table).getByRole('button', { name: 'Limpar filtro' }));
+    expect(await screen.findByText('proposta-comercial-v3.pdf')).toBeInTheDocument();
+    expect(screen.getByLabelText('Resultado')).toHaveValue('');
+  });
+
+  it('paginação do histórico (B17): troca de página e de tamanho vão para a API', async () => {
+    const user = userEvent.setup();
+    const spy = vi.spyOn(mockApi, 'listFileScans');
+    renderAs('admin');
+    await historyTable();
+    expect(spy).toHaveBeenLastCalledWith({ result: undefined, page: 1, pageSize: 20 });
+
+    await user.selectOptions(screen.getByLabelText('Itens por página'), '10');
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ result: undefined, page: 1, pageSize: 10 }));
+    const pagination = screen.getByRole('navigation', { name: 'Paginação' });
+    expect(pagination).toHaveTextContent(/Exibindo\s*1–\d+\s*de/);
+
+    await user.selectOptions(screen.getByLabelText('Resultado'), 'threat');
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ result: 'threat', page: 1, pageSize: 10 }));
+  });
+
+  it('com muitas análises, avança de página e uma análise nova volta para a primeira página', async () => {
+    const user = userEvent.setup();
+    renderAs('analyst');
+    for (let i = 0; i < 12; i += 1) await mockApi.analyzeFile(new File([`extra-${i}`], `extra-${i}.txt`));
+    const spy = vi.spyOn(mockApi, 'listFileScans');
+    await historyTable();
+    await user.click(screen.getByRole('button', { name: 'Atualizar' }));
+    await user.selectOptions(screen.getByLabelText('Itens por página'), '10');
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ result: undefined, page: 1, pageSize: 10 }));
+
+    await user.click(screen.getByRole('button', { name: /próxima/i }));
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ result: undefined, page: 2, pageSize: 10 }));
+
+    choose(new File(['novo'], 'novissimo.txt'));
+    await screen.findByTestId('file-verdict');
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith({ result: undefined, page: 1, pageSize: 10 }));
+    const table = await historyTable();
+    await waitFor(() => expect(within(table).getAllByRole('row')[1]).toHaveTextContent('novissimo.txt'));
+  });
+
   it('zona de soltar funciona por teclado (Enter e Espaço abrem a escolha do arquivo)', async () => {
     const user = userEvent.setup();
     renderAs('collaborator');

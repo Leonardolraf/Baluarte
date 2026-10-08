@@ -4,7 +4,8 @@ import { AntivirusIndisponivel, analisar as analisarNoAntivirus, antivirusConfig
 import type { UsuarioAtual } from '../models/usuario.model.js';
 import { OPERADORES } from '../models/dominio.model.js';
 import {
-  LIMITE_ANALISES_POR_HORA, LIMITE_ARQUIVO_BYTES, MENSAGEM_LIMPO, mensagemAmeaca, nomeParaExibir, type AnaliseDto,
+  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ARQUIVO_BYTES, MENSAGEM_LIMPO, mensagemAmeaca,
+  nomeParaExibir, type AnaliseDto, type FiltrosHistorico,
 } from '../models/analiseArquivo.model.js';
 import { segundaOpiniaoDto } from '../models/segundaOpiniao.model.js';
 import * as repo from '../repositories/analiseArquivo.repository.js';
@@ -89,9 +90,31 @@ function paraDto(r: Awaited<ReturnType<typeof repo.criar>>, usuario?: { nome: st
   };
 }
 
-/** Historico: o Colaborador ve so as proprias analises; operadores veem todas, com quem enviou. */
-export async function listar(usuario: UsuarioAtual): Promise<AnaliseDto[]> {
+/**
+ * Historico (B17), paginado no servidor e filtrado por resultado: o Colaborador ve so as
+ * proprias analises (o dono vem do login, nunca da query); operadores veem todas, com quem
+ * enviou. O `total` do resumo segue o mesmo criterio (dono e filtro).
+ */
+export async function listar(usuario: UsuarioAtual, f: FiltrosHistorico) {
   const operador = OPERADORES.includes(usuario.perfil);
-  const registros = await repo.listar(operador ? undefined : usuario.id);
-  return registros.map((r) => paraDto(r, operador ? { nome: r.user.nome, email: r.user.email } : undefined));
+  const { registros, total } = await repo.listar(
+    { userId: operador ? undefined : usuario.id, resultado: f.resultado },
+    f.pagina,
+    f.tamanho,
+  );
+  const lista: AnaliseDto[] = registros.map((r) =>
+    paraDto(r, operador ? { nome: r.user.nome, email: r.user.email } : undefined),
+  );
+  return { lista, resumo: { total, pagina: f.pagina, tamanho: f.tamanho } };
+}
+
+/**
+ * Arquivos maliciosos no risco tecnico do dashboard (B17): arquivos DISTINTOS por SHA-256 com
+ * veredito AMEACA do ClamAV nos ultimos 30 dias, de todos os usuarios. O mesmo arquivo enviado
+ * varias vezes (ou por varias pessoas) conta uma vez. A segunda opiniao do VirusTotal nao entra:
+ * o veredito e so do ClamAV, como no historico.
+ */
+export function contarArquivosMaliciosos(agora = new Date()): Promise<number> {
+  const desde = new Date(agora.getTime() - JANELA_ARQUIVOS_MALICIOSOS_DIAS * 24 * 60 * 60 * 1000);
+  return repo.contarAmeacasDistintasDesde(desde);
 }

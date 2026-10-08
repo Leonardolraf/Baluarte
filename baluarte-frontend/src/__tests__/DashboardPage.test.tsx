@@ -8,7 +8,7 @@ import { buildMockToken } from '@/lib/jwt';
 import { formatNumber } from '@/lib/format';
 import { tokenStorage, userStorage } from '@/lib/storage';
 import { configureMocks, mockApi } from '@/mocks/api';
-import { MOCK_USERS, MOCK_VULNERABILITIES } from '@/mocks/data';
+import { MOCK_FILE_SCANS, MOCK_USERS, MOCK_VULNERABILITIES } from '@/mocks/data';
 import DashboardPage from '@/pages/Dashboard/DashboardPage';
 
 type Session = NonNullable<AuthProviderProps['initialSession']>;
@@ -114,11 +114,18 @@ describe('DashboardPage', () => {
       (vuln) => vuln.status !== 'resolved' && vuln.status !== 'accepted',
     );
     const critical = open.filter((vuln) => vuln.severity === 'critical');
+    // B17: arquivos com ameaça (distintos por SHA-256) somam nas críticas, não nas abertas.
+    const maliciousFiles = new Set(
+      MOCK_FILE_SCANS.filter((scan) => scan.result === 'threat').map((scan) => scan.sha256),
+    ).size;
+    expect(maliciousFiles).toBeGreaterThan(0);
 
     expect(
       within(statCard('Vulnerabilidades abertas')).getByText(formatNumber(open.length)),
     ).toBeInTheDocument();
-    expect(within(statCard('Críticas')).getByText(formatNumber(critical.length))).toBeInTheDocument();
+    expect(
+      within(statCard('Críticas')).getByText(formatNumber(critical.length + maliciousFiles)),
+    ).toBeInTheDocument();
     expect(screen.getAllByTestId('severity-badge').length).toBeGreaterThan(0);
   });
 
@@ -171,6 +178,9 @@ describe('DashboardPage', () => {
     }
     expect(screen.queryAllByTestId('severity-badge')).toHaveLength(0);
     expect(screen.queryByText(/Risco técnico:/)).not.toBeInTheDocument();
+    // B17: arquivos com ameaça são KPI técnico, então também não aparecem para o Colaborador.
+    expect(screen.queryByText(/arquivos? com ameaça/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('malicious-files-note')).not.toBeInTheDocument();
   });
 
   it('para gestor com listas vazias, mantém os cards com estado vazio', async () => {
@@ -193,6 +203,45 @@ describe('DashboardPage', () => {
 
     expect(screen.queryByRole('heading', { name: 'Seu treinamento' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Iniciar treinamento' })).not.toBeInTheDocument();
+  });
+
+  it('arquivos com ameaça (B17) aparecem nas críticas e na distribuição, sem mudar as abertas', async () => {
+    overrideDashboard((metrics) => ({
+      ...metrics,
+      kpis: { ...metrics.kpis, openVulnerabilities: 4, criticalVulnerabilities: 3, maliciousFiles: 2 },
+      severityDistribution: { critical: 3, high: 1, medium: 2, low: 0, info: 0 },
+    }));
+    renderDashboard('analyst');
+    await screen.findAllByRole('meter');
+
+    expect(within(statCard('Críticas')).getByText('inclui 2 arquivos com ameaça')).toBeInTheDocument();
+    const distribution = screen
+      .getByRole('heading', { name: 'Distribuição por severidade' })
+      .closest('section')!;
+    expect(
+      within(distribution).getByText('Vulnerabilidades abertas e arquivos com ameaça (30 dias)'),
+    ).toBeInTheDocument();
+    // O total do rodapé continua sendo só de vulnerabilidades: 6 distribuídos − 2 arquivos.
+    expect(distribution).toHaveTextContent('Total: 4 vulnerabilidades abertas');
+    expect(within(distribution).getByTestId('malicious-files-note')).toHaveTextContent(
+      'Crítico inclui 2 arquivos com ameaça nos últimos 30 dias',
+    );
+  });
+
+  it('sem arquivo com ameaça, nada muda no card de críticas nem na distribuição', async () => {
+    overrideDashboard((metrics) => ({
+      ...metrics,
+      kpis: { ...metrics.kpis, maliciousFiles: 0 },
+    }));
+    renderDashboard('admin');
+    await screen.findAllByRole('meter');
+
+    expect(within(statCard('Críticas')).queryByText(/arquivo/)).not.toBeInTheDocument();
+    const distribution = screen
+      .getByRole('heading', { name: 'Distribuição por severidade' })
+      .closest('section')!;
+    expect(within(distribution).getByText('Vulnerabilidades abertas')).toBeInTheDocument();
+    expect(within(distribution).queryByTestId('malicious-files-note')).not.toBeInTheDocument();
   });
 
   it('mostra "—" e "não medida" quando a resiliência a phishing é nula', async () => {

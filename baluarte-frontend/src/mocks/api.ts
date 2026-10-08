@@ -23,6 +23,8 @@ import type {
   CreatedUser,
   DashboardMetrics,
   FileScan,
+  FileScanFilters,
+  FileScanListResponse,
   FileScanOutcome,
   FunnelStage,
   SecondOpinion,
@@ -619,6 +621,20 @@ function mockSecondOpinion(sha256: string, threat: boolean): SecondOpinion {
   return { ...base, status: 'unknown', reason: null, detections: null, total: null, checkedAt: nowIso() };
 }
 
+/** Janela dos arquivos maliciosos no risco técnico (a mesma do backend, B17). */
+export const MALICIOUS_FILES_WINDOW_DAYS = 30;
+
+/** Arquivos distintos (por SHA-256) com ameaça nos últimos 30 dias, de todos os usuários. */
+function countMaliciousFiles(now = Date.now()): number {
+  const since = now - MALICIOUS_FILES_WINDOW_DAYS * 24 * HOUR_MS;
+  const hashes = new Set(
+    state.fileScans
+      .filter((s) => s.result === 'threat' && Date.parse(s.scannedAt) >= since)
+      .map((s) => s.sha256),
+  );
+  return hashes.size;
+}
+
 function fileScanView(entry: MockFileScan, withUser: boolean): FileScan {
   const { userId, ...scan } = entry;
   if (!withUser) return { ...scan };
@@ -757,6 +773,10 @@ export const mockApi: BaluarteApi = {
         severityDistribution[v.severity] += 1;
         weighted += SEVERITY_WEIGHT[v.severity];
       }
+      // B17: arquivo malicioso pesa como crítico (distintos por SHA-256, últimos 30 dias, de todos).
+      const maliciousFiles = countMaliciousFiles();
+      severityDistribution.critical += maliciousFiles;
+      weighted += SEVERITY_WEIGHT.critical * maliciousFiles;
       const capacity = Math.max(1, state.assets.length) * 20;
       const technicalRisk = clampPct((weighted / capacity) * 100);
 
@@ -798,7 +818,10 @@ export const mockApi: BaluarteApi = {
         humanRisk: totalSent > 0 ? humanRisk : 0,
         kpis: {
           openVulnerabilities: manager ? open.length : null,
-          criticalVulnerabilities: manager ? open.filter((v) => v.severity === 'critical').length : null,
+          criticalVulnerabilities: manager
+            ? open.filter((v) => v.severity === 'critical').length + maliciousFiles
+            : null,
+          maliciousFiles: manager ? maliciousFiles : null,
           phishingResilience: totalSent > 0 ? 100 - clickRate : null,
           monitoredAssets: manager ? state.assets.filter((a) => a.status === 'active').length : null,
           activeCampaigns: manager ? campaigns.filter((c) => c.status === 'active').length : null,
@@ -1535,14 +1558,30 @@ export const mockApi: BaluarteApi = {
     return { scan, message: fileScanVerdict(scan) };
   },
 
-  async listFileScans(): Promise<FileScan[]> {
+  async listFileScans(filters: FileScanFilters = {}): Promise<FileScanListResponse> {
     return simulate(() => {
       const user = requireUser();
       const operator = user.role === 'admin' || user.role === 'analyst';
-      return state.fileScans
+      const page = filters.page ?? 1;
+      const pageSize = filters.pageSize ?? 20;
+      if (!Number.isInteger(page) || page < 1)
+        throw new HttpError(400, 'PAGINA_INVALIDA', 'Página inválida: use um inteiro a partir de 1');
+      if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100)
+        throw new HttpError(400, 'TAMANHO_INVALIDO', 'Tamanho inválido: use um inteiro de 1 a 100');
+      if (filters.result && filters.result !== 'clean' && filters.result !== 'threat')
+        throw new HttpError(400, 'RESULTADO_INVALIDO', 'Filtro de resultado inválido: use LIMPO ou AMEACA');
+      const items = state.fileScans
         .filter((entry) => operator || entry.userId === user.id)
-        .sort((a, b) => new Date(b.scannedAt).getTime() - new Date(a.scannedAt).getTime())
-        .map((entry) => fileScanView(entry, operator));
+        .filter((entry) => !filters.result || entry.result === filters.result)
+        .sort((a, b) => Date.parse(b.scannedAt) - Date.parse(a.scannedAt) || b.id.localeCompare(a.id));
+      return {
+        items: items
+          .slice((page - 1) * pageSize, page * pageSize)
+          .map((entry) => fileScanView(entry, operator)),
+        total: items.length,
+        page,
+        pageSize,
+      };
     });
   },
 

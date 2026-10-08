@@ -2,11 +2,20 @@ import { OPERADORES } from '../models/dominio.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
 import { contar as contarAtivos } from '../repositories/ativo.repository.js';
 import { listarComEventos } from '../repositories/campanha.repository.js';
+import { contarArquivosMaliciosos } from './analiseArquivo.service.js';
 import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
 import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.service.js';
 
 // Dashboard unificado: risco tecnico (achados) + risco humano (campanhas) num painel so.
-// Nao tem repository proprio: agrega os de ativos e campanhas e o service de achados.
+// Nao tem repository proprio: agrega os de ativos e campanhas e os services de achados e de
+// analise de arquivos.
+//
+// Arquivos maliciosos no risco tecnico (B17): `arquivosMaliciosos` = arquivos distintos por
+// SHA-256 com AMEACA do ClamAV nos ultimos 30 dias (services/analiseArquivo.service.ts). Cada um
+// pesa como um achado CRITICO: entra em `criticas` e em `distribuicaoSeveridade['Crítico']`,
+// mas NAO em `vulnerabilidadesAbertas` (arquivo malicioso nao e vulnerabilidade de ativo).
+// Logo: soma da distribuicao = vulnerabilidadesAbertas + arquivosMaliciosos. O risco tecnico
+// do frontend, que pondera a distribuicao, ja recebe o peso critico sem mudar a formula.
 
 /**
  * Colaborador recebe so o indice de resiliencia a phishing (RN-006): os KPIs tecnicos
@@ -25,7 +34,13 @@ export async function painel(perfil: string) {
     // (B21/B26: o ciclo anda na leitura, para qualquer perfil).
     await avancarVarreduras();
     return {
-      kpis: { vulnerabilidadesAbertas: null, criticas: null, resilienciaPhishing: resiliencia, ativosMonitorados: null },
+      kpis: {
+        vulnerabilidadesAbertas: null,
+        criticas: null,
+        arquivosMaliciosos: null, // KPI tecnico (B17): fica com os operadores, como os demais
+        resilienciaPhishing: resiliencia,
+        ativosMonitorados: null,
+      },
       distribuicaoSeveridade: null,
       vulnerabilidadesRecentes: [],
       alertas: [],
@@ -40,6 +55,8 @@ export async function painel(perfil: string) {
   const emAberto = findings.filter((f) => !encerrado(f));
   const sev: Record<string, number> = { 'Crítico': 0, 'Alto': 0, 'Médio': 0, 'Baixo': 0 };
   for (const f of emAberto) sev[f.severidade] = (sev[f.severidade] || 0) + 1;
+  const arquivosMaliciosos = await contarArquivosMaliciosos();
+  sev['Crítico'] += arquivosMaliciosos;
 
   const ativos = await contarAtivos();
   const ativa = campanhas.find((c) => c.status === 'ATIVA') || campanhas[0];
@@ -47,7 +64,9 @@ export async function painel(perfil: string) {
   return {
     kpis: {
       vulnerabilidadesAbertas: emAberto.length,
-      criticas: emAberto.filter((f) => f.cvss >= 9.0).length,
+      criticas: emAberto.filter((f) => f.cvss >= 9.0).length + arquivosMaliciosos,
+      // KPI tecnico: so para operadores, como os outros (o Colaborador recebe null, B10).
+      arquivosMaliciosos,
       resilienciaPhishing: resiliencia,
       ativosMonitorados: ativos,
     },

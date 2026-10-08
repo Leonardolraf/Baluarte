@@ -244,7 +244,7 @@ describe('services/api — análise de arquivos no backend real', () => {
     await expectHttp(realApi.listFileScans(), 501, 'NAO_IMPLEMENTADO');
   });
 
-  it('GET /arquivos/analises desembrulha o envelope e adapta cada item', async () => {
+  it('GET /arquivos/analises desembrulha o envelope, adapta cada item e lê o total do resumo', async () => {
     const seen = respondWith((config) =>
       ok(config, {
         status: 'sucesso',
@@ -252,14 +252,29 @@ describe('services/api — análise de arquivos no backend real', () => {
           backendScan({ id: 'a2', usuario: { nome: 'Ana', email: 'ana@empresa.com' } }),
           backendScan({ id: 'a1', resultado: 'LIMPO', ameaca: null }),
         ],
+        resumo: { total: 42, pagina: 1, tamanho: 20 },
       }),
     );
-    const items = await realApi.listFileScans();
+    const page = await realApi.listFileScans();
     expect(seen[0]!.url).toBe('/arquivos/analises');
-    expect(items.map((s) => [s.id, s.result, s.uploadedBy?.name])).toEqual([
+    // Sem filtro: só a paginação padrão vai na query.
+    expect(seen[0]!.params).toEqual({ pagina: '1', tamanho: '20' });
+    expect(page.items.map((s) => [s.id, s.result, s.uploadedBy?.name])).toEqual([
       ['a2', 'threat', 'Ana'],
       ['a1', 'clean', undefined],
     ]);
+    expect(page).toMatchObject({ total: 42, page: 1, pageSize: 20 });
+  });
+
+  it('filtro e página viram resultado/pagina/tamanho; sem resumo, o total é o que veio', async () => {
+    const seen = respondWith((config) =>
+      ok(config, { status: 'sucesso', dados: [backendScan({ id: 'a9' })] }),
+    );
+    const threats = await realApi.listFileScans({ result: 'threat', page: 3, pageSize: 50 });
+    expect(seen[0]!.params).toEqual({ resultado: 'AMEACA', pagina: '3', tamanho: '50' });
+    expect(threats).toMatchObject({ total: 1, page: 3, pageSize: 50 });
+    await realApi.listFileScans({ result: 'clean' });
+    expect(seen[1]!.params).toEqual({ resultado: 'LIMPO', pagina: '1', tamanho: '20' });
   });
 });
 
@@ -329,17 +344,61 @@ describe('mockApi — análise de arquivos', () => {
   it('colaborador lista só as próprias análises, sem `uploadedBy`; operador vê todas com o dono', async () => {
     const collaborator = loginAs('collaborator');
     await mockApi.analyzeFile(new File(['abc'], 'minha.txt'));
-    const own = await mockApi.listFileScans();
+    const own = (await mockApi.listFileScans()).items;
     expect(own[0]!.name).toBe('minha.txt');
     expect(own.every((s) => s.uploadedBy === undefined)).toBe(true);
     expect(own.map((s) => s.name)).not.toContain('eicar.com');
 
     loginAs('analyst');
-    const all = await mockApi.listFileScans();
+    const all = (await mockApi.listFileScans()).items;
     expect(all.length).toBeGreaterThan(own.length);
     expect(all[0]).toMatchObject({ name: 'minha.txt', uploadedBy: { email: collaborator.email } });
     const dates = all.map((s) => new Date(s.scannedAt).getTime());
     expect([...dates].sort((a, b) => b - a)).toEqual(dates);
+  });
+
+  it('histórico filtra por resultado e pagina, com o total do filtro (B17)', async () => {
+    loginAs('analyst');
+    for (let i = 0; i < 3; i += 1) await mockApi.analyzeFile(new File([`limpo-${i}`], `l${i}.txt`));
+    const all = await mockApi.listFileScans({ pageSize: 100 });
+    const threats = await mockApi.listFileScans({ result: 'threat', pageSize: 100 });
+    expect(threats.items.length).toBeGreaterThan(0);
+    expect(threats.items.every((s) => s.result === 'threat')).toBe(true);
+    const clean = await mockApi.listFileScans({ result: 'clean', pageSize: 100 });
+    expect(clean.items.every((s) => s.result === 'clean')).toBe(true);
+    expect(threats.total + clean.total).toBe(all.total);
+
+    const first = await mockApi.listFileScans({ page: 1, pageSize: 2 });
+    const second = await mockApi.listFileScans({ page: 2, pageSize: 2 });
+    expect(first).toMatchObject({ total: all.total, page: 1, pageSize: 2 });
+    expect(first.items).toHaveLength(2);
+    expect([...first.items, ...second.items].map((s) => s.id)).toEqual(
+      all.items.slice(0, 4).map((s) => s.id),
+    );
+  });
+
+  it('histórico com página, tamanho ou resultado inválido responde 400 com o código do backend', async () => {
+    loginAs('admin');
+    await expectHttp(mockApi.listFileScans({ page: 0 }), 400, 'PAGINA_INVALIDA');
+    await expectHttp(mockApi.listFileScans({ pageSize: 101 }), 400, 'TAMANHO_INVALIDO');
+    await expectHttp(mockApi.listFileScans({ result: 'x' as unknown as 'clean' }), 400, 'RESULTADO_INVALIDO');
+  });
+
+  it('dashboard conta arquivo malicioso como crítico, uma vez por SHA-256 (B17)', async () => {
+    loginAs('analyst');
+    const before = await mockApi.getDashboard();
+    // O seed tem um EICAR de ontem: já conta.
+    expect(before.kpis.maliciousFiles).toBe(1);
+    // O mesmo EICAR de novo (mesmo conteúdo = mesmo hash) não soma; um arquivo malicioso novo soma.
+    const eicar = new File(['X5O!P%@AP EICAR-STANDARD-ANTIVIRUS-TEST-FILE'], 'eicar.txt');
+    await mockApi.analyzeFile(eicar);
+    await mockApi.analyzeFile(eicar);
+    const after = await mockApi.getDashboard();
+    expect(after.kpis.maliciousFiles).toBe(2);
+    expect(after.kpis.criticalVulnerabilities).toBe(before.kpis.criticalVulnerabilities! + 1);
+    expect(after.severityDistribution!.critical).toBe(before.severityDistribution!.critical + 1);
+    expect(after.kpis.openVulnerabilities).toBe(before.kpis.openVulnerabilities);
+    expect(after.technicalRisk).toBeGreaterThanOrEqual(before.technicalRisk!);
   });
 
   it('segunda opinião simulada: EICAR malicioso, arquivo novo desconhecido, cache pelo hash', async () => {

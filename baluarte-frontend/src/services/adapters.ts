@@ -15,6 +15,7 @@ import type {
   CampaignTemplate,
   DashboardMetrics,
   FileScan,
+  FileScanListResponse,
   FunnelStage,
   SecondOpinion,
   SecondOpinionReason,
@@ -174,9 +175,12 @@ export interface BackendCampaignReport {
 export interface BackendDashboard {
   kpis: {
     vulnerabilidadesAbertas: number | null;
+    /** Já inclui os arquivos maliciosos (B17). */
     criticas: number | null;
     resilienciaPhishing: number | null;
     ativosMonitorados: number | null;
+    /** Arquivos distintos com ameaça nos últimos 30 dias (B17); null para o Colaborador, ausente em backend anterior. */
+    arquivosMaliciosos?: number | null;
   };
   distribuicaoSeveridade: Record<string, number> | null;
   vulnerabilidadesRecentes: BackendFinding[];
@@ -666,6 +670,7 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
     kpis: {
       openVulnerabilities: raw.kpis.vulnerabilidadesAbertas,
       criticalVulnerabilities: raw.kpis.criticas,
+      maliciousFiles: technical ? (countOrNull(raw.kpis.arquivosMaliciosos) ?? 0) : null,
       phishingResilience,
       monitoredAssets: raw.kpis.ativosMonitorados,
       // Contagens de campanha só existem para quem recebe as campanhas (operadores).
@@ -937,6 +942,27 @@ export function toFileScan(raw: BackendFileScan): FileScan {
   scan.secondOpinion = toSecondOpinion(raw.segundaOpiniao, scan.sha256);
   if (raw.usuario) scan.uploadedBy = { name: raw.usuario.nome, email: raw.usuario.email };
   return scan;
+}
+
+export interface BackendFileScanSummary {
+  total?: number;
+  pagina?: number;
+  tamanho?: number;
+}
+
+/** Página de GET /arquivos/analises (`dados` + `resumo`, B17). */
+export function toFileScanList(
+  dados: BackendFileScan[],
+  resumo: BackendFileScanSummary | undefined,
+  fallback: { page: number; pageSize: number },
+): FileScanListResponse {
+  const items = (dados ?? []).map(toFileScan);
+  return {
+    items,
+    total: typeof resumo?.total === 'number' ? resumo.total : items.length,
+    page: typeof resumo?.pagina === 'number' ? resumo.pagina : fallback.page,
+    pageSize: typeof resumo?.tamanho === 'number' ? resumo.tamanho : fallback.pageSize,
+  };
 }
 
 // ---- Auditoria ----------------------------------------------------------------
