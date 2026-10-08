@@ -128,6 +128,10 @@ export function registerManageRoutes(r: Router) {
     const registro = await localizarLinkValido(String(token));
     if (!registro) return erro(res, 400, 'Token inválido ou expirado', 'TOKEN_RESET_INVALIDO');
     const convite = registro.tipo === 'CONVITE';
+    // Mesma regra da troca de senha logada. No convite nunca casa: a conta pendente
+    // tem um hash descartavel (src/conta.ts), entao a primeira senha sempre passa.
+    if (await bcrypt.compare(String(novaSenha), registro.user.senhaHash))
+      return erro(res, 400, 'A nova senha deve ser diferente da atual', 'SENHA_REPETIDA');
 
     const senhaHash = await bcrypt.hash(String(novaSenha), 10);
     await prisma.$transaction([
@@ -208,6 +212,22 @@ export function registerManageRoutes(r: Router) {
       return erro(res, 502, 'Não foi possível enviar o e-mail. Tente novamente.', 'EMAIL_NAO_ENVIADO');
     await registrarAuditoria(ator.id, 'ENVIAR_CONVITE', alvo.email);
     return enviar(res, 200, { status: 'sucesso', mensagem: `Convite reenviado para ${alvo.email}` });
+  }));
+
+  // ---- POST /users/:id/redefinir-senha (Administrador) -----------------------
+  // O administrador dispara o link de redefinicao de um usuario. Rota propria (e nao a
+  // publica /auth/reset-password) para registrar QUEM pediu e nao gastar o limite de
+  // pedidos do dono da conta. Conta Pendente usa o convite; Inativa nao recebe link.
+  r.post('/users/:id/redefinir-senha', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
+    const ator = usuarioDe(req);
+    const alvo = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!alvo) return erro(res, 404, 'Usuário não encontrado', 'USUARIO_NAO_ENCONTRADO');
+    if (alvo.status !== 'Ativo')
+      return erro(res, 409, 'O link de redefinição só é enviado para contas ativas', 'USUARIO_NAO_ATIVO');
+    if (!(await emitirLinkConta(alvo, 'RESET')))
+      return erro(res, 502, 'Não foi possível enviar o e-mail. Tente novamente.', 'EMAIL_NAO_ENVIADO');
+    await registrarAuditoria(ator.id, 'ENVIAR_RESET_SENHA', alvo.email);
+    return enviar(res, 200, { status: 'sucesso', mensagem: `Link de redefinição enviado para ${alvo.email}` });
   }));
 
   // ---- GET /configuracoes/notificacoes (protegido) ---------------------------

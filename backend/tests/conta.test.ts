@@ -263,3 +263,69 @@ describe('login: bloqueio guardado no banco e auditoria', () => {
     assert.ok(await prisma.auditLog.findFirst({ where: { usuarioId: conta.id, acao: 'LOGIN' } }));
   });
 });
+
+describe('redefinição pelo link não aceita a senha atual', () => {
+  it('reset com a mesma senha -> 400 SENHA_REPETIDA, sem consumir o link; outra senha passa', async () => {
+    await limparLimiteReset();
+    const conta = await criarUsuario(admin, 'Colaborador', 'reset-igual');
+    await chamar('POST', '/auth/reset-password', { body: { email: conta.email } });
+    const token = await tokenDoEmail(conta.email, 'reset-password');
+    assert.ok(token);
+
+    esperaErro(await chamar('POST', '/auth/reset-password/confirm', { body: { token, novaSenha: SENHA_CONTA } }), 400, 'SENHA_REPETIDA');
+    // O link continua valendo e a senha atual também.
+    assert.equal(await prisma.passwordResetToken.count({ where: { userId: conta.id, tipo: 'RESET', usadoEm: null } }), 1);
+    await login(conta.email, SENHA_CONTA);
+
+    assert.equal((await chamar('POST', '/auth/reset-password/confirm', { body: { token, novaSenha: 'Diferente@12' } })).status, 200);
+    await login(conta.email, 'Diferente@12');
+  });
+
+  it('convite aceita a primeira senha (o hash da conta pendente é descartável e nunca casa)', async () => {
+    const conta = await criarUsuarioPendente(admin, 'Colaborador', 'convite-primeira');
+    const r = await chamar('POST', '/auth/reset-password/confirm', { body: { token: conta.convite, novaSenha: SENHA_CONTA } });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.mensagem, 'Senha cadastrada com sucesso');
+  });
+});
+
+describe('POST /users/:id/redefinir-senha (administrador dispara o link)', () => {
+  it('envia o link de redefinição para conta ativa, audita quem pediu e o link troca a senha', async () => {
+    const conta = await criarUsuario(admin, 'Colaborador', 'admin-reset');
+    const r = await chamar('POST', `/users/${conta.id}/redefinir-senha`, { token: admin });
+    assert.equal(r.status, 200);
+    assert.match(r.body.mensagem, /Link de redefinição enviado/);
+    const token = await tokenDoEmail(conta.email, 'reset-password');
+    assert.ok(token, 'esperava o e-mail com o link de redefinição');
+
+    const adminId = (await prisma.user.findUnique({ where: { email: ADMIN.email } }))!.id;
+    assert.ok(await prisma.auditLog.findFirst({ where: { usuarioId: adminId, acao: 'ENVIAR_RESET_SENHA', detalhe: conta.email.toLowerCase() } }));
+
+    assert.equal((await chamar('POST', '/auth/reset-password/confirm', { body: { token, novaSenha: 'PeloAdmin@1' } })).status, 200);
+    await login(conta.email, 'PeloAdmin@1');
+  });
+
+  it('não gasta o limite de pedidos do dono da conta', async () => {
+    await limparLimiteReset();
+    const conta = await criarUsuario(admin, 'Colaborador', 'admin-reset-limite');
+    for (let i = 0; i < 4; i++) assert.equal((await chamar('POST', `/users/${conta.id}/redefinir-senha`, { token: admin })).status, 200);
+    assert.equal((await chamar('POST', '/auth/reset-password', { body: { email: conta.email } })).status, 200);
+  });
+
+  it('conta Pendente ou Inativa -> 409; inexistente -> 404', async () => {
+    const pendente = await criarUsuarioPendente(admin, 'Colaborador', 'admin-reset-pend');
+    esperaErro(await chamar('POST', `/users/${pendente.id}/redefinir-senha`, { token: admin }), 409, 'USUARIO_NAO_ATIVO');
+    const inativa = await criarUsuario(admin, 'Colaborador', 'admin-reset-inat');
+    assert.equal((await chamar('PATCH', `/users/${inativa.id}`, { token: admin, body: { status: 'Inativo' } })).status, 200);
+    esperaErro(await chamar('POST', `/users/${inativa.id}/redefinir-senha`, { token: admin }), 409, 'USUARIO_NAO_ATIVO');
+    esperaErro(await chamar('POST', '/users/nao-existe/redefinir-senha', { token: admin }), 404, 'USUARIO_NAO_ENCONTRADO');
+  });
+
+  it('RBAC: só Administrador (Analista e Colaborador -> 403; sem token -> 401)', async () => {
+    const conta = await criarUsuario(admin, 'Colaborador', 'admin-reset-rbac');
+    const tokenColab = await login(conta.email, SENHA_CONTA);
+    esperaErro(await chamar('POST', `/users/${conta.id}/redefinir-senha`, { token: analista }), 403, 'PERFIL_SEM_PERMISSAO');
+    esperaErro(await chamar('POST', `/users/${conta.id}/redefinir-senha`, { token: tokenColab }), 403, 'PERFIL_SEM_PERMISSAO');
+    esperaErro(await chamar('POST', `/users/${conta.id}/redefinir-senha`), 401, 'TOKEN_AUSENTE');
+  });
+});

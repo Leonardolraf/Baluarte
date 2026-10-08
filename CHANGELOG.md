@@ -135,6 +135,14 @@ A varredura continua **simulada**, mas deixa de ficar "na fila" para sempre.
 - **Fora do escopo** — pixel de abertura (o e-mail é só texto; a abertura vem do clique ou do reporte).
 - **Testes** — 221 no backend com o B21 (204 só com este item) (`tests/campanha-email.test.ts`, 10 novos: e-mail por destinatário com o link e o token certos, texto por template sem link externo, nada enviado em campanha recusada, auditoria, produção sem SMTP sem envio nem log do link, clique pelo token do e-mail, reporte idempotente, relatório com reportes, token inválido); 335 no frontend (adaptador, mocks, as duas telas novas e a auditoria axe delas).
 
+## 2026-10-08 — Senha repetida na redefinição e link de redefinição pelo administrador
+
+Pedidos do Leo depois de testar o convite em produção.
+
+- **Redefinição recusa a senha atual** — `POST /auth/reset-password/confirm` passa a responder `400 SENHA_REPETIDA` (mesma mensagem da troca de senha logada) quando a nova senha é igual à atual; o link não é consumido. O convite não é afetado: a conta pendente tem hash descartável, então a primeira senha sempre passa.
+- **Administrador envia o link de redefinição** — `POST /users/:id/redefinir-senha` (só Administrador; conta ativa; `409 USUARIO_NAO_ATIVO` para Pendente/Inativa, `404`, `502 EMAIL_NAO_ENVIADO`). Rota própria em vez da pública para auditar quem pediu (`ENVIAR_RESET_SENHA`) e não gastar o limite de 3 pedidos por e-mail do dono da conta.
+- **Testes** — 227 no backend (7 banco + 107 integração + 113 pentest).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -142,7 +150,7 @@ A varredura continua **simulada**, mas deixa de ficar "na fila" para sempre.
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 221 no backend (7 banco + 101 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 227 no backend (7 banco + 107 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |
