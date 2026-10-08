@@ -30,6 +30,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   REPORTAR_PHISHING: 'Phishing reportado',
   ANALISAR_ARQUIVO: 'Arquivo analisado',
   INSCREVER_ESTACAO: 'Estação inscrita',
+  APLICAR_RETENCAO_AUDITORIA: 'Retenção da auditoria aplicada',
 };
 
 /** Rótulo da ação; código desconhecido vira "Coletar inventario" a partir de `COLETAR_INVENTARIO`. */

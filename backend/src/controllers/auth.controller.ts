@@ -62,5 +62,5 @@ export async function renovar(req: Request, res: Response) {
 
 /** GET /configuracoes/seguranca (politica documentada, leitura). */
 export async function politicaSeguranca(_req: Request, res: Response) {
-  enviar(res, 200, { status: 'sucesso', dados: authService.politicaSeguranca() });
+  enviar(res, 200, { status: 'sucesso', dados: await authService.politicaSeguranca() });
 }

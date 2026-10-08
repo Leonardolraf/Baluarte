@@ -9,6 +9,55 @@ import { email, regra, regrasDePaginacao, seVeio } from '../utils/esquemas.js';
 /** Registro como esta no banco. Sem FK para User: o registro sobrevive a exclusao da conta. */
 export type RegistroAuditoria = AuditLog;
 
+/**
+ * Retencao da trilha (RNF-002): registros com mais de 12 meses podem ser apagados por
+ * POST /auditoria/retencao. Fixa: a funcao do banco recusa menos que isso.
+ */
+export const RETENCAO_MESES = 12;
+
+/** Registros lidos por vez ao recalcular a cadeia de hash. */
+export const LOTE_VERIFICACAO = 1000;
+
+/**
+ * Elo da cadeia como a verificacao le: o hash gravado, o anterior gravado e o `calculado`,
+ * recalculado agora pela mesma funcao do banco que o trigger de INSERT usa (fonte unica).
+ */
+export interface EloCadeia {
+  id: string;
+  timestamp: Date;
+  sequencia: bigint;
+  hash: string | null;
+  hashAnterior: string | null;
+  calculado: string;
+}
+
+/**
+ * Por que a cadeia quebrou no registro: sem hash (gravado sem o trigger), conteudo que nao
+ * bate com o hash (registro alterado) ou `hashAnterior` diferente do hash do registro
+ * anterior (registro apagado ou inserido no meio, ou o anterior teve o hash reescrito).
+ */
+export type MotivoQuebra = 'SEM_HASH' | 'CONTEUDO_ALTERADO' | 'ELO_QUEBRADO';
+
+/** Resultado de GET /auditoria/integridade. */
+export interface ResultadoIntegridade {
+  integra: boolean;
+  registrosVerificados: number;
+  /**
+   * Triggers da migration 20261008171000_auditoria_imutavel ativos (UPDATE/DELETE/TRUNCATE
+   * recusados). Essa migration fica na branch feat/b29-trava; sem ela, `false`.
+   */
+  travaNoBanco: boolean;
+  primeiraQuebra?: { id: string; timestamp: Date; motivo: MotivoQuebra };
+}
+
+/** Resultado de POST /auditoria/retencao. */
+export interface ResultadoRetencao {
+  apagados: number;
+  /** Registros anteriores a este instante (UTC) eram elegiveis. */
+  corte: Date;
+  retencaoMeses: number;
+}
+
 /** Tamanho padrao e maximo da pagina da consulta. */
 export const TAMANHO_PADRAO = 20;
 export const TAMANHO_MAXIMO = 100;

@@ -1,5 +1,7 @@
 import type {
+  AuditChainBreakReason,
   AuditEntry,
+  AuditIntegrity,
   AuditListResponse,
   AccountLink,
   Asset,
@@ -1293,5 +1295,31 @@ export function toStationList(
       offline: resumo.offline ?? items.length - online,
       offlineAfterSec: resumo.janelaOfflineS ?? 0,
     },
+  };
+}
+
+export interface BackendAuditIntegrity {
+  integra: boolean;
+  registrosVerificados: number;
+  travaNoBanco?: boolean;
+  primeiraQuebra?: { id: string; timestamp: string; motivo?: string } | null;
+}
+
+const AUDIT_BREAK_REASON: Record<string, AuditChainBreakReason> = {
+  SEM_HASH: 'missing_hash',
+  CONTEUDO_ALTERADO: 'content_altered',
+  ELO_QUEBRADO: 'broken_link',
+};
+
+/** Verificação da cadeia de hash (GET /auditoria/integridade). */
+export function toAuditIntegrity(raw: BackendAuditIntegrity): AuditIntegrity {
+  const quebra = raw.primeiraQuebra;
+  return {
+    intact: raw.integra === true,
+    verifiedCount: typeof raw.registrosVerificados === 'number' ? raw.registrosVerificados : 0,
+    databaseLock: raw.travaNoBanco === true,
+    firstBreak: quebra
+      ? { id: quebra.id, at: quebra.timestamp, reason: AUDIT_BREAK_REASON[quebra.motivo ?? ''] ?? 'unknown' }
+      : null,
   };
 }

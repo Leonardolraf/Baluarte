@@ -494,6 +494,11 @@ export interface SecurityPolicy {
   loginAttemptLimit: number;
   twoFactorEnabled: boolean;
   auditRegistersActions: boolean;
+  /**
+   * Trava no banco ativa: UPDATE/DELETE/TRUNCATE no AuditLog recusados (migration
+   * 20261008171000_auditoria_imutavel). Sem ela a trilha ainda tem a cadeia de hash, que
+   * detecta adulteração, mas o banco aceita a alteração.
+   */
   auditLogImmutable: boolean;
   /** Nulo quando ainda não há política de retenção definida. */
   auditRetentionMonths: number | null;
@@ -706,6 +711,22 @@ export interface StationVerification {
 export interface StationListResponse {
   items: Station[];
   summary: { total: number; online: number; offline: number; offlineAfterSec: number };
+}
+
+/**
+ * Por que a cadeia de hash quebrou: registro sem hash, conteúdo que não confere com o hash
+ * gravado, ou elo (hash anterior) que não aponta para o registro anterior.
+ */
+export type AuditChainBreakReason = 'missing_hash' | 'content_altered' | 'broken_link' | 'unknown';
+
+/** Resultado da verificação da cadeia de hash da trilha (GET /auditoria/integridade). */
+export interface AuditIntegrity {
+  intact: boolean;
+  verifiedCount: number;
+  /** Trava do banco ligada (UPDATE/DELETE/TRUNCATE recusados no AuditLog). */
+  databaseLock: boolean;
+  /** Primeiro registro que não confere; `null` com a cadeia íntegra. */
+  firstBreak: { id: string; at: string; reason: AuditChainBreakReason } | null;
 }
 
 // ---- Infra / API ------------------------------------------------------------
