@@ -1,27 +1,24 @@
 import type { Router } from 'express';
-import { enviar, erro, wrap } from '../../http/resposta.js';
+import { enviar, wrap } from '../../http/resposta.js';
+import { notaCvss, regra, textoDeQuery, umDe, validar } from '../../shared/esquemas.js';
 import { exigePerfil, exigeToken } from '../../http/middlewares.js';
 import { OPERADORES, STATUS_FINDING } from '../../shared/dominio.js';
-import { queryString } from '../../shared/validacao.js';
 import * as vulnerabilidades from './service.js';
 
 export function rotasVulnerabilidades(r: Router) {
   // ---- GET /api/findings/classificacao?cvss=X (contrato N2 AT1; publico) ----
   r.get('/findings/classificacao', wrap(async (req, res) => {
-    const raw = req.query.cvss;
-    const cvss = Number(raw);
-    if (raw === undefined || raw === '' || Number.isNaN(cvss) || cvss < 0 || cvss > 10)
-      return erro(res, 400, 'CVSS deve estar entre 0.0 e 10.0', 'CVSS_INVALIDO');
-    return enviar(res, 200, { status: 'sucesso', dados: vulnerabilidades.classificar(cvss) });
+    validar(req.query, [regra('cvss', notaCvss, 'CVSS deve estar entre 0.0 e 10.0', 'CVSS_INVALIDO')]);
+    return enviar(res, 200, { status: 'sucesso', dados: vulnerabilidades.classificar(Number(req.query.cvss)) });
   }));
 
   // ---- GET /vulnerabilidades?severidade=&status=&q= (Administrador/Analista) ----
   r.get('/vulnerabilidades', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
     // Coage a string: `?severidade[]=x` / `?q[$ne]=x` viram objeto/array no parser do Express.
     const { lista, resumo } = await vulnerabilidades.listar({
-      severidade: queryString(req.query.severidade),
-      status: queryString(req.query.status),
-      q: queryString(req.query.q),
+      severidade: textoDeQuery.parse(req.query.severidade),
+      status: textoDeQuery.parse(req.query.status),
+      q: textoDeQuery.parse(req.query.q),
     });
     enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
   }));
@@ -33,9 +30,8 @@ export function rotasVulnerabilidades(r: Router) {
 
   // ---- PATCH /vulnerabilidades/:id (status, "Risco aceito" incluso) ----
   r.patch('/vulnerabilidades/:id', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
-    const { status } = req.body ?? {};
-    if (!STATUS_FINDING.includes(status)) return erro(res, 400, 'Status inválido', 'STATUS_INVALIDO');
-    const dados = await vulnerabilidades.alterarStatus(req.params.id, status);
+    const { status } = validar(req.body, [regra('status', umDe(STATUS_FINDING), 'Status inválido', 'STATUS_INVALIDO')]);
+    const dados = await vulnerabilidades.alterarStatus(req.params.id, String(status));
     enviar(res, 200, { status: 'sucesso', mensagem: 'Status atualizado', dados });
   }));
 }

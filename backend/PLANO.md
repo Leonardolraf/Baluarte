@@ -86,4 +86,4 @@ Cada módulo: `routes` (Express) → `service` (regra de negócio) → `reposito
 
 ## 7. Próximo passo concreto
 
-Fase 0 — modularização **concluída em 08/10/2026 (B01)**: as rotas saíram de `routes/{api,read,manage}.ts` para `modules/<domínio>/{routes,service,repository}.ts`, sem mudar rota, mensagem nem código de erro (backend 289/289, Newman 70/70). Falta da Fase 0 a validação com zod na borda (B09), que entra nas rotas dos módulos.
+Fase 0 — modularização **concluída em 08/10/2026 (B01)**: as rotas saíram de `routes/{api,read,manage}.ts` para `modules/<domínio>/{routes,service,repository}.ts`, sem mudar rota, mensagem nem código de erro (backend 289/289, Newman 70/70). A validação com zod na borda (B09) entrou em seguida: **Fase 0 concluída**.

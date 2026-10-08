@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { falhar } from '../../http/resposta.js';
 import type { UsuarioAtual } from '../../http/middlewares.js';
-import { POLITICA_SENHA } from '../../shared/validacao.js';
+import { POLITICA_SENHA } from '../../shared/dominio.js';
 import { registrarAuditoria } from '../audit/service.js';
 import { localizarPorEmail, normalizarEmail } from '../users/repository.js';
 import { gerarToken, SESSAO_MAXIMA_MS, type TokenPayload } from './jwt.js';

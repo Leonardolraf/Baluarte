@@ -189,6 +189,14 @@ Fase 0 do `backend/PLANO.md`: a regra de negócio saiu dos três arquivos de rot
 - **Padrão** — a rota valida o formato e responde; o serviço tem a regra e lança `falhar(status, mensagem, código)`; o `wrap` converte esse erro de negócio no mesmo envelope do contrato; o repositório fala com o Prisma.
 - **Testes** — 289 no backend (eram 279): 10 testes de unidade novos para as peças criadas (erro de negócio no `wrap`, métricas de campanha, conteúdo e permissão do treinamento, constantes). Unidade 57/57 (83,9% de linhas); completa 289/289 (98,8% de linhas, 95,3% de ramos). Contra a API refatorada: Newman 35 requisições / 70 asserções e Robot 29/29, sem falhas.
 
+## 2026-10-08 — Validação de entrada com zod (B09)
+
+Último item da Fase 0 do `backend/PLANO.md`.
+
+- **`shared/esquemas.ts`** — schemas zod dos campos (presença, texto, e-mail, host, senha da política, listas fixas, nota CVSS, parâmetro de query) e `validar(corpo, regras)`, que aplica as regras **na ordem do contrato** e lança o erro de negócio da primeira que falha. A ordem faz parte do contrato da N2 AT1 (no login: e-mail vazio → senha vazia → formato do e-mail), por isso as regras são uma lista e não um `z.object`, que juntaria os erros por campo.
+- **Rotas de todos os módulos** declaram as regras de entrada em vez de `if`s espalhados; só as checagens que cruzam campos ou percorrem listas ficaram no código da rota. Os predicados de `shared/validacao.ts` passam a usar os mesmos schemas (uma fonte de verdade por formato).
+- **Testes** — 299 no backend (10 de unidade novos para os schemas e a ordem das regras). Newman 35 requisições / 70 asserções e Robot 29/29 contra a API com zod, sem falhas.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -196,7 +204,7 @@ Fase 0 do `backend/PLANO.md`: a regra de negócio saiu dos três arquivos de rot
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 289 no backend (57 unidade + 7 banco + 112 integração + 113 pentest; 98,8% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 299 no backend (67 unidade + 7 banco + 112 integração + 113 pentest; 98,8% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`). Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |

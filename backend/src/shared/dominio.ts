@@ -15,3 +15,12 @@ export const OPERADORES = ['Administrador', 'Analista'];
 
 /** Rotulo de quem nao tem departamento nos relatorios agregados. */
 export const SEM_DEPARTAMENTO = 'Sem departamento';
+
+// Politica de senha publicada em GET /configuracoes/seguranca e aplicada nas rotas
+// de alteracao/redefinicao de senha.
+export const POLITICA_SENHA = {
+  comprimentoMinimo: 8,
+  comprimentoMaximo: 64,
+  exigirMaiusculaMinuscula: true,
+  exigirNumeroEspecial: true,
+} as const;

@@ -1,8 +1,15 @@
 import type { Router } from 'express';
+import { z } from 'zod';
 import { enviar, erro, wrap } from '../../http/resposta.js';
+import { opcional, regra, validar } from '../../shared/esquemas.js';
 import { exigeToken, usuarioDe } from '../../http/middlewares.js';
 import * as preferencias from './service.js';
 import { PREF_CAMPOS, type PrefCampo } from './service.js';
+
+// Cada preferencia, se enviada, tem de ser booleana.
+const PREFERENCIAS = PREF_CAMPOS.map((campo) =>
+  opcional(regra(campo, z.boolean(), `O campo ${campo} deve ser verdadeiro ou falso`, 'PREFERENCIA_INVALIDA')),
+);
 
 export function rotasNotificacoes(r: Router) {
   // ---- GET /configuracoes/notificacoes (protegido) ----
@@ -12,15 +19,9 @@ export function rotasNotificacoes(r: Router) {
 
   // ---- PUT /configuracoes/notificacoes (protegido; so booleanos) ----
   r.put('/configuracoes/notificacoes', exigeToken, wrap(async (req, res) => {
-    const corpo = (req.body ?? {}) as Record<string, unknown>;
+    const corpo = validar(req.body, PREFERENCIAS);
     const dados: Partial<Record<PrefCampo, boolean>> = {};
-    for (const campo of PREF_CAMPOS) {
-      const valor = corpo[campo];
-      if (valor === undefined) continue;
-      if (typeof valor !== 'boolean')
-        return erro(res, 400, `O campo ${campo} deve ser verdadeiro ou falso`, 'PREFERENCIA_INVALIDA');
-      dados[campo] = valor;
-    }
+    for (const campo of PREF_CAMPOS) if (corpo[campo] !== undefined) dados[campo] = corpo[campo] as boolean;
     if (Object.keys(dados).length === 0)
       return erro(res, 400, 'Nenhuma preferência informada', 'PREFERENCIA_INVALIDA');
     const salvas = await preferencias.salvar(usuarioDe(req).id, dados);
