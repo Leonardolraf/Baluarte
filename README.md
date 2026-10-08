@@ -163,11 +163,15 @@ docker compose up --build -d               # idem + frontend legado :3000 (para 
 docker compose down                        # -v tambem apaga o banco (volume db-data)
 ```
 - O frontend do produto fica em **:8081** no Docker, e nao em 5173: a 5173 e do dev server do Vite (que o Playwright reutiliza quando esta ocupada), entao os dois modos convivem sem se confundir.
-- Os dados ficam no PostgreSQL do servico `db` (volume `db-data`), publicado so em `127.0.0.1:5432`. A senha vem de `POSTGRES_PASSWORD` no `.env` da raiz; sem ela o compose nao sobe. Na **primeira** subida o entrypoint aplica as migrations (`prisma migrate deploy`, que nunca apaga dados), roda o seed de contrato e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes so aplica migrations pendentes e o seed de contrato (idempotente).
+- Os dados ficam no PostgreSQL do servico `db` (volume `db-data`), publicado so em `127.0.0.1:5432`. A senha vem de `POSTGRES_PASSWORD` no `.env` da raiz; sem ela o compose nao sobe. Na **primeira** subida o entrypoint aplica as migrations (`prisma migrate deploy`, que nunca apaga dados), roda o seed de contrato (`SEED_CONTRATO=0` desliga: ele cria contas com as senhas públicas acima, então não vai para produção) e o `seed:demo` (`SEED_DEMO=0` desliga); nas seguintes so aplica migrations pendentes e o seed de contrato (idempotente).
 - **Depois de um `db:reset` com a API no ar, reinicie a API** (`docker compose restart backend`): o reset recria a extensao `citext` e as conexoes abertas ficam com o tipo antigo em cache (`cache lookup failed for type`).
 - **Sem segredo no repositorio:** se `JWT_SECRET` nao vier do `.env`, o entrypoint gera um aleatorio e o guarda no volume (`/data/jwt.secret`), entao as sessoes sobrevivem a reinicios sem nenhum valor fixo versionado. Com `NODE_ENV=production` a API se recusa a subir sem um segredo forte.
 - `app` faz o build de producao de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o servico `backend` (`baluarte-frontend/nginx.conf`); so sobe depois do healthcheck da API. A API roda como usuario `node`, nao como root.
 - Para as suites Newman/Robot contra o Docker, suba com um banco limpo: `docker compose down -v && SEED_DEMO=0 docker compose up --build -d`.
+
+## Deploy da API no Railway
+
+Roteiro completo (serviço, variáveis, migração dos dados do Supabase, troca no frontend) em [`docs/DEPLOY-RAILWAY.md`](docs/DEPLOY-RAILWAY.md).
 
 ## Estrutura
 
