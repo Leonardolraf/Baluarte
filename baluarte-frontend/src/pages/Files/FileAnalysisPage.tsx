@@ -1,5 +1,5 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
-import type { FileScan, FileScanOutcome } from '@/types';
+import type { FileScan, FileScanOutcome, SecondOpinion, SecondOpinionStatus } from '@/types';
 import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { useAuth } from '@/contexts/useAuth';
@@ -12,6 +12,7 @@ import {
   fileScanVerdict,
   formatBytes,
   isTooLarge,
+  secondOpinionText,
 } from '@/lib/files';
 import { formatDateTime, formatNumber, formatRelative } from '@/lib/format';
 import { SEVERITY_BADGE_CLASS } from '@/lib/severity';
@@ -36,7 +37,9 @@ import {
   AlertTriangleIcon,
   CheckCircleIcon,
   CopyIcon,
+  ExternalLinkIcon,
   FileScanIcon,
+  InfoIcon,
   LockIcon,
   RefreshIcon,
   UploadIcon,
@@ -108,12 +111,83 @@ function Verdict({ scan }: { scan: FileScan }) {
   );
 }
 
+/** Cor da segunda opinião: risco só quando o VirusTotal detectou algo; o resto é neutro. */
+const SECOND_OPINION_CLASS: Record<SecondOpinionStatus, string> = {
+  malicious: SEVERITY_BADGE_CLASS.critical,
+  suspicious: SEVERITY_BADGE_CLASS.high,
+  no_detection: CLEAN_PILL_CLASS,
+  unknown: CLEAN_PILL_CLASS,
+  unavailable: CLEAN_PILL_CLASS,
+  disabled: CLEAN_PILL_CLASS,
+};
+
+function VirusTotalLink({ opinion }: { opinion: SecondOpinion }) {
+  return (
+    <a
+      href={opinion.link}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-ink underline-offset-4 hover:underline dark:text-white"
+    >
+      Ver relatório do hash no VirusTotal
+      <ExternalLinkIcon size={14} className="shrink-0" />
+      <span className="sr-only">(abre em nova aba)</span>
+    </a>
+  );
+}
+
+/**
+ * Segunda opinião do VirusTotal (B20), abaixo do veredito: só o hash foi consultado, e ela não
+ * muda o resultado do antivírus. Desconhecido e indisponível ganham texto próprio.
+ */
+function SecondOpinionPanel({ opinion }: { opinion: SecondOpinion | null }) {
+  if (!opinion) return null;
+  const text = secondOpinionText(opinion);
+  const detected = opinion.status === 'malicious' || opinion.status === 'suspicious';
+  return (
+    <div
+      data-testid="second-opinion"
+      data-status={opinion.status}
+      className={cn(
+        'rounded-lg px-4 py-3 ring-1 ring-inset',
+        detected ? SECOND_OPINION_CLASS[opinion.status] : 'ring-slate-200 dark:ring-slate-700',
+      )}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        Segunda opinião · VirusTotal
+      </p>
+      <div className="mt-2 flex items-start gap-2">
+        {detected ? (
+          <AlertTriangleIcon size={18} className="mt-0.5 shrink-0" />
+        ) : (
+          <InfoIcon size={18} className="mt-0.5 shrink-0 text-slate-500 dark:text-slate-400" />
+        )}
+        <div className="min-w-0 space-y-1">
+          <p className={cn('text-sm font-semibold', !detected && 'text-ink dark:text-white')}>{text.title}</p>
+          <p className={cn('text-sm', !detected && 'text-slate-600 dark:text-slate-300')}>{text.detail}</p>
+          {opinion.checkedAt && (
+            <p className={cn('text-xs', !detected && 'text-slate-500 dark:text-slate-400')}>
+              Consultado em {formatDateTime(opinion.checkedAt)}
+            </p>
+          )}
+          {opinion.status !== 'disabled' && (
+            <div className="pt-1">
+              <VirusTotalLink opinion={opinion} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResultCard({ outcome }: { outcome: FileScanOutcome }) {
   const { scan } = outcome;
   return (
     <Card title="Resultado da análise" subtitle={scan.name}>
       <div className="space-y-5">
         <Verdict scan={scan} />
+        <SecondOpinionPanel opinion={scan.secondOpinion} />
         <KeyValueList
           columns={2}
           items={[
@@ -139,6 +213,7 @@ function HistoryTable({ items, showUser }: { items: FileScan[]; showUser: boolea
           <tr>
             <Th>Arquivo</Th>
             <Th>Resultado</Th>
+            <Th>VirusTotal</Th>
             <Th>SHA-256</Th>
             {showUser && <Th>Enviado por</Th>}
             <Th>Analisado</Th>
@@ -160,6 +235,22 @@ function HistoryTable({ items, showUser }: { items: FileScan[]; showUser: boolea
                   />
                 ) : (
                   <StatusPill label="Sem ameaça conhecida" colorClass={CLEAN_PILL_CLASS} />
+                )}
+              </Td>
+              <Td>
+                {scan.secondOpinion ? (
+                  <StatusPill
+                    label={secondOpinionText(scan.secondOpinion).short}
+                    title={secondOpinionText(scan.secondOpinion).title}
+                    colorClass={SECOND_OPINION_CLASS[scan.secondOpinion.status]}
+                  />
+                ) : (
+                  <span
+                    className="text-slate-500 dark:text-slate-400"
+                    title="Análise anterior à segunda opinião"
+                  >
+                    —
+                  </span>
                 )}
               </Td>
               <Td>
@@ -275,7 +366,11 @@ export default function FileAnalysisPage() {
       ? `Enviando ${current?.name ?? 'arquivo'}…`
       : `Analisando ${current?.name ?? 'arquivo'}…`
     : outcome
-      ? `${fileScanVerdict(outcome.scan)}. Arquivo ${outcome.scan.name}.`
+      ? `${fileScanVerdict(outcome.scan)}. Arquivo ${outcome.scan.name}.${
+          outcome.scan.secondOpinion
+            ? ` VirusTotal: ${secondOpinionText(outcome.scan.secondOpinion).title}.`
+            : ''
+        }`
       : '';
 
   const items = data ?? [];
@@ -307,7 +402,8 @@ export default function FileAnalysisPage() {
             <LockIcon size={16} className="mt-0.5 shrink-0" />
             <span>
               O arquivo é analisado e descartado em seguida: ele não fica guardado. Só o hash (SHA-256) e o
-              resultado ficam no histórico.
+              resultado ficam no histórico. Para a segunda opinião, só o hash é consultado no VirusTotal: o
+              arquivo nunca é enviado a ele.
             </span>
           </p>
 

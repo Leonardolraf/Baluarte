@@ -87,6 +87,8 @@ describe('POST /arquivos/analise', () => {
     assert.equal(r.body.dados.nome, 'relatorio.txt', 'nunca guarda caminho, só o nome');
     assert.equal(recebidoPeloClamd, conteudo.length, 'o antivírus recebeu o arquivo inteiro');
     assert.doesNotMatch(JSON.stringify(r.body), /seguro/i);
+    // Sem VIRUSTOTAL_API_KEY a segunda opinião (B20) fica desligada e nada sai para fora.
+    assert.equal(r.body.dados.segundaOpiniao.situacao, 'DESLIGADO');
     const reg = await prisma.fileScan.findUnique({ where: { id: r.body.dados.id } });
     assert.equal(reg?.userId, colabId);
     assert.ok(await prisma.auditLog.findFirst({ where: { usuarioId: colabId, acao: 'ANALISAR_ARQUIVO' } }));

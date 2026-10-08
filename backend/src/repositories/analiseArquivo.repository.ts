@@ -1,4 +1,5 @@
 import { prisma } from '../config/db.js';
+import type { SegundaOpiniaoGravada } from '../models/segundaOpiniao.model.js';
 
 // Acesso a dados das analises de arquivo (tabela FileScan).
 
@@ -9,7 +10,7 @@ export function criar(dados: {
   sha256: string;
   resultado: 'LIMPO' | 'AMEACA';
   ameaca: string | null;
-}) {
+} & SegundaOpiniaoGravada) {
   return prisma.fileScan.create({ data: dados });
 }
 

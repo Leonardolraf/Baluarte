@@ -25,6 +25,7 @@ import type {
   FileScan,
   FileScanOutcome,
   FunnelStage,
+  SecondOpinion,
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
@@ -168,7 +169,11 @@ interface MockState {
   antivirusAvailable: boolean;
   /** Estações inscritas pelo agente (B13); o último contato é relativo ao relógio real. */
   stations: MockStation[];
+  /** Segunda opinião do VirusTotal simulada (B20): ligada, desligada (sem chave) ou sem cota. */
+  secondOpinionMode: MockSecondOpinionMode;
 }
+
+export type MockSecondOpinionMode = 'enabled' | 'disabled' | 'quota';
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -203,6 +208,7 @@ function createState(): MockState {
     fileScanTimes: new Map<string, number[]>(),
     antivirusAvailable: true,
     stations: buildMockStations(),
+    secondOpinionMode: 'enabled',
   };
 }
 
@@ -216,6 +222,11 @@ export function resetMockState(): void {
 /** Liga/desliga o antivírus simulado (testes e demonstração do 503). Volta a ligar com `resetMockState`. */
 export function setMockAntivirusAvailable(available: boolean): void {
   state.antivirusAvailable = available;
+}
+
+/** Modo da segunda opinião simulada (testes e demonstração). Volta a `enabled` com `resetMockState`. */
+export function setMockSecondOpinion(mode: MockSecondOpinionMode): void {
+  state.secondOpinionMode = mode;
 }
 
 // ---- Infra interna ----------------------------------------------------------
@@ -577,6 +588,35 @@ function containsAscii(bytes: Uint8Array, needle: string): boolean {
     return true;
   }
   return false;
+}
+
+/** Detecções simuladas do EICAR no VirusTotal (o arquivo de teste é conhecido por quase todos). */
+export const MOCK_EICAR_DETECTIONS = { detections: 61, total: 68 };
+
+/**
+ * Segunda opinião simulada, como no B20: só pelo hash, com cache do mesmo hash já consultado.
+ * EICAR é malicioso; qualquer outro arquivo novo é desconhecido (o mock não conhece hashes reais).
+ */
+function mockSecondOpinion(sha256: string, threat: boolean): SecondOpinion {
+  const base = { source: 'VirusTotal' as const, link: `https://www.virustotal.com/gui/file/${sha256}` };
+  if (state.secondOpinionMode === 'disabled')
+    return { ...base, status: 'disabled', reason: null, detections: null, total: null, checkedAt: null };
+  const cached = state.fileScans.find(
+    (s) => s.sha256 === sha256 && s.secondOpinion && s.secondOpinion.checkedAt !== null,
+  )?.secondOpinion;
+  if (cached) return { ...cached };
+  if (state.secondOpinionMode === 'quota')
+    return {
+      ...base,
+      status: 'unavailable',
+      reason: 'quota',
+      detections: null,
+      total: null,
+      checkedAt: null,
+    };
+  if (threat)
+    return { ...base, status: 'malicious', reason: null, ...MOCK_EICAR_DETECTIONS, checkedAt: nowIso() };
+  return { ...base, status: 'unknown', reason: null, detections: null, total: null, checkedAt: nowIso() };
 }
 
 function fileScanView(entry: MockFileScan, withUser: boolean): FileScan {
@@ -1476,15 +1516,18 @@ export const mockApi: BaluarteApi = {
     const bytes = await readFileBytes(file);
     // Arquivo de teste EICAR: pelo nome (eicar.com, eicar.txt…) ou pela assinatura no conteúdo.
     const threat = /eicar/i.test(file.name) || containsAscii(bytes, 'EICAR');
+    const sha256 = await mockSha256(bytes);
     const entry: MockFileScan = {
       id: nextId('arq'),
       userId: user.id,
       name: file.name,
       size: file.size,
-      sha256: await mockSha256(bytes),
+      sha256,
       result: threat ? 'threat' : 'clean',
       threat: threat ? EICAR_SIGNATURE : null,
       scannedAt: nowIso(),
+      // Depois do antivírus, só pelo hash; não muda o veredito acima.
+      secondOpinion: mockSecondOpinion(sha256, threat),
     };
     state.fileScans.unshift(entry);
     state.fileScanTimes.set(user.id, [...recent, now]);

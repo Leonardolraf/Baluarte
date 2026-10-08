@@ -480,6 +480,30 @@ export interface CreatedUser extends User {
 /** Veredito do antivírus: só diz se uma assinatura CONHECIDA casou, nunca que o arquivo é seguro. */
 export type FileScanResult = 'clean' | 'threat';
 
+/**
+ * Segunda opinião do VirusTotal (B20), consultada só pelo SHA-256 depois do antivírus: o arquivo
+ * nunca é enviado a ele, e ela não muda o veredito principal (`result`).
+ */
+export type SecondOpinionStatus =
+  'malicious' | 'suspicious' | 'no_detection' | 'unknown' | 'unavailable' | 'disabled';
+
+/** Por que a segunda opinião ficou indisponível (só com `unavailable`). */
+export type SecondOpinionReason = 'quota' | 'invalid_key' | 'provider_limit' | 'timeout' | 'failure';
+
+export interface SecondOpinion {
+  source: 'VirusTotal';
+  status: SecondOpinionStatus;
+  reason: SecondOpinionReason | null;
+  /** Mecanismos que marcaram o arquivo como malicioso ou suspeito (só com veredito). */
+  detections: number | null;
+  /** Mecanismos que deram veredito (só com veredito). */
+  total: number | null;
+  /** Quando o VirusTotal respondeu (null se não respondeu ou está desligado). */
+  checkedAt: string | null;
+  /** Relatório público do hash no VirusTotal. */
+  link: string;
+}
+
 /** Análise de um arquivo enviado. O arquivo é descartado; só o hash e o resultado ficam. */
 export interface FileScan {
   id: string;
@@ -491,6 +515,8 @@ export interface FileScan {
   /** Nome da assinatura encontrada (só quando `result` é `threat`). */
   threat: string | null;
   scannedAt: string;
+  /** Segunda opinião do VirusTotal; null nas análises anteriores a ela (B20). */
+  secondOpinion: SecondOpinion | null;
   /** Quem enviou: só vem para Administrador e Analista. */
   uploadedBy?: { name: string; email: string };
 }

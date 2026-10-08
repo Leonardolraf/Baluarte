@@ -1,4 +1,5 @@
 import type { FileScan } from '@prisma/client';
+import type { SegundaOpiniaoDto } from './segundaOpiniao.model.js';
 
 // Analise de arquivo pelo antivirus (B04). O arquivo nunca e gravado: passa em fluxo pelo
 // ClamAV e e descartado; fica so o registro (nome para exibir, tamanho, SHA-256, veredito).
@@ -27,6 +28,8 @@ export interface AnaliseDto {
   resultado: 'LIMPO' | 'AMEACA';
   ameaca: string | null;
   analisadoEm: Date;
+  /** Segunda opiniao do VirusTotal (B20); null nas analises anteriores a ela. Nao muda `resultado`. */
+  segundaOpiniao: SegundaOpiniaoDto | null;
   usuario?: { nome: string; email: string };
 }
 

@@ -2,7 +2,7 @@ import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRe
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RBACRole } from '@/types';
 import { httpClient, realApi } from '@/services/api';
-import { toFileScan, type BackendFileScan } from '@/services/adapters';
+import { toFileScan, toSecondOpinion, type BackendFileScan } from '@/services/adapters';
 import { HttpError } from '@/lib/errors';
 import {
   fileScanErrorMessage,
@@ -10,15 +10,18 @@ import {
   formatBytes,
   isTooLarge,
   MAX_FILE_SIZE_BYTES,
+  secondOpinionText,
 } from '@/lib/files';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
 import {
   EICAR_SIGNATURE,
+  MOCK_EICAR_DETECTIONS,
   MOCK_FILE_SCANS_PER_HOUR,
   mockApi,
   mockSha256,
   setMockAntivirusAvailable,
+  setMockSecondOpinion,
 } from '@/mocks/api';
 import { MOCK_USERS } from '@/mocks/data';
 
@@ -66,7 +69,77 @@ describe('services/adapters — análise de arquivos', () => {
       result: 'threat',
       threat: 'Eicar-Signature',
       scannedAt: '2026-10-08T12:00:00.000Z',
+      secondOpinion: null,
     });
+  });
+
+  it('converte a segunda opinião do VirusTotal (B20); o link sai do hash, nunca do servidor', () => {
+    const scan = toFileScan(
+      backendScan({
+        segundaOpiniao: {
+          fonte: 'VirusTotal',
+          situacao: 'MALICIOSO',
+          motivo: null,
+          deteccoes: 61,
+          total: 68,
+          consultadoEm: '2026-10-08T12:00:01.000Z',
+          link: 'javascript:alert(1)',
+          mensagem: '61 de 68…',
+        },
+      }),
+    );
+    expect(scan.secondOpinion).toEqual({
+      source: 'VirusTotal',
+      status: 'malicious',
+      reason: null,
+      detections: 61,
+      total: 68,
+      checkedAt: '2026-10-08T12:00:01.000Z',
+      link: 'https://www.virustotal.com/gui/file/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f',
+    });
+  });
+
+  it('segunda opinião: indisponível com motivo, desconhecido sem contagens, situação estranha vira indisponível', () => {
+    const sha = 'a'.repeat(64);
+    const raw = {
+      fonte: 'VirusTotal',
+      motivo: null,
+      deteccoes: null,
+      total: null,
+      consultadoEm: null,
+      link: '',
+    };
+    expect(toSecondOpinion({ ...raw, situacao: 'INDISPONIVEL', motivo: 'COTA' }, sha)).toMatchObject({
+      status: 'unavailable',
+      reason: 'quota',
+    });
+    expect(toSecondOpinion({ ...raw, situacao: 'INDISPONIVEL', motivo: 'TEMPO_ESGOTADO' }, sha)?.reason).toBe(
+      'timeout',
+    );
+    expect(toSecondOpinion({ ...raw, situacao: 'INDISPONIVEL', motivo: 'XYZ' }, sha)?.reason).toBe('failure');
+    expect(
+      toSecondOpinion(
+        { ...raw, situacao: 'DESCONHECIDO', deteccoes: 3, total: 9, consultadoEm: '2026-10-08T00:00:00Z' },
+        sha,
+      ),
+    ).toMatchObject({ status: 'unknown', detections: null, total: null, checkedAt: '2026-10-08T00:00:00Z' });
+    expect(toSecondOpinion({ ...raw, situacao: 'SEM_DETECCAO', deteccoes: 0, total: 66 }, sha)).toMatchObject(
+      {
+        status: 'no_detection',
+        detections: 0,
+        total: 66,
+      },
+    );
+    expect(
+      toSecondOpinion({ ...raw, situacao: 'SUSPEITO', deteccoes: -1, total: 66 }, sha)?.detections,
+    ).toBeNull();
+    expect(toSecondOpinion({ ...raw, situacao: 'DESLIGADO' }, sha)?.status).toBe('disabled');
+    expect(toSecondOpinion({ ...raw, situacao: 'OUTRA' }, sha)).toMatchObject({
+      status: 'unavailable',
+      reason: 'failure',
+    });
+    expect(toSecondOpinion(null, sha)).toBeNull();
+    expect(toSecondOpinion(undefined, sha)).toBeNull();
   });
 
   it('LIMPO zera a ameaça; `usuario` (operadores) vira uploadedBy', () => {
@@ -269,6 +342,33 @@ describe('mockApi — análise de arquivos', () => {
     expect([...dates].sort((a, b) => b - a)).toEqual(dates);
   });
 
+  it('segunda opinião simulada: EICAR malicioso, arquivo novo desconhecido, cache pelo hash', async () => {
+    loginAs('collaborator');
+    const eicar = await mockApi.analyzeFile(new File(['qualquer'], 'eicar.com'));
+    expect(eicar.scan.secondOpinion).toMatchObject({ status: 'malicious', ...MOCK_EICAR_DETECTIONS });
+    expect(eicar.scan.secondOpinion?.link).toBe(`https://www.virustotal.com/gui/file/${eicar.scan.sha256}`);
+
+    const novo = await mockApi.analyzeFile(new File(['abc'], 'notas.txt'));
+    expect(novo.scan.result).toBe('clean');
+    expect(novo.scan.secondOpinion).toMatchObject({ status: 'unknown', detections: null });
+    expect(novo.scan.secondOpinion?.checkedAt).not.toBeNull();
+
+    // Sem cota, o mesmo hash ainda sai do cache; um hash novo fica indisponível.
+    setMockSecondOpinion('quota');
+    const repetido = await mockApi.analyzeFile(new File(['abc'], 'copia.txt'));
+    expect(repetido.scan.secondOpinion).toEqual(novo.scan.secondOpinion);
+    const semCota = await mockApi.analyzeFile(new File(['outro'], 'outro.txt'));
+    expect(semCota.scan.secondOpinion).toMatchObject({
+      status: 'unavailable',
+      reason: 'quota',
+      checkedAt: null,
+    });
+
+    setMockSecondOpinion('disabled');
+    const desligada = await mockApi.analyzeFile(new File(['abc'], 'c.txt'));
+    expect(desligada.scan.secondOpinion).toMatchObject({ status: 'disabled', checkedAt: null });
+  });
+
   it('mockSha256 tem 64 hex também sem Web Crypto (contexto não seguro)', async () => {
     const original = globalThis.crypto;
     Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true });
@@ -312,5 +412,40 @@ describe('lib/files', () => {
       'Ameaça encontrada: Eicar-Signature',
     );
     expect(fileScanVerdict({ result: 'threat', threat: null })).toBe('Ameaça encontrada: não identificada');
+  });
+
+  it('textos da segunda opinião: claros para desconhecido e indisponível, nunca "seguro"', () => {
+    const base = {
+      source: 'VirusTotal' as const,
+      reason: null,
+      detections: null,
+      total: null,
+      checkedAt: null,
+      link: '',
+    };
+    const all = [
+      secondOpinionText({ ...base, status: 'malicious', detections: 61, total: 68 }),
+      secondOpinionText({ ...base, status: 'suspicious', detections: 2, total: 66 }),
+      secondOpinionText({ ...base, status: 'no_detection', detections: 0, total: 66 }),
+      secondOpinionText({ ...base, status: 'unknown' }),
+      secondOpinionText({ ...base, status: 'unavailable', reason: 'quota' }),
+      secondOpinionText({ ...base, status: 'unavailable', reason: 'invalid_key' }),
+      secondOpinionText({ ...base, status: 'unavailable', reason: 'provider_limit' }),
+      secondOpinionText({ ...base, status: 'unavailable', reason: 'timeout' }),
+      secondOpinionText({ ...base, status: 'unavailable', reason: null }),
+      secondOpinionText({ ...base, status: 'disabled' }),
+    ];
+    expect(all[0]!.title).toBe('61 de 68 antivírus do VirusTotal detectaram este arquivo');
+    expect(all[0]!.short).toBe('61/68 detecções');
+    expect(all[1]!.short).toBe('2/66 suspeito');
+    expect(all[2]!.title).toBe('Nenhum dos 66 antivírus do VirusTotal detectou ameaça conhecida');
+    expect(all[3]!.detail).toMatch(/não foi enviado ao VirusTotal/);
+    expect(all[4]!.title).toBe('Segunda opinião indisponível agora (cota)');
+    expect(all[5]!.title).toMatch(/chave do VirusTotal recusada/);
+    expect(all[6]!.title).toMatch(/limite do VirusTotal/);
+    expect(all[7]!.title).toMatch(/não respondeu a tempo/);
+    expect(all[8]!.title).toMatch(/falha ao consultar/);
+    expect(all[9]!.short).toBe('Desligada');
+    for (const t of all) expect(`${t.title} ${t.detail}`).not.toMatch(/é seguro|arquivo seguro/i);
   });
 });

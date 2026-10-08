@@ -50,6 +50,10 @@ export function prepararBanco(testFileUrl: string): void {
   process.env.NODE_ENV = 'test';
   // Com NODE_ENV=test os e-mails vao para a caixa em memoria (src/config/email.ts), nunca para SMTP.
   delete process.env.SMTP_HOST;
+  // Nenhum teste consulta o VirusTotal de verdade: quem testa a segunda opiniao (B20) aponta
+  // VIRUSTOTAL_API_URL para um servidor local e define uma chave falsa.
+  delete process.env.VIRUSTOTAL_API_KEY;
+  delete process.env.VIRUSTOTAL_API_URL;
   process.env.FRONTEND_URL = 'http://localhost:5173';
   // migrate reset cria o banco se faltar, apaga tudo e reaplica as migrations (testa as migrations de verdade).
   npx('prisma migrate reset --force --skip-seed --skip-generate');
