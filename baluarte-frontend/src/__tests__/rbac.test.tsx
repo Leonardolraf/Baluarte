@@ -140,8 +140,14 @@ describe('RBAC — itens de navegação por perfil', () => {
   const pathsFor = (role: RBACRole | null) =>
     navGroupsForRole(role).flatMap((group) => group.items.map((item) => item.to));
 
-  it('colaborador vê apenas Dashboard, Análise de arquivos e Configurações', () => {
-    expect(pathsFor('collaborator')).toEqual(['/dashboard', '/files', '/settings']);
+  it('colaborador vê apenas Dashboard, Análise de arquivos, Configurações e o aviso de monitoramento', () => {
+    expect(pathsFor('collaborator')).toEqual(['/dashboard', '/files', '/settings', '/monitoring']);
+  });
+
+  it('os três perfis veem o aviso de monitoramento da estação (B18)', () => {
+    for (const role of ['admin', 'analyst', 'collaborator'] as const) {
+      expect(pathsFor(role)).toContain('/monitoring');
+    }
   });
 
   it('analista vê análise e conscientização, mas não Usuários', () => {

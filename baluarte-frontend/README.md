@@ -115,6 +115,7 @@ VITE_USE_MOCKS=
 | `/training/:id` | Treinamento contextual pós-clique (marcar como concluído) | todos |
 | `/users`, `/users/new`, `/users/:id/edit` | Gestão de usuários e perfis | Admin |
 | `/settings` | Senha, notificações, tema, política de segurança | todos |
+| `/monitoring` | Aviso de monitoramento da estação (B18): o que o agente coleta e com que frequência, texto vindo da API com a versão, botão **Li e estou ciente**; para o Administrador, a lista paginada de quem deu ciência de qual versão. Enquanto falta a ciência da versão atual, um banner discreto aparece no topo das outras telas | todos (lista: Admin) |
 
 `ProtectedRoute` redireciona anônimos para `/login` (guardando a origem, inclusive query string) e mostra "Acesso negado" para perfis fora da lista. A sessão vive em `localStorage` (`baluarte.token` / `baluarte.user`); **o JWT é a fonte de verdade** para id, e-mail e perfil (o objeto guardado só contribui com o nome), a expiração é verificada com `jwt-decode` e um 401 da API derruba a sessão. O dashboard entrega a colaboradores apenas índices e KPIs — a lista técnica de achados e as métricas por campanha ficam restritas a Admin/Analista também no payload.
 

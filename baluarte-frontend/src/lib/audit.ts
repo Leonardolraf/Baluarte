@@ -31,6 +31,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   ANALISAR_ARQUIVO: 'Arquivo analisado',
   INSCREVER_ESTACAO: 'Estação inscrita',
   APLICAR_RETENCAO_AUDITORIA: 'Retenção da auditoria aplicada',
+  REGISTRAR_CIENCIA_MONITORAMENTO: 'Ciência do aviso de monitoramento',
 };
 
 /** Rótulo da ação; código desconhecido vira "Coletar inventario" a partir de `COLETAR_INVENTARIO`. */

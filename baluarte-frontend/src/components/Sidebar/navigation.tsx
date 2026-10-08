@@ -6,6 +6,7 @@ import {
   BugIcon,
   ClockIcon,
   DashboardIcon,
+  EyeIcon,
   FileScanIcon,
   GraduationIcon,
   MailIcon,
@@ -80,6 +81,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/users', label: 'Usuários', icon: <UsersIcon />, roles: ROUTE_ROLES.users },
       { to: '/audit', label: 'Auditoria', icon: <ClockIcon />, roles: ROUTE_ROLES.audit },
       { to: '/settings', label: 'Configurações', icon: <SettingsIcon />, roles: ROUTE_ROLES.settings },
+      {
+        to: '/monitoring',
+        label: 'Monitoramento',
+        icon: <EyeIcon />,
+        roles: ROUTE_ROLES.monitoring,
+      },
     ],
   },
 ];

@@ -970,6 +970,128 @@ describe('realApi — estações monitoradas (B13)', () => {
   });
 });
 
+describe('realApi — aviso de monitoramento da estação (B18)', () => {
+  const aviso = {
+    versao: '2026-10-08',
+    rascunho: true,
+    titulo: 'Aviso sobre o monitoramento da estação de trabalho',
+    introducao: 'Introdução.',
+    secoes: [
+      { id: 'coletado', titulo: 'O que é coletado', paragrafos: [], itens: ['Programas'], observacoes: [] },
+      {
+        id: 'nao-coletado',
+        titulo: 'O que não é coletado',
+        paragrafos: ['O agente não lê:'],
+        itens: ['e-mails;'],
+        observacoes: ['Nota.'],
+      },
+    ],
+    ciencia: { registrada: false, registradaEm: null },
+  };
+
+  it('lê o aviso em GET /monitoramento/aviso e converte os campos', async () => {
+    on('GET /monitoramento/aviso', ok(aviso));
+    const notice = await realApi.getMonitoringNotice();
+    expect(notice).toEqual({
+      version: '2026-10-08',
+      draft: true,
+      title: 'Aviso sobre o monitoramento da estação de trabalho',
+      intro: 'Introdução.',
+      sections: [
+        { id: 'coletado', title: 'O que é coletado', paragraphs: [], items: ['Programas'], notes: [] },
+        {
+          id: 'nao-coletado',
+          title: 'O que não é coletado',
+          paragraphs: ['O agente não lê:'],
+          items: ['e-mails;'],
+          notes: ['Nota.'],
+        },
+      ],
+      acknowledged: false,
+      acknowledgedAt: null,
+    });
+  });
+
+  it('registra a ciência em POST /monitoramento/ciencia com a versão lida e propaga o 409', async () => {
+    on('POST /monitoramento/ciencia', {
+      status: 201,
+      data: {
+        status: 'sucesso',
+        dados: { versao: '2026-10-08', registradaEm: '2026-10-08T15:00:00.000Z', nova: true },
+      },
+    });
+    expect(await realApi.acknowledgeMonitoringNotice('2026-10-08')).toEqual({
+      version: '2026-10-08',
+      acknowledgedAt: '2026-10-08T15:00:00.000Z',
+      created: true,
+    });
+    expect(body()).toEqual({ versao: '2026-10-08' });
+
+    on('POST /monitoramento/ciencia', fail(409, 'VERSAO_DESATUALIZADA', 'O aviso mudou desde a sua leitura'));
+    expect(await rejection(realApi.acknowledgeMonitoringNotice('2026-01-01'))).toMatchObject({
+      status: 409,
+      code: 'VERSAO_DESATUALIZADA',
+    });
+  });
+
+  it('lista as ciências em GET /monitoramento/ciencias, paginada e filtrada no servidor', async () => {
+    on('GET /monitoramento/ciencias', {
+      status: 200,
+      data: {
+        status: 'sucesso',
+        dados: [
+          {
+            id: 'ack-1',
+            versao: '2026-10-08',
+            registradaEm: '2026-10-08T15:00:00.000Z',
+            usuario: {
+              id: 'u-2',
+              nome: 'Colaborador',
+              email: 'colaborador@empresa.com',
+              perfil: 'Colaborador',
+              status: 'Ativo',
+            },
+          },
+        ],
+        resumo: { total: 7, pagina: 2, tamanho: 5, versaoAtual: '2026-10-08', pendentesVersaoAtual: 3 },
+      },
+    });
+    const list = await realApi.listMonitoringAcknowledgements({
+      version: '2026-10-08',
+      page: 2,
+      pageSize: 5,
+    });
+    expect(calls.at(-1)?.params).toEqual({ pagina: '2', tamanho: '5', versao: '2026-10-08' });
+    expect(list).toEqual({
+      items: [
+        {
+          id: 'ack-1',
+          version: '2026-10-08',
+          acknowledgedAt: '2026-10-08T15:00:00.000Z',
+          user: {
+            id: 'u-2',
+            name: 'Colaborador',
+            email: 'colaborador@empresa.com',
+            role: 'collaborator',
+            status: 'active',
+          },
+        },
+      ],
+      total: 7,
+      page: 2,
+      pageSize: 5,
+      currentVersion: '2026-10-08',
+      pendingCurrentVersion: 3,
+    });
+
+    await realApi.listMonitoringAcknowledgements();
+    expect(calls.at(-1)?.params).toEqual({ pagina: '1', tamanho: '20' });
+
+    on('GET /monitoramento/ciencias', fail(403, 'PERFIL_SEM_PERMISSAO', 'Acesso negado para o seu perfil'));
+    expect(await rejection(realApi.listMonitoringAcknowledgements())).toMatchObject({ status: 403 });
+  });
+});
+
 describe('realApi — configurações', () => {
   const prefs = {
     alertasEmail: true,

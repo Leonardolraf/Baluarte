@@ -19,6 +19,10 @@ import type {
   FileScanOutcome,
   LoginCredentials,
   LoginResponse,
+  MonitoringAcknowledgementFilters,
+  MonitoringAcknowledgementListResponse,
+  MonitoringAcknowledgementResult,
+  MonitoringNotice,
   NotificationPreferences,
   PhishingReportResult,
   ScanReport,
@@ -150,6 +154,16 @@ export interface BaluarteApi {
   getStation(id: string): Promise<StationDetail>;
   /** Cruza o inventário com as bases públicas de vulnerabilidades agora (B14). */
   verifyStation(id: string): Promise<StationVerification>;
+
+  // Aviso de monitoramento da estação (B18, LGPD)
+  /** Texto em vigor (servido pela API), a versão e a ciência do usuário atual nela. Qualquer perfil. */
+  getMonitoringNotice(): Promise<MonitoringNotice>;
+  /** Registra "Li e estou ciente" da versão lida; idempotente. 409 se o texto mudou nesse meio-tempo. */
+  acknowledgeMonitoringNotice(version: string): Promise<MonitoringAcknowledgementResult>;
+  /** Quem deu ciência de qual versão, paginado no servidor. Só Administrador. */
+  listMonitoringAcknowledgements(
+    filters?: MonitoringAcknowledgementFilters,
+  ): Promise<MonitoringAcknowledgementListResponse>;
 
   // Configurações
   getNotificationPreferences(): Promise<NotificationPreferences>;

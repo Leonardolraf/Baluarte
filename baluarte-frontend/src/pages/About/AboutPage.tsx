@@ -100,6 +100,7 @@ const AREA_LABEL: Record<Area, string> = {
   users: 'Usuários',
   audit: 'Trilha de auditoria',
   settings: 'Configurações',
+  monitoring: 'Aviso de monitoramento',
 };
 
 const AREAS: readonly Area[] = [
@@ -114,6 +115,7 @@ const AREAS: readonly Area[] = [
   'users',
   'audit',
   'settings',
+  'monitoring',
 ];
 
 /** Áreas de navegação liberadas para o perfil, derivadas da tabela de rotas. */

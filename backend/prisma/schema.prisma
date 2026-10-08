@@ -40,6 +40,7 @@ model User {
   resetTokens  PasswordResetToken[]
   eventos      CampaignEvent[]
   analises     FileScan[]
+  ciencias     MonitoringAcknowledgement[]
 
   @@index([departmentId])
 }
@@ -361,4 +362,21 @@ model VirusTotalLookup {
   criadoEm DateTime @default(now())
 
   @@index([criadoEm])
+}
+
+// Ciencia do aviso de monitoramento da estacao (B18, RNF-006, LGPD): quem registrou "Li e
+// estou ciente", quando e de qual versao do texto (VERSAO_AVISO em
+// src/models/avisoMonitoramento.model.ts). Uma linha por usuario e versao: texto novo pede
+// ciencia nova e a antiga continua guardada. Modelo em ingles e campos em portugues, como
+// Department. Cascade: excluir a conta leva as ciencias dela (dado pessoal, como FileScan);
+// o registro REGISTRAR_CIENCIA_MONITORAMENTO do AuditLog, sem FK, continua.
+model MonitoringAcknowledgement {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versao       String   // CHECK: 1 a 32 caracteres [0-9A-Za-z._-]
+  registradaEm DateTime @default(now())
+
+  @@unique([userId, versao])
+  @@index([versao, registradaEm])
 }
