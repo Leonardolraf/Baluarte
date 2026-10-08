@@ -61,6 +61,8 @@ export function hostValido(host: unknown): boolean {
   const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
   const m = h.match(ipv4);
   if (m) return m.slice(1).every((o) => Number(o) >= 0 && Number(o) <= 255);
+  // So digitos e pontos sem ser IPv4 (ex.: "10.0.0") nao e nome de dominio: o TLD nunca e numerico.
+  if (/^[\d.]+$/.test(h)) return false;
   return /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(h);
 }
 

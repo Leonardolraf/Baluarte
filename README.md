@@ -62,12 +62,30 @@ npm run dev
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 232 testes. Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (112): treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
+| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 279 testes. Unidade (47, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura, validações, política de senha, tokens, JWT/RBAC, e-mails). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (112): treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
 | **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 340 testes |
 | **Frontend — ponta a ponta** (Playwright, modo mock, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 32 testes |
 | **Frontend — ponta a ponta em modo real** | `baluarte-frontend/e2e/real-backend.spec.ts` | `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; em dev use `:5174` com `VITE_USE_MOCKS=false`) | 10 testes |
+
+### Cobertura e relatório de testes (roteiro 3.2)
+
+```bash
+cd backend && npm run test:unidade      # só os 47 testes de unidade (sem banco, < 1 s)
+cd backend && npm run test:relatorio    # cobertura de unidade + completa e coverage/RELATORIO.md
+cd baluarte-frontend && npm run test:coverage
+```
+
+O `test:relatorio` mede a cobertura com o c8 e escreve `backend/coverage/RELATORIO.md` com testes, aprovados, falhas, **taxa de sucesso** e **% de linhas, ramos e funções** de cada suíte (relatório por arquivo em `coverage/index.html`). Metas mínimas (o comando falha abaixo delas): unidade 75% linhas / 85% ramos / 70% funções; completa 90% / 85% / 90%; frontend 80% / 75% / 60%.
+
+| Suíte | Testes | Taxa de sucesso | Linhas | Ramos | Funções |
+|---|---:|---:|---:|---:|---:|
+| Backend — unidade | 47 | 100% | 80,5% | 93,0% | 78,3% |
+| Backend — completa (unidade + integração + pentest) | 279 | 100% | 98,7% | 94,2% | 98,8% |
+| Frontend (Vitest) | 340 | 100% | 84,1% | 79,9% | 63,2% |
+
+As funções do frontend (63,2%) estão abaixo dos 70% do RNF-08; linhas e ramos estão acima.
 
 ### API — Postman/Newman (contra o backend real)
 A collection da N2 AT1 (`testes-api/`) roda **35 requisições / 70 asserções** sobre os 6 endpoints do contrato. Rode com a base de contrato (sem dados de demo) para garantir o verde:

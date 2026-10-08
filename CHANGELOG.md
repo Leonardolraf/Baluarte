@@ -164,6 +164,15 @@ A tela de treinamentos levava ~9 s em produção: uma requisição por campanha,
 - **`GET /assets`** ganha `achadosAbertos` (mesma regra de "aberto" dos KPIs) e `ultimaVarredura`, para o frontend não cruzar as listas de vulnerabilidades e varreduras por host.
 - **Testes** — 232 no backend (7 banco + 112 integração + 113 pentest).
 
+## 2026-10-08 — Testes de unidade e cobertura medida (B03)
+
+Item 3.2 do roteiro do professor: teste de unidade com percentual de cobertura e taxa de sucesso.
+
+- **47 testes de unidade** em `backend/tests/unidade/`, sem banco, sem servidor e sem rede (< 1 s): cálculo CVSS 3.1 contra valores da calculadora do FIRST, CWE/CVE, catálogo e remediação, ciclo da varredura simulada, validações de entrada, política de senha, tokens de link, JWT e middlewares de autenticação/RBAC, envelope de erro, transportes de e-mail e o texto do e-mail simulado da campanha.
+- **Defeito achado pelos testes de unidade:** `hostValido('10.0.0')` aceitava o valor (sem ser IPv4, caía na regra de nome de domínio). Nome de domínio nunca termina em rótulo numérico; corrigido.
+- **Cobertura com c8** — `npm run cobertura:unidade`, `npm run cobertura` e `npm run test:relatorio`, que escreve `coverage/RELATORIO.md` com taxa de sucesso e % de linhas, ramos e funções. Metas mínimas no c8 e no Vitest do frontend (o comando falha abaixo delas).
+- **Números:** backend unidade 47/47 (80,5% linhas, 93,0% ramos); backend completo 279/279 (98,7% linhas, 94,2% ramos, 98,8% funções); frontend 340/340 (84,1% linhas, 79,9% ramos, 63,2% funções).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -171,7 +180,7 @@ A tela de treinamentos levava ~9 s em produção: uma requisição por campanha,
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 232 no backend (7 banco + 112 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 279 no backend (47 unidade + 7 banco + 112 integração + 113 pentest; 98,7% de linhas cobertas) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; faltam RS256, modularização do backend e execução real de varredura/phishing | `backend/PLANO.md` |
