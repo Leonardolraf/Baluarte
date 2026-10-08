@@ -221,6 +221,12 @@ export interface ScanReport {
   durationSec?: number | null;
   findingsCount: number;
   findingsBySeverity: Record<Severity, number>;
+  /** 0 a 100: 0 na fila, 1 a 99 em andamento, 100 concluída (B26; calculado pelo servidor na leitura). */
+  progress: number;
+  /** Etapa legível ("Na fila", "Testando injeção", "Concluída"...). */
+  stage: string;
+  /** Quando a varredura conclui (ou concluiu), em ISO 8601; null se o servidor não informou. */
+  estimatedCompletionAt: string | null;
 }
 
 // ---- Campanhas de phishing --------------------------------------------------

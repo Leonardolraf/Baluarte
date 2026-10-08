@@ -78,6 +78,8 @@ export interface BaluarteApi {
   listAssets(): Promise<Asset[]>;
   createAsset(input: AssetInput): Promise<Asset>;
   listScans(): Promise<ScanReport[]>;
+  /** Uma varredura só, com o progresso (B26): a tela acompanha as que estão em curso. */
+  getScan(id: string): Promise<ScanReport>;
   startScan(assetId: string): Promise<ScanReport>;
 
   // Vulnerabilidades

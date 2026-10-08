@@ -81,6 +81,10 @@ export interface BackendScan {
   concluidoEm?: string | null;
   asset?: { nome: string; host: string };
   _count?: { findings?: number };
+  /** B26: só nas leituras (GET /scans e /scans/:id); a resposta do POST /scans não traz. */
+  progresso?: number;
+  etapa?: string;
+  estimativaConclusao?: string;
 }
 
 export interface BackendFinding {
@@ -368,21 +372,39 @@ export function toAsset(raw: BackendAsset): Asset {
   };
 }
 
+/** Etapa quando o servidor não informou (ex.: resposta do POST /scans): sai do status. */
+const SCAN_STAGE_FALLBACK: Record<ScanStatus, string> = {
+  queued: 'Na fila',
+  running: 'Em andamento',
+  completed: 'Concluída',
+  failed: 'Falhou',
+};
+
 export function toScan(raw: BackendScan): ScanReport {
   const started = new Date(raw.criadoEm).getTime();
   const finished = raw.concluidoEm ? new Date(raw.concluidoEm).getTime() : null;
+  const status = SCAN_STATUS_FROM_LABEL[norm(raw.status)] ?? 'queued';
+  const progress =
+    typeof raw.progresso === 'number' && Number.isFinite(raw.progresso)
+      ? Math.max(0, Math.min(100, Math.round(raw.progresso)))
+      : status === 'completed'
+        ? 100
+        : 0;
   return {
     id: raw.id,
     assetId: raw.assetId,
     assetName: raw.asset?.nome ?? raw.assetId,
     assetHost: raw.asset?.host ?? '',
-    status: SCAN_STATUS_FROM_LABEL[norm(raw.status)] ?? 'queued',
+    status,
     scanner: 'Baluarte OWASP Engine',
     startedAt: raw.criadoEm,
     finishedAt: raw.concluidoEm ?? null,
     durationSec: finished ? Math.max(0, Math.round((finished - started) / 1000)) : null,
     findingsCount: raw._count?.findings ?? 0,
     findingsBySeverity: emptySeverityMap(),
+    progress,
+    stage: raw.etapa || SCAN_STAGE_FALLBACK[status],
+    estimatedCompletionAt: raw.estimativaConclusao ?? raw.concluidoEm ?? null,
   };
 }
 

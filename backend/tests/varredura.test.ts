@@ -1,16 +1,30 @@
 // B21 — ciclo de vida da varredura simulada (EM_FILA -> EM_ANDAMENTO -> CONCLUIDA) e
-// RN-003 (uma varredura por vez no mesmo ativo). O tempo e simulado recuando `criadoEm`
+// RN-003 (uma varredura por vez no mesmo ativo). B26 — progresso consultavel (percentual,
+// etapa e estimativa nas leituras; GET /scans/:id) e avanco "em segundo plano" na leitura. O tempo e simulado recuando `criadoEm`
 // no banco, sem dormir. Banco Postgres isolado (baluarte_test_varredura) — ver helpers.ts.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ANALISTA, chamar, encerrarServidor, esperaErro, iniciarServidor, login, prepararBanco } from './helpers.js';
+import {
+  ADMIN,
+  ANALISTA,
+  SENHA_CONTA,
+  chamar,
+  criarUsuario,
+  encerrarServidor,
+  esperaErro,
+  iniciarServidor,
+  login,
+  prepararBanco,
+} from './helpers.js';
 
 prepararBanco(import.meta.url);
 
 const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/config/db.js');
 const { dadosAchado } = await import('../src/models/catalogoAchado.model.js');
-const { statusPorTempo, DURACAO_VARREDURA_MS, TEMPO_EM_FILA_MS } = await import('../src/services/cicloVarredura.service.js');
+const { statusPorTempo, DURACAO_VARREDURA_MS, TEMPO_EM_FILA_MS, ETAPAS_ANDAMENTO } = await import(
+  '../src/services/cicloVarredura.service.js'
+);
 
 let analista: string;
 let hostSeq = 0;
@@ -184,5 +198,151 @@ describe('RN-003: uma varredura por vez no mesmo ativo', () => {
     esperaErro(await chamar('POST', '/scans', { token: analista, body: {} }), 400, 'ATIVO_OBRIGATORIO');
     esperaErro(await chamar('POST', '/scans', { token: analista, body: { ativoId: 'ativo-999' } }), 404, 'ATIVO_NAO_ENCONTRADO');
     esperaErro(await chamar('POST', '/scans', { token: analista, body: { ativoId: 'ativo-002' } }), 422, 'ATIVO_INATIVO');
+  });
+});
+
+type ScanLido = {
+  id: string;
+  status: string;
+  criadoEm: string;
+  concluidoEm: string | null;
+  progresso: number;
+  etapa: string;
+  estimativaConclusao: string;
+  asset: { host: string };
+  _count: { findings: number };
+};
+
+describe('B26: progresso consultável', () => {
+  let colaborador: string;
+  before(async () => {
+    const admin = await login(ADMIN.email, ADMIN.senha);
+    const conta = await criarUsuario(admin, 'Colaborador', 'b26');
+    colaborador = await login(conta.email, SENHA_CONTA);
+  });
+
+  async function detalhe(scanId: string): Promise<ScanLido> {
+    const r = await chamar('GET', `/scans/${scanId}`, { token: analista });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.status, 'sucesso');
+    return r.body.dados as ScanLido;
+  }
+
+  const lerComProgresso = async (scanId: string) => (await lerScan(scanId)) as unknown as ScanLido;
+
+  it('POST /scans continua com a resposta do contrato (sem os campos novos)', async () => {
+    const ativo = await novoAtivo();
+    const r = await chamar('POST', '/scans', { token: analista, body: { ativoId: ativo.id } });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.mensagem, 'Varredura enfileirada com sucesso');
+    assert.deepEqual(Object.keys(r.body.dados).sort(), ['ativoId', 'criadoEm', 'scanId', 'statusVarredura']);
+    assert.equal(r.body.dados.statusVarredura, 'EM_FILA');
+  });
+
+  it('GET /scans traz progresso, etapa e estimativa coerentes com o status em cada fase', async () => {
+    const ativo = await novoAtivo();
+    const scanId = await iniciar(ativo.id);
+
+    const fila = await lerComProgresso(scanId);
+    assert.equal(fila.status, 'EM_FILA');
+    assert.equal(fila.progresso, 0);
+    assert.equal(fila.etapa, 'Na fila');
+    assert.equal(new Date(fila.estimativaConclusao).getTime(), new Date(fila.criadoEm).getTime() + DURACAO_VARREDURA_MS);
+
+    // Meio do andamento (com folga para o tempo que o teste leva).
+    const meio = TEMPO_EM_FILA_MS + (DURACAO_VARREDURA_MS - TEMPO_EM_FILA_MS) / 2;
+    const criadoEm = await recuar(scanId, meio);
+    const andamento = await lerComProgresso(scanId);
+    assert.equal(andamento.status, 'EM_ANDAMENTO');
+    assert.ok(andamento.progresso >= 50 && andamento.progresso <= 60, `progresso: ${andamento.progresso}`);
+    assert.ok((ETAPAS_ANDAMENTO as readonly string[]).includes(andamento.etapa), andamento.etapa);
+    assert.equal(new Date(andamento.estimativaConclusao).getTime(), criadoEm.getTime() + DURACAO_VARREDURA_MS);
+    assert.equal(andamento._count.findings, 0);
+
+    await recuar(scanId, DURACAO_VARREDURA_MS + 1_000);
+    const concluida = await lerComProgresso(scanId);
+    assert.equal(concluida.status, 'CONCLUIDA');
+    assert.equal(concluida.progresso, 100);
+    assert.equal(concluida.etapa, 'Concluída');
+    assert.equal(concluida.estimativaConclusao, concluida.concluidoEm, 'concluída: a estimativa é a data real');
+    assert.ok(concluida._count.findings >= 2);
+  });
+
+  it('nada novo é gravado: o progresso não existe no banco, só na resposta', async () => {
+    const ativo = await novoAtivo();
+    const scanId = await iniciar(ativo.id);
+    const gravado = await prisma.scan.findUniqueOrThrow({ where: { id: scanId } });
+    assert.deepEqual(Object.keys(gravado).sort(), ['assetId', 'concluidoEm', 'criadoEm', 'id', 'status']);
+  });
+
+  it('GET /scans/:id devolve só a varredura, no mesmo formato da lista', async () => {
+    const ativo = await novoAtivo();
+    const scanId = await iniciar(ativo.id);
+    await recuar(scanId, TEMPO_EM_FILA_MS + 2_000);
+    const um = await detalhe(scanId);
+    assert.equal(um.id, scanId);
+    assert.equal(um.status, 'EM_ANDAMENTO');
+    assert.equal(um.asset.host, ativo.host);
+    assert.ok(um.progresso >= 1 && um.progresso <= 99);
+    assert.equal(um.etapa, ETAPAS_ANDAMENTO[0]);
+    const daLista = await lerComProgresso(scanId);
+    assert.deepEqual(Object.keys(um).sort(), Object.keys(daLista).sort());
+  });
+
+  it('GET /scans/:id também avança: a varredura vencida conclui com achados na consulta dela', async () => {
+    const ativo = await novoAtivo();
+    const scanId = await iniciar(ativo.id);
+    await recuar(scanId, 60_000);
+    const um = await detalhe(scanId);
+    assert.equal(um.status, 'CONCLUIDA');
+    assert.equal(um.progresso, 100);
+    assert.ok(um._count.findings >= 2 && um._count.findings <= 4);
+  });
+
+  it('a consulta de uma varredura avança as outras pendentes (segundo plano na leitura)', async () => {
+    const a = await novoAtivo();
+    const b = await novoAtivo();
+    const idA = await iniciar(a.id);
+    const idB = await iniciar(b.id);
+    await recuar(idA, 60_000);
+    await recuar(idB, 60_000);
+    await detalhe(idA);
+    const outra = await prisma.scan.findUniqueOrThrow({ where: { id: idB }, include: { _count: { select: { findings: true } } } });
+    assert.equal(outra.status, 'CONCLUIDA');
+    assert.ok(outra._count.findings >= 2);
+  });
+
+  it('o dashboard de qualquer perfil (até Colaborador) conclui as pendentes e os achados aparecem sem abrir /scans', async () => {
+    const ativo = await novoAtivo();
+    const scanId = await iniciar(ativo.id);
+    await recuar(scanId, 60_000);
+    const r = await chamar('GET', '/dashboard', { token: colaborador });
+    assert.equal(r.status, 200);
+    const gravado = await prisma.scan.findUniqueOrThrow({ where: { id: scanId }, include: { _count: { select: { findings: true } } } });
+    assert.equal(gravado.status, 'CONCLUIDA');
+    assert.ok(gravado._count.findings >= 2);
+    const vulns = await chamar('GET', `/vulnerabilidades?q=${ativo.host}`, { token: analista });
+    assert.equal(vulns.body.resumo.total, gravado._count.findings);
+  });
+
+  it('RBAC e erros de GET /scans/:id: 401 sem token, 403 Colaborador, 400 id inválido, 404 inexistente', async () => {
+    const ativo = await novoAtivo();
+    const scanId = await iniciar(ativo.id);
+    esperaErro(await chamar('GET', `/scans/${scanId}`), 401, 'TOKEN_AUSENTE');
+    esperaErro(await chamar('GET', `/scans/${scanId}`, { token: 'abc' }), 401, 'TOKEN_INVALIDO');
+    esperaErro(await chamar('GET', `/scans/${scanId}`, { token: colaborador }), 403, 'PERFIL_SEM_PERMISSAO');
+    // A autenticacao e o perfil vem antes da validacao do id.
+    esperaErro(await chamar('GET', '/scans/a.b'), 401, 'TOKEN_AUSENTE');
+    esperaErro(await chamar('GET', '/scans/a.b', { token: colaborador }), 403, 'PERFIL_SEM_PERMISSAO');
+    const invalidos = ['a.b', encodeURIComponent("1' OR '1'='1"), 'x'.repeat(65), encodeURIComponent('{"$ne":null}')];
+    for (const id of invalidos) {
+      esperaErro(await chamar('GET', `/scans/${id}`, { token: analista }), 400, 'VARREDURA_ID_INVALIDO');
+    }
+    const nao = await chamar('GET', '/scans/scan-que-nao-existe', { token: analista });
+    esperaErro(nao, 404, 'VARREDURA_NAO_ENCONTRADA');
+    assert.equal(nao.body.mensagem, 'Varredura não encontrada');
+    // Administrador tambem opera a plataforma.
+    const admin = await login(ADMIN.email, ADMIN.senha);
+    assert.equal((await chamar('GET', `/scans/${scanId}`, { token: admin })).status, 200);
   });
 });

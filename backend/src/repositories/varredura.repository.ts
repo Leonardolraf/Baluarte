@@ -16,8 +16,15 @@ export function criarSeLivre(assetId: string) {
   });
 }
 
+const COM_ATIVO_E_ACHADOS = { asset: true, _count: { select: { findings: true } } } as const;
+
 export function listar() {
-  return prisma.scan.findMany({ include: { asset: true, _count: { select: { findings: true } } }, orderBy: { criadoEm: 'desc' } });
+  return prisma.scan.findMany({ include: COM_ATIVO_E_ACHADOS, orderBy: { criadoEm: 'desc' } });
+}
+
+/** Uma varredura, no mesmo formato da lista (ativo e contagem de achados). */
+export function buscar(id: string) {
+  return prisma.scan.findUnique({ where: { id }, include: COM_ATIVO_E_ACHADOS });
 }
 
 /** Fila -> andamento: varreduras criadas entre os dois limites (nem na fila, nem vencidas). */

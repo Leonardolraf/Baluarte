@@ -1232,6 +1232,9 @@ export const MOCK_SCANS: ScanReport[] = [
     durationSec: 742,
     findingsCount: 3,
     findingsBySeverity: { critical: 0, high: 2, medium: 1, low: 0, info: 0 },
+    progress: 100,
+    stage: 'Concluída',
+    estimatedCompletionAt: new Date(NOW_MS - 5 * DAY_MS + 742_000).toISOString(),
   },
   {
     id: 'scan-002',
@@ -1245,6 +1248,9 @@ export const MOCK_SCANS: ScanReport[] = [
     durationSec: 968,
     findingsCount: 4,
     findingsBySeverity: { critical: 1, high: 1, medium: 1, low: 0, info: 1 },
+    progress: 100,
+    stage: 'Concluída',
+    estimatedCompletionAt: new Date(NOW_MS - 9 * DAY_MS + 968_000).toISOString(),
   },
   {
     id: 'scan-003',
@@ -1258,6 +1264,9 @@ export const MOCK_SCANS: ScanReport[] = [
     durationSec: 611,
     findingsCount: 3,
     findingsBySeverity: { critical: 1, high: 1, medium: 1, low: 0, info: 0 },
+    progress: 100,
+    stage: 'Concluída',
+    estimatedCompletionAt: new Date(NOW_MS - 2 * DAY_MS + 611_000).toISOString(),
   },
   {
     id: 'scan-004',
@@ -1271,6 +1280,9 @@ export const MOCK_SCANS: ScanReport[] = [
     durationSec: 523,
     findingsCount: 2,
     findingsBySeverity: { critical: 1, high: 0, medium: 1, low: 0, info: 0 },
+    progress: 100,
+    stage: 'Concluída',
+    estimatedCompletionAt: new Date(NOW_MS - 2 * DAY_MS + 523_000).toISOString(),
   },
   {
     id: 'scan-005',
@@ -1284,6 +1296,11 @@ export const MOCK_SCANS: ScanReport[] = [
     durationSec: null,
     findingsCount: 0,
     findingsBySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+    // Varredura longa do seed (não segue o ciclo de 20 s da simulação): progresso fixo,
+    // sem estimativa de conclusão.
+    progress: 62,
+    stage: 'Testando autenticação',
+    estimatedCompletionAt: null,
   },
 ];
 

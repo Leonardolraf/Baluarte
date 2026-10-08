@@ -8,4 +8,5 @@ import { wrap } from '../utils/resposta.js';
 export function rotasVarreduras(r: Router) {
   r.post('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(varreduraController.iniciar));
   r.get('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(varreduraController.listar));
+  r.get('/scans/:id', exigeToken, exigePerfil(...OPERADORES), wrap(varreduraController.detalhe));
 }

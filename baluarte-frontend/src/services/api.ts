@@ -365,6 +365,11 @@ export const realApi: BaluarteApi = {
     return raw.map(toScan);
   },
 
+  async getScan(id: string): Promise<ScanReport> {
+    const raw = await request<BackendScan>({ method: 'GET', url: `/scans/${encodeURIComponent(id)}` });
+    return toScan(raw);
+  },
+
   async startScan(assetId: string): Promise<ScanReport> {
     const raw = await request<{ scanId: string; ativoId: string; statusVarredura: string; criadoEm: string }>(
       {

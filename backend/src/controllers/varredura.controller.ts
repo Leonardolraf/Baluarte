@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
-import { INICIO } from '../models/varredura.model.js';
+import { CONSULTA, INICIO } from '../models/varredura.model.js';
 import * as varreduraService from '../services/varredura.service.js';
 import { enviar } from '../utils/resposta.js';
 import { validar } from '../utils/esquemas.js';
@@ -14,7 +14,13 @@ export async function iniciar(req: Request, res: Response) {
   return enviar(res, 201, { status: 'sucesso', mensagem: 'Varredura enfileirada com sucesso', dados });
 }
 
-/** GET /scans (lista tecnica, so quem opera a plataforma: RN-006). */
+/** GET /scans (lista tecnica, so quem opera a plataforma: RN-006), com o progresso de cada uma (B26). */
 export async function listar(_req: Request, res: Response) {
   enviar(res, 200, { status: 'sucesso', dados: await varreduraService.listar() });
+}
+
+/** GET /scans/:id (B26): uma varredura so, com o progresso, para a tela acompanhar. */
+export async function detalhe(req: Request, res: Response) {
+  const { id } = validar(req.params, CONSULTA);
+  enviar(res, 200, { status: 'sucesso', dados: await varreduraService.detalhe(String(id)) });
 }
