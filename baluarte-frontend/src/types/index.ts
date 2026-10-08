@@ -101,6 +101,23 @@ export interface Asset {
   createdAt: string;
   lastScanAt?: string | null;
   openFindings: number;
+  /**
+   * Nota de risco 0–100 calculada pelo servidor a cada leitura (B25): 10 × críticas + 7 × altas +
+   * 4 × médias + 1 × baixa abertas, com teto 100. Ausente em API sem a nota.
+   */
+  riskScore?: number;
+  /** Achados abertos por severidade (base da nota). */
+  openBySeverity?: Record<Severity, number>;
+}
+
+/** Ativo no ranking de maior risco do dashboard (B25). */
+export interface AssetRisk {
+  id: string;
+  name: string;
+  host: string;
+  riskScore: number;
+  openFindings: number;
+  openBySeverity: Record<Severity, number>;
 }
 
 export interface AssetInput {
@@ -144,7 +161,8 @@ export interface RemediationStep {
 export interface VulnerabilityHistoryEntry {
   id: string;
   at: string;
-  actor: string;
+  /** Quem fez (ausente quando o dado não diz: a detecção é da varredura, não de uma pessoa). */
+  actor?: string;
   action: 'detected' | 'status_changed' | 'commented' | 'rescanned' | 'assigned';
   from?: VulnerabilityStatus;
   to?: VulnerabilityStatus;
@@ -181,6 +199,13 @@ export interface Vulnerability {
   detectedAt: string;
   updatedAt: string;
   history: VulnerabilityHistoryEntry[];
+  /**
+   * O histórico explica o status atual? `false` quando há mudanças de status sem registro
+   * (o servidor ainda não tem tabela de histórico: B25b). Ausente = não informado.
+   */
+  historyComplete?: boolean;
+  /** De onde o achado veio: a varredura que o gerou (só no detalhe). */
+  origin?: { scanId: string; scanStartedAt: string; assetId: string } | null;
 }
 
 export interface VulnerabilityFilters {
@@ -196,9 +221,29 @@ export interface VulnerabilitySummary {
   assets: number;
 }
 
+/** Tamanho padrão da página da lista de vulnerabilidades (o servidor aceita até 100). */
+export const VULN_PAGE_SIZE = 20;
+
+/** Colunas pelas quais a lista de vulnerabilidades ordena (no servidor). */
+export type VulnerabilitySortKey = 'severity' | 'title' | 'cvss' | 'detectedAt';
+
+/** Página pedida à lista (paginação e ordenação no servidor, B25). */
+export interface VulnerabilityListOptions {
+  /** A partir de 1. Padrão 1. */
+  page?: number;
+  /** Padrão `VULN_PAGE_SIZE` (20); o servidor aceita até 100. */
+  pageSize?: number;
+  /** `null`/ausente: a mais recente primeiro. */
+  sort?: SortState<VulnerabilitySortKey> | null;
+}
+
 export interface VulnerabilityListResponse {
+  /** Só a página pedida. */
   items: Vulnerability[];
+  /** Números do filtro inteiro (não só da página). */
   summary: VulnerabilitySummary;
+  page: number;
+  pageSize: number;
 }
 
 /** Relatório de vulnerabilidades exportado (B24): o arquivo e o nome sugerido para salvar. */
@@ -410,6 +455,8 @@ export interface DashboardMetrics {
   /** `null` para o Colaborador (RN-006). */
   severityDistribution: Record<Severity, number> | null;
   recentFindings: Vulnerability[];
+  /** Os 5 ativos de maior risco (B25); vazio para o Colaborador. */
+  topRiskAssets: AssetRisk[];
   recentCampaigns: Campaign[];
   recentScans: ScanReport[];
   timeline: TimelineEvent[];

@@ -200,7 +200,10 @@ describe('mockApi — dashboard e vulnerabilidades', () => {
 
   it('filtra por severidade, status e texto e devolve resumo coerente', async () => {
     await loginAs('analyst');
-    const all = await mockApi.listVulnerabilities();
+    const all = await mockApi.listVulnerabilities(
+      {},
+      { pageSize: 100, sort: { key: 'severity', direction: 'asc' } },
+    );
     expect(all.summary.total).toBe(all.items.length);
     const critical = await mockApi.listVulnerabilities({ severity: 'critical' });
     expect(critical.items.every((v) => v.severity === 'critical')).toBe(true);
@@ -213,7 +216,7 @@ describe('mockApi — dashboard e vulnerabilidades', () => {
     const none = await mockApi.listVulnerabilities({ query: 'zzz-inexistente' });
     expect(none.items).toHaveLength(0);
     expect(none.summary.assets).toBe(0);
-    // Ordenação: mais graves primeiro.
+    // Ordenação pedida: mais graves primeiro.
     const ranks = all.items.map((v) => ['critical', 'high', 'medium', 'low', 'info'].indexOf(v.severity));
     expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
   });

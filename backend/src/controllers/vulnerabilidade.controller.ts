@@ -1,7 +1,18 @@
 import type { Request, Response } from 'express';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
 import { SEVERIDADES, STATUS_FINDING } from '../models/dominio.model.js';
-import { ALTERACAO_STATUS, CLASSIFICACAO, FILTROS_RELATORIO, rotuloDaLista } from '../models/vulnerabilidade.model.js';
+import {
+  ALTERACAO_STATUS,
+  CLASSIFICACAO,
+  CONSULTA_LISTA,
+  FILTROS_RELATORIO,
+  ORDEM_PADRAO,
+  TAMANHO_PADRAO,
+  rotuloDaLista,
+  type CampoOrdenacao,
+  type Direcao,
+  type FiltrosVulnerabilidade,
+} from '../models/vulnerabilidade.model.js';
 import * as vulnerabilidadeService from '../services/vulnerabilidade.service.js';
 import { enviar, enviarArquivo } from '../utils/resposta.js';
 import { textoDeQuery, validar } from '../utils/esquemas.js';
@@ -14,31 +25,48 @@ export async function classificar(req: Request, res: Response) {
   return enviar(res, 200, { status: 'sucesso', dados: vulnerabilidadeService.classificar(Number(req.query.cvss)) });
 }
 
-/** GET /vulnerabilidades?severidade=&status=&q= (Administrador/Analista). */
+/** Parametro de query ja validado; vazio (ou so espacos) conta como ausente. */
+function parametro(req: Request, campo: string): string | undefined {
+  return textoDeQuery.parse(req.query[campo])?.trim() || undefined;
+}
+
+/** Filtros validados no rotulo oficial (`alto` -> `Alto`): os mesmos na lista e no relatorio. */
+function filtrosDe(req: Request): FiltrosVulnerabilidade {
+  return {
+    severidade: rotuloDaLista(SEVERIDADES, parametro(req, 'severidade')),
+    status: rotuloDaLista(STATUS_FINDING, parametro(req, 'status')),
+    q: parametro(req, 'q'),
+  };
+}
+
+/**
+ * GET /vulnerabilidades?severidade=&status=&q=&pagina=&tamanho=&ordenar=&direcao=
+ * (Administrador/Analista). Paginada no servidor (padrao 20, maximo 100); sem `ordenar`, a
+ * mais recente primeiro. Parametro invalido: 400 com codigo proprio.
+ */
 export async function listar(req: Request, res: Response) {
-  // Coage a string: `?severidade[]=x` / `?q[$ne]=x` viram objeto/array no parser do Express.
+  validar(req.query, CONSULTA_LISTA);
+  const ordenar = parametro(req, 'ordenar') as CampoOrdenacao | undefined;
   const { lista, resumo } = await vulnerabilidadeService.listar({
-    severidade: textoDeQuery.parse(req.query.severidade),
-    status: textoDeQuery.parse(req.query.status),
-    q: textoDeQuery.parse(req.query.q),
+    filtros: filtrosDe(req),
+    ordem: {
+      campo: ordenar ?? ORDEM_PADRAO.campo,
+      direcao: (parametro(req, 'direcao') as Direcao | undefined) ?? ORDEM_PADRAO.direcao,
+    },
+    pagina: Number(parametro(req, 'pagina') ?? 1),
+    tamanho: Number(parametro(req, 'tamanho') ?? TAMANHO_PADRAO),
   });
   enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
 }
 
-/** GET /vulnerabilidades/relatorio.pdf?severidade=&status=&q= (Administrador/Analista; B24). */
+/** GET /vulnerabilidades/relatorio.pdf?severidade=&status=&q= (Administrador/Analista; B24). Exporta o filtro inteiro, sem paginar. */
 export async function exportarRelatorio(req: Request, res: Response) {
   validar(req.query, FILTROS_RELATORIO);
-  // Depois de validar, todo parametro presente e string; vazio (ou so espacos) conta como ausente.
-  const q = (campo: string) => textoDeQuery.parse(req.query[campo])?.trim() || undefined;
-  const { pdf, nomeArquivo } = await vulnerabilidadeService.exportarRelatorio(usuarioDe(req), {
-    severidade: rotuloDaLista(SEVERIDADES, q('severidade')),
-    status: rotuloDaLista(STATUS_FINDING, q('status')),
-    q: q('q'),
-  });
+  const { pdf, nomeArquivo } = await vulnerabilidadeService.exportarRelatorio(usuarioDe(req), filtrosDe(req));
   enviarArquivo(res, pdf, 'application/pdf', nomeArquivo);
 }
 
-/** GET /vulnerabilidades/:id. */
+/** GET /vulnerabilidades/:id (com a origem e o historico). */
 export async function detalhe(req: Request, res: Response) {
   enviar(res, 200, { status: 'sucesso', dados: await vulnerabilidadeService.detalhe(req.params.id) });
 }

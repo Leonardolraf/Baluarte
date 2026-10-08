@@ -29,7 +29,7 @@ import type {
   PhishingReportResult,
   ScanReport,
   SecurityPolicy,
-  Severity,
+  SortState,
   StationDetail,
   StationListResponse,
   Training,
@@ -38,10 +38,13 @@ import type {
   UserInput,
   Vulnerability,
   VulnerabilityFilters,
+  VulnerabilityListOptions,
   VulnerabilityListResponse,
+  VulnerabilitySortKey,
   VulnerabilityReportFile,
   VulnerabilityStatus,
 } from '@/types';
+import { VULN_PAGE_SIZE } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict } from '@/lib/files';
@@ -73,6 +76,7 @@ import {
   toTrainingOverview,
   toUser,
   toVulnerability,
+  toVulnerabilityList,
   SEVERITY_TO_LABEL,
   VULN_STATUS_TO_LABEL,
   type BackendAccountLink,
@@ -95,6 +99,7 @@ import {
   type BackendTraining,
   type BackendTrainingOverview,
   type BackendUser,
+  type BackendVulnerabilitySummary,
 } from '@/services/adapters';
 
 // -----------------------------------------------------------------------------
@@ -227,8 +232,40 @@ async function requestWithSummary<T>(
   return { dados: response.data.dados, resumo: response.data.resumo };
 }
 
-function emptySeverityMap(): Record<Severity, number> {
-  return { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+export { VULN_PAGE_SIZE };
+
+/**
+ * Coluna da tela → ordenação do servidor (`ordenar`/`direcao`). A severidade sai da nota CVSS,
+ * então ordenar por severidade "da mais grave" é ordenar pelo CVSS do maior para o menor.
+ */
+export function vulnerabilitySortParams(
+  sort: SortState<VulnerabilitySortKey> | null | undefined,
+): Record<string, string> {
+  if (!sort) return {};
+  switch (sort.key) {
+    case 'severity':
+      return { ordenar: 'cvss', direcao: sort.direction === 'asc' ? 'desc' : 'asc' };
+    case 'cvss':
+      return { ordenar: 'cvss', direcao: sort.direction };
+    case 'title':
+      return { ordenar: 'descricao', direcao: sort.direction };
+    case 'detectedAt':
+      return { ordenar: 'detectadoEm', direcao: sort.direction };
+  }
+}
+
+/** Filtros da tela → query do servidor (lista e relatório usam os mesmos). */
+function vulnerabilityFilterParams(filters: VulnerabilityFilters): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (filters.severity && filters.severity !== 'all') {
+    const label = SEVERITY_TO_LABEL[filters.severity];
+    if (!label) throw new HttpError(400, 'SEVERIDADE_INVALIDA', 'Esta severidade não existe no servidor.');
+    params.severidade = label;
+  }
+  if (filters.status && filters.status !== 'all') params.status = VULN_STATUS_TO_LABEL[filters.status];
+  const query = filters.query?.trim();
+  if (query) params.q = query;
+  return params;
 }
 
 /** Rota inexistente no backend atual vira 501 explícito (em vez de "Rota não encontrada"). */
@@ -396,58 +433,39 @@ export const realApi: BaluarteApi = {
     });
   },
 
-  async listVulnerabilities(filters: VulnerabilityFilters = {}): Promise<VulnerabilityListResponse> {
-    const params: Record<string, string> = {};
-    if (filters.query) params.q = filters.query;
-    const { dados } = await requestWithSummary<BackendFinding[]>({
+  // Filtro, ordenação e paginação no servidor (B25): chega uma página, e o `resumo` (total,
+  // ativos, contagens por severidade e status) descreve o filtro inteiro.
+  async listVulnerabilities(
+    filters: VulnerabilityFilters = {},
+    options: VulnerabilityListOptions = {},
+  ): Promise<VulnerabilityListResponse> {
+    const page = options.page ?? 1;
+    const pageSize = options.pageSize ?? VULN_PAGE_SIZE;
+    // "Informativo" não existe no servidor (toda nota CVSS cai numa das quatro faixas).
+    if (filters.severity === 'info') {
+      return toVulnerabilityList(
+        [],
+        { total: 0, ativos: 0, pagina: page, tamanho: pageSize },
+        { page, pageSize },
+      );
+    }
+    const { dados, resumo } = await requestWithSummary<BackendFinding[]>({
       method: 'GET',
       url: '/vulnerabilidades',
-      params,
-    });
-    let items = dados.map(toVulnerability);
-    if (filters.severity && filters.severity !== 'all')
-      items = items.filter((v) => v.severity === filters.severity);
-    if (filters.status && filters.status !== 'all') items = items.filter((v) => v.status === filters.status);
-    const bySeverity = emptySeverityMap();
-    const byStatus: Record<VulnerabilityStatus, number> = {
-      open: 0,
-      in_review: 0,
-      remediating: 0,
-      resolved: 0,
-      accepted: 0,
-    };
-    for (const v of items) {
-      bySeverity[v.severity] += 1;
-      byStatus[v.status] += 1;
-    }
-    return {
-      items,
-      summary: {
-        total: items.length,
-        bySeverity,
-        byStatus,
-        assets: new Set(items.map((v) => v.assetId)).size,
+      params: {
+        ...vulnerabilityFilterParams(filters),
+        ...vulnerabilitySortParams(options.sort),
+        pagina: String(page),
+        tamanho: String(pageSize),
       },
-    };
+    });
+    return toVulnerabilityList(dados, resumo as BackendVulnerabilitySummary | undefined, { page, pageSize });
   },
 
   // Relatório em PDF (B24): o servidor aplica os mesmos filtros da lista, gera o arquivo e
   // registra a exportação na auditoria. Blob pelo mesmo cliente (o interceptor põe o token).
   async exportVulnerabilityReport(filters: VulnerabilityFilters = {}): Promise<VulnerabilityReportFile> {
-    const params: Record<string, string> = {};
-    if (filters.severity && filters.severity !== 'all') {
-      const label = SEVERITY_TO_LABEL[filters.severity];
-      if (!label)
-        throw new HttpError(
-          400,
-          'SEVERIDADE_INVALIDA',
-          'Esta severidade não existe no relatório do servidor.',
-        );
-      params.severidade = label;
-    }
-    if (filters.status && filters.status !== 'all') params.status = VULN_STATUS_TO_LABEL[filters.status];
-    const query = filters.query?.trim();
-    if (query) params.q = query;
+    const params = vulnerabilityFilterParams(filters);
     const response = await httpClient.request<Blob>({
       method: 'GET',
       url: '/vulnerabilidades/relatorio.pdf',

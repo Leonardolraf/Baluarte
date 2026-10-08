@@ -1,6 +1,6 @@
 import type { Finding } from '@prisma/client';
 import { z } from 'zod';
-import { notaCvss, regra, seVeio, umDe, umDeSemCaixa } from '../utils/esquemas.js';
+import { notaCvss, regra, regrasDePaginacao, seVeio, umDe, umDeSemCaixa } from '../utils/esquemas.js';
 import { SEVERIDADES, STATUS_FINDING } from './dominio.model.js';
 
 // Model de vulnerabilidade (achado de varredura): tipos do dominio, DTOs e regras de entrada (zod).
@@ -15,11 +15,44 @@ export type FindingComScan = {
   scan: { asset: { host: string; nome: string } };
 };
 
-/** Filtros da lista (GET /vulnerabilidades); so strings passam. */
+/** Achado com a origem completa (varredura e ativo com id): o detalhe mostra de onde ele veio. */
+export type FindingComOrigem = FindingComScan & {
+  scan: { id: string; criadoEm: Date; concluidoEm: Date | null; asset: { id: string; host: string; nome: string } };
+};
+
+/**
+ * Filtros da lista e do relatorio, ja validados e no rotulo oficial (`alto` -> `Alto`):
+ * severidade e status sao comparados por igualdade; `q` busca no host ou na categoria.
+ */
 export interface FiltrosVulnerabilidade {
   severidade?: string;
   status?: string;
   q?: string;
+}
+
+/** Campos pelos quais a lista pode ser ordenada (GET /vulnerabilidades?ordenar=). */
+export const CAMPOS_ORDENACAO = ['detectadoEm', 'cvss', 'descricao'] as const;
+export type CampoOrdenacao = (typeof CAMPOS_ORDENACAO)[number];
+export const DIRECOES = ['asc', 'desc'] as const;
+export type Direcao = (typeof DIRECOES)[number];
+
+/** Ordem da lista. Sem `ordenar`, a mais recente primeiro (como era antes da paginacao). */
+export interface OrdemVulnerabilidade {
+  campo: CampoOrdenacao;
+  direcao: Direcao;
+}
+export const ORDEM_PADRAO: OrdemVulnerabilidade = { campo: 'detectadoEm', direcao: 'desc' };
+
+/** Tamanho padrao e maximo da pagina da lista (os mesmos da auditoria). */
+export const TAMANHO_PADRAO = 20;
+export const TAMANHO_MAXIMO = 100;
+
+/** Consulta da lista paginada (filtros + ordem + pagina). */
+export interface ConsultaVulnerabilidades {
+  filtros: FiltrosVulnerabilidade;
+  ordem: OrdemVulnerabilidade;
+  pagina: number;
+  tamanho: number;
 }
 
 export const CLASSIFICACAO = [regra('cvss', notaCvss, 'CVSS deve estar entre 0.0 e 10.0', 'CVSS_INVALIDO')];
@@ -44,10 +77,47 @@ export const FILTROS_RELATORIO = [
   regra('q', seVeio(z.string().max(BUSCA_MAXIMA)), `Busca inválida: use um texto de até ${BUSCA_MAXIMA} caracteres`, 'BUSCA_INVALIDA'),
 ];
 
+/**
+ * Regras da query de GET /vulnerabilidades: os filtros do relatorio (mesmos codigos), a
+ * paginacao (`pagina`, `tamanho` <= 100) e a ordenacao. Valor desconhecido, repetido ou
+ * objeto/array dá 400 com codigo proprio, nunca uma lista que parece filtrada sem estar.
+ */
+export const CONSULTA_LISTA = [
+  ...FILTROS_RELATORIO,
+  ...regrasDePaginacao(TAMANHO_MAXIMO),
+  regra('ordenar', seVeio(umDe(CAMPOS_ORDENACAO)), `Ordenação inválida: use ${CAMPOS_ORDENACAO.join(', ')}`, 'ORDENACAO_INVALIDA'),
+  regra('direcao', seVeio(umDe(DIRECOES)), 'Direção inválida: use asc ou desc', 'DIRECAO_INVALIDA'),
+];
+
 /** Rotulo oficial da lista para um filtro ja validado (`alto` -> `Alto`). */
 export function rotuloDaLista(lista: readonly string[], valor: string | undefined): string | undefined {
   if (!valor) return undefined;
   return lista.find((item) => item.toLowerCase() === valor.toLowerCase());
+}
+
+// ---- Historico do achado (B25, sem tabela propria) ------------------------------
+
+/** Mudanca de status lida da trilha de auditoria (ALTERAR_STATUS_VULNERABILIDADE). */
+export interface AlteracaoStatus {
+  quando: Date;
+  de: string;
+  para: string;
+  autor: { id: string; nome: string } | null;
+}
+
+/**
+ * Historico como a API devolve: a deteccao (fato do proprio achado) e as mudancas de status
+ * registradas na auditoria. `completo` diz se essas mudancas explicam o status atual a partir
+ * de "Aberta" (o status com que o scanner cria todo achado); quando nao explicam (achado
+ * carregado por seed, mudanca anterior a trilha ou registro perdido), a tela avisa.
+ */
+export interface HistoricoVulnerabilidade {
+  eventos: Array<
+    | { tipo: 'DETECTADO'; quando: Date; varreduraId: string; ativo: string; ativoNome: string }
+    | ({ tipo: 'STATUS_ALTERADO' } & AlteracaoStatus)
+  >;
+  statusAtual: string;
+  completo: boolean;
 }
 
 /** Quem gerou o relatorio (sai no cabecalho do PDF). */

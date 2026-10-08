@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type {
+  AssetRisk,
   Campaign,
   DashboardMetrics,
   PendingTraining,
@@ -152,6 +153,91 @@ function RecentFindingsTable({ items, canManage }: { items: Vulnerability[]; can
         </TBody>
       </Table>
     </div>
+  );
+}
+
+// ---- Ativos de maior risco (B25) -------------------------------------------
+
+/** Rótulo curto para as contagens por severidade na linha do ativo. */
+const SEVERITY_SHORT: Record<Severity, string> = {
+  critical: 'crít.',
+  high: 'altas',
+  medium: 'médias',
+  low: 'baixas',
+  info: 'info.',
+};
+
+function TopRiskAssets({ items }: { items: AssetRisk[] }) {
+  if (items.length === 0) {
+    return (
+      <EmptyState
+        compact
+        title="Nenhum ativo em risco"
+        description="Nenhum ativo tem vulnerabilidade aberta."
+      />
+    );
+  }
+  return (
+    <ol className="divide-y divide-slate-100 dark:divide-slate-800" data-testid="top-risk-assets">
+      {items.map((asset, index) => {
+        // A barra leva a cor da severidade mais grave em aberto (dado, não faixa inventada).
+        const worst = SEVERITIES.find((severity) => asset.openBySeverity[severity] > 0) ?? 'low';
+        const score = clampPct(asset.riskScore);
+        return (
+          <li key={asset.id} className="py-3 first:pt-0 last:pb-0" data-testid="top-risk-asset">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 w-4 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-400"
+                >
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <Link
+                    to={`/vulnerabilities?q=${encodeURIComponent(asset.host)}`}
+                    className="block truncate text-sm font-medium text-ink hover:underline dark:text-white"
+                    title={`Ver vulnerabilidades de ${asset.host}`}
+                  >
+                    {asset.name}
+                  </Link>
+                  <div className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">
+                    {asset.host}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    {SEVERITIES.filter((severity) => asset.openBySeverity[severity] > 0).map((severity) => (
+                      <span key={severity} className="inline-flex items-center gap-1">
+                        <span
+                          aria-hidden="true"
+                          className={cn('h-1.5 w-1.5 rounded-full', SEVERITY_DOT_CLASS[severity])}
+                        />
+                        <span className="tabular-nums">{formatNumber(asset.openBySeverity[severity])}</span>{' '}
+                        {SEVERITY_SHORT[severity]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="w-24 shrink-0 text-right">
+                <span className="text-sm font-semibold tabular-nums text-ink dark:text-white">
+                  {formatNumber(score)}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">/100</span>
+                <div
+                  className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                  aria-hidden="true"
+                >
+                  <div
+                    className={cn('h-full rounded-full', SEVERITY_DOT_CLASS[worst])}
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -580,6 +666,24 @@ export default function DashboardPage() {
             <SeverityDistribution distribution={severityDistribution} />
           </Card>
         </div>
+      )}
+
+      {/* Ativos de maior risco (B25): lista técnica, só para quem opera a plataforma */}
+      {canManage && (
+        <Card
+          title="Ativos de maior risco"
+          subtitle="Nota de 0 a 100 pelas vulnerabilidades abertas"
+          href="/assets"
+          hrefLabel="Ver ativos"
+          footer={
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Nota = 10 por crítica, 7 por alta, 4 por média e 1 por baixa em aberto (teto 100), recalculada a
+              cada leitura.
+            </p>
+          }
+        >
+          <TopRiskAssets items={data.topRiskAssets} />
+        </Card>
       )}
 
       {/* Linha 4 — campanhas + timeline */}

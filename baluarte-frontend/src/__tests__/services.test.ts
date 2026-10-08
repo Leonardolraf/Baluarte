@@ -331,7 +331,12 @@ describe('services/adapters', () => {
     expect(vuln.cvss).toMatchObject({ version: '3.1', base: 10 });
     expect(vuln.assetName).toBe('srv-web-01');
     expect(vuln.evidence[0]?.content).toBe('GET /?x=${jndi:ldap://…} -> 200');
-    expect(vuln.history[0]).toMatchObject({ action: 'detected', to: 'open' });
+    // Sem `historico` (lista ou API antiga) só a detecção, sem afirmar o status de então (B25).
+    expect(vuln.history).toHaveLength(1);
+    expect(vuln.history[0]).toMatchObject({ action: 'detected' });
+    expect(vuln.history[0]?.to).toBeUndefined();
+    expect(vuln.history[0]?.actor).toBeUndefined();
+    expect(vuln.historyComplete).toBeUndefined();
   });
 
   it('toVulnerability: sem CVE devolve null e categoria fora do padrão vira "OWASP"', () => {

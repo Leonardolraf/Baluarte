@@ -1,8 +1,8 @@
 import type { CadastroAtivo } from '../models/ativo.model.js';
 import { falhar } from '../utils/resposta.js';
-import { STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
 import { registrarAuditoria } from './auditoria.service.js';
+import { abertosPorAtivo, riscoDe } from './riscoAtivo.service.js';
 import * as repo from '../repositories/ativo.repository.js';
 
 /** Cadastro de ativo (contrato N2 AT1). O host e unico. `ip` e `descricao` sao extensao (B10). */
@@ -24,15 +24,17 @@ export async function cadastrar(atorId: string, dados: CadastroAtivo) {
 }
 
 /**
- * Ativos com achadosAbertos e ultimaVarredura prontos (o frontend nao precisa cruzar as
- * listas de vulnerabilidades e varreduras). "Aberto" = mesma regra dos KPIs do dashboard.
+ * Ativos com achadosAbertos, ultimaVarredura e a nota de risco prontos (o frontend nao
+ * precisa cruzar as listas de vulnerabilidades e varreduras). "Aberto" = mesma regra dos
+ * KPIs do dashboard. A nota (0 a 100) e calculada nesta leitura (services/riscoAtivo.service.ts),
+ * junto com os abertos por severidade.
  */
 export async function listar() {
   await avancarVarreduras();
-  const ativos = await repo.listarComVarreduras();
+  const [ativos, abertos] = await Promise.all([repo.listarComVarreduras(), abertosPorAtivo()]);
   return ativos.map(({ scans, ...ativo }) => ({
     ...ativo,
-    achadosAbertos: scans.reduce((n, s) => n + s.findings.filter((f) => !STATUS_FINDING_ENCERRADO.includes(f.status)).length, 0),
+    ...riscoDe(abertos.get(ativo.id)),
     ultimaVarredura: scans[0]
       ? { id: scans[0].id, status: scans[0].status, criadoEm: scans[0].criadoEm, concluidoEm: scans[0].concluidoEm }
       : null,
