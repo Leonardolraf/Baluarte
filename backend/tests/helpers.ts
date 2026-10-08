@@ -55,6 +55,13 @@ export function prepararBanco(testFileUrl: string): void {
   delete process.env.VIRUSTOTAL_API_KEY;
   delete process.env.VIRUSTOTAL_API_URL;
   process.env.FRONTEND_URL = 'http://localhost:5173';
+  // B14: nada de rede real nos testes. As bases de vulnerabilidades apontam para uma porta local
+  // sem servidor (quem testa o cruzamento sobe um OSV/NVD falso e troca estas URLs); sem chave
+  // do NVD; o cruzamento automatico ja fica desligado com NODE_ENV=test.
+  process.env.OSV_API_URL = 'http://127.0.0.1:9';
+  process.env.NVD_API_URL = 'http://127.0.0.1:9';
+  delete process.env.NVD_API_KEY;
+  delete process.env.CRUZAMENTO_AUTOMATICO;
   // migrate reset cria o banco se faltar, apaga tudo e reaplica as migrations (testa as migrations de verdade).
   npx('prisma migrate reset --force --skip-seed --skip-generate');
   npx('tsx prisma/seed.ts');

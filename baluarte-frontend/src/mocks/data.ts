@@ -2101,7 +2101,27 @@ export const MOCK_AUDIT_LOG: AuditEntry[] = [
 export const MOCK_STATION_OFFLINE_AFTER_SEC = 900;
 
 /** Estação guardada no mock: o status e os totais são calculados na leitura, como no servidor. */
-export type MockStation = Omit<StationDetail, 'status' | 'softwareCount' | 'portCount' | 'offlineAfterSec'>;
+export type MockStation = Omit<
+  StationDetail,
+  | 'status'
+  | 'softwareCount'
+  | 'portCount'
+  | 'offlineAfterSec'
+  | 'verifiedAt'
+  | 'findingsTotal'
+  | 'findingsOpen'
+> & {
+  /** B14: estado do cruzamento com as bases de vulnerabilidades (a verificação preenche). */
+  verifiedAt?: string | null;
+  findingsTotal?: number;
+  findingsOpen?: number;
+};
+
+/**
+ * Quantos CVEs com nota a verificação simulada (B14) encontra em cada estação. A ops-ws-05 é
+ * RHEL, sem cobertura no OSV; a COM-NB-01 ainda não mandou inventário.
+ */
+export const MOCK_STATION_CVES: Record<string, number> = { 'ws-001': 3, 'ws-002': 2, 'ws-003': 4 };
 
 function sw(
   name: string,

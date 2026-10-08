@@ -19,6 +19,7 @@ import {
   type SistemaOperacional,
 } from '../models/agente.model.js';
 import { registrarAuditoria } from './auditoria.service.js';
+import { verificarEmSegundoPlano } from './cruzamento.service.js';
 import * as repo from '../repositories/agente.repository.js';
 
 // Lado servidor do protocolo remoto TLS do osquery (B07). O osquery se inscreve com o
@@ -138,7 +139,8 @@ function programasDe(linhas: Record<string, unknown>[]): ItemPrograma[] {
   for (const l of linhas) {
     const r = linhaPrograma.safeParse(l);
     if (!r.success) continue;
-    const item = { nome: r.data.name, versao: r.data.version, fornecedor: r.data.fornecedor };
+    const origem = r.data.origem && r.data.origem !== r.data.name ? r.data.origem : null;
+    const item = { nome: r.data.name, versao: r.data.version, fornecedor: r.data.fornecedor, pacoteOrigem: origem };
     vistos.set(`${item.nome}\u0001${item.versao}`, item);
   }
   return [...vistos.values()];
@@ -158,8 +160,9 @@ function portasDe(linhas: Record<string, unknown>[]): ItemPorta[] {
 /**
  * Recebimento de logs. `status` so atualiza o visto-por-ultimo; `result` com snapshot das
  * queries do Baluarte substitui o inventario da categoria. Eventos de outras queries ou
- * fora do formato sao ignorados (o osquery nao reenviaria nada diferente). Devolve false
- * se a chave nao vale.
+ * fora do formato sao ignorados (o osquery nao reenviaria nada diferente). Programas novos
+ * disparam o cruzamento com as bases de vulnerabilidades (B14) em segundo plano. Devolve
+ * false se a chave nao vale.
  */
 export async function receberLog(nodeKey: string, tipo: string, eventos: unknown[]): Promise<boolean> {
   const estacao = await estacaoDaChave(nodeKey);
@@ -169,14 +172,17 @@ export async function receberLog(nodeKey: string, tipo: string, eventos: unknown
     return true;
   }
   let gravou = false;
+  let programasNovos = false;
   for (const bruto of eventos) {
     const ev = eventoResultado.safeParse(bruto);
     if (!ev.success || !ev.data.snapshot) continue;
     const q = QUERIES[ev.data.name];
     if (!q) continue;
     const linhas = ev.data.snapshot;
-    if (q.categoria === 'programas' && q.fonte) await repo.substituirProgramas(estacao.id, q.fonte, programasDe(linhas));
-    else if (q.categoria === 'portas') await repo.substituirPortas(estacao.id, portasDe(linhas));
+    if (q.categoria === 'programas' && q.fonte) {
+      await repo.substituirProgramas(estacao.id, q.fonte, programasDe(linhas));
+      programasNovos = true;
+    } else if (q.categoria === 'portas') await repo.substituirPortas(estacao.id, portasDe(linhas));
     else if (q.categoria === 'sistema') {
       const linha = linhaSistema.safeParse(linhas[0] ?? {});
       if (!linha.success || !linha.data.name) continue;
@@ -185,5 +191,8 @@ export async function receberLog(nodeKey: string, tipo: string, eventos: unknown
     gravou = true;
   }
   if (!gravou) await repo.marcarVista(estacao.id);
+  // B14: inventario de programas novo -> cruzamento com as bases de vulnerabilidades, sem
+  // segurar a resposta ao agente (e sem rodar onde o processo congela depois de responder).
+  if (programasNovos) verificarEmSegundoPlano(estacao.id);
   return true;
 }

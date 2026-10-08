@@ -114,8 +114,10 @@ model Workstation {
   inscritaEm     DateTime @default(now())
   vistaEm        DateTime @default(now()) // ultima requisicao do agente (config ou logger)
   inventarioEm   DateTime? // ultimo resultado de inventario recebido
+  verificadaEm   DateTime? // ultimo cruzamento do inventario com as bases de vulnerabilidades (B14)
   programas      WorkstationSoftware[]
   portas         WorkstationPort[]
+  achados        Finding[]
 }
 
 // Inventario mais recente de programas da estacao (cada resultado substitui o anterior da
@@ -128,6 +130,9 @@ model WorkstationSoftware {
   versao        String      // "" quando o sistema nao informa a versao
   fonte         String      // CHECK: programs | deb_packages | rpm_packages | apps
   fornecedor    String?     // publisher (Windows), maintainer (deb), vendor (rpm), bundle id (macOS)
+  // Pacote-fonte do deb ("openssl" para o binario libssl3; "gcc-12 (12.2.0-14)" quando a versao
+  // difere). As bases do Debian e do Ubuntu no OSV sao indexadas pelo pacote-fonte (B14).
+  pacoteOrigem  String?
   coletadoEm    DateTime    @default(now())
 
   @@unique([workstationId, fonte, nome, versao])
@@ -181,7 +186,17 @@ model Finding {
   remediacao     Json?
   status         String   @default("Aberta") // CHECK: Aberta | Em revisão | Em remediação | Resolvida | Risco aceito
   criadoEm       DateTime @default(now())
+  // Achado de estacao (B14): programa instalado com CVE conhecido numa base publica. Nulos
+  // nos achados do scanner. A varredura (scanId) e a "verificacao do inventario" no ativo
+  // da estacao; workstationId + cve + programa nao se repetem (o mesmo CVE no mesmo
+  // programa da mesma estacao vira um achado so, em qualquer verificacao).
+  workstationId       String?
+  workstation         Workstation? @relation(fields: [workstationId], references: [id], onDelete: SetNull)
+  programa            String?  // nome do programa (Windows: o da tabela de CPE) ou pacote-fonte (Linux)
+  programaVersao      String?  // versao instalada quando o achado nasceu
+  baseVulnerabilidade String?  // CHECK: OSV | NVD
 
+  @@unique([workstationId, cve, programa])
   @@index([scanId])
 }
 
@@ -254,6 +269,22 @@ model ResetRequest {
 
   @@index([email, criadoEm])
   @@index([criadoEm])
+}
+
+// Cache das consultas as bases publicas de vulnerabilidades (B14): OSV (pacotes Linux) e NVD
+// (programas Windows pela tabela de CPE). Guarda a resposta ja reduzida ao que o cruzamento
+// usa (ids, CVE, vetor CVSS, resumo), com validade; resposta vazia tambem e guardada, falha
+// nao. chave: "consulta:<ecossistema>|<pacote>|<versao>", "vuln:<id>", "cpe:<cpe>", "cve:<id>".
+model VulnerabilityCache {
+  id           String   @id @default(cuid())
+  base         String   // CHECK: OSV | NVD
+  chave        String   // CHECK: 1 a 2048 caracteres
+  dados        Json
+  consultadoEm DateTime @default(now())
+  expiraEm     DateTime
+
+  @@unique([base, chave])
+  @@index([expiraEm])
 }
 
 // Analise de arquivo pelo antivirus (B04). O arquivo nunca e gravado: passa em fluxo pelo

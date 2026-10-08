@@ -17,7 +17,7 @@ const COLUNA = { detectadoEm: 'criadoEm', cvss: 'cvss', descricao: 'descricao' }
 /**
  * Filtros da lista e do relatorio como `where` do banco. Severidade e status chegam no
  * rotulo oficial (o controller ja normalizou maiusculas); a busca e por trecho, sem
- * diferenciar maiusculas, no host do ativo ou na categoria OWASP.
+ * diferenciar maiusculas, no host do ativo, na categoria OWASP, no CVE ou no programa (B14).
  */
 function filtro(f: FiltrosVulnerabilidade): Prisma.FindingWhereInput {
   // O `contains` do Prisma vira ILIKE '%termo%' sem escapar curingas: `%` e `_` do usuario
@@ -31,6 +31,9 @@ function filtro(f: FiltrosVulnerabilidade): Prisma.FindingWhereInput {
           OR: [
             { scan: { asset: { host: { contains: termo, mode: 'insensitive' } } } },
             { categoriaOwasp: { contains: termo, mode: 'insensitive' } },
+            // Achado de estacao (B14): tambem pelo CVE e pelo programa instalado.
+            { cve: { contains: termo, mode: 'insensitive' } },
+            { programa: { contains: termo, mode: 'insensitive' } },
           ],
         }
       : {}),

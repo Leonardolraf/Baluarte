@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AuthUser, RBACRole, StationDetail } from '@/types';
+import type { AuthUser, RBACRole, StationDetail, StationVerification } from '@/types';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { buildMockToken } from '@/lib/jwt';
 import { HttpError } from '@/lib/errors';
@@ -10,7 +10,14 @@ import { tokenStorage, userStorage } from '@/lib/storage';
 import { formatWindow, listenScope } from '@/lib/stations';
 import { mockApi } from '@/mocks/api';
 import { buildMockStations, MOCK_STATION_OFFLINE_AFTER_SEC, MOCK_USERS } from '@/mocks/data';
-import { toAsset, toStation, toStationDetail, toStationList, type BackendStation } from '@/services/adapters';
+import {
+  toAsset,
+  toStation,
+  toStationDetail,
+  toStationList,
+  toStationVerification,
+  type BackendStation,
+} from '@/services/adapters';
 import StationListPage from '@/pages/Stations/StationListPage';
 import StationDetailPage from '@/pages/Stations/StationDetailPage';
 
@@ -172,6 +179,9 @@ describe('StationDetailPage', () => {
       softwareCount: software.length,
       portCount: base.ports.length,
       offlineAfterSec: 900,
+      verifiedAt: null,
+      findingsTotal: 0,
+      findingsOpen: 0,
     };
     vi.spyOn(mockApi, 'getStation').mockResolvedValue(big);
     const user = userEvent.setup();
@@ -348,5 +358,170 @@ describe('mock — estações iniciais', () => {
         Date.parse('2026-10-08T12:00:00Z') - Date.parse(s.lastSeenAt) > MOCK_STATION_OFFLINE_AFTER_SEC * 1000,
     );
     expect(offline.map((s) => s.id)).toEqual(['ws-003']);
+  });
+});
+
+describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
+  const resultado = (extra: Partial<StationVerification> = {}): StationVerification => ({
+    verifiedAt: '2026-10-08T12:00:00.000Z',
+    checkedPrograms: 7,
+    uncoveredPrograms: 0,
+    vulnerabilitiesFound: 3,
+    newFindings: 3,
+    existingFindings: 0,
+    noCvss: 0,
+    pending: 0,
+    failures: [],
+    ...extra,
+  });
+
+  it('antes da primeira verificação mostra "Nunca verificada" e nenhum achado', async () => {
+    renderAt('/stations/ws-001');
+    await screen.findByRole('heading', { name: 'FIN-NB-07' });
+    expect(screen.getByText('Nunca verificada')).toBeInTheDocument();
+    expect(screen.getByText('Achados em aberto')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /de 3/ })).not.toBeInTheDocument();
+  });
+
+  it('o Analista verifica: mostra o resultado, a data e o link para os achados em aberto', async () => {
+    const user = userEvent.setup();
+    const spy = vi.spyOn(mockApi, 'verifyStation');
+    renderAt('/stations/ws-001');
+    await screen.findByRole('heading', { name: 'FIN-NB-07' });
+    await user.click(screen.getByRole('button', { name: 'Verificar vulnerabilidades' }));
+    const status = await screen.findByTestId('verification-result');
+    expect(spy).toHaveBeenCalledWith('ws-001');
+    expect(status).toHaveTextContent('Verificação concluída: 3 achados novos, 0 já registrados.');
+    expect(status).toHaveTextContent('7 programas consultados');
+    const link = await screen.findByRole('link', { name: /3 de 3/ });
+    expect(link).toHaveAttribute('href', '/vulnerabilities?q=fin-nb-07.empresa.local');
+    expect(screen.queryByText('Nunca verificada')).not.toBeInTheDocument();
+  });
+
+  it('o Administrador também vê o botão', async () => {
+    renderAt('/stations/ws-002', 'admin');
+    await screen.findByRole('heading', { name: 'dev-ws-02' });
+    expect(screen.getByRole('button', { name: 'Verificar vulnerabilidades' })).toBeEnabled();
+  });
+
+  it('estação sem inventário: botão desabilitado', async () => {
+    renderAt('/stations/ws-005');
+    await screen.findByRole('heading', { name: 'COM-NB-01' });
+    expect(screen.getByRole('button', { name: 'Verificar vulnerabilidades' })).toBeDisabled();
+  });
+
+  it('base fora do ar e consultas pendentes aparecem no resultado', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(mockApi, 'verifyStation').mockResolvedValue(
+      resultado({
+        newFindings: 0,
+        existingFindings: 1,
+        failures: ['OSV'],
+        pending: 2,
+        noCvss: 1,
+        uncoveredPrograms: 4,
+      }),
+    );
+    renderAt('/stations/ws-002');
+    await screen.findByRole('heading', { name: 'dev-ws-02' });
+    await user.click(screen.getByRole('button', { name: 'Verificar vulnerabilidades' }));
+    const status = await screen.findByTestId('verification-result');
+    expect(status).toHaveTextContent('0 achados novos, 1 já registrado.');
+    expect(status).toHaveTextContent('Sem resposta de OSV');
+    expect(status).toHaveTextContent('2 consultas ficaram para a próxima verificação');
+    expect(status).toHaveTextContent('1 CVE sem nota CVSS');
+    expect(status).toHaveTextContent('4 sem cobertura nas bases');
+  });
+
+  it('erro da API vira o banner de erro, sem resultado', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(mockApi, 'verifyStation').mockRejectedValue(
+      new HttpError(
+        409,
+        'VERIFICACAO_EM_ANDAMENTO',
+        'Já existe uma verificação em andamento para esta estação',
+      ),
+    );
+    renderAt('/stations/ws-002');
+    await screen.findByRole('heading', { name: 'dev-ws-02' });
+    await user.click(screen.getByRole('button', { name: 'Verificar vulnerabilidades' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Já existe uma verificação em andamento');
+    expect(screen.queryByTestId('verification-result')).not.toBeInTheDocument();
+  });
+
+  it('mockApi: só Administrador e Analista; a segunda verificação não cria nada; RHEL sem cobertura', async () => {
+    session('collaborator');
+    await expect(mockApi.verifyStation('ws-001')).rejects.toMatchObject({ status: 403 });
+    session('analyst');
+    await expect(mockApi.verifyStation('ws-999')).rejects.toMatchObject({
+      status: 404,
+      code: 'ESTACAO_NAO_ENCONTRADA',
+    });
+    expect(await mockApi.verifyStation('ws-003')).toMatchObject({ newFindings: 4, existingFindings: 0 });
+    expect(await mockApi.verifyStation('ws-003')).toMatchObject({ newFindings: 0, existingFindings: 4 });
+    const detail = await mockApi.getStation('ws-003');
+    expect(detail).toMatchObject({ findingsTotal: 4, findingsOpen: 4 });
+    expect(detail.verifiedAt).not.toBeNull();
+    const list = await mockApi.listStations();
+    expect(list.items.find((s) => s.id === 'ws-003')?.verifiedAt).toBe(detail.verifiedAt);
+    expect(list.items[0]).not.toHaveProperty('findingsTotal');
+    expect(await mockApi.verifyStation('ws-004')).toMatchObject({
+      newFindings: 0,
+      checkedPrograms: 0,
+      uncoveredPrograms: 4,
+    });
+  });
+
+  it('adapters: verificação e campos novos do detalhe', () => {
+    expect(
+      toStationVerification({
+        verificadaEm: '2026-10-08T12:00:00.000Z',
+        programasConsultados: 4,
+        programasSemCobertura: 1,
+        vulnerabilidadesEncontradas: 4,
+        achadosNovos: 3,
+        achadosExistentes: 0,
+        semCvss: 1,
+        pendentes: 0,
+        falhas: ['NVD', 'OUTRA'],
+      }),
+    ).toEqual({
+      verifiedAt: '2026-10-08T12:00:00.000Z',
+      checkedPrograms: 4,
+      uncoveredPrograms: 1,
+      vulnerabilitiesFound: 4,
+      newFindings: 3,
+      existingFindings: 0,
+      noCvss: 1,
+      pending: 0,
+      failures: ['NVD'],
+    });
+    const raw = {
+      id: 'cm1',
+      ativoId: 'cm2',
+      nome: 'x',
+      host: 'x.local',
+      identificador: 'u',
+      sistema: 'Ubuntu',
+      status: 'Online',
+      ultimoContato: '2026-10-08T10:00:00.000Z',
+      inscritaEm: '2026-10-01T10:00:00.000Z',
+      inventarioEm: null,
+      totalProgramas: 0,
+      totalPortas: 0,
+      janelaOfflineS: 900,
+      programas: [],
+      portas: [],
+    };
+    expect(
+      toStationDetail({
+        ...raw,
+        verificadaEm: '2026-10-08T11:00:00.000Z',
+        totalAchados: 3,
+        achadosAbertos: 2,
+      }),
+    ).toMatchObject({ verifiedAt: '2026-10-08T11:00:00.000Z', findingsTotal: 3, findingsOpen: 2 });
+    // Backend sem os campos (antes do B14): valores neutros.
+    expect(toStationDetail(raw)).toMatchObject({ verifiedAt: null, findingsTotal: 0, findingsOpen: 0 });
   });
 });

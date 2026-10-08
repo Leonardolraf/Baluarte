@@ -12,6 +12,8 @@ export type Vulnerabilidade = Finding;
 export type FindingComScan = {
   id: string; categoriaOwasp: string; cvss: number; severidade: string; descricao: string; evidencia: string;
   cwe: string | null; cve: string | null; cvssVetor: string | null; remediacao: unknown; status: string; criadoEm: Date;
+  /** Achado de estacao (B14): programa com CVE conhecido; nulos nos achados do scanner. */
+  programa?: string | null; programaVersao?: string | null; baseVulnerabilidade?: string | null;
   scan: { asset: { host: string; nome: string } };
 };
 
@@ -22,7 +24,7 @@ export type FindingComOrigem = FindingComScan & {
 
 /**
  * Filtros da lista e do relatorio, ja validados e no rotulo oficial (`alto` -> `Alto`):
- * severidade e status sao comparados por igualdade; `q` busca no host ou na categoria.
+ * severidade e status sao comparados por igualdade; `q` busca no host, na categoria, no CVE ou no programa (B14).
  */
 export interface FiltrosVulnerabilidade {
   severidade?: string;
@@ -139,6 +141,9 @@ export interface AchadoRelatorio {
   severidade: string;
   status: string;
   detectadoEm: Date;
+  /** Achado de estacao (B14): programa e versao instalados; null nos achados do scanner. */
+  programa: string | null;
+  programaVersao: string | null;
 }
 
 /** Contagem por rotulo, na ordem oficial da lista (inclui os zeros). */

@@ -45,6 +45,8 @@ export function montarRelatorio(
       severidade: f.severidade,
       status: f.status,
       detectadoEm: f.criadoEm,
+      programa: f.programa ?? null,
+      programaVersao: f.programaVersao ?? null,
     }))
     .sort((a, b) => b.cvss - a.cvss || b.detectadoEm.getTime() - a.detectadoEm.getTime());
   const notas = achados.map((a) => a.cvss);

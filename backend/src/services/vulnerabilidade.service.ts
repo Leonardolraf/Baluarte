@@ -42,6 +42,10 @@ export function mapFinding(f: FindingComScan) {
     descricao: f.descricao,
     evidencia: f.evidencia,
     remediacao: lerRemediacao(f.remediacao),
+    // Achado de estacao (B14): o programa instalado e a base publica de onde veio o CVE.
+    programa: f.programa ?? null,
+    programaVersao: f.programaVersao ?? null,
+    baseVulnerabilidade: f.baseVulnerabilidade ?? null,
     detectadoEm: f.criadoEm,
   };
 }
