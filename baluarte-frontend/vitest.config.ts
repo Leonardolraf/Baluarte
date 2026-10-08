@@ -19,9 +19,12 @@ export default defineConfig({
     restoreMocks: true,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'json-summary'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/__tests__/**', 'src/main.tsx', 'src/vite-env.d.ts'],
+      // Meta minima (B03): abaixo disso `npm run test:coverage` falha. Linhas e ramos acima
+      // dos 70% do RNF-08; funcoes ainda abaixo (63%) — meta atual para nao regredir.
+      thresholds: { lines: 80, statements: 80, branches: 75, functions: 60 },
     },
   },
 });

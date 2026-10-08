@@ -5,3 +5,7 @@ dist/
 .env
 
 .vercel
+
+# relatórios de cobertura (gerados por npm run test:relatorio)
+coverage/
+coverage-unidade/
