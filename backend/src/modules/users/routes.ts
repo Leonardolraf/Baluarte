@@ -1,20 +1,24 @@
 import type { Router } from 'express';
 import { enviar, erro, wrap } from '../../http/resposta.js';
+import { email, opcional, regra, texto, umDe, validar } from '../../shared/esquemas.js';
 import { exigePerfil, exigeToken, usuarioDe } from '../../http/middlewares.js';
 import { OPERADORES, PERFIS, STATUS_USUARIO } from '../../shared/dominio.js';
-import { emailFormatoValido, textoPreenchido, vazio } from '../../shared/validacao.js';
 import { normalizarEmail } from './repository.js';
 import * as usuarios from './service.js';
 import type { AlteracaoUsuario } from './service.js';
 
+// Regras de entrada (zod), na ordem do contrato.
+const NOME = regra('nome', texto, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
+const EMAIL = regra('email', email, 'Email inválido', 'EMAIL_INVALIDO');
+const PERFIL = regra('perfil', umDe(PERFIS), 'Perfil inválido', 'PERFIL_INVALIDO');
+const CADASTRO = [NOME, EMAIL, PERFIL];
+const EDICAO = [opcional(NOME), opcional(EMAIL), opcional(PERFIL), opcional(regra('status', umDe(STATUS_USUARIO), 'Status inválido', 'STATUS_INVALIDO'))];
+
 export function rotasUsuarios(r: Router) {
   // ---- POST /api/users (contrato N2 AT1; Administrador/Analista) --------------
   r.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
-    const { nome, email, perfil, departamento } = req.body ?? {};
-    if (!textoPreenchido(nome)) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
-    if (!emailFormatoValido(email)) return erro(res, 400, 'Email inválido', 'EMAIL_INVALIDO');
-    if (!PERFIS.includes(perfil)) return erro(res, 400, 'Perfil inválido', 'PERFIL_INVALIDO');
-    const dados = await usuarios.criar(usuarioDe(req), { nome, email: String(email), perfil, departamento });
+    const { nome, email, perfil, departamento } = validar(req.body, CADASTRO);
+    const dados = await usuarios.criar(usuarioDe(req), { nome: nome as string, email: String(email), perfil: perfil as string, departamento });
     return enviar(res, 201, { status: 'sucesso', mensagem: 'Usuário cadastrado com sucesso', dados });
   }));
 
@@ -32,26 +36,16 @@ export function rotasUsuarios(r: Router) {
   // ---- PATCH /users/:id (Administrador) ----
   r.patch('/users/:id', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
     const ator = usuarioDe(req);
-    const { nome, email, perfil, status, departamento } = req.body ?? {};
-    // Validacoes de formato (nao dependem do banco).
+    // Formato dos campos enviados (os ausentes nao mudam).
+    const { nome, email, perfil, status, departamento } = validar(req.body, EDICAO);
     const dados: AlteracaoUsuario = {};
-    if (nome !== undefined) {
-      if (typeof nome !== 'string' || vazio(nome.trim())) return erro(res, 400, 'Nome é obrigatório', 'NOME_OBRIGATORIO');
-      dados.nome = nome.trim();
-    }
-    if (email !== undefined) {
-      if (!emailFormatoValido(email)) return erro(res, 400, 'Email inválido', 'EMAIL_INVALIDO');
-      dados.email = normalizarEmail(email);
-    }
-    if (perfil !== undefined) {
-      if (!PERFIS.includes(perfil)) return erro(res, 400, 'Perfil inválido', 'PERFIL_INVALIDO');
-      dados.perfil = perfil;
-    }
+    if (nome !== undefined) dados.nome = String(nome).trim();
+    if (email !== undefined) dados.email = normalizarEmail(email);
+    if (perfil !== undefined) dados.perfil = String(perfil);
     if (status !== undefined) {
-      if (!STATUS_USUARIO.includes(status)) return erro(res, 400, 'Status inválido', 'STATUS_INVALIDO');
       if (req.params.id === ator.id && status === 'Inativo')
         return erro(res, 422, 'Você não pode inativar a própria conta', 'AUTO_INATIVACAO');
-      dados.status = status;
+      dados.status = String(status);
     }
     const atualizado = await usuarios.atualizar(ator, req.params.id, dados, departamento);
     return enviar(res, 200, { status: 'sucesso', mensagem: 'Usuário atualizado', dados: atualizado });

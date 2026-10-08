@@ -1,9 +1,15 @@
 import type { Router } from 'express';
-import { enviar, erro, wrap } from '../../http/resposta.js';
+import { z } from 'zod';
+import { enviar, wrap } from '../../http/resposta.js';
+import { regra, texto, validar } from '../../shared/esquemas.js';
 import { exigePerfil, exigeToken, usuarioDe } from '../../http/middlewares.js';
 import { OPERADORES } from '../../shared/dominio.js';
-import { vazio } from '../../shared/validacao.js';
 import * as departamentos from './service.js';
+
+const CADASTRO = [
+  regra('nome', texto, 'Nome do departamento é obrigatório', 'NOME_OBRIGATORIO'),
+  regra('nome', z.string().trim().max(60), 'Nome do departamento deve ter até 60 caracteres', 'NOME_INVALIDO'),
+];
 
 export function rotasDepartamentos(r: Router) {
   // ---- GET /departamentos (opcoes do cadastro de usuario) ----
@@ -13,12 +19,8 @@ export function rotasDepartamentos(r: Router) {
 
   // ---- POST /departamentos (Administrador) ----
   r.post('/departamentos', exigeToken, exigePerfil('Administrador'), wrap(async (req, res) => {
-    const { nome } = req.body ?? {};
-    if (typeof nome !== 'string' || vazio(nome.trim()))
-      return erro(res, 400, 'Nome do departamento é obrigatório', 'NOME_OBRIGATORIO');
-    const limpo = nome.trim();
-    if (limpo.length > 60) return erro(res, 400, 'Nome do departamento deve ter até 60 caracteres', 'NOME_INVALIDO');
-    const dados = await departamentos.criar(usuarioDe(req).id, limpo);
+    const { nome } = validar(req.body, CADASTRO);
+    const dados = await departamentos.criar(usuarioDe(req).id, String(nome).trim());
     return enviar(res, 201, { status: 'sucesso', mensagem: 'Departamento cadastrado', dados });
   }));
 

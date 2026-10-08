@@ -1,18 +1,21 @@
 import type { Router } from 'express';
-import { enviar, erro, wrap } from '../../http/resposta.js';
+import { enviar, wrap } from '../../http/resposta.js';
+import { host, regra, texto, umDe, validar } from '../../shared/esquemas.js';
 import { exigePerfil, exigeToken } from '../../http/middlewares.js';
 import { OPERADORES, TIPOS_ATIVO } from '../../shared/dominio.js';
-import { hostValido, textoPreenchido } from '../../shared/validacao.js';
 import * as ativos from './service.js';
+
+const CADASTRO = [
+  regra('nome', texto, 'Nome do ativo é obrigatório', 'NOME_OBRIGATORIO'),
+  regra('tipo', umDe(TIPOS_ATIVO), 'Tipo de ativo inválido', 'TIPO_INVALIDO'),
+  regra('host', host, 'Host inválido', 'HOST_INVALIDO'),
+];
 
 export function rotasAtivos(r: Router) {
   // ---- POST /api/assets (contrato N2 AT1; Administrador/Analista) ----
   r.post('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
-    const { nome, tipo, host } = req.body ?? {};
-    if (!textoPreenchido(nome)) return erro(res, 400, 'Nome do ativo é obrigatório', 'NOME_OBRIGATORIO');
-    if (!TIPOS_ATIVO.includes(tipo)) return erro(res, 400, 'Tipo de ativo inválido', 'TIPO_INVALIDO');
-    if (!hostValido(host)) return erro(res, 400, 'Host inválido', 'HOST_INVALIDO');
-    const dados = await ativos.cadastrar({ nome, tipo, host: String(host).trim() });
+    const { nome, tipo, host } = validar(req.body, CADASTRO);
+    const dados = await ativos.cadastrar({ nome: nome as string, tipo: tipo as string, host: String(host).trim() });
     return enviar(res, 201, { status: 'sucesso', mensagem: 'Ativo cadastrado com sucesso', dados });
   }));
 
