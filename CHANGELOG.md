@@ -223,6 +223,18 @@ Pedido do professor: o backend passa de módulos por domínio (`src/modules/<dom
 - **`repositories/`** — único acesso ao Prisma. **`middlewares/`**, **`config/`** (Prisma, e-mail) e **`utils/`** (envelope de resposta, schemas zod, validação, tokens de link) completam a árvore; `app.ts` fica em `src/` por causa do preset Express da Vercel e o servidor vai para `src/server.ts`.
 - **Testes** — backend 303/303 contra PostgreSQL, cobertura de unidade dentro das metas (linhas 87,6%, ramos 93,7%, funções 76,7%), Newman 35 requisições / 70 asserções sem falhas, `tsc --noEmit` limpo.
 
+## 2026-10-08 — Análise de arquivos com ClamAV (B04)
+
+Primeiro método novo de varredura: qualquer perfil envia um arquivo e o sistema diz se há ameaça conhecida.
+
+- **`POST /arquivos/analise`** (multipart, campo `arquivo`, até 10 MB) e **`GET /arquivos/analises`** (histórico; Colaborador vê só o próprio, operadores veem todos com quem enviou). Erros: `400 ARQUIVO_OBRIGATORIO`, `413 ARQUIVO_MUITO_GRANDE`, `429 MUITAS_ANALISES` (20 por hora por usuário), `503 ANTIVIRUS_INDISPONIVEL`.
+- **Sem disco** — o `busboy` lê o multipart em fluxo e cada bloco vai direto ao clamd (protocolo INSTREAM, `config/antivirus.ts`), com SHA-256 e tamanho calculados no caminho. O arquivo nunca é gravado nem devolvido; fica só o registro (nome para exibir, sem caminho; tamanho; SHA-256; veredito). O texto nunca afirma "arquivo seguro".
+- **ClamAV 1.5 no Compose** como perfil opcional (`--profile antivirus`): a documentação pede 3 a 4 GiB de RAM. Assinaturas atualizadas pelo freshclam e guardadas em volume.
+- **Tabela `FileScan`** com migration, CHECKs (veredito, SHA-256 em hexadecimal, ameaça só com AMEACA) e RLS; auditoria `ANALISAR_ARQUIVO`.
+- **Verificado com o ClamAV real**: o arquivo de teste EICAR, enviado da memória, voltou "Ameaça encontrada: Eicar-Test-Signature" com o SHA-256 oficial do EICAR; arquivo comum voltou "Nenhuma ameaça conhecida encontrada".
+- **Testes** — 321 no backend: 7 de unidade do cliente do clamd e 11 de integração (contra um clamd falso em TCP). Newman 35 requisições / 70 asserções sem falhas.
+- **Produção** — sem ClamAV a rota responde 503. Decisão pendente do Leo: plano maior no Railway, demonstrar só localmente, ou VirusTotal pelo hash (B20) em produção.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -230,7 +242,7 @@ Pedido do professor: o backend passa de módulos por domínio (`src/modules/<dom
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 303 no backend (71 unidade + 7 banco + 112 integração + 113 pentest; 98,8% de linhas cobertas) · 399 no frontend (Vitest+RTL+axe; 81,8% das funções cobertas) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 321 no backend (78 unidade + 7 banco + 123 integração + 113 pentest; 98,8% de linhas cobertas) · 399 no frontend (Vitest+RTL+axe; 81,8% das funções cobertas) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`). Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

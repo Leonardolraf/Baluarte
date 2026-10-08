@@ -21,7 +21,7 @@ function escrever(socket: Socket, dados: Buffer): Promise<void> {
   return new Promise((ok, falha) => {
     if (socket.write(dados)) return ok();
     socket.once('drain', ok);
-    socket.once('error', falha);
+    socket.once('error', (e) => falha(new AntivirusIndisponivel(e.message)));
   });
 }
 
@@ -36,7 +36,8 @@ export function lerVeredito(resposta: string): Veredito {
 
 /**
  * Envia o conteudo ao clamd em fluxo e devolve o veredito. Lanca AntivirusIndisponivel se
- * o clamd nao responder; nunca devolve "limpo" por falha.
+ * o clamd nao responder; nunca devolve "limpo" por falha. Erro lancado pela fonte dos blocos
+ * interrompe o envio e sobe sem alteracao.
  */
 export async function analisar(blocos: AsyncIterable<Buffer>): Promise<Veredito> {
   if (!antivirusConfigurado()) throw new AntivirusIndisponivel('CLAMAV_HOST não configurado');
@@ -70,7 +71,8 @@ export async function analisar(blocos: AsyncIterable<Buffer>): Promise<Veredito>
     socket.destroy();
     // Evita rejeicao nao tratada da promessa de resposta quando a falha veio antes dela.
     resposta.catch(() => undefined);
-    if (e instanceof AntivirusIndisponivel) throw e;
-    throw new AntivirusIndisponivel(e instanceof Error ? e.message : String(e));
+    // Falha de rede/clamd ja chega como AntivirusIndisponivel; o resto veio da FONTE dos blocos
+    // (ex.: arquivo maior que o limite) e sobe como esta, para quem chamou decidir a resposta.
+    throw e;
   }
 }
