@@ -327,6 +327,39 @@ describe('realApi — dashboard, ativos e varreduras', () => {
     expect(metrics.recentScans.map((s) => s.id)).toEqual(['s-1']);
   });
 
+  it('colaborador recebe só a resiliência: KPIs técnicos e de campanha ficam null (RN-006, B10)', async () => {
+    tokenStorage.set(buildMockToken({ sub: 'u-2', email: 'c@empresa.com', role: 'collaborator' }));
+    on(
+      'GET /dashboard',
+      ok({
+        kpis: {
+          vulnerabilidadesAbertas: null,
+          criticas: null,
+          resilienciaPhishing: 75,
+          ativosMonitorados: null,
+        },
+        distribuicaoSeveridade: null,
+        vulnerabilidadesRecentes: [],
+        alertas: [],
+        campanhas: [],
+        funil: null,
+        campanhaAtiva: null,
+      }),
+    );
+    const metrics = await realApi.getDashboard();
+    expect(metrics.technicalRisk).toBeNull();
+    expect(metrics.severityDistribution).toBeNull();
+    expect(metrics.kpis).toEqual({
+      openVulnerabilities: null,
+      criticalVulnerabilities: null,
+      phishingResilience: 75,
+      monitoredAssets: null,
+      activeCampaigns: null,
+      trainedCollaborators: null,
+    });
+    expect(metrics.humanRisk).toBe(63);
+  });
+
   it('colaborador não consulta /scans e falha em /scans não derruba o dashboard', async () => {
     tokenStorage.set(buildMockToken({ sub: 'u-2', email: 'c@empresa.com', role: 'collaborator' }));
     on('GET /dashboard', ok(dashboard));
@@ -349,17 +382,80 @@ describe('realApi — dashboard, ativos e varreduras', () => {
 
     on(
       'POST /assets',
-      ok({ id: 'a-2', nome: 'API', host: 'api.empresa.com', tipo: 'Aplicacao', status: 'Ativo' }),
+      ok({
+        id: 'a-2',
+        nome: 'API',
+        host: 'api.empresa.com',
+        tipo: 'Aplicacao',
+        status: 'Ativo',
+        ip: null,
+        descricao: 'Gateway',
+      }),
     );
     const created = await realApi.createAsset({
       name: ' API ',
       type: 'application',
       host: ' api.empresa.com ',
-      description: 'Gateway',
+      description: ' Gateway ',
     });
-    expect(body()).toEqual({ nome: 'API', tipo: 'Aplicacao', host: 'api.empresa.com' });
+    // ip vazio não vai; a descrição vai com o nome em português (B10).
+    expect(body()).toEqual({ nome: 'API', tipo: 'Aplicacao', host: 'api.empresa.com', descricao: 'Gateway' });
     expect(created).toMatchObject({ id: 'a-2', type: 'application', description: 'Gateway', ip: null });
     expect(created.createdAt).toBeTruthy();
+  });
+
+  it('createAsset envia ip e descrição e lê os dois da resposta da API, não do formulário (B10)', async () => {
+    on(
+      'POST /assets',
+      ok({
+        id: 'a-3',
+        nome: 'Portal',
+        host: 'portal.empresa.com',
+        tipo: 'Servidor',
+        status: 'Ativo',
+        criadoEm: '2026-10-08T10:00:00.000Z',
+        ip: '203.0.113.7',
+        descricao: 'Salvo pelo servidor',
+      }),
+    );
+    const created = await realApi.createAsset({
+      name: 'Portal',
+      type: 'server',
+      host: 'https://portal.empresa.com/login',
+      ip: ' 203.0.113.7 ',
+      description: 'Digitado no formulário',
+    });
+    expect(body()).toEqual({
+      nome: 'Portal',
+      tipo: 'Servidor',
+      host: 'https://portal.empresa.com/login',
+      ip: '203.0.113.7',
+      descricao: 'Digitado no formulário',
+    });
+    expect(created).toMatchObject({
+      host: 'portal.empresa.com',
+      ip: '203.0.113.7',
+      description: 'Salvo pelo servidor',
+      createdAt: '2026-10-08T10:00:00.000Z',
+    });
+
+    on(
+      'GET /assets',
+      ok([
+        {
+          id: 'a-3',
+          nome: 'Portal',
+          host: 'portal.empresa.com',
+          tipo: 'Servidor',
+          status: 'Ativo',
+          criadoEm: 'x',
+          ip: '203.0.113.7',
+          descricao: 'Salvo pelo servidor',
+        },
+      ]),
+    );
+    const [listed] = await realApi.listAssets();
+    expect(listed).toMatchObject({ ip: '203.0.113.7', description: 'Salvo pelo servidor' });
   });
 
   it('inicia uma varredura e devolve o status inicial em fila', async () => {

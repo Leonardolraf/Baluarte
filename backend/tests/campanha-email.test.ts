@@ -134,6 +134,42 @@ describe('POST /campaigns envia o e-mail simulado', () => {
     assert.equal(await prisma.campaignEvent.count(), eventosAntes);
   });
 
+  it('o domínio interno vem de DOMINIO_INTERNO (padrão @empresa.com) — B10', async () => {
+    const original = process.env.DOMINIO_INTERNO;
+    try {
+      process.env.DOMINIO_INTERNO = 'Filial.Exemplo.com.br'; // sem '@' e com maiúsculas: normalizado
+      const email = `dest.${Date.now()}@filial.exemplo.com.br`;
+      const criado = await chamar('POST', '/users', { token: admin, body: { nome: 'Destino Filial', email, perfil: 'Colaborador' } });
+      assert.equal(criado.status, 201, JSON.stringify(criado.body));
+
+      const ok = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Filial', destinatario: email, template: 'urgencia' } });
+      assert.equal(ok.status, 201, JSON.stringify(ok.body));
+      // Com o domínio trocado, o @empresa.com passa a ser externo (mesma mensagem e código do contrato).
+      const fora = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatario: ana.email, template: 'urgencia' } });
+      esperaErro(fora, 422, 'DESTINATARIO_EXTERNO');
+      assert.equal(fora.body.mensagem, 'Destinatário não autorizado: apenas e-mails internos');
+      // Domínio certo, mas sem cadastro: continua barrado.
+      esperaErro(
+        await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatario: 'ninguem@filial.exemplo.com.br', template: 'urgencia' } }),
+        422,
+        'DESTINATARIO_NAO_CADASTRADO',
+      );
+
+      // Vazio = padrão do contrato.
+      process.env.DOMINIO_INTERNO = '  ';
+      const padrao = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Padrão', destinatario: ana.email, template: 'urgencia' } });
+      assert.equal(padrao.status, 201, JSON.stringify(padrao.body));
+      esperaErro(
+        await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatario: email, template: 'urgencia' } }),
+        422,
+        'DESTINATARIO_EXTERNO',
+      );
+    } finally {
+      if (original === undefined) delete process.env.DOMINIO_INTERNO;
+      else process.env.DOMINIO_INTERNO = original;
+    }
+  });
+
   it('registra a criação e o envio na auditoria', async () => {
     const { r } = await criarCampanha('curiosidade', [bruno.email]);
     const id = r.body.dados.idCampanha as string;

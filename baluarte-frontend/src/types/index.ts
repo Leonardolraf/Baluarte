@@ -381,23 +381,28 @@ export interface TimelineEvent {
   href?: string;
 }
 
+/**
+ * KPIs do dashboard. O Colaborador recebe só a resiliência a phishing (RN-006, B10): os
+ * indicadores técnicos e os de campanha chegam `null` para ele e a tela não os exibe.
+ */
 export interface DashboardKpis {
-  openVulnerabilities: number;
-  criticalVulnerabilities: number;
+  openVulnerabilities: number | null;
+  criticalVulnerabilities: number | null;
   /** 100 − taxa de clique; `null` enquanto nenhuma campanha foi disparada (não medido ≠ 0 %). */
   phishingResilience: number | null;
-  monitoredAssets: number;
-  activeCampaigns: number;
-  trainedCollaborators: number;
+  monitoredAssets: number | null;
+  activeCampaigns: number | null;
+  trainedCollaborators: number | null;
 }
 
 export interface DashboardMetrics {
-  /** Risco técnico agregado (0–100, maior = pior). */
-  technicalRisk: number;
+  /** Risco técnico agregado (0–100, maior = pior); `null` para o Colaborador (RN-006). */
+  technicalRisk: number | null;
   /** Risco humano agregado (0–100, maior = pior). */
   humanRisk: number;
   kpis: DashboardKpis;
-  severityDistribution: Record<Severity, number>;
+  /** `null` para o Colaborador (RN-006). */
+  severityDistribution: Record<Severity, number> | null;
   recentFindings: Vulnerability[];
   recentCampaigns: Campaign[];
   recentScans: ScanReport[];

@@ -87,6 +87,8 @@ model Asset {
   host     String   @unique
   tipo     String   // CHECK: Servidor | Aplicacao | Rede | Banco de Dados | Estação de trabalho
   status   String   @default("Ativo") // CHECK: Ativo | Inativo
+  ip       String?  // CHECK: IPv4 (octetos 0-255) ou nulo
+  descricao String? // CHECK: ate 500 caracteres ou nulo
   criadoEm DateTime @default(now())
   scans    Scan[]
   estacao  Workstation?

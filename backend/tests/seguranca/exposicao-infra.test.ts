@@ -8,7 +8,7 @@
 //  - Segredos nunca no corpo: senhaHash (bcrypt), segredo do JWT, tokenHash de reset, senha em claro.
 //  - Metodo/rota: metodos nao suportados e rota inexistente -> 404 ROTA_NAO_ENCONTRADA padronizado.
 //  - DoS barato: corpo acima de 64kb barrado; e-mail gigante barrado antes de virar chave de mapa.
-//  - Fronteira RBAC no PAYLOAD: dashboard de Colaborador sem lista tecnica nem metricas por campanha.
+//  - Fronteira RBAC no PAYLOAD: dashboard de Colaborador sem KPIs tecnicos, lista tecnica nem metricas por campanha.
 //
 // Casos marcados com it.skip documentam um ACHADO REAL de seguranca (ver `findings`): a asercao
 // afirma o comportamento SEGURO e falha contra o backend atual; destravar so apos corrigir o src.
@@ -395,10 +395,16 @@ describe('dashboard do Colaborador nao vaza dados tecnicos no payload', () => {
     });
   });
 
-  it('Colaborador recebe KPIs numericos, mas nao a lista tecnica de achados', async () => {
+  it('Colaborador recebe so o indice de resiliencia a phishing, sem KPIs tecnicos nem lista de achados (B10, RN-006)', async () => {
     const r = await chamar('GET', '/dashboard', { token: colaborador });
     assert.equal(r.status, 200);
-    assert.equal(typeof r.body.dados.kpis.vulnerabilidadesAbertas, 'number');
+    const { kpis } = r.body.dados;
+    // A campanha semeada tem 2 envios e 1 clique: resiliencia 50 %.
+    assert.equal(kpis.resilienciaPhishing, 50, 'o indice de resiliencia continua visivel ao Colaborador');
+    assert.equal(kpis.vulnerabilidadesAbertas, null, 'Colaborador nao deve ver a contagem de vulnerabilidades');
+    assert.equal(kpis.criticas, null, 'Colaborador nao deve ver a contagem de criticas');
+    assert.equal(kpis.ativosMonitorados, null, 'Colaborador nao deve ver a contagem de ativos');
+    assert.equal(r.body.dados.distribuicaoSeveridade, null, 'Colaborador nao deve ver a distribuicao por severidade');
     assert.deepEqual(r.body.dados.vulnerabilidadesRecentes, [], 'Colaborador nao deve ver achados detalhados');
     assert.deepEqual(r.body.dados.alertas, [], 'Colaborador nao deve ver alertas tecnicos');
   });

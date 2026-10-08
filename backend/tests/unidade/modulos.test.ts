@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { ErroNegocio, falhar, wrap } from '../../src/utils/resposta.js';
 import { funilDe, mapCampaign, totais } from '../../src/services/campanhaMetricas.service.js';
 import { dadosTreinamento, podeVerTreinamento } from '../../src/models/treinamento.model.js';
-import { OPERADORES, PERFIS, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../../src/models/dominio.model.js';
+import { OPERADORES, PERFIS, STATUS_FINDING, STATUS_FINDING_ENCERRADO, dominioInterno } from '../../src/models/dominio.model.js';
 
 function resposta(jaEnviada = false) {
   const r = {
@@ -118,5 +118,22 @@ describe('constantes de domínio', () => {
     assert.deepEqual(OPERADORES, ['Administrador', 'Analista']);
     for (const p of OPERADORES) assert.ok(PERFIS.includes(p));
     for (const s of STATUS_FINDING_ENCERRADO) assert.ok(STATUS_FINDING.includes(s));
+  });
+
+  it('dominioInterno: DOMINIO_INTERNO do ambiente, normalizado, com @empresa.com por padrão (B10)', () => {
+    const original = process.env.DOMINIO_INTERNO;
+    try {
+      delete process.env.DOMINIO_INTERNO;
+      assert.equal(dominioInterno(), '@empresa.com');
+      process.env.DOMINIO_INTERNO = '   ';
+      assert.equal(dominioInterno(), '@empresa.com');
+      process.env.DOMINIO_INTERNO = ' Filial.Exemplo.com.br ';
+      assert.equal(dominioInterno(), '@filial.exemplo.com.br');
+      process.env.DOMINIO_INTERNO = '@outra.com';
+      assert.equal(dominioInterno(), '@outra.com');
+    } finally {
+      if (original === undefined) delete process.env.DOMINIO_INTERNO;
+      else process.env.DOMINIO_INTERNO = original;
+    }
   });
 });

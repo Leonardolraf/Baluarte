@@ -28,16 +28,35 @@ export function umDe(lista: readonly string[]) {
 
 /** Host de ativo: IPv4 com octetos de 0 a 255 ou nome de dominio (TLD nunca numerico). */
 const OCTETO = z.coerce.number().int().min(0).max(255);
+function ehIpv4(h: string): boolean {
+  const partes = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  return !!partes && partes.slice(1).every((o) => OCTETO.safeParse(o).success);
+}
 export const host = z
   .string()
   .trim()
   .min(1)
   .refine((h) => {
-    const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-    if (ipv4) return ipv4.slice(1).every((o) => OCTETO.safeParse(o).success);
+    if (ehIpv4(h)) return true;
     if (/^[\d.]+$/.test(h)) return false;
     return /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(h);
   });
+
+/** Ausente no corpo: undefined, null ou string vazia/em branco (campos opcionais). */
+function ausente(v: unknown): boolean {
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/** IP opcional do ativo: ausente ou IPv4 com octetos de 0 a 255. */
+export const ipOpcional = z.unknown().refine((v) => ausente(v) || (typeof v === 'string' && ehIpv4(v.trim())));
+
+/** Limite da descricao do ativo (o mesmo da restricao CHECK no banco). */
+export const DESCRICAO_MAX = 500;
+
+/** Descricao opcional do ativo: ausente ou texto de ate 500 caracteres (apos o trim). */
+export const descricaoOpcional = z
+  .unknown()
+  .refine((v) => ausente(v) || (typeof v === 'string' && v.trim().length <= DESCRICAO_MAX));
 
 /** Senha nova pela politica publicada. A mensagem do erro sai de `problemaDaSenha`. */
 export const senhaNova = z

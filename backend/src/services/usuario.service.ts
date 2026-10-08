@@ -71,9 +71,10 @@ export async function atualizar(ator: Ator, id: string, dados: AlteracaoUsuario,
       const dono = await repo.donoDoEmail(dados.email, tx);
       if (dono && dono.id !== alvo.id) falhar(409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
     }
-    const eraAdminAtivo = alvo.perfil === 'Administrador' && alvo.status !== 'Inativo';
+    // "Admin ativo" = perfil Administrador com status 'Ativo' (Pendente nao entra por login).
+    const eraAdminAtivo = alvo.perfil === 'Administrador' && alvo.status === 'Ativo';
     const deixaDeSerAdminAtivo =
-      (dados.perfil ?? alvo.perfil) !== 'Administrador' || (dados.status ?? alvo.status) === 'Inativo';
+      (dados.perfil ?? alvo.perfil) !== 'Administrador' || (dados.status ?? alvo.status) !== 'Ativo';
     if (eraAdminAtivo && deixaDeSerAdminAtivo && (await repo.contarOutrosAdmins(tx, alvo.id)) === 0)
       falhar(409, 'Não é possível rebaixar o único administrador ativo', 'ULTIMO_ADMIN');
     return repo.atualizar(alvo.id, dados, tx);
@@ -89,7 +90,7 @@ export async function excluir(ator: Ator, id: string): Promise<void> {
   const email = await repo.emTransacao(async (tx) => {
     const alvo = await repo.buscarPorId(id, tx);
     if (!alvo) falhar(404, 'Usuário não encontrado', 'USUARIO_NAO_ENCONTRADO');
-    if (alvo.perfil === 'Administrador' && alvo.status !== 'Inativo' && (await repo.contarOutrosAdmins(tx, alvo.id)) === 0)
+    if (alvo.perfil === 'Administrador' && alvo.status === 'Ativo' && (await repo.contarOutrosAdmins(tx, alvo.id)) === 0)
       falhar(409, 'Não é possível excluir o único administrador ativo', 'ULTIMO_ADMIN');
     // Quem ja participou de campanha nao e excluido (onDelete: Restrict): apagar
     // distorceria as metricas historicas. Inativar a conta tem o mesmo efeito de acesso.

@@ -19,6 +19,7 @@ import { ASSET_TYPE_LABEL, SEVERITY_BADGE_CLASS } from '@/lib/severity';
 import { errorMessage, isHttpError } from '@/lib/errors';
 import { notify } from '@/store/uiStore';
 import { cn } from '@/lib/cn';
+import { normalizeAssetHost } from '@/lib/host';
 
 interface AssetFormValues {
   name: string;
@@ -35,6 +36,7 @@ const FIELD_BY_ERROR_CODE = new Map<string, AssetField>([
   ['HOST_INVALIDO', 'host'],
   ['ATIVO_DUPLICADO', 'host'],
   ['IP_INVALIDO', 'ip'],
+  ['DESCRICAO_INVALIDA', 'description'],
   ['NOME_OBRIGATORIO', 'name'],
   ['TIPO_INVALIDO', 'type'],
 ]);
@@ -43,7 +45,8 @@ const FIELD_BY_ERROR_CODE = new Map<string, AssetField>([
 const HOSTNAME_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
 const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
-const HOST_HINT = 'Nome DNS (ex.: srv-web-01.empresa.com) ou IPv4.';
+const HOST_HINT =
+  'Nome DNS (ex.: srv-web-01.empresa.com) ou IPv4. Endereço com https:// é aceito: fica só o host.';
 const IP_HINT = 'Opcional. IPv4 (ex.: 192.168.0.10).';
 const DESCRIPTION_HINT = 'Opcional. Até 500 caracteres.';
 
@@ -196,7 +199,7 @@ export default function AssetFormPage() {
                   {...register('host', {
                     required: 'Informe o host do ativo.',
                     validate: (value) =>
-                      isValidHost(value.trim()) ||
+                      isValidHost(normalizeAssetHost(value)) ||
                       'Informe um nome DNS válido (ex.: srv-web-01.empresa.com) ou um IPv4.',
                   })}
                 />

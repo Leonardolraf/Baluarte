@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type {
   Campaign,
@@ -358,12 +359,84 @@ export default function DashboardPage() {
 
   const { kpis } = data;
   const resilienceMeasured = kpis.phishingResilience !== null;
-  const openTotal = SEVERITIES.reduce((sum, severity) => sum + data.severityDistribution[severity], 0);
+  // Colaborador (RN-006, B10): a API não manda a parte técnica (null). Nada de cards vazios ou zerados.
+  const severityDistribution = data.severityDistribution;
+  const technicalRisk = data.technicalRisk;
+  const openTotal = severityDistribution
+    ? SEVERITIES.reduce((sum, severity) => sum + severityDistribution[severity], 0)
+    : 0;
   const manageHref = (path: string) => (canManage ? path : undefined);
-  // Colaboradores só recebem as listas técnicas vazias (fronteira RBAC do payload): não exibir cards vazios.
   const showFindings = canManage || data.recentFindings.length > 0;
   const showCampaigns = canManage || data.recentCampaigns.length > 0;
+  const showTimeline = canManage || data.timeline.length > 0;
   const trainingCard = data.pendingTraining ? <PendingTrainingCard training={data.pendingTraining} /> : null;
+
+  // Só entram os indicadores que a API mandou para este perfil.
+  const statCards: { key: string; node: ReactNode }[] = [];
+  const addStat = (key: string, value: number | null, render: (value: number) => ReactNode) => {
+    if (value !== null) statCards.push({ key, node: render(value) });
+  };
+  addStat('open', kpis.openVulnerabilities, (value) => (
+    <StatCard
+      variant="plate"
+      label="Vulnerabilidades abertas"
+      value={formatNumber(value)}
+      tone={value > 0 ? 'critical' : 'neutral'}
+      icon={<BugIcon size={16} />}
+      href={manageHref('/vulnerabilities')}
+    />
+  ));
+  addStat('critical', kpis.criticalVulnerabilities, (value) => (
+    <StatCard
+      variant="plate"
+      label="Críticas"
+      value={formatNumber(value)}
+      tone="critical"
+      icon={<XCircleIcon size={16} />}
+      href={manageHref('/vulnerabilities')}
+    />
+  ));
+  addStat('assets', kpis.monitoredAssets, (value) => (
+    <StatCard
+      variant="plate"
+      label="Ativos monitorados"
+      value={formatNumber(value)}
+      icon={<ServerIcon size={16} />}
+      href={manageHref('/assets')}
+    />
+  ));
+  addStat('campaigns', kpis.activeCampaigns, (value) => (
+    <StatCard
+      variant="plate"
+      label="Campanhas ativas"
+      value={formatNumber(value)}
+      icon={<MailIcon size={16} />}
+      href={manageHref('/campaigns')}
+    />
+  ));
+  addStat('trained', kpis.trainedCollaborators, (value) => (
+    <StatCard
+      variant="plate"
+      label="Colaboradores treinados"
+      value={formatNumber(value)}
+      icon={<GraduationIcon size={16} />}
+      href={manageHref('/trainings')}
+    />
+  ));
+  statCards.push({
+    key: 'resilience',
+    node: (
+      <StatCard
+        variant="plate"
+        label="Resiliência a phishing"
+        value={kpis.phishingResilience === null ? '—' : formatPercent(kpis.phishingResilience)}
+        tone={resilienceMeasured ? resilienceSeverity(kpis.phishingResilience) : 'neutral'}
+        hint={resilienceMeasured ? undefined : 'Sem campanhas disparadas'}
+        icon={<ShieldIcon size={16} />}
+        href={manageHref('/campaigns')}
+      />
+    ),
+  });
 
   return (
     <div className="space-y-6">
@@ -396,65 +469,38 @@ export default function DashboardPage() {
       {/* Colaborador: o treinamento pendente é a ação principal — vem antes dos índices */}
       {isCollaborator && trainingCard}
 
-      {/* Placa de comando — os dois índices de risco e os seis indicadores num só bloco */}
+      {/* Placa de comando — os índices de risco e os indicadores do perfil num só bloco */}
       <Plate data-testid="risk-gauges" aria-label="Índices de risco e indicadores">
-        <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:gap-8">
-          <CircularGauge
-            value={data.technicalRisk}
-            label="Risco técnico"
-            colorScheme="tech"
-            onDark
-            size={188}
-            sublabel={`${formatNumber(kpis.openVulnerabilities)} vulnerabilidades abertas · ${formatNumber(kpis.criticalVulnerabilities)} críticas`}
-          />
+        <div
+          className={cn(
+            'grid grid-cols-1 items-center gap-6 lg:gap-8',
+            technicalRisk !== null
+              ? 'lg:grid-cols-[auto_minmax(0,1fr)_auto]'
+              : 'lg:grid-cols-[minmax(0,1fr)_auto]',
+          )}
+        >
+          {technicalRisk !== null && (
+            <CircularGauge
+              value={technicalRisk}
+              label="Risco técnico"
+              colorScheme="tech"
+              onDark
+              size={188}
+              sublabel={`${formatNumber(kpis.openVulnerabilities ?? 0)} vulnerabilidades abertas · ${formatNumber(kpis.criticalVulnerabilities ?? 0)} críticas`}
+            />
+          )}
           {/* Entre os dois medidores sobram ~490 px em 1280: duas colunas; três só em telas largas. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3">
-            <StatCard
-              variant="plate"
-              label="Vulnerabilidades abertas"
-              value={formatNumber(kpis.openVulnerabilities)}
-              tone={kpis.openVulnerabilities > 0 ? 'critical' : 'neutral'}
-              icon={<BugIcon size={16} />}
-              href={manageHref('/vulnerabilities')}
-            />
-            <StatCard
-              variant="plate"
-              label="Críticas"
-              value={formatNumber(kpis.criticalVulnerabilities)}
-              tone="critical"
-              icon={<XCircleIcon size={16} />}
-              href={manageHref('/vulnerabilities')}
-            />
-            <StatCard
-              variant="plate"
-              label="Ativos monitorados"
-              value={formatNumber(kpis.monitoredAssets)}
-              icon={<ServerIcon size={16} />}
-              href={manageHref('/assets')}
-            />
-            <StatCard
-              variant="plate"
-              label="Campanhas ativas"
-              value={formatNumber(kpis.activeCampaigns)}
-              icon={<MailIcon size={16} />}
-              href={manageHref('/campaigns')}
-            />
-            <StatCard
-              variant="plate"
-              label="Colaboradores treinados"
-              value={formatNumber(kpis.trainedCollaborators)}
-              icon={<GraduationIcon size={16} />}
-              href={manageHref('/trainings')}
-            />
-            <StatCard
-              variant="plate"
-              label="Resiliência a phishing"
-              value={kpis.phishingResilience === null ? '—' : formatPercent(kpis.phishingResilience)}
-              tone={resilienceMeasured ? resilienceSeverity(kpis.phishingResilience) : 'neutral'}
-              hint={resilienceMeasured ? undefined : 'Sem campanhas disparadas'}
-              icon={<ShieldIcon size={16} />}
-              href={manageHref('/campaigns')}
-            />
+          <div
+            className={cn(
+              'grid gap-3',
+              statCards.length > 1
+                ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 2xl:grid-cols-3'
+                : 'grid-cols-1 sm:max-w-xs',
+            )}
+          >
+            {statCards.map((card) => (
+              <Fragment key={card.key}>{card.node}</Fragment>
+            ))}
           </div>
           <CircularGauge
             value={data.humanRisk}
@@ -470,61 +516,69 @@ export default function DashboardPage() {
           />
         </div>
         <p className="mt-5 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500 dark:border-white/10 dark:text-slate-400">
-          Risco técnico: severidade ponderada das vulnerabilidades abertas por ativo monitorado. Risco humano:
-          taxas de clique e de submissão de credenciais nas simulações de phishing, medidas pessoa a pessoa.
+          {technicalRisk !== null &&
+            'Risco técnico: severidade ponderada das vulnerabilidades abertas por ativo monitorado. '}
+          Risco humano: taxas de clique e de submissão de credenciais nas simulações de phishing, medidas
+          pessoa a pessoa.
         </p>
       </Plate>
 
       {/* Gestores: o treinamento pendente (se houver) vem depois dos indicadores */}
       {!isCollaborator && trainingCard}
 
-      {/* Linha 3 — vulnerabilidades recentes + distribuição */}
-      <div className={cn('grid grid-cols-1 gap-6', showFindings && 'lg:grid-cols-3')}>
-        {showFindings && (
+      {/* Linha 3 — vulnerabilidades recentes + distribuição (só com a parte técnica) */}
+      {severityDistribution && (
+        <div className={cn('grid grid-cols-1 gap-6', showFindings && 'lg:grid-cols-3')}>
+          {showFindings && (
+            <Card
+              title="Vulnerabilidades recentes"
+              subtitle="Vulnerabilidades abertas detectadas mais recentemente"
+              flush
+              href={manageHref('/vulnerabilities')}
+              hrefLabel="Ver todas"
+              className="lg:col-span-2"
+            >
+              <RecentFindingsTable items={data.recentFindings} canManage={canManage} />
+            </Card>
+          )}
           <Card
-            title="Vulnerabilidades recentes"
-            subtitle="Vulnerabilidades abertas detectadas mais recentemente"
-            flush
-            href={manageHref('/vulnerabilities')}
-            hrefLabel="Ver todas"
-            className="lg:col-span-2"
+            title="Distribuição por severidade"
+            subtitle="Vulnerabilidades abertas"
+            footer={
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Total:{' '}
+                <span className="font-semibold tabular-nums text-ink dark:text-white">
+                  {formatNumber(openTotal)}
+                </span>{' '}
+                {openTotal === 1 ? 'vulnerabilidade aberta' : 'vulnerabilidades abertas'}
+              </p>
+            }
           >
-            <RecentFindingsTable items={data.recentFindings} canManage={canManage} />
+            <SeverityDistribution distribution={severityDistribution} />
           </Card>
-        )}
-        <Card
-          title="Distribuição por severidade"
-          subtitle="Vulnerabilidades abertas"
-          footer={
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Total:{' '}
-              <span className="font-semibold tabular-nums text-ink dark:text-white">
-                {formatNumber(openTotal)}
-              </span>{' '}
-              {openTotal === 1 ? 'vulnerabilidade aberta' : 'vulnerabilidades abertas'}
-            </p>
-          }
-        >
-          <SeverityDistribution distribution={data.severityDistribution} />
-        </Card>
-      </div>
+        </div>
+      )}
 
       {/* Linha 4 — campanhas + timeline */}
-      <div className={cn('grid grid-cols-1 gap-6', showCampaigns && 'lg:grid-cols-2')}>
-        {showCampaigns && (
-          <Card
-            title="Campanhas recentes"
-            subtitle="Simulações de phishing"
-            href={manageHref('/campaigns')}
-            hrefLabel="Ver todas"
-          >
-            <RecentCampaigns items={data.recentCampaigns} canManage={canManage} />
-          </Card>
-        )}
-        <Card title="Ameaças recentes" subtitle="Linha do tempo de eventos de segurança">
-          <ThreatTimeline events={data.timeline} hasRole={hasRole} />
-        </Card>
-      </div>
+      {(showCampaigns || showTimeline) && (
+        <div className={cn('grid grid-cols-1 gap-6', showCampaigns && showTimeline && 'lg:grid-cols-2')}>
+          {showCampaigns && (
+            <Card
+              title="Campanhas recentes"
+              subtitle="Simulações de phishing"
+              href={manageHref('/campaigns')}
+              hrefLabel="Ver todas"
+            >
+              <RecentCampaigns items={data.recentCampaigns} canManage={canManage} />
+            </Card>
+          )}
+          {showTimeline && (
+            <Card title="Ameaças recentes" subtitle="Linha do tempo de eventos de segurança">
+              <ThreatTimeline events={data.timeline} hasRole={hasRole} />
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }

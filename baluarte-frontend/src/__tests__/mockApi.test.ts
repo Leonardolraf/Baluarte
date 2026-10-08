@@ -160,7 +160,7 @@ describe('mockApi — dashboard e vulnerabilidades', () => {
     expect(d.technicalRisk).toBeLessThanOrEqual(100);
     expect(d.humanRisk).toBeGreaterThanOrEqual(0);
     expect(d.humanRisk).toBeLessThanOrEqual(100);
-    const open = Object.values(d.severityDistribution).reduce((a, b) => a + b, 0);
+    const open = Object.values(d.severityDistribution ?? {}).reduce((a, b) => a + b, 0);
     expect(open).toBe(d.kpis.openVulnerabilities);
     expect(d.recentFindings.length).toBeLessThanOrEqual(5);
     expect(d.recentFindings.every((v) => v.status !== 'resolved' && v.status !== 'accepted')).toBe(true);
@@ -176,12 +176,22 @@ describe('mockApi — dashboard e vulnerabilidades', () => {
     expect(d.pendingTraining).toMatchObject({ id: expect.stringMatching(/^trn-/) });
   });
 
-  it('dashboard do colaborador omite a lista técnica de achados e as campanhas', async () => {
+  it('dashboard do colaborador traz só a resiliência a phishing, sem nada técnico (RN-006, B10)', async () => {
     await loginAs('collaborator');
     const d = await mockApi.getDashboard();
     expect(d.recentFindings).toEqual([]);
     expect(d.recentCampaigns).toEqual([]);
-    expect(d.kpis.openVulnerabilities).toBeGreaterThan(0);
+    expect(d.timeline).toEqual([]);
+    expect(d.technicalRisk).toBeNull();
+    expect(d.severityDistribution).toBeNull();
+    expect(d.kpis).toMatchObject({
+      openVulnerabilities: null,
+      criticalVulnerabilities: null,
+      monitoredAssets: null,
+      activeCampaigns: null,
+      trainedCollaborators: null,
+    });
+    expect(d.kpis.phishingResilience).not.toBeNull();
     expect(d.pendingTraining).not.toBeNull();
   });
 
@@ -425,6 +435,9 @@ describe('mockApi — campanhas e treinamento', () => {
     const again = await mockApi.completeTraining('trn-urgency');
     expect(again.completedAt).toBe(done.completedAt);
     await expectHttp(mockApi.getTraining('nao-existe'), 404, 'TREINAMENTO_NAO_ENCONTRADO');
+    // A linha do tempo é dos operadores (RN-006): a conclusão aparece no dashboard do gestor.
+    expect((await mockApi.getDashboard()).timeline).toEqual([]);
+    await loginAs('analyst');
     const dashboard = await mockApi.getDashboard();
     expect(dashboard.timeline.some((e) => e.kind === 'training')).toBe(true);
   });

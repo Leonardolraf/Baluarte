@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { ErroNegocio } from '../../src/utils/resposta.js';
 import {
-  email, host, notaCvss, opcional, preenchido, problemaDaSenha, regra, senhaNova, texto, textoDeQuery, umDe, validar,
+  descricaoOpcional, email, host, ipOpcional, notaCvss, opcional, preenchido, problemaDaSenha, regra, senhaNova, texto, textoDeQuery, umDe, validar,
 } from '../../src/utils/esquemas.js';
+import { normalizarHost } from '../../src/utils/validacao.js';
 
 function erroDe(fn: () => unknown): ErroNegocio {
   try {
@@ -65,6 +66,26 @@ describe('schemas de campo', () => {
     const tipo = umDe(['Servidor', 'Banco de Dados']);
     assert.ok(tipo.safeParse('Banco de Dados').success);
     for (const v of ['servidor', 'Rede', ['Servidor'], 1]) assert.equal(tipo.safeParse(v).success, false);
+  });
+
+  it('normalizarHost: tira esquema http(s), caminho, query, porta e barra final; sem esquema, só o trim (B10)', () => {
+    assert.equal(normalizarHost('https://portal.empresa.com/login'), 'portal.empresa.com');
+    assert.equal(normalizarHost('HTTP://10.0.0.5:8080/'), '10.0.0.5');
+    assert.equal(normalizarHost(' https://a.empresa.com?x=1#y '), 'a.empresa.com');
+    assert.equal(normalizarHost('https://a.empresa.com/'), 'a.empresa.com');
+    assert.equal(normalizarHost('exemplo.com/rota'), 'exemplo.com/rota');
+    assert.equal(normalizarHost(' api.empresa.com '), 'api.empresa.com');
+    assert.equal(normalizarHost('ftp://x.com'), 'ftp://x.com');
+    assert.equal(normalizarHost('https://u:s@x.com/'), 'u:s@x.com');
+    assert.equal(normalizarHost(7), 7);
+    assert.equal(host.safeParse(normalizarHost('https://u:s@x.com/')).success, false);
+  });
+
+  it('ipOpcional e descricaoOpcional: ausente passa; IPv4 e até 500 caracteres (B10)', () => {
+    for (const v of [undefined, null, '', '  ', '10.0.0.5', '0.0.0.0', '255.255.255.255']) assert.ok(ipOpcional.safeParse(v).success, String(v));
+    for (const v of ['256.0.0.1', '10.0.0', 'x', 5, {}]) assert.equal(ipOpcional.safeParse(v).success, false, String(v));
+    for (const v of [undefined, null, '', 'ok', 'a'.repeat(500), ` ${'a'.repeat(500)} `]) assert.ok(descricaoOpcional.safeParse(v).success);
+    for (const v of ['a'.repeat(501), 1, [], {}]) assert.equal(descricaoOpcional.safeParse(v).success, false);
   });
 
   it('host: IPv4 válido, domínio, e recusa números sem formato de IPv4', () => {

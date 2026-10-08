@@ -101,6 +101,37 @@ describe('AssetFormPage', () => {
     expect(assets.some((a) => a.host === 'db-teste.empresa.com')).toBe(true);
   });
 
+  it('aceita endereço com https:// e o cadastro guarda só o host (B10)', async () => {
+    const user = userEvent.setup();
+    renderAsAnalyst();
+
+    await user.type(field.name(), 'Portal com protocolo');
+    await user.selectOptions(field.type(), 'application');
+    await user.type(field.host(), 'https://portal-b10.empresa.com:8443/login?x=1');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect(await screen.findByText('Lista de vulnerabilidades')).toBeInTheDocument();
+    const assets = await api.listAssets();
+    expect(assets.some((a) => a.host === 'portal-b10.empresa.com')).toBe(true);
+  });
+
+  it('descrição longa recusada pela API aparece no próprio campo (DESCRICAO_INVALIDA, B10)', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(mockApi, 'createAsset').mockRejectedValueOnce(
+      new HttpError(400, 'DESCRICAO_INVALIDA', 'A descrição deve ter no máximo 500 caracteres'),
+    );
+    renderAsAnalyst();
+
+    await user.type(field.name(), 'Ativo com descrição');
+    await user.selectOptions(field.type(), 'server');
+    await user.type(field.host(), 'desc-b10.empresa.com');
+    await user.type(field.description(), 'curta');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect(await screen.findByText('A descrição deve ter no máximo 500 caracteres')).toBeInTheDocument();
+    expect(field.description()).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('host duplicado volta da API e aparece no próprio campo', async () => {
     const user = userEvent.setup();
     renderAsAnalyst();

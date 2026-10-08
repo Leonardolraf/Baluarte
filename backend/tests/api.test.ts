@@ -99,7 +99,10 @@ describe('RBAC das rotas de escrita e leitura', () => {
     assert.equal(dashboard.status, 200);
     assert.deepEqual(dashboard.body.dados.vulnerabilidadesRecentes, []);
     assert.deepEqual(dashboard.body.dados.alertas, []);
-    assert.ok(typeof dashboard.body.dados.kpis.vulnerabilidadesAbertas === 'number');
+    // B10: so o indice de resiliencia; os KPIs tecnicos vem null (RN-006).
+    assert.equal(dashboard.body.dados.kpis.vulnerabilidadesAbertas, null);
+    assert.equal(dashboard.body.dados.distribuicaoSeveridade, null);
+    assert.ok('resilienciaPhishing' in dashboard.body.dados.kpis);
     // Politica de seguranca e treinamento continuam liberados.
     assert.equal((await chamar('GET', '/configuracoes/seguranca', { token: colaborador })).status, 200);
   });

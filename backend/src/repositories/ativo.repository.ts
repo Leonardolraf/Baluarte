@@ -1,3 +1,4 @@
+import type { CadastroAtivo } from '../models/ativo.model.js';
 import { prisma } from '../config/db.js';
 
 export function buscarPorHost(host: string) {
@@ -8,7 +9,7 @@ export function buscarPorId(id: string) {
   return prisma.asset.findUnique({ where: { id } });
 }
 
-export function criar(dados: { nome: string; tipo: string; host: string }) {
+export function criar(dados: CadastroAtivo) {
   return prisma.asset.create({ data: { ...dados, status: 'Ativo' } });
 }
 

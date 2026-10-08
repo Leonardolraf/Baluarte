@@ -66,7 +66,10 @@ export function emTransacao<T>(fn: (tx: Db) => Promise<T>): Promise<T> {
   return prisma.$transaction(fn);
 }
 
-/** Administradores ativos (nao Inativo) alem do usuario informado. */
+/**
+ * Administradores com status 'Ativo' alem do usuario informado. 'Pendente' nao conta:
+ * conta pendente nao entra por login, entao nao garante acesso administrativo (B10).
+ */
 export function contarOutrosAdmins(tx: Db, excetoId: string) {
-  return tx.user.count({ where: { perfil: 'Administrador', status: { not: 'Inativo' }, id: { not: excetoId } } });
+  return tx.user.count({ where: { perfil: 'Administrador', status: 'Ativo', id: { not: excetoId } } });
 }

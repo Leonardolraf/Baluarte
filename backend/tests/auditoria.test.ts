@@ -48,6 +48,17 @@ describe('RN-008: ações novas registradas', () => {
     assert.match(reg.detalhe!, new RegExp(ativoId));
   });
 
+  it('CRIAR_ATIVO guarda o host normalizado e o IP informado, sem a descrição (B10)', async () => {
+    const r = await chamar('POST', '/assets', {
+      token: analista,
+      body: { nome: 'Portal B10', tipo: 'Aplicacao', host: 'https://portal-auditoria.empresa.com/login', ip: '10.12.0.9', descricao: 'Texto livre' },
+    });
+    assert.equal(r.status, 201);
+    const reg = await prisma.auditLog.findFirst({ where: { acao: 'CRIAR_ATIVO', detalhe: { contains: r.body.dados.id } } });
+    assert.ok(reg);
+    assert.equal(reg.detalhe, `${r.body.dados.id} (portal-auditoria.empresa.com, Aplicacao, IP 10.12.0.9)`);
+  });
+
   it('cadastro recusado (duplicado) não grava', async () => {
     const r = await chamar('POST', '/assets', { token: analista, body: { nome: 'Dup', tipo: 'Servidor', host: '10.12.0.1' } });
     assert.equal(r.status, 409);

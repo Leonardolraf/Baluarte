@@ -54,8 +54,12 @@ describe('POST /assets — validação de entrada', () => {
       ' ', // só espaço
       '', // vazio
       'javascript:alert(1)', // esquema de script
-      'http://exemplo.com', // URL com esquema e barras
-      'exemplo.com/rota', // barra no caminho
+      'ftp://exemplo.com', // esquema que nao e http(s): nao e normalizado
+      'https://', // so o esquema: host vazio
+      'https://usuario:senha@exemplo.com/', // credenciais na URL nao viram host
+      'https://exemplo.com:porta/', // porta nao numerica
+      'https://999.1.1.1/login', // normalizado, mas o IPv4 continua fora da faixa
+      'exemplo.com/rota', // barra no caminho (sem esquema o valor nao e normalizado)
       'semdominio', // rótulo único, sem ponto
       "10.0.0.1'; DROP TABLE assets;--", // tentativa de injeção no host
     ];
@@ -78,6 +82,88 @@ describe('POST /assets — validação de entrada', () => {
     // Limite inferior/superior do octeto é aceito.
     const borda = await chamar('POST', '/assets', { token: analista, body: { nome: 'Borda octeto', tipo: 'Rede', host: '0.0.0.255' } });
     assert.equal(borda.status, 201);
+  });
+
+  it('aceita endereço com http(s):// e guarda só o host (B10)', async () => {
+    const casos: [string, string][] = [
+      ['https://portal-b10.empresa.com/login', 'portal-b10.empresa.com'],
+      ['HTTP://intranet-b10.empresa.com:8080/', 'intranet-b10.empresa.com'],
+      ['  https://198.51.100.90:8443/a/b?x=1#topo  ', '198.51.100.90'],
+      ['https://busca-b10.empresa.com?q=1', 'busca-b10.empresa.com'],
+    ];
+    for (const [enviado, guardado] of casos) {
+      const r = await chamar('POST', '/assets', { token: analista, body: { nome: 'Com protocolo', tipo: 'Aplicacao', host: enviado } });
+      assert.equal(r.status, 201, `${enviado}: ${JSON.stringify(r.body)}`);
+      assert.equal(r.body.dados.host, guardado);
+      assert.equal((await prisma.asset.findUniqueOrThrow({ where: { id: r.body.dados.id } })).host, guardado);
+    }
+    // O host normalizado colide com o mesmo host sem protocolo.
+    esperaErro(
+      await chamar('POST', '/assets', { token: analista, body: { nome: 'Repetido', tipo: 'Rede', host: 'portal-b10.empresa.com' } }),
+      409,
+      'ATIVO_DUPLICADO',
+    );
+    esperaErro(
+      await chamar('POST', '/assets', { token: analista, body: { nome: 'Repetido', tipo: 'Rede', host: 'https://192.168.0.10/' } }),
+      409,
+      'ATIVO_DUPLICADO',
+    );
+    // Mensagem do contrato inalterada para o que continua inválido.
+    const ruim = await chamar('POST', '/assets', { token: analista, body: { nome: 'X', tipo: 'Rede', host: 'https://meu host/' } });
+    esperaErro(ruim, 400, 'HOST_INVALIDO');
+    assert.equal(ruim.body.mensagem, 'Host inválido');
+  });
+
+  it('grava IP e descrição opcionais, devolve no POST e no GET /assets (B10)', async () => {
+    const descricao = 'Servidor do portal do cliente — DMZ';
+    const r = await chamar('POST', '/assets', {
+      token: analista,
+      body: { nome: 'Portal B10', tipo: 'Servidor', host: 'portal-ip.empresa.com', ip: ' 203.0.113.7 ', descricao: `  ${descricao}  ` },
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.dados.ip, '203.0.113.7');
+    assert.equal(r.body.dados.descricao, descricao);
+    assert.ok(r.body.dados.criadoEm);
+
+    const lista = await chamar('GET', '/assets', { token: analista });
+    const salvo = lista.body.dados.find((a: { id: string }) => a.id === r.body.dados.id);
+    assert.equal(salvo.ip, '203.0.113.7');
+    assert.equal(salvo.descricao, descricao);
+
+    // Sem os campos (o corpo do contrato): null. Vazio também vira null.
+    const sem = await chamar('POST', '/assets', { token: analista, body: { nome: 'Sem extras', tipo: 'Rede', host: '198.51.100.91' } });
+    assert.equal(sem.status, 201);
+    assert.equal(sem.body.dados.ip, null);
+    assert.equal(sem.body.dados.descricao, null);
+    const vazio = await chamar('POST', '/assets', { token: analista, body: { nome: 'Vazio', tipo: 'Rede', host: '198.51.100.92', ip: '', descricao: '   ' } });
+    assert.equal(vazio.status, 201);
+    assert.equal(vazio.body.dados.ip, null);
+    assert.equal(vazio.body.dados.descricao, null);
+
+    // Limite: 500 caracteres passa.
+    const limite = await chamar('POST', '/assets', { token: analista, body: { nome: 'Limite', tipo: 'Rede', host: '198.51.100.93', descricao: 'a'.repeat(500) } });
+    assert.equal(limite.status, 201);
+  });
+
+  it('rejeita IP fora de IPv4 (IP_INVALIDO) e descrição longa ou não textual (DESCRICAO_INVALIDA) — B10', async () => {
+    for (const ip of ['999.1.1.1', '10.0.0', 'abc', '::1', 42, ['10.0.0.1'], { $ne: null }]) {
+      esperaErro(
+        await chamar('POST', '/assets', { token: analista, body: { nome: 'IP ruim', tipo: 'Rede', host: '198.51.100.94', ip } }),
+        400,
+        'IP_INVALIDO',
+      );
+    }
+    for (const descricao of ['a'.repeat(501), 123, ['x'], { a: 1 }]) {
+      const r = await chamar('POST', '/assets', { token: analista, body: { nome: 'Desc ruim', tipo: 'Rede', host: '198.51.100.95', descricao } });
+      esperaErro(r, 400, 'DESCRICAO_INVALIDA');
+    }
+    // Erros do contrato vêm antes das extensões: host inválido + IP inválido -> HOST_INVALIDO.
+    esperaErro(
+      await chamar('POST', '/assets', { token: analista, body: { nome: 'Ordem', tipo: 'Rede', host: '999.1.1.1', ip: 'x' } }),
+      400,
+      'HOST_INVALIDO',
+    );
+    assert.equal(await prisma.asset.count({ where: { host: { in: ['198.51.100.94', '198.51.100.95'] } } }), 0);
   });
 
   it('rejeita tipo fora da lista (TIPO_INVALIDO) e nome ausente (NOME_OBRIGATORIO)', async () => {
