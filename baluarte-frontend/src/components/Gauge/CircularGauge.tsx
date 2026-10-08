@@ -78,7 +78,10 @@ export function CircularGauge({
   const dashOffset = arcLength * (1 - clamped / 100);
   const filledTicks = Math.round((clamped / 100) * TICKS);
 
-  const trackClass = onDark ? 'stroke-white/15' : 'stroke-slate-200 dark:stroke-slate-800';
+  // `onDark` = desenhado sobre a placa, que agora acompanha o tema.
+  const trackClass = onDark
+    ? 'stroke-slate-200 dark:stroke-white/15'
+    : 'stroke-slate-200 dark:stroke-slate-800';
   const valueClass = onDark ? SEVERITY_PLATE_TEXT_CLASS[severity] : SEVERITY_TEXT_CLASS[severity];
 
   return (
@@ -162,15 +165,9 @@ export function CircularGauge({
         </div>
       </div>
       <figcaption className="-mt-3 text-center">
-        <div className={cn('text-sm font-semibold', onDark ? 'text-white' : 'text-ink dark:text-white')}>
-          {label}
-        </div>
+        <div className={cn('text-sm font-semibold', 'text-ink dark:text-white')}>{label}</div>
         {sublabel && (
-          <div
-            className={cn('mt-0.5 text-xs', onDark ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400')}
-          >
-            {sublabel}
-          </div>
+          <div className={cn('mt-0.5 text-xs', 'text-slate-500 dark:text-slate-400')}>{sublabel}</div>
         )}
       </figcaption>
     </figure>

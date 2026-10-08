@@ -90,7 +90,7 @@ const TONE_CLASS: Record<StatTone, string> = {
 };
 
 const PLATE_TONE_CLASS: Record<StatTone, string> = {
-  neutral: 'text-white',
+  neutral: 'text-ink dark:text-white',
   ...SEVERITY_PLATE_TEXT_CLASS,
 };
 
@@ -123,12 +123,10 @@ export function StatCard({
       {/* Reserva duas linhas de rótulo: rótulos de 1 e de 2 linhas alinham o numeral na mesma base. */}
       <div className="flex min-h-8 items-start justify-between gap-3">
         {/* Quebra só entre palavras: rótulo partido ao meio ("VULNERABILI/DADES") é ilegível. */}
-        <span className={cn('label-caps min-w-0 break-normal', onPlate && '!text-slate-400')}>{label}</span>
-        {icon && (
-          <span className={cn('shrink-0', onPlate ? 'text-slate-500' : 'text-slate-400 dark:text-slate-500')}>
-            {icon}
-          </span>
-        )}
+        <span className={cn('label-caps min-w-0 break-normal', onPlate && 'dark:!text-slate-400')}>
+          {label}
+        </span>
+        {icon && <span className={cn('shrink-0', 'text-slate-400 dark:text-slate-500')}>{icon}</span>}
       </div>
       <div
         className={cn(
@@ -139,20 +137,16 @@ export function StatCard({
       >
         {value}
       </div>
-      {hint && (
-        <div
-          className={cn('mt-1 text-xs', onPlate ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400')}
-        >
-          {hint}
-        </div>
-      )}
+      {hint && <div className={cn('mt-1 text-xs', 'text-slate-500 dark:text-slate-400')}>{hint}</div>}
     </>
   );
 
   const surface = onPlate
-    ? 'block rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3'
+    ? 'block rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.04]'
     : 'surface block p-5';
-  const hover = onPlate ? 'transition-colors hover:bg-white/[0.08]' : 'transition-shadow hover:shadow-md';
+  const hover = onPlate
+    ? 'transition-colors hover:bg-slate-100 dark:hover:bg-white/[0.08]'
+    : 'transition-shadow hover:shadow-md';
 
   if (href) {
     return (

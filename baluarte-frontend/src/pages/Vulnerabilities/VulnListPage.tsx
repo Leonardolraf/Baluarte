@@ -5,9 +5,8 @@ import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { SEVERITY_LABEL } from '@/lib/severity';
 import { formatNumber } from '@/lib/format';
-import { ErrorState, LinkButton, LoadingSpinner, PageHeader, SeverityBadge, Skeleton } from '@/components';
+import { ErrorState, LoadingSpinner, PageHeader, SeverityBadge, Skeleton } from '@/components';
 import { VulnTable } from '@/components/Table/VulnTable';
-import { ServerIcon } from '@/components/icons';
 
 const QUERY_PARAM = 'q';
 const DEBOUNCE_MS = 300;
@@ -106,11 +105,6 @@ export default function VulnListPage() {
       <PageHeader
         title="Vulnerabilidades"
         description="Achados das varreduras OWASP Top 10 com pontuação CVSS v3.1."
-        actions={
-          <LinkButton to="/assets/new" variant="outline" leftIcon={<ServerIcon size={16} />}>
-            Cadastrar ativo
-          </LinkButton>
-        }
         meta={
           data ? <SummaryMeta summary={data.summary} /> : loading ? <Skeleton className="h-5 w-56" /> : null
         }

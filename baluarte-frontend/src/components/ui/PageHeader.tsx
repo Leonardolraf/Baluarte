@@ -9,6 +9,8 @@ export interface Breadcrumb {
 }
 
 export interface PageHeaderProps {
+  /** Linha curta acima do título (saudação, contexto). */
+  eyebrow?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
   breadcrumbs?: Breadcrumb[];
@@ -18,7 +20,15 @@ export interface PageHeaderProps {
   className?: string;
 }
 
-export function PageHeader({ title, description, breadcrumbs, actions, meta, className }: PageHeaderProps) {
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  breadcrumbs,
+  actions,
+  meta,
+  className,
+}: PageHeaderProps) {
   return (
     <header className={cn('mb-6', className)}>
       {breadcrumbs && breadcrumbs.length > 0 && (
@@ -49,6 +59,9 @@ export function PageHeader({ title, description, breadcrumbs, actions, meta, cla
       )}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
+          {eyebrow && (
+            <p className="display mb-1 text-lg leading-6 text-slate-600 dark:text-slate-300">{eyebrow}</p>
+          )}
           <h1 className="display text-[28px] leading-8 text-ink dark:text-white">{title}</h1>
           {description && (
             <p className="mt-1.5 max-w-3xl text-sm text-slate-600 dark:text-slate-400">{description}</p>
