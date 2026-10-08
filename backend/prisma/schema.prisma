@@ -240,7 +240,7 @@ model CampaignEvent {
 // ao anterior (migration 20261008170000_auditoria_cadeia_hash): o trigger de INSERT calcula
 // `sequencia`, `hashAnterior` e `hash` sob um advisory lock (valores enviados pela aplicacao
 // sao ignorados) e GET /auditoria/integridade detecta adulteracao. A trava no banco
-// (UPDATE/DELETE/TRUNCATE recusados) e pendencia: migration 20261008171000_auditoria_imutavel
+// (UPDATE/DELETE/TRUNCATE recusados) e pendencia: migration 20261008176000_auditoria_imutavel
 // na branch feat/b29-trava. Serializacao do hash no README (Auditoria).
 // Sem FK para User de proposito: o registro sobrevive a exclusao da conta.
 model AuditLog {
@@ -249,9 +249,12 @@ model AuditLog {
   acao         String
   detalhe      String?
   timestamp    DateTime @default(now())
-  // Ordem da cadeia (atribuida pelo trigger, dentro do lock). Nao e o timestamp: duas
-  // transacoes concorrentes podem gravar fora da ordem do now() de cada uma.
-  sequencia    BigInt   @unique @default(autoincrement())
+  // Ordem da cadeia. Nao e o timestamp: duas transacoes concorrentes podem gravar fora da
+  // ordem do now() de cada uma. O trigger de INSERT SEMPRE sobrescreve este valor com
+  // nextval("AuditLog_sequencia_seq") dentro do advisory lock; o default 0 so existe para o
+  // campo ser opcional no create. Um default nextval queimaria um segundo numero a cada
+  // INSERT (sequencia pulando de 2 em 2; migration 20261008175000_auditoria_sequencia_sem_salto).
+  sequencia    BigInt   @unique @default(0)
   // Anulaveis para o codigo antigo continuar gravando; o trigger sempre preenche.
   // Unico: duas linhas com o mesmo anterior seriam uma bifurcacao da cadeia.
   hashAnterior String?  @unique

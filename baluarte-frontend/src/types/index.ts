@@ -496,7 +496,7 @@ export interface SecurityPolicy {
   auditRegistersActions: boolean;
   /**
    * Trava no banco ativa: UPDATE/DELETE/TRUNCATE no AuditLog recusados (migration
-   * 20261008171000_auditoria_imutavel). Sem ela a trilha ainda tem a cadeia de hash, que
+   * 20261008176000_auditoria_imutavel). Sem ela a trilha ainda tem a cadeia de hash, que
    * detecta adulteração, mas o banco aceita a alteração.
    */
   auditLogImmutable: boolean;

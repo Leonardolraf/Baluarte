@@ -128,6 +128,28 @@ describe('B29: encadeamento por hash (trigger de INSERT)', () => {
     assert.equal(v.registrosVerificados, linhas.length);
   });
 
+  it('a sequencia é contígua: cada INSERT gasta um número só, sequencial ou concorrente', async () => {
+    // O default da coluna é 0 e só o trigger tira o nextval (migration auditoria_sequencia_sem_salto);
+    // com o default nextval de antes, cada INSERT queimava dois números (2, 4, 6...).
+    const antes = (await cadeia()).at(-1)!.sequencia;
+    for (let i = 0; i < 10; i++) await registrarAuditoria(null, 'SEQUENCIA_B29', `seq ${i}`);
+    await Promise.all([
+      ...Array.from({ length: 20 }, (_, i) => registrarAuditoria(null, 'SEQUENCIA_B29', `conc ${i}`)),
+      ...Array.from({ length: 10 }, (_, i) => prisma.auditLog.create({ data: { acao: 'SEQUENCIA_B29', detalhe: `direto ${i}` } })),
+    ]);
+    await prisma.auditLog.createMany({ data: Array.from({ length: 5 }, (_, i) => ({ acao: 'SEQUENCIA_B29', detalhe: `lote ${i}` })) });
+    // SQL sem a coluna, como um cliente que não conhece `sequencia` (o Prisma anterior a esta
+    // correção, um script, o SQL Editor): aí é o default do banco que vale.
+    const sql = (i: number) => prisma.$executeRaw`INSERT INTO "AuditLog" ("id", "acao", "detalhe") VALUES (${`sql-b29-${i}`}, 'SEQUENCIA_B29', 'sql')`;
+    for (let i = 0; i < 5; i++) await sql(i);
+    await Promise.all(Array.from({ length: 10 }, (_, i) => sql(5 + i)));
+    const novos = (await prisma.auditLog.findMany({ where: { sequencia: { gt: antes } }, orderBy: { sequencia: 'asc' } })).map((r) => r.sequencia);
+    assert.equal(novos.length, 60);
+    assert.deepEqual(novos, Array.from({ length: 60 }, (_, i) => antes + BigInt(i + 1)), 'sem salto');
+    assert.ok(novos.every((n) => n > 0n), 'o default 0 nunca é gravado');
+    assert.equal((await integridade()).integra, true);
+  });
+
   it('a verificação percorre mais de um lote (1000) sem quebra', async () => {
     await prisma.auditLog.createMany({ data: Array.from({ length: 1100 }, (_, i) => ({ acao: 'LOTE_B29', detalhe: String(i) })) });
     const v = await integridade();
