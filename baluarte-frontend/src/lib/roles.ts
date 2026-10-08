@@ -27,6 +27,8 @@ export const ROUTE_ROLES = {
   /** GET /scans é restrito a Administrador/Analista no servidor (B02). */
   scans: ['admin', 'analyst'],
   campaigns: ['admin', 'analyst'],
+  /** Análise de arquivos (B05): aberta aos três perfis; o colaborador só vê as próprias análises. */
+  files: ['admin', 'analyst', 'collaborator'],
   training: ['admin', 'analyst', 'collaborator'],
   /** Consolidado de quem concluiu treinamento: dado individual, restrito à gestão (RN-006). */
   trainings: ['admin', 'analyst'],

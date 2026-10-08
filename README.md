@@ -65,7 +65,7 @@ npm run dev
 | **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 321 testes. Unidade (78, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura, validações, política de senha, tokens, JWT/RBAC, erro de negócio, validação zod (ordem das regras do contrato), métricas de campanha, treinamento, e-mails). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (123): análise de arquivos (antivírus em fluxo, EICAR, limites, histórico por perfil), treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
-| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 399 testes |
+| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 428 testes |
 | **Frontend — ponta a ponta** (Playwright, modo mock, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 32 testes |
 | **Frontend — ponta a ponta em modo real** | `baluarte-frontend/e2e/real-backend.spec.ts` | `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; em dev use `:5174` com `VITE_USE_MOCKS=false`) | 10 testes |
 
@@ -83,7 +83,7 @@ O `test:relatorio` mede a cobertura com o c8 e escreve `backend/coverage/RELATOR
 |---|---:|---:|---:|---:|---:|
 | Backend — unidade | 57 | 100% | 83,9% | 94,2% | 78,2% |
 | Backend — completa (unidade + integração + pentest) | 289 | 100% | 98,8% | 95,3% | 99,0% |
-| Frontend (Vitest) | 399 | 100% | 90,0% | 82,2% | 81,8% |
+| Frontend (Vitest) | 428 | 100% | 90,4% | 82,9% | 82,2% |
 
 As três medidas das três suítes estão acima dos 70% do RNF-08 (as funções do frontend subiram de 63,2% para 81,8% no DT03).
 

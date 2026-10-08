@@ -5,6 +5,7 @@ import {
   ActivityIcon,
   BugIcon,
   DashboardIcon,
+  FileScanIcon,
   GraduationIcon,
   MailIcon,
   PlusIcon,
@@ -47,6 +48,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/assets', label: 'Ativos', icon: <ServerIcon />, roles: ROUTE_ROLES.assets, end: true },
       { to: '/assets/new', label: 'Cadastrar ativo', icon: <PlusIcon />, roles: ROUTE_ROLES.assets },
       { to: '/scans', label: 'Varreduras', icon: <ActivityIcon />, roles: ROUTE_ROLES.scans, end: true },
+      {
+        to: '/files',
+        label: 'Análise de arquivos',
+        icon: <FileScanIcon />,
+        roles: ROUTE_ROLES.files,
+        end: true,
+      },
     ],
   },
   {

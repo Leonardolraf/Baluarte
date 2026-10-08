@@ -456,6 +456,32 @@ export interface CreatedUser extends User {
   inviteSent: boolean;
 }
 
+// ---- Análise de arquivos (B04/B05) ------------------------------------------
+
+/** Veredito do antivírus: só diz se uma assinatura CONHECIDA casou, nunca que o arquivo é seguro. */
+export type FileScanResult = 'clean' | 'threat';
+
+/** Análise de um arquivo enviado. O arquivo é descartado; só o hash e o resultado ficam. */
+export interface FileScan {
+  id: string;
+  name: string;
+  /** Tamanho em bytes. */
+  size: number;
+  sha256: string;
+  result: FileScanResult;
+  /** Nome da assinatura encontrada (só quando `result` é `threat`). */
+  threat: string | null;
+  scannedAt: string;
+  /** Quem enviou: só vem para Administrador e Analista. */
+  uploadedBy?: { name: string; email: string };
+}
+
+/** Resposta do envio: a análise e a mensagem do servidor ("Nenhuma ameaça conhecida encontrada"…). */
+export interface FileScanOutcome {
+  scan: FileScan;
+  message: string;
+}
+
 // ---- Infra / API ------------------------------------------------------------
 
 export interface ApiError {

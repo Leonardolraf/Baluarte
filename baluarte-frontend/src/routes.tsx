@@ -17,6 +17,7 @@ const VulnDetailPage = lazy(() => import('@/pages/Vulnerabilities/VulnDetailPage
 const AssetListPage = lazy(() => import('@/pages/Assets/AssetListPage'));
 const AssetFormPage = lazy(() => import('@/pages/Assets/AssetFormPage'));
 const ScanListPage = lazy(() => import('@/pages/Scans/ScanListPage'));
+const FileAnalysisPage = lazy(() => import('@/pages/Files/FileAnalysisPage'));
 const CampaignListPage = lazy(() => import('@/pages/Campaigns/CampaignListPage'));
 const CampaignFormPage = lazy(() => import('@/pages/Campaigns/CampaignFormPage'));
 const CampaignDetailPage = lazy(() => import('@/pages/Campaigns/CampaignDetailPage'));
@@ -46,7 +47,7 @@ function NotFound() {
  * Hierarquia de rotas.
  *  - Públicas: /login, /reset-password, /definir-senha, /about,
  *    /t/:token e /t/:token/reportar (links do e-mail simulado da campanha)
- *  - Protegidas (qualquer perfil): /dashboard, /training/:id, /settings
+ *  - Protegidas (qualquer perfil): /dashboard, /files, /training/:id, /settings
  *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /scans, /trainings, /campaigns[/new|/:id]
  *  - Admin: /users, /users/new, /users/:id/edit
  */
@@ -72,6 +73,7 @@ export const routes: RouteObject[] = [
         element: <AppLayout />,
         children: [
           { path: '/dashboard', element: page(<DashboardPage />) },
+          { path: '/files', element: page(<FileAnalysisPage />) },
           { path: '/training/:id', element: page(<TrainingPage />) },
           { path: '/settings', element: page(<SettingsPage />) },
           {

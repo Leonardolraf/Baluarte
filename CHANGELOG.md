@@ -235,6 +235,15 @@ Primeiro método novo de varredura: qualquer perfil envia um arquivo e o sistema
 - **Testes** — 321 no backend: 7 de unidade do cliente do clamd e 11 de integração (contra um clamd falso em TCP). Newman 35 requisições / 70 asserções sem falhas.
 - **Produção** — sem ClamAV a rota responde 503. Decisão pendente do Leo: plano maior no Railway, demonstrar só localmente, ou VirusTotal pelo hash (B20) em produção.
 
+## 2026-10-08 — Tela de análise de arquivos (B05)
+
+Tela do antivírus de arquivos no `baluarte-frontend/`, feita **contra o contrato do B04** (`POST /api/arquivos/analise`, multipart com o campo `arquivo`, e `GET /api/arquivos/analises`). O backend do B04 (ClamAV) vem em seguida; até ele existir, no modo real a tela recebe 501 `NAO_IMPLEMENTADO` (a rota inexistente é convertida como nas demais), e a camada mock responde igual ao contrato.
+
+- **Tela `/files`** ("Análise de arquivos", menu lateral para os três perfis): zona de arrastar e soltar que também abre a escolha do arquivo por clique ou teclado (Enter/Espaço), barra de envio, aviso de privacidade (o arquivo é analisado e descartado; só hash e resultado ficam no histórico) e anúncio do resultado por `aria-live`. O veredito sem ameaça é "Nenhuma ameaça conhecida encontrada", nunca "arquivo seguro"; a ameaça aparece em destaque com o nome da assinatura. Nome, tamanho e SHA-256 copiável. Mensagens próprias para 400, 413 (a tela barra acima de 10 MB antes de enviar), 429 e 503 ("não está disponível neste ambiente").
+- **Histórico** abaixo do envio: o Colaborador vê só as próprias análises; Administrador e Analista veem todas, com nome e e-mail de quem enviou.
+- **Camada de serviço** — `analyzeFile`/`listFileScans` no contrato `BaluarteApi`; no modo real, o upload vai pelo mesmo cliente axios (token pelo interceptor, `Content-Type` multipart para o FormData não virar JSON, progresso por `onUploadProgress`); `toFileScan` em `adapters.ts` converte `nome/tamanho/resultado/ameaca/analisadoEm/usuario`. Mock: `eicar*` no nome ou "EICAR" no conteúdo → AMEACA `Eicar-Signature`; acima de 10 MB → 413; limite de 20 análises por usuário por hora → 429; antivírus desligável para demonstrar o 503; SHA-256 real pelo Web Crypto.
+- **Testes** — 428 no frontend depois da junção com o DT03 (369 nesta branch, eram 340): 9 da página (envio limpo, ameaça, arquivo grande barrado, 503, histórico com e sem a coluna de usuário, teclado, arrastar e soltar, barra de envio), 18 de adaptadores, cliente HTTP real (multipart, erros, 404 → 501), camada mock e utilitários, e a página nova na suíte de acessibilidade (axe) como Analista e como Colaborador. Cobertura 85,0% linhas / 80,5% ramos / 65,2% funções.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -242,7 +251,7 @@ Primeiro método novo de varredura: qualquer perfil envia um arquivo e o sistema
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 321 no backend (78 unidade + 7 banco + 123 integração + 113 pentest; 98,8% de linhas cobertas) · 399 no frontend (Vitest+RTL+axe; 81,8% das funções cobertas) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 321 no backend (78 unidade + 7 banco + 123 integração + 113 pentest; 98,8% de linhas cobertas) · 428 no frontend (Vitest+RTL+axe; 82,2% das funções cobertas) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`). Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

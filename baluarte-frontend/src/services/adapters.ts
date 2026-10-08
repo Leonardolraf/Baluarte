@@ -12,6 +12,7 @@ import type {
   CampaignStatus,
   CampaignTemplate,
   DashboardMetrics,
+  FileScan,
   FunnelStage,
   NotificationPreferences,
   RBACRole,
@@ -772,4 +773,34 @@ export function fromCampaignInput(input: CampaignInput): {
     destinatarios,
     template: TEMPLATE_TO_LABEL[input.template],
   };
+}
+
+// ---- Análise de arquivos (contrato do B04) ------------------------------------
+
+export interface BackendFileScan {
+  id: string;
+  nome: string;
+  /** Bytes. */
+  tamanho: number;
+  sha256: string;
+  resultado: string;
+  ameaca: string | null;
+  analisadoEm: string;
+  /** Só para Administrador e Analista em GET /arquivos/analises. */
+  usuario?: { nome: string; email: string } | null;
+}
+
+export function toFileScan(raw: BackendFileScan): FileScan {
+  const threat = String(raw.resultado).toUpperCase() === 'AMEACA';
+  const scan: FileScan = {
+    id: String(raw.id),
+    name: raw.nome,
+    size: Number(raw.tamanho) || 0,
+    sha256: String(raw.sha256).toLowerCase(),
+    result: threat ? 'threat' : 'clean',
+    threat: threat ? (raw.ameaca ?? null) : null,
+    scannedAt: raw.analisadoEm,
+  };
+  if (raw.usuario) scan.uploadedBy = { name: raw.usuario.nome, email: raw.usuario.email };
+  return scan;
 }
