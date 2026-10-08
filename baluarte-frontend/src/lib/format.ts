@@ -56,6 +56,24 @@ export function formatRelative(value: string | Date | null | undefined, now: Dat
   return past ? `há ${unit}` : `em ${unit}`;
 }
 
+/**
+ * Tempo até uma data futura, para estimativas curtas: "≈ 12 s", "≈ 2 min 5 s". Data passada
+ * (ou agora) vira "instantes"; data ausente ou inválida, null.
+ */
+export function formatTimeLeft(
+  value: string | Date | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  const d = toDate(value);
+  if (!d) return null;
+  const seconds = Math.ceil((d.getTime() - now.getTime()) / 1000);
+  if (seconds <= 0) return 'instantes';
+  if (seconds < 60) return `≈ ${seconds} s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `≈ ${minutes} min ${rest} s` : `≈ ${minutes} min`;
+}
+
 export function formatNumber(value: number): string {
   return numberFormatter.format(value);
 }

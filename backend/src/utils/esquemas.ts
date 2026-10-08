@@ -74,6 +74,9 @@ export function seVeio(esquema: z.ZodType) {
   return z.unknown().refine((v) => v === undefined || v === '' || esquema.safeParse(v).success);
 }
 
+/** Id de recurso no caminho (cuid do Prisma ou id legivel do seed, ex.: `ativo-001`). */
+export const idRecurso = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+
 /** Parametro de query: so string passa; objeto/array (`?q[$ne]=x`) vira undefined. */
 export const textoDeQuery = z.string().optional().catch(undefined);
 

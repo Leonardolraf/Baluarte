@@ -48,6 +48,7 @@ import type {
 import { HttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict, MAX_FILE_SIZE_BYTES } from '@/lib/files';
+import { SCAN_DURATION_MS, scanProgressByTime } from './scanProgress';
 import { vulnerabilityReportFilename } from '@/lib/download';
 import { formatDate, formatDateTime, localDayRange } from '@/lib/format';
 import { buildMockToken, decodeToken } from '@/lib/jwt';
@@ -307,18 +308,10 @@ function isOpen(v: Vulnerability): boolean {
   return v.status !== 'resolved' && v.status !== 'accepted';
 }
 
-// ---- Varredura simulada (espelha backend/src/varredura.ts) ------------------
-// O status sai do tempo decorrido desde o início, avaliado na leitura: em fila nos
-// primeiros 5 s, em andamento até 20 s, concluída depois. Os achados nascem na conclusão.
-export const SCAN_QUEUE_MS = 5_000;
-export const SCAN_DURATION_MS = 20_000;
-
-function scanStatusByTime(startedAt: string, now: number): ScanReport['status'] {
-  const elapsed = now - new Date(startedAt).getTime();
-  if (elapsed >= SCAN_DURATION_MS) return 'completed';
-  if (elapsed >= SCAN_QUEUE_MS) return 'running';
-  return 'queued';
-}
+// ---- Varredura simulada (espelha backend/src/services/cicloVarredura.service.ts) ----
+// Status e progresso saem do tempo decorrido desde o início, avaliados na leitura
+// (mocks/scanProgress.ts). Os achados nascem na conclusão.
+export { SCAN_DURATION_MS, SCAN_QUEUE_MS } from './scanProgress';
 
 /** Achados da varredura concluída: 2 ou 3 tipos distintos do catálogo de demonstração, no ativo varrido. */
 function generateScanFindings(scan: ScanReport, at: string): Vulnerability[] {
@@ -347,7 +340,10 @@ function generateScanFindings(scan: ScanReport, at: string): Vulnerability[] {
 function advanceScans(now = Date.now()): void {
   for (const scan of state.scans) {
     if (!state.runtimeScans.has(scan.id) || scan.status === 'completed') continue;
-    const status = scanStatusByTime(scan.startedAt, now);
+    const { status, progress, stage, estimatedCompletionAt } = scanProgressByTime(scan.startedAt, now);
+    scan.progress = progress;
+    scan.stage = stage;
+    scan.estimatedCompletionAt = estimatedCompletionAt;
     if (status !== 'completed') {
       scan.status = status;
       continue;
@@ -825,6 +821,16 @@ export const mockApi: BaluarteApi = {
     });
   },
 
+  async getScan(id: string): Promise<ScanReport> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin', 'analyst']);
+      advanceScans();
+      const scan = state.scans.find((s) => s.id === id);
+      if (!scan) throw new HttpError(404, 'VARREDURA_NAO_ENCONTRADA', 'Varredura não encontrada');
+      return clone(scan);
+    });
+  },
+
   async startScan(assetId: string): Promise<ScanReport> {
     await delay();
     const user = requireUser();
@@ -841,6 +847,8 @@ export const mockApi: BaluarteApi = {
         'VARREDURA_EM_ANDAMENTO',
         'Já existe uma varredura em andamento para este ativo',
       );
+    const startedAt = nowIso();
+    const { progress, stage, estimatedCompletionAt } = scanProgressByTime(startedAt, Date.now());
     const scan: ScanReport = {
       id: nextId('scan'),
       assetId: asset.id,
@@ -848,11 +856,14 @@ export const mockApi: BaluarteApi = {
       assetHost: asset.host,
       status: 'queued',
       scanner: 'Baluarte OWASP Engine 1.4',
-      startedAt: nowIso(),
+      startedAt,
       finishedAt: null,
       durationSec: null,
       findingsCount: 0,
       findingsBySeverity: emptySeverityMap(),
+      progress,
+      stage,
+      estimatedCompletionAt,
     };
     state.scans.unshift(scan);
     state.runtimeScans.add(scan.id);

@@ -5,7 +5,7 @@ import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { errorMessage } from '@/lib/errors';
 import { isScanInProgress, SCAN_STATUS_CLASS, SCAN_STATUS_LABEL } from '@/lib/severity';
-import { formatDateTime, formatNumber, formatRelative } from '@/lib/format';
+import { formatDateTime, formatNumber, formatRelative, formatTimeLeft } from '@/lib/format';
 import {
   Button,
   Card,
@@ -29,6 +29,58 @@ import { ActivityIcon, BugIcon, PlayIcon, RefreshIcon } from '@/components/icons
 /** Intervalo da consulta automática enquanto houver varredura em fila ou em andamento. */
 export const SCAN_POLL_MS = 3_000;
 
+/** Quantos avisos de "varredura concluída" ficam visíveis (os mais recentes primeiro). */
+const MAX_COMPLETION_NOTICES = 3;
+
+function findingsHref(host: string): string {
+  return `/vulnerabilities?q=${encodeURIComponent(host)}`;
+}
+
+/**
+ * Progresso da varredura em curso (B26): etapa, percentual e conclusão prevista, como o
+ * servidor calculou na última consulta. Concluída mostra 100%; o resto, travessão.
+ */
+function ScanProgressCell({ scan }: { scan: ScanReport }) {
+  if (!isScanInProgress(scan.status)) {
+    return (
+      <span className="tabular-nums text-slate-500 dark:text-slate-400">
+        {scan.status === 'completed' ? '100%' : '—'}
+      </span>
+    );
+  }
+  const timeLeft = formatTimeLeft(scan.estimatedCompletionAt);
+  return (
+    <div className="min-w-[11rem] space-y-1.5">
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="text-ink dark:text-white">{scan.stage}</span>
+        <span className="tabular-nums text-slate-500 dark:text-slate-400">{scan.progress}%</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={`Progresso da varredura de ${scan.assetName}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={scan.progress}
+        aria-valuetext={`${scan.progress}%, ${scan.stage}`}
+        className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+      >
+        <div
+          className="h-full rounded-full bg-ink transition-[width] duration-500 motion-reduce:transition-none dark:bg-white"
+          style={{ width: `${scan.progress}%` }}
+        />
+      </div>
+      {timeLeft && scan.estimatedCompletionAt ? (
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          Conclusão prevista em{' '}
+          <time dateTime={scan.estimatedCompletionAt} title={formatDateTime(scan.estimatedCompletionAt)}>
+            {timeLeft}
+          </time>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function duration(scan: ScanReport): string {
   if (scan.durationSec == null) return '—';
   return scan.durationSec < 60
@@ -48,6 +100,9 @@ function ScanRows({ items }: { items: ScanReport[] }) {
           <Td>
             <StatusPill label={SCAN_STATUS_LABEL[scan.status]} colorClass={SCAN_STATUS_CLASS[scan.status]} />
           </Td>
+          <Td>
+            <ScanProgressCell scan={scan} />
+          </Td>
           <Td className="whitespace-nowrap text-slate-500 dark:text-slate-400">
             <time dateTime={scan.startedAt} title={formatDateTime(scan.startedAt)}>
               {formatRelative(scan.startedAt)}
@@ -60,7 +115,7 @@ function ScanRows({ items }: { items: ScanReport[] }) {
               <span className="text-slate-500 dark:text-slate-400">—</span>
             ) : scan.findingsCount > 0 && scan.assetHost ? (
               <Link
-                to={`/vulnerabilities?q=${encodeURIComponent(scan.assetHost)}`}
+                to={findingsHref(scan.assetHost)}
                 className="inline-flex items-center gap-1 font-semibold tabular-nums text-ink underline-offset-4 hover:underline dark:text-white"
               >
                 {formatNumber(scan.findingsCount)}
@@ -78,8 +133,9 @@ function ScanRows({ items }: { items: ScanReport[] }) {
 
 /**
  * Varreduras OWASP (simuladas no servidor): iniciar uma varredura por ativo e acompanhar
- * o status (Em fila → Em andamento → Concluída). Enquanto houver varredura em curso, a
- * lista é consultada de novo a cada {@link SCAN_POLL_MS} ms, sem piscar a tela.
+ * o status (Em fila → Em andamento → Concluída) e o progresso (B26). Enquanto houver
+ * varredura em curso, cada uma delas é consultada de novo (`GET /scans/:id`) a cada
+ * {@link SCAN_POLL_MS} ms, sem piscar a tela; ao concluir, um aviso leva aos achados.
  */
 export default function ScanListPage() {
   const scansState = useAsync<ScanReport[]>(() => api.listScans(), []);
@@ -90,30 +146,46 @@ export default function ScanListPage() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
+  const [completed, setCompleted] = useState<ScanReport[]>([]);
+
   const scans = data ?? [];
-  const inProgress = scans.some((scan) => isScanInProgress(scan.status));
-  const busyAssets = new Set(scans.filter((s) => isScanInProgress(s.status)).map((s) => s.assetId));
+  const running = scans.filter((scan) => isScanInProgress(scan.status));
+  const inProgress = running.length > 0;
+  const busyAssets = new Set(running.map((s) => s.assetId));
   const activeAssets = (assetsState.data ?? []).filter((asset) => asset.status === 'active');
 
-  // Consulta silenciosa (sem o estado de carregamento) enquanto algo ainda vai mudar de status.
+  // Consulta silenciosa (sem o estado de carregamento) só das varreduras que ainda vão
+  // mudar: uma requisição leve por varredura em curso, em vez da lista inteira.
+  const runningKey = running.map((s) => s.id).join(',');
   const polling = useRef(false);
   useEffect(() => {
-    if (!inProgress) return undefined;
+    if (!runningKey) return undefined;
+    const ids = runningKey.split(',');
     const timer = window.setInterval(() => {
       if (polling.current) return;
       polling.current = true;
-      api
-        .listScans()
-        .then((fresh) => setData(fresh))
-        .catch(() => {
-          // Falha pontual: a próxima rodada tenta de novo (e o botão Atualizar continua disponível).
+      void Promise.allSettled(ids.map((id) => api.getScan(id)))
+        .then((results) => {
+          // Falha pontual de uma consulta: a varredura fica como estava e a próxima rodada tenta de novo.
+          const fresh = new Map<string, ScanReport>();
+          for (const result of results) {
+            if (result.status === 'fulfilled') fresh.set(result.value.id, result.value);
+          }
+          if (fresh.size === 0) return;
+          const finished = [...fresh.values()].filter((scan) => scan.status === 'completed');
+          if (finished.length > 0) {
+            setCompleted((previous) =>
+              [...finished, ...previous.filter((p) => !fresh.has(p.id))].slice(0, MAX_COMPLETION_NOTICES),
+            );
+          }
+          setData((previous) => previous?.map((scan) => fresh.get(scan.id) ?? scan) ?? previous);
         })
         .finally(() => {
           polling.current = false;
         });
     }, SCAN_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [inProgress, setData]);
+  }, [runningKey, setData]);
 
   async function onStart(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -200,14 +272,45 @@ export default function ScanListPage() {
       ) : (
         <Card title="Histórico" subtitle="Mais recentes primeiro" flush>
           <p className="px-5 pt-3 text-xs text-slate-500 dark:text-slate-400" aria-live="polite">
-            {inProgress ? 'Atualizando automaticamente enquanto houver varredura em andamento.' : ''}
+            {inProgress
+              ? 'Atualizando automaticamente enquanto houver varredura em andamento. A varredura continua mesmo se você sair desta tela.'
+              : ''}
           </p>
+          <div role="status" className="px-5" data-testid="scan-completed-notices">
+            {completed.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {completed.map((scan) => (
+                  <li
+                    key={scan.id}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-50 px-3 py-2 text-sm text-ink ring-1 ring-inset ring-slate-200 dark:bg-slate-800/60 dark:text-white dark:ring-slate-700"
+                  >
+                    <span>
+                      Varredura de <strong className="font-semibold">{scan.assetName}</strong> concluída:{' '}
+                      {scan.findingsCount === 0
+                        ? 'nenhum achado.'
+                        : `${formatNumber(scan.findingsCount)} ${scan.findingsCount === 1 ? 'achado' : 'achados'}.`}
+                    </span>
+                    {scan.findingsCount > 0 && scan.assetHost ? (
+                      <Link
+                        to={findingsHref(scan.assetHost)}
+                        className="inline-flex items-center gap-1 font-semibold underline underline-offset-4"
+                      >
+                        Ver achados
+                        <BugIcon size={14} />
+                      </Link>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
           <div className="overflow-x-auto">
             <Table>
               <THead>
                 <tr>
                   <Th>Ativo</Th>
                   <Th>Status</Th>
+                  <Th>Progresso</Th>
                   <Th>Iniciada</Th>
                   <Th>Duração</Th>
                   <Th align="right">Achados</Th>

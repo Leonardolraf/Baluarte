@@ -368,6 +368,39 @@ describe('realApi — dashboard, ativos e varreduras', () => {
     expect(body()).toEqual({ ativoId: 'a-1' });
     expect(report).toMatchObject({ id: 's-9', assetId: 'a-1', status: 'queued', finishedAt: null });
   });
+
+  it('consulta uma varredura só, com o progresso (B26)', async () => {
+    on(
+      'GET /scans/s-9',
+      ok({
+        id: 's-9',
+        assetId: 'a-1',
+        status: 'EM_ANDAMENTO',
+        criadoEm: '2026-10-07T12:00:00.000Z',
+        concluidoEm: null,
+        asset: { nome: 'Portal', host: '10.0.0.5' },
+        _count: { findings: 0 },
+        progresso: 37,
+        etapa: 'Testando injeção',
+        estimativaConclusao: '2026-10-07T12:00:20.000Z',
+      }),
+    );
+    const report = await realApi.getScan('s-9');
+    expect(calls.at(-1)?.method).toBe('get');
+    expect(report).toMatchObject({
+      id: 's-9',
+      assetName: 'Portal',
+      status: 'running',
+      progress: 37,
+      stage: 'Testando injeção',
+      estimatedCompletionAt: '2026-10-07T12:00:20.000Z',
+    });
+
+    on('GET /scans/nao-existe', fail(404, 'VARREDURA_NAO_ENCONTRADA', 'Varredura não encontrada'));
+    const err = await rejection(realApi.getScan('nao-existe'));
+    expect(err.status).toBe(404);
+    expect(err.code).toBe('VARREDURA_NAO_ENCONTRADA');
+  });
 });
 
 describe('realApi — vulnerabilidades', () => {
