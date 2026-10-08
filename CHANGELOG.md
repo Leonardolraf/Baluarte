@@ -94,6 +94,47 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 - **Testes** — 152 no backend (eram 144): campanha com não cadastrado/inativo, vínculo e hash por evento, unicidade, exclusão com histórico, link público (token desconhecido, id do evento no lugar do token, concluir antes de abrir, clique registrado uma vez, conclusão idempotente) e leitura protegida do treinamento. Newman: 35 requisições / 70 asserções, 0 falhas.
 - **Atenção ao atualizar um banco existente** — `userId` obrigatório não pode ser adicionado a eventos que já existem, então o `db push` pede reset. Local: `npm run db:reset && npm run seed && npm run seed:demo`. Docker: `docker compose down -v` antes de subir (o volume é recriado e semeado).
 
+## 2026-10-07 — Cadastro por convite, e-mail de conta e sessão no servidor
+
+- **Fim da senha provisória fixa** — todo usuário criado pelo administrador nascia com `Mudar@123`, publicada no repositório, e a conta `Pendente` já entrava com ela: quem lesse o código podia tomar qualquer conta recém-criada. Agora `POST /users` cria a conta `Pendente` com um hash descartável (nenhuma senha confere) e envia um **convite por e-mail**, com link de 72 h e uso único, para a pessoa criar a própria senha. Conta `Pendente` não entra por login (`403 CONTA_PENDENTE` para as antigas que ainda tinham a senha fixa). `POST /users/:id/convite` reenvia; "esqueci a senha" de uma conta pendente manda um convite novo.
+- **E-mail de verdade** — `src/email.ts` (nodemailer): SMTP para o **Mailpit** do Compose (`:8025`, nada sai da máquina), caixa em memória nos testes, log em dev sem SMTP. O link de redefinição deixou de ser impresso no log (`RESET_TOKEN_CONSOLE` saiu).
+- **Sessão no servidor** — `POST /auth/logout` invalida os tokens emitidos antes (todos os dispositivos); `POST /auth/renovar` mantém a sessão viva enquanto há uso (expira com 30 min parada, teto de 8 h); trocar a senha encerra as outras sessões e devolve um token novo. `POST /auth/link/verificar` deixa a tela conferir o link antes de pedir a senha.
+- **Limites no banco** — falhas de login (`LoginFailure`) e pedidos de redefinição (`ResetRequest`) saem da memória: o bloqueio vale depois de reiniciar a API e entre instâncias. Redefinir a senha pelo link tira a conta do bloqueio.
+- **Auditoria** — `LOGIN`, `LOGIN_BLOQUEADO`, `LOGOUT`, `CRIAR_USUARIO`, `ENVIAR_CONVITE`, `ACEITAR_CONVITE`.
+- **Banco** — migrations `conta_convite_login` (`PasswordResetToken.tipo` com CHECK `RESET`/`CONVITE`, `User.sessaoEncerradaEm`, `LoginFailure` com RLS) e `limite_reset_no_banco` (`ResetRequest` com RLS).
+- **Testes** — 192 no backend (eram 174): `tests/conta.test.ts` novo (convite, reenvio e RBAC, verificação do link, logout, renovação, troca de senha, bloqueio persistido, auditoria); os testes passam a criar contas pelo convite, lido da caixa de e-mail em memória.
+- **Problema conhecido** — a migration `habilita_rls` faz `ALTER TABLE "_prisma_migrations"`, tabela que não existe no banco-sombra do `prisma migrate dev`: o comando falha para qualquer migration nova. Como ela já está aplicada no Postgres local e no Supabase, o arquivo não foi alterado; migrations novas são geradas com `migrate dev --create-only` apontando para um banco descartável recém-criado, até a correção ser decidida.
+
+## 2026-10-07 — Cabeçalhos de segurança e dependências sem alerta (B11)
+
+- **`helmet` 8.3** na API, antes de tudo (os cabeçalhos saem também nos erros 400/401/404 e no preflight do CORS): CSP `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, HSTS (só vale em HTTPS). CORS e `x-powered-by` desligado sem mudança.
+- **Dependências** — `npm audit fix` sem `--force` no backend: `proxy-addr` 2.0.8 (alerta crítico), `body-parser` 1.20.8 e `qs` 6.16.0 (moderados), `express` 4.22.3. `npm audit` zerado. No frontend ficou o alerta moderado do `react-router` 6, que só sai com a versão 7 (major; um dos alertas é de SSR, que a SPA não usa).
+- **Fora:** limite de requisições por IP — em memória não funciona na API serverless da Vercel.
+- **B02** (commit anterior) — `GET /scans` só para Administrador/Analista; a política de segurança deixa de afirmar log imutável e retenção de 12 meses.
+- **Testes** — 200 no backend (7 banco + 80 integração + 113 pentest).
+
+## 2026-10-07 — Varredura com status que anda (B21)
+
+A varredura continua **simulada**, mas deixa de ficar "na fila" para sempre.
+
+- **Status pelo tempo decorrido** — `EM_FILA` nos primeiros 5 s, `EM_ANDAMENTO` até 20 s, `CONCLUIDA` depois (`backend/src/varredura.ts`). Não há timer depois da resposta: a API também roda como função serverless na Vercel, que congela ao responder. A transição é calculada e **gravada na leitura** (`GET /scans`, `/dashboard`, `/vulnerabilidades` e antes de criar uma varredura), com `concluidoEm` = criação + 20 s.
+- **Achados só na conclusão** — antes eram gravados no `POST /scans`, junto com a varredura em fila. Agora nascem quando a varredura conclui, dentro de uma transação que só uma leitura concorrente vence (sem achado duplicado); varredura antiga que já tinha achados conclui sem ganhar outros. Assim nenhuma lista nem indicador precisa filtrar "achado de varredura não concluída".
+- **Uma varredura por vez no ativo (RN-003)** — `POST /scans` recusa com `409 VARREDURA_EM_ANDAMENTO` enquanto a anterior não conclui; a linha do ativo é travada na criação (`SELECT … FOR UPDATE`), então pedidos simultâneos criam uma só. As validações do contrato (400/404/422) vêm antes. A collection do Newman e as suítes Robot foram conferidas: o Newman cria uma única varredura com sucesso (`ativo-001`) por execução e o Robot não cria nenhuma, então o contrato segue igual (`dados.statusVarredura === 'EM_FILA'`). Rodar o Newman duas vezes em menos de 20 s no mesmo banco daria 409 no CT-S1 — o README já exige banco limpo a cada execução.
+- **Frontend** — tela nova **Varreduras** (`/scans`, Administrador/Analista, na barra lateral): inicia a varredura de um ativo ativo (o que já está em curso aparece desabilitado), mostra status, duração e achados (só na conclusão, com link para as vulnerabilidades do host) e consulta de novo a cada 3 s, sem piscar a tela, enquanto houver varredura em curso. A camada mock espelha o ciclo, os achados na conclusão e o 409.
+- **Sem mudança de schema** — o `CHECK` já aceitava os três status.
+- **Testes** — 205 no backend (eram 194): `tests/varredura.test.ts` (transições com `criadoEm` recuado no banco, sem dormir; concluir direto da fila; leituras simultâneas; bloqueio, simultaneidade e ordem das validações). 329 no frontend (eram 324): ciclo e 409 na camada mock, tela com consulta automática, auditoria axe de `/scans`.
+
+## 2026-10-07 — E-mail simulado da campanha e "reportar e-mail suspeito" (B19)
+
+- **E-mail de verdade para cada destinatário** — `POST /campaigns` passa a enviar, pelo mesmo `src/email.ts` dos e-mails de conta (Mailpit em dev/demo, caixa em memória nos testes, nada em produção sem SMTP), o e-mail do template (`src/campanhaEmail.ts`): urgência ("conta bloqueada em 24 horas"), autoridade ("pedido da Diretoria") e curiosidade ("plano de cargos e salários"), como o frontend descreve cada um. Só texto, sem anexo, sem pedido de senha, remetente da plataforma (`EMAIL_REMETENTE`) e rodapé que identifica a **simulação de treinamento interno**. Os dois links vão para o próprio frontend: `/t/<token>` (treinamento; o clique já era registrado por `GET /treinamentos/link/:token`) e `/t/<token>/reportar`. `enviadoEm` passa a ser marcado só para quem recebeu (antes ficava vazio e o funil mostrava 0 enviados). O `TREINAMENTO_LINK_CONSOLE` saiu.
+- **Contrato** — mesmos status, mensagens e códigos de erro; a resposta ganha `emailsEnviados`. Campanha recusada (formato, domínio, template, destinatário não cadastrado/inativo) não envia nada. Falha de envio não desfaz a campanha.
+- **Reportar** — `POST /treinamentos/link/:token/reportar` (público, mesmo token do link): grava `reportouEm` (campo que já existia no `CampaignEvent`, sem migration) e a abertura, não conta clique, é idempotente (o primeiro reporte vale; `updateMany` condicional evita registro duplo concorrente) e responde `404 LINK_NAO_ENCONTRADO` para token inválido. O `GET` não registra nada: a tela pede confirmação, para antivírus que pré-visitam links não "reportarem" por ninguém.
+- **Relatório** — `GET /campanhas/:id` traz `reportes[]` (destinatário, departamento, data, se clicou) e `reportouEm` em cada treinamento; o detalhe da campanha no frontend mostra quem reportou (inclusive quem não clicou) e os reportes na linha do tempo.
+- **Auditoria** — `CRIAR_CAMPANHA`, `ENVIAR_CAMPANHA` (quantos de quantos) e `REPORTAR_PHISHING`.
+- **Frontend** — o link do e-mail não tinha tela: rotas públicas novas `/t/:token` (a mesma `TrainingPage`, em modo link, sem login e sem expor a campanha) e `/t/:token/reportar` (`ReportPhishingPage`, com confirmação). Métodos `getTrainingByLink`, `completeTrainingByLink` e `reportPhishing` na API real e nos mocks (no mock, o token é o id do destinatário). Textos do formulário de campanha e do "Sobre" deixaram de dizer que nenhum e-mail é enviado.
+- **Fora do escopo** — pixel de abertura (o e-mail é só texto; a abertura vem do clique ou do reporte).
+- **Testes** — 221 no backend com o B21 (204 só com este item) (`tests/campanha-email.test.ts`, 10 novos: e-mail por destinatário com o link e o token certos, texto por template sem link externo, nada enviado em campanha recusada, auditoria, produção sem SMTP sem envio nem log do link, clique pelo token do e-mail, reporte idempotente, relatório com reportes, token inválido); 335 no frontend (adaptador, mocks, as duas telas novas e a auditoria axe delas).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -101,7 +142,7 @@ Primeira etapa da revisão do banco (itens 3 e 5 da análise do esquema). Mudan�
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 174 no backend (7 banco + 60 integração + 107 pentest) · 323 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
+| Testes | 221 no backend (7 banco + 101 integração + 113 pentest) · 340 no frontend (Vitest+RTL+axe) + Playwright · Newman 70 + Robot 29 (N2 AT1) | 2026-10-07 |
 | Deploy | Docker Compose local (4 serviços, com Postgres) + demo pública na Vercel (frontend/mock), com deploy automático a cada push na `main` | 2026-09-18 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução (Postgres, RS256, e-mail, scanner real, campanhas reais, hardening) | Documentado, não iniciado | `backend/PLANO.md` |

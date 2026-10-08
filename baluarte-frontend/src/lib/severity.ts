@@ -137,6 +137,20 @@ export const SCAN_STATUS_LABEL: Record<ScanStatus, string> = {
   failed: 'Falhou',
 };
 
+export const SCAN_STATUS_CLASS: Record<ScanStatus, string> = {
+  queued:
+    'bg-slate-100 text-slate-700 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-500/30',
+  running: 'bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-950/60 dark:text-sky-300 dark:ring-sky-500/30',
+  completed:
+    'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-950/60 dark:text-green-300 dark:ring-green-500/30',
+  failed: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-950/60 dark:text-red-300 dark:ring-red-500/30',
+};
+
+/** Varredura que ainda vai mudar de status (a tela consulta de novo enquanto houver uma). */
+export function isScanInProgress(status: ScanStatus): boolean {
+  return status === 'queued' || status === 'running';
+}
+
 // ---- Campanhas --------------------------------------------------------------
 
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {

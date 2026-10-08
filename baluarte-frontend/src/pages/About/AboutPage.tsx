@@ -91,6 +91,7 @@ const AREA_LABEL: Record<Area, string> = {
   dashboard: 'Dashboard',
   vulnerabilities: 'Vulnerabilidades',
   assets: 'Ativos',
+  scans: 'Varreduras',
   campaigns: 'Campanhas',
   training: 'Treinamento próprio',
   trainings: 'Colaboradores treinados',
@@ -250,8 +251,9 @@ export default function AboutPage() {
             Escopo desta versão
           </p>
           <p className="mt-1 text-slate-600 dark:text-slate-300">
-            O scanner e o disparo de phishing são simulados: nenhum ataque real é executado e nenhum e-mail é
-            enviado. Os dados exibidos servem para demonstrar o fluxo completo da plataforma.
+            O scanner e o phishing são simulados: nenhum ataque real é executado. O e-mail da campanha é
+            identificado como simulação, vai só para usuários internos cadastrados e, na demonstração, fica na
+            caixa de teste local (Mailpit). Os dados exibidos servem para demonstrar o fluxo completo.
           </p>
         </div>
       </section>

@@ -15,6 +15,8 @@ export interface AuthContextValue {
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => Promise<AuthUser>;
   logout: (reason?: string) => void;
+  /** Substitui o token guardado (troca de senha e renovação de sessão). */
+  replaceToken: (token: string) => void;
   hasRole: (...roles: RBACRole[]) => boolean;
   /** Atualiza o usuário em memória e no storage (ex.: após editar o próprio perfil). */
   updateUser: (patch: Partial<AuthUser>) => void;

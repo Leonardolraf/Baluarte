@@ -4,7 +4,10 @@ import { prisma } from '../db.js';
 import { gerarToken, exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { emailEmUso, localizarPorEmail, normalizarEmail, resolverDepartamento } from '../usuarios.js';
 import { gerarTokenLink, hashToken } from '../tokens.js';
-import { CATALOGO_ACHADOS, dadosAchado, type ChaveAchado } from '../catalogo.js';
+import { emitirLinkConta, hashSemSenha } from '../conta.js';
+import { enviarEmailsCampanha } from '../campanhaEmail.js';
+import { registrarAuditoria } from '../audit.js';
+import { avancarVarreduras } from '../varredura.js';
 import { registerReadRoutes } from './read.js';
 import { registerManageRoutes } from './manage.js';
 import {
@@ -28,43 +31,33 @@ export const apiRouter = Router();
 const OPERADORES = ['Administrador', 'Analista'];
 
 // ---- Limite de tentativas de login (politica publicada em /configuracoes/seguranca) ----
+// As falhas ficam no banco (tabela LoginFailure), por e-mail digitado: o bloqueio vale
+// depois de reiniciar a API e cobre tambem e-mails que nao existem.
 const LOGIN_JANELA_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FALHAS = 5;
-const falhasLogin = new Map<string, number[]>();
 // Hash de sacrificio: mantem o custo do bcrypt igual quando o e-mail nao existe
 // (sem isso o tempo de resposta revelaria quais e-mails estao cadastrados).
 const HASH_SACRIFICIO = bcrypt.hashSync('baluarte-sem-usuario', 10);
 
-function falhasRecentes(chave: string): number[] {
-  const agora = Date.now();
-  const recentes = (falhasLogin.get(chave) ?? []).filter((t) => agora - t < LOGIN_JANELA_MS);
-  if (recentes.length) falhasLogin.set(chave, recentes);
-  else falhasLogin.delete(chave);
-  return recentes;
+function inicioDaJanela(): Date {
+  return new Date(Date.now() - LOGIN_JANELA_MS);
 }
 
-function registrarFalhaLogin(chave: string): void {
-  const recentes = falhasRecentes(chave);
-  recentes.push(Date.now());
-  falhasLogin.set(chave, recentes);
-  // Poda periodica: o mapa nunca cresce sem limite (endpoint publico).
-  if (falhasLogin.size > 1000) for (const k of falhasLogin.keys()) falhasRecentes(k);
+function falhasRecentes(chave: string): Promise<number> {
+  return prisma.loginFailure.count({ where: { email: chave, criadoEm: { gte: inicioDaJanela() } } });
+}
+
+/** Registra a falha e devolve quantas a conta acumula na janela. */
+async function registrarFalhaLogin(chave: string): Promise<number> {
+  await prisma.loginFailure.create({ data: { email: chave } });
+  // Poda: o que saiu da janela nao conta mais (endpoint publico: a tabela nao cresce sem limite).
+  await prisma.loginFailure.deleteMany({ where: { criadoEm: { lt: inicioDaJanela() } } });
+  return falhasRecentes(chave);
 }
 
 /** Zera o limitador de login (usado pelos testes). */
-export function limparLimiteLogin(): void {
-  falhasLogin.clear();
-}
-
-// Varredura simulada: sorteia de 2 a 4 tipos distintos do catalogo (src/catalogo.ts).
-function gerarFindings() {
-  const qtd = 2 + Math.floor(Math.random() * 3);
-  const chaves = Object.keys(CATALOGO_ACHADOS) as ChaveAchado[];
-  const escolhidos: ChaveAchado[] = [];
-  for (let i = 0; i < qtd && chaves.length; i++) {
-    escolhidos.push(chaves.splice(Math.floor(Math.random() * chaves.length), 1)[0]);
-  }
-  return escolhidos.map(dadosAchado);
+export async function limparLimiteLogin(): Promise<void> {
+  await prisma.loginFailure.deleteMany();
 }
 
 // ---- POST /api/login --------------------------------------------------------
@@ -75,18 +68,25 @@ apiRouter.post('/login', wrap(async (req, res) => {
   if (!emailFormatoValido(email)) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
 
   const chave = normalizarEmail(email);
-  if (falhasRecentes(chave).length >= LOGIN_MAX_FALHAS)
+  if ((await falhasRecentes(chave)) >= LOGIN_MAX_FALHAS)
     return erro(res, 429, 'Muitas tentativas de login. Aguarde alguns minutos.', 'MUITAS_TENTATIVAS');
 
   const usuario = await localizarPorEmail(String(email));
   const ok = await bcrypt.compare(String(senha), usuario ? usuario.senhaHash : HASH_SACRIFICIO);
   if (!usuario || !ok) {
-    registrarFalhaLogin(chave);
+    const falhas = await registrarFalhaLogin(chave);
+    if (usuario && falhas === LOGIN_MAX_FALHAS)
+      await registrarAuditoria(usuario.id, 'LOGIN_BLOQUEADO', `${LOGIN_MAX_FALHAS} falhas em 15 min`);
     return erro(res, 401, 'E-mail ou senha inválidos', 'CREDENCIAIS_INVALIDAS');
   }
   if (usuario.status === 'Inativo')
     return erro(res, 403, 'Usuário inativo. Contate o administrador.', 'USUARIO_INATIVO');
-  falhasLogin.delete(chave);
+  // Quem ainda nao aceitou o convite entra so pelo link (contas antigas com senha
+  // provisoria tambem caem aqui). So chega aqui quem acertou a senha: nada e revelado.
+  if (usuario.status === 'Pendente')
+    return erro(res, 403, 'Conta ainda não ativada. Crie sua senha pelo link do convite.', 'CONTA_PENDENTE');
+  await prisma.loginFailure.deleteMany({ where: { email: chave } });
+  await registrarAuditoria(usuario.id, 'LOGIN');
 
   const token = gerarToken({ idUsuario: usuario.id, email: usuario.email, perfil: usuario.perfil });
   return enviar(res, 200, {
@@ -105,11 +105,19 @@ apiRouter.post('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
   if (!ativo) return erro(res, 404, 'Ativo não encontrado', 'ATIVO_NAO_ENCONTRADO');
   if (ativo.status !== 'Ativo') return erro(res, 422, 'Varredura não permitida: ativo está inativo', 'ATIVO_INATIVO');
 
-  const scan = await prisma.scan.create({ data: { assetId: ativo.id, status: 'EM_FILA' } });
-  // Varredura simulada: gera achados realistas ligados ao scan.
-  await prisma.finding.createMany({
-    data: gerarFindings().map((f) => ({ ...f, scanId: scan.id })),
+  // RN-003: uma varredura por vez no mesmo ativo. Antes de checar, grava o status que o
+  // tempo ja determinou (a anterior pode ter concluido sem ninguem ter lido).
+  await avancarVarreduras();
+  const scan = await prisma.$transaction(async (tx) => {
+    // Trava a linha do ativo: duas criacoes simultaneas no mesmo ativo ficam em fila aqui.
+    await tx.$queryRaw`SELECT id FROM "Asset" WHERE id = ${ativo.id} FOR UPDATE`;
+    const emCurso = await tx.scan.findFirst({ where: { assetId: ativo.id, status: { not: 'CONCLUIDA' } } });
+    if (emCurso) return null;
+    // Varredura simulada: os achados so nascem na conclusao (src/varredura.ts).
+    return tx.scan.create({ data: { assetId: ativo.id, status: 'EM_FILA' } });
   });
+  if (!scan)
+    return erro(res, 409, 'Já existe uma varredura em andamento para este ativo', 'VARREDURA_EM_ANDAMENTO');
 
   return enviar(res, 201, {
     status: 'sucesso',
@@ -152,15 +160,28 @@ apiRouter.post('/users', exigeToken, exigePerfil(...OPERADORES), wrap(async (req
   const emailNorm = normalizarEmail(email);
   if (await emailEmUso(emailNorm)) return erro(res, 409, 'Email já cadastrado', 'EMAIL_DUPLICADO');
 
-  const senhaHash = await bcrypt.hash('Mudar@123', 10);
+  // Nao existe senha provisoria: a conta nasce Pendente, sem senha utilizavel, e a
+  // pessoa cria a propria senha pelo link do convite enviado por e-mail.
   const usuario = await prisma.user.create({
-    data: { nome, email: emailNorm, perfil, senhaHash, status: 'Pendente', departmentId: departmentId ?? null },
+    data: { nome, email: emailNorm, perfil, senhaHash: await hashSemSenha(), status: 'Pendente', departmentId: departmentId ?? null },
     include: { department: true },
   });
+  const ator = usuarioDe(req);
+  await registrarAuditoria(ator.id, 'CRIAR_USUARIO', `${usuario.id} (${usuario.email}, ${usuario.perfil})`);
+  // Falha no envio nao desfaz o cadastro: o convite pode ser reenviado (POST /users/:id/convite).
+  const conviteEnviado = await emitirLinkConta(usuario, 'CONVITE');
+  if (conviteEnviado) await registrarAuditoria(ator.id, 'ENVIAR_CONVITE', usuario.email);
   return enviar(res, 201, {
     status: 'sucesso',
     mensagem: 'Usuário cadastrado com sucesso',
-    dados: { idUsuario: usuario.id, nome: usuario.nome, email: usuario.email, perfil: usuario.perfil, departamento: usuario.department?.name ?? null },
+    dados: {
+      idUsuario: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      perfil: usuario.perfil,
+      departamento: usuario.department?.name ?? null,
+      conviteEnviado,
+    },
   });
 }));
 
@@ -185,14 +206,14 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
   // So recebe campanha quem esta cadastrado e nao esta Inativo (e-mail citext: ignora maiusculas).
   const usuarios = await prisma.user.findMany({
     where: { email: { in: lista.map((e) => e.toLowerCase()) } },
-    select: { id: true, email: true, status: true },
+    select: { id: true, nome: true, email: true, status: true },
   });
-  const destinos: { userId: string; email: string }[] = [];
+  const destinos: { userId: string; nome: string; email: string }[] = [];
   for (const email of lista) {
     const u = usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());
     if (!u || u.status === 'Inativo')
       return erro(res, 422, `Destinatário não cadastrado ou inativo: ${email}`, 'DESTINATARIO_NAO_CADASTRADO');
-    destinos.push({ userId: u.id, email: u.email });
+    destinos.push({ userId: u.id, nome: u.nome, email: u.email });
   }
 
   // Cada destinatario recebe um token proprio para o link do e-mail; no banco fica so o hash.
@@ -207,12 +228,15 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
       },
     },
   });
-  // Nao ha envio de e-mail neste projeto: fora de producao, e so com
-  // TREINAMENTO_LINK_CONSOLE=1, o link de cada destinatario vai para o log do servidor.
-  if (process.env.NODE_ENV !== 'production' && process.env.TREINAMENTO_LINK_CONSOLE === '1') {
-    const base = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-    destinos.forEach((d, i) => console.log(`[campanha] link de ${d.email}: ${base}/t/${tokens[i]}`));
-  }
+  const ator = usuarioDe(req);
+  await registrarAuditoria(ator.id, 'CRIAR_CAMPANHA', `${campanha.id} (${campanha.nome}, ${campanha.template}, ${destinos.length} destinatário(s))`);
+  // E-mail simulado a cada destinatario, com o link rastreavel e o de reporte (src/campanhaEmail.ts).
+  // Falha de envio nao desfaz a campanha: o evento fica sem `enviadoEm`.
+  const emailsEnviados = await enviarEmailsCampanha(
+    campanha,
+    destinos.map((d, i) => ({ userId: d.userId, nome: d.nome, email: d.email, token: tokens[i] })),
+  );
+  await registrarAuditoria(ator.id, 'ENVIAR_CAMPANHA', `${campanha.id}: ${emailsEnviados} de ${destinos.length} e-mail(s) enviado(s)`);
 
   return enviar(res, 201, {
     status: 'sucesso',
@@ -224,6 +248,8 @@ apiRouter.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(async 
       destinatarios: destinos.map((d) => d.email),
       template: campanha.template,
       status: campanha.status,
+      // Extensao compativel: quantos e-mails simulados sairam (0 em producao sem SMTP).
+      emailsEnviados,
     },
   });
 }));

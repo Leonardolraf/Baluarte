@@ -9,7 +9,9 @@
 // E-mail e nome de departamento usam citext: unicidade e busca ignoram maiusculas.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Runtime Linux da Vercel alem do binario local (o build roda em outra maquina).
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -29,6 +31,9 @@ model User {
   criadoEm  DateTime @default(now())
   // Marca a ultima redefinicao de senha: tokens JWT emitidos antes disso deixam de valer.
   senhaAlteradaEm DateTime?
+  // Marca o ultimo logout: tokens JWT emitidos antes disso deixam de valer (sair encerra
+  // as sessoes abertas em todos os dispositivos).
+  sessaoEncerradaEm DateTime?
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   preferencias NotificationPreference?
@@ -59,12 +64,14 @@ model NotificationPreference {
   atualizadoEm       DateTime @updatedAt
 }
 
-// Token de redefinicao de senha. Guarda-se apenas o hash SHA-256; o token em claro
-// e entregue ao usuario (em dev, impresso no console do servidor — nao ha e-mail).
+// Token de link de conta, entregue por e-mail: RESET (redefinicao de senha, 30 min) ou
+// CONVITE (cadastro da primeira senha de quem o administrador criou, 72 h). Guarda-se
+// apenas o hash SHA-256; o token em claro so existe no e-mail.
 model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tipo      String    @default("RESET") // CHECK: RESET | CONVITE
   tokenHash String    @unique
   expiraEm  DateTime
   usadoEm   DateTime?
@@ -165,4 +172,28 @@ model AuditLog {
 
   @@index([usuarioId])
   @@index([timestamp])
+}
+
+// Falha de login, por e-mail digitado (existente ou nao). Fica no banco para o bloqueio
+// por excesso de tentativas valer depois de reiniciar a API. Sem chave estrangeira: o
+// e-mail pode nao existir, e o limitador nao pode revelar quais existem.
+model LoginFailure {
+  id       String   @id @default(cuid())
+  email    String   @db.Citext
+  criadoEm DateTime @default(now())
+
+  @@index([email, criadoEm])
+  @@index([criadoEm])
+}
+
+// Pedido de redefinicao, por e-mail digitado. Mesmo motivo de LoginFailure: o limite
+// precisa valer entre instancias e sobreviver a reinicio (a API roda como funcao
+// serverless, onde estado em memoria nao e compartilhado).
+model ResetRequest {
+  id       String   @id @default(cuid())
+  email    String   @db.Citext
+  criadoEm DateTime @default(now())
+
+  @@index([email, criadoEm])
+  @@index([criadoEm])
 }

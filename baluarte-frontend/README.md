@@ -58,7 +58,7 @@ A única porta de entrada das telas é `src/services/api.ts`, que exporta `api: 
 | Autenticação | `POST /login`, `GET /me`, `POST /auth/change-password`, `POST /auth/reset-password`, `POST /auth/reset-password/confirm` |
 | Dashboard e ativos | `GET /dashboard`, `GET /scans`, `POST /scans`, `GET/POST /assets` |
 | Vulnerabilidades | `GET /vulnerabilidades[?q=]`, `GET/PATCH /vulnerabilidades/:id` (status inclui `Risco aceito`) |
-| Campanhas e treinamento | `GET /campanhas`, `GET /campanhas/:id`, `POST /campaigns` (`destinatario` + `destinatarios[]`), `GET /treinamentos/:token`, `POST /treinamentos/:token/concluir` |
+| Campanhas e treinamento | `GET /campanhas`, `GET /campanhas/:id`, `POST /campaigns` (`destinatario` + `destinatarios[]`), `GET /treinamentos/:token`, `POST /treinamentos/:token/concluir`; públicas, pelo link do e-mail: `GET /treinamentos/link/:token`, `POST /treinamentos/link/:token/concluir`, `POST /treinamentos/link/:token/reportar` (telas `/t/:token` e `/t/:token/reportar`) |
 | Usuários | `GET /usuarios`, `POST /users`, `PATCH/DELETE /users/:id` (Administrador) |
 | Configurações | `GET /configuracoes/seguranca`, `GET/PUT /configuracoes/notificacoes` |
 
@@ -66,11 +66,15 @@ Todas estão implementadas em `../backend` (testes em `../backend/tests`). `src/
 
 O RBAC é do servidor, não só da interface: em modo real o colaborador recebe 403 nas listas técnicas e um dashboard sem a lista de achados, o analista não lista usuários, um token emitido antes de um rebaixamento deixa de valer e uma conta inativada cai na primeira requisição (401 e volta ao login).
 
-### Redefinição de senha
+### Convite e redefinição de senha
 
-Fluxo em duas etapas na mesma rota: `/reset-password` pede o e-mail (resposta genérica, sem revelar se ele existe) e `/reset-password?token=…` define a nova senha. **Não há serviço de e-mail neste projeto**: no backend real o token aparece no console do servidor (`[reset-senha] token para …`), válido por 30 minutos e de uso único; na camada mock ele volta na própria resposta (`demoToken`) e a tela oferece o link "Continuar para a redefinição".
+A conta nasce por convite: o administrador cadastra o usuário e a API envia um link `/definir-senha?token=…` (válido por 72 horas, uso único) para a pessoa criar a primeira senha. Se o e-mail falhar, o cadastro vale mesmo assim e a tela avisa para reenviar o convite pela lista.
 
-Para ligar no backend real: suba `../backend` (`npm run db:push && npm run seed && npm run seed:demo && npm run dev`) e rode aqui `VITE_USE_MOCKS=false npm run dev` (ou edite `.env`).
+A redefinição usa a mesma tela em duas etapas: `/reset-password` pede o e-mail (resposta genérica, sem revelar se ele existe) e `/reset-password?token=…` define a nova senha (link válido por 30 minutos, uso único). Com token, a página confere o link na API (`/auth/link/verificar`) **antes** de mostrar o formulário: link vencido ou inexistente vai direto para "Link inválido ou expirado", com o botão para pedir um novo.
+
+No backend real os e-mails (convite e redefinição) chegam no **Mailpit** em http://localhost:8025, que guarda tudo e não entrega nada para fora; sem `SMTP_HOST`, fora de produção, o e-mail inteiro sai no log da API. Na camada mock o token volta na própria resposta (`demoToken`) e a tela oferece o link "Continuar para a redefinição".
+
+Para ligar no backend real: suba `../backend` (`npm run db:migrate && npm run seed && npm run seed:demo && npm run dev` — o schema muda só por migration, nunca por `db:push`) e rode aqui `VITE_USE_MOCKS=false npm run dev` (ou edite `.env`). Pela stack Docker (`docker compose up -d` na raiz), o app fica em http://localhost:8081, a API em :8080 e o Mailpit em :8025.
 
 ## Variáveis de ambiente
 
@@ -99,6 +103,7 @@ VITE_USE_MOCKS=
 | `/dashboard` | Visão geral de risco (2 gauges, KPIs, vulnerabilidades e campanhas recentes, linha do tempo, treinamento pendente) | todos |
 | `/vulnerabilities`, `/vulnerabilities/:id` | Lista com filtros/ordenação/paginação; detalhe com abas Visão geral · Evidências · Remediação · Histórico | Admin, Analista |
 | `/assets/new` | Cadastro de ativo | Admin, Analista |
+| `/scans` | Varreduras: iniciar por ativo e acompanhar o status (Em fila → Em andamento → Concluída), com consulta automática a cada 3 s enquanto houver varredura em curso | Admin, Analista |
 | `/campaigns`, `/campaigns/new`, `/campaigns/:id` | Campanhas de phishing: lista, criação, relatório (KPIs, funil, gauge de cliques, destinatários) | Admin, Analista |
 | `/training/:id` | Treinamento contextual pós-clique (marcar como concluído) | todos |
 | `/users`, `/users/new`, `/users/:id/edit` | Gestão de usuários e perfis | Admin |

@@ -76,9 +76,15 @@ function BulletList({
   );
 }
 
-export default function TrainingPage() {
-  const { id } = useParams<{ id: string }>();
-  const trainingId = id ?? '';
+/**
+ * Duas entradas, a mesma tela:
+ *  - /training/:id (logado): o id do evento de campanha, pela navegação interna;
+ *  - /t/:token (público, `viaLink`): o link do e-mail simulado da campanha. Abrir
+ *    registra o clique; a resposta não expõe a campanha.
+ */
+export default function TrainingPage({ viaLink = false }: { viaLink?: boolean }) {
+  const { id, token } = useParams<{ id: string; token: string }>();
+  const trainingId = (viaLink ? token : id) ?? '';
   const { hasRole } = useAuth();
   const {
     data: training,
@@ -86,7 +92,10 @@ export default function TrainingPage() {
     loading,
     reload,
     setData,
-  } = useAsync<Training>(() => api.getTraining(trainingId), [trainingId]);
+  } = useAsync<Training>(
+    () => (viaLink ? api.getTrainingByLink(trainingId) : api.getTraining(trainingId)),
+    [trainingId, viaLink],
+  );
   const [completing, setCompleting] = useState(false);
 
   if (loading && !training) return <LoadingSpinner label="Carregando treinamento…" />;
@@ -97,8 +106,16 @@ export default function TrainingPage() {
         <EmptyState
           tone="error"
           title="Treinamento não encontrado"
-          description="O treinamento solicitado não existe ou foi removido."
-          action={{ label: 'Voltar ao dashboard', to: '/dashboard' }}
+          description={
+            viaLink
+              ? 'O link é inválido ou a campanha foi encerrada.'
+              : 'O treinamento solicitado não existe ou foi removido.'
+          }
+          action={
+            viaLink
+              ? { label: 'Ir para o login', to: '/login' }
+              : { label: 'Voltar ao dashboard', to: '/dashboard' }
+          }
           className="min-h-[50vh]"
         />
       );
@@ -116,7 +133,9 @@ export default function TrainingPage() {
   async function handleComplete() {
     setCompleting(true);
     try {
-      const result = await trackOperation(api.completeTraining(trainingId));
+      const result = await trackOperation(
+        viaLink ? api.completeTrainingByLink(trainingId) : api.completeTraining(trainingId),
+      );
       setData(result);
       notify.success('Treinamento concluído!');
     } catch (err) {
@@ -127,9 +146,11 @@ export default function TrainingPage() {
   }
 
   return (
-    <div>
+    <div className={viaLink ? 'mx-auto w-full max-w-6xl px-4 py-8 sm:px-6' : undefined}>
       <PageHeader
-        breadcrumbs={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Treinamento' }]}
+        breadcrumbs={
+          viaLink ? undefined : [{ label: 'Dashboard', to: '/dashboard' }, { label: 'Treinamento' }]
+        }
         title={training.title}
         description={training.summary}
         meta={
@@ -245,7 +266,7 @@ export default function TrainingPage() {
                     Conclusão registrada apenas no ambiente de demonstração
                   </p>
                 )}
-                {canSeeCampaign ? (
+                {viaLink ? null : canSeeCampaign ? (
                   <LinkButton
                     to={`/campaigns/${training.campaignId}`}
                     variant="outline"

@@ -93,7 +93,7 @@ test.describe('Autenticação', () => {
     await page.locator('#novaSenha').fill('Nova@1234');
     await page.locator('#confirmarSenha').fill('Nova@1234');
     await page.locator('#btnRedefinir').click();
-    await expect(page.getByRole('heading', { name: 'Senha redefinida' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Senha definida' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Ir para o login' }).click();
     await page.locator('#email').fill('colaborador@empresa.com');
@@ -103,11 +103,11 @@ test.describe('Autenticação', () => {
   });
 
   test('link de redefinição inválido orienta a pedir um novo', async ({ page }) => {
+    // O link é conferido antes: sem formulário de senha, direto para a orientação.
     await page.goto('/reset-password?token=nao-existe');
-    await page.locator('#novaSenha').fill('Nova@1234');
-    await page.locator('#confirmarSenha').fill('Nova@1234');
-    await page.locator('#btnRedefinir').click();
+    await expect(page.getByRole('heading', { name: 'Link inválido ou expirado' })).toBeVisible();
     await expect(page.locator('#mensagem')).toContainText(/inválido ou expirou/);
+    await expect(page.locator('#novaSenha')).toHaveCount(0);
     await page.getByRole('link', { name: 'Solicitar um novo link' }).click();
     await expect(page).toHaveURL(/\/reset-password$/);
     await expect(page.locator('#email')).toBeVisible();

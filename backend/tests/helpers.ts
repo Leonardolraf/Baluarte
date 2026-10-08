@@ -21,7 +21,8 @@ import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Express } from 'express';
 
-export const SENHA_PROVISORIA = 'Mudar@123';
+/** Senha que `criarUsuario` cadastra pelo link do convite (nao existe senha provisoria). */
+export const SENHA_CONTA = 'Conta@1234';
 export const ADMIN = { email: 'admin@empresa.com', senha: 'Admin@123' };
 export const ANALISTA = { email: 'analista@empresa.com', senha: 'Senha@123' };
 
@@ -40,13 +41,15 @@ export function prepararBanco(testFileUrl: string): void {
   const url = new URL(base);
   if (!HOSTS_LOCAIS.has(url.hostname))
     throw new Error(`os testes recriam bancos: recusando o servidor nao local "${url.hostname}" (use TEST_DATABASE_URL local)`);
-  url.pathname = `/baluarte_test_${nome}`;
+  // TEST_DB_PREFIXO separa execucoes simultaneas (ex.: dois worktrees rodando a suite ao mesmo tempo).
+  const prefixo = (process.env.TEST_DB_PREFIXO ?? '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
+  url.pathname = `/baluarte_test_${prefixo}${nome}`;
   process.env.DATABASE_URL = url.toString();
   process.env.DIRECT_URL = url.toString();
   process.env.JWT_SECRET = 'segredo-somente-para-testes';
   process.env.NODE_ENV = 'test';
-  // O canal de entrega do token de redefinicao em dev/demo e o log (opt-in).
-  process.env.RESET_TOKEN_CONSOLE = '1';
+  // Com NODE_ENV=test os e-mails vao para a caixa em memoria (src/email.ts), nunca para SMTP.
+  delete process.env.SMTP_HOST;
   process.env.FRONTEND_URL = 'http://localhost:5173';
   // migrate reset cria o banco se faltar, apaga tudo e reaplica as migrations (testa as migrations de verdade).
   npx('prisma migrate reset --force --skip-seed --skip-generate');
@@ -119,14 +122,40 @@ export function emailUnico(prefixo: string): string {
   return `${prefixo}.${Date.now()}.${seq}@empresa.com`;
 }
 
-/** Cria um usuario pelo contrato (senha provisoria Mudar@123, status Pendente). */
-export async function criarUsuario(
+type Perfil = 'Administrador' | 'Analista' | 'Colaborador';
+
+/**
+ * Token do link mais recente enviado a um e-mail (caixa de saida em memoria). Filtra pela
+ * rota do link: 'definir-senha' (convite) ou 'reset-password' (redefinicao).
+ */
+export async function tokenDoEmail(email: string, rota?: 'definir-senha' | 'reset-password'): Promise<string | null> {
+  const { caixaDeSaida } = await import('../src/email.js');
+  const padrao = new RegExp(`/(${rota ?? 'definir-senha|reset-password'})\\?token=([0-9a-f]{64})`);
+  for (let i = caixaDeSaida.length - 1; i >= 0; i--) {
+    const m = caixaDeSaida[i].para.toLowerCase() === email.toLowerCase() ? caixaDeSaida[i].texto.match(padrao) : null;
+    if (m) return m[2];
+  }
+  return null;
+}
+
+/** Cria um usuario pelo contrato e para no convite: status Pendente, sem senha utilizavel. */
+export async function criarUsuarioPendente(
   token: string,
-  perfil: 'Administrador' | 'Analista' | 'Colaborador',
+  perfil: Perfil,
   prefixo = 'teste',
-): Promise<{ id: string; email: string }> {
+): Promise<{ id: string; email: string; convite: string }> {
   const email = emailUnico(prefixo);
   const r = await chamar('POST', '/users', { token, body: { nome: `Usuário ${prefixo}`, email, perfil } });
   assert.equal(r.status, 201, JSON.stringify(r.body));
-  return { id: r.body.dados.idUsuario as string, email };
+  const convite = await tokenDoEmail(email, 'definir-senha');
+  assert.ok(convite, `esperava o e-mail de convite para ${email}`);
+  return { id: r.body.dados.idUsuario as string, email, convite };
+}
+
+/** Cria um usuario pelo contrato e aceita o convite com SENHA_CONTA (status Ativo). */
+export async function criarUsuario(token: string, perfil: Perfil, prefixo = 'teste'): Promise<{ id: string; email: string }> {
+  const { id, email, convite } = await criarUsuarioPendente(token, perfil, prefixo);
+  const r = await chamar('POST', '/auth/reset-password/confirm', { body: { token: convite, novaSenha: SENHA_CONTA } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  return { id, email };
 }

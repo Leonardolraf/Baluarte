@@ -103,6 +103,7 @@ function ChangePasswordSection({ policy }: { policy: SecurityPolicy | null }) {
 }
 
 function ChangePasswordForm({ policy }: { policy: SecurityPolicy | null }) {
+  const { replaceToken } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -125,6 +126,8 @@ function ChangePasswordForm({ policy }: { policy: SecurityPolicy | null }) {
           newPassword: values.newPassword,
         }),
       );
+      // O token anterior morre junto com a senha: sem isso a sessão cairia na chamada seguinte.
+      replaceToken(response.token);
       notify.success(response.message);
       reset();
     } catch (err) {
@@ -432,11 +435,20 @@ function SecurityPolicySection({
           { label: 'Maiúsculas e minúsculas obrigatórias', value: yesNo(policy.requireMixedCase) },
           { label: 'Número e símbolo obrigatórios', value: yesNo(policy.requireNumberAndSymbol) },
           { label: 'Algoritmo do token', value: policy.tokenAlgorithm, mono: true },
-          { label: 'Expiração da sessão', value: `${policy.sessionExpirationMinutes} min` },
+          { label: 'Expiração por inatividade', value: `${policy.sessionExpirationMinutes} min` },
+          { label: 'Duração máxima da sessão', value: `${policy.sessionMaxHours} h` },
           { label: 'Limite de tentativas de login', value: `${policy.loginAttemptLimit} tentativas` },
           { label: 'Autenticação em dois fatores', value: yesNo(policy.twoFactorEnabled) },
+          { label: 'Ações registradas em auditoria', value: yesNo(policy.auditRegistersActions) },
           { label: 'Log de auditoria imutável', value: yesNo(policy.auditLogImmutable) },
-          { label: 'Retenção da auditoria', value: `${policy.auditRetentionMonths} meses` },
+          {
+            label: 'Retenção da auditoria',
+            // A API devolve null quando ainda não há política de retenção definida.
+            value:
+              policy.auditRetentionMonths === null
+                ? 'Sem política definida'
+                : `${policy.auditRetentionMonths} meses`,
+          },
         ]}
       />
     );

@@ -1,5 +1,6 @@
-import type { BaluarteApi, MessageResponse } from '@/services/contract';
+import type { BaluarteApi, ChangePasswordResult, MessageResponse } from '@/services/contract';
 import type {
+  AccountLink,
   Asset,
   AssetInput,
   AuthUser,
@@ -11,11 +12,14 @@ import type {
   CampaignReport,
   CampaignTimelineEvent,
   ChangePasswordInput,
+  CreatedUser,
   DashboardMetrics,
   FunnelStage,
   LoginCredentials,
   LoginResponse,
   NotificationPreferences,
+  PhishingReportResult,
+  RBACRole,
   ScanReport,
   SecurityPolicy,
   Severity,
@@ -120,6 +124,8 @@ interface MockState {
   sequence: number;
   /** Campanhas criadas nesta sessão: só elas têm métricas derivadas dos próprios destinatários. */
   runtimeCampaigns: Set<string>;
+  /** Varreduras iniciadas nesta sessão: só elas avançam de status pelo tempo (as do seed ficam como estão). */
+  runtimeScans: Set<string>;
 }
 
 function clone<T>(value: T): T {
@@ -144,9 +150,12 @@ function createState(): MockState {
     timeline: clone(MOCK_TIMELINE),
     notificationPreferences: clone(MOCK_NOTIFICATION_PREFERENCES),
     securityPolicy: clone(MOCK_SECURITY_POLICY),
-    resetTokens: new Map<string, string>(),
+    // Link de demonstração sempre válido: a tela de criar senha confere o token na API
+    // antes de pedir a senha, então sem um token conhecido não há como mostrar o fluxo.
+    resetTokens: new Map<string, string>([['demo-reset-1', 'colaborador@empresa.com']]),
     sequence: 1000,
     runtimeCampaigns: new Set<string>(),
+    runtimeScans: new Set<string>(),
   };
 }
 
@@ -242,6 +251,69 @@ function isOpen(v: Vulnerability): boolean {
   return v.status !== 'resolved' && v.status !== 'accepted';
 }
 
+// ---- Varredura simulada (espelha backend/src/varredura.ts) ------------------
+// O status sai do tempo decorrido desde o início, avaliado na leitura: em fila nos
+// primeiros 5 s, em andamento até 20 s, concluída depois. Os achados nascem na conclusão.
+export const SCAN_QUEUE_MS = 5_000;
+export const SCAN_DURATION_MS = 20_000;
+
+function scanStatusByTime(startedAt: string, now: number): ScanReport['status'] {
+  const elapsed = now - new Date(startedAt).getTime();
+  if (elapsed >= SCAN_DURATION_MS) return 'completed';
+  if (elapsed >= SCAN_QUEUE_MS) return 'running';
+  return 'queued';
+}
+
+/** Achados da varredura concluída: 2 ou 3 tipos distintos do catálogo de demonstração, no ativo varrido. */
+function generateScanFindings(scan: ScanReport, at: string): Vulnerability[] {
+  const pool = MOCK_VULNERABILITIES.filter((v, i, all) => all.findIndex((x) => x.title === v.title) === i);
+  const count = Math.min(pool.length, 2 + Math.floor(Math.random() * 2));
+  const picked: Vulnerability[] = [];
+  for (let i = 0; i < count; i++) picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]!);
+  return picked.map((template) => {
+    const id = nextId('vuln');
+    return {
+      ...clone(template),
+      id,
+      status: 'open',
+      assetId: scan.assetId,
+      assetName: scan.assetName,
+      assetHost: scan.assetHost,
+      detectedAt: at,
+      updatedAt: at,
+      evidence: template.evidence.map((e, n) => ({ ...clone(e), id: `${id}-e${n}`, capturedAt: at })),
+      history: [{ id: `${id}-h1`, at, actor: scan.scanner, action: 'detected' }],
+    };
+  });
+}
+
+/** Grava o status que o tempo já determinou (e os achados de quem concluiu). */
+function advanceScans(now = Date.now()): void {
+  for (const scan of state.scans) {
+    if (!state.runtimeScans.has(scan.id) || scan.status === 'completed') continue;
+    const status = scanStatusByTime(scan.startedAt, now);
+    if (status !== 'completed') {
+      scan.status = status;
+      continue;
+    }
+    const finishedAt = new Date(new Date(scan.startedAt).getTime() + SCAN_DURATION_MS).toISOString();
+    const findings = generateScanFindings(scan, finishedAt);
+    state.vulnerabilities.unshift(...findings);
+    const bySeverity = emptySeverityMap();
+    for (const f of findings) bySeverity[f.severity] += 1;
+    scan.status = status;
+    scan.finishedAt = finishedAt;
+    scan.durationSec = SCAN_DURATION_MS / 1000;
+    scan.findingsCount = findings.length;
+    scan.findingsBySeverity = bySeverity;
+    pushTimeline({
+      kind: 'scan',
+      title: 'Varredura concluída',
+      description: `${scan.assetName} (${scan.assetHost}) · ${findings.length} achados`,
+    });
+  }
+}
+
 const SEVERITY_WEIGHT: Record<Severity, number> = { critical: 10, high: 6, medium: 3, low: 1, info: 0 };
 
 function clampPct(value: number): number {
@@ -284,6 +356,27 @@ function refreshCampaignMetrics(campaign: Campaign): Campaign {
     campaign.metrics = computeMetrics(campaign.id, campaign.metrics.recipients);
   }
   return campaign;
+}
+
+function recipientByLink(token: string): CampaignRecipient {
+  const recipient = state.recipients.find((r) => r.id === token.trim());
+  if (!recipient) throw new HttpError(404, 'TREINAMENTO_NAO_ENCONTRADO', 'Treinamento não encontrado');
+  return recipient;
+}
+
+/** Treinamento do template da campanha, sem expor a campanha (como na API real). */
+function linkTraining(token: string, recipient: CampaignRecipient): Training {
+  const campaign = state.campaigns.find((c) => c.id === recipient.campaignId);
+  const base =
+    state.trainings.find((t) => t.id === `trn-${campaign?.template ?? 'urgency'}`) ?? state.trainings[0];
+  return {
+    ...clone(base),
+    id: token,
+    campaignId: null,
+    progress: recipient.trainingCompleted ? 100 : 0,
+    completed: recipient.trainingCompleted,
+    completedAt: null,
+  };
 }
 
 function buildFunnel(metrics: CampaignMetrics): FunnelStage[] {
@@ -360,6 +453,11 @@ function pushTimeline(event: Omit<TimelineEvent, 'id' | 'at'>): void {
 
 // ---- Implementação ----------------------------------------------------------
 
+/** Token da sessao mock, usado pelo login, pela renovacao e pela troca de senha. */
+function emitirToken(user: { id: string; email: string; name: string; role: RBACRole }): string {
+  return buildMockToken({ sub: user.id, email: user.email, name: user.name, role: user.role });
+}
+
 export const mockApi: BaluarteApi = {
   // ---- Autenticação ----
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
@@ -376,6 +474,13 @@ export const mockApi: BaluarteApi = {
     }
     if (user.status === 'inactive') {
       throw new HttpError(403, 'USUARIO_INATIVO', 'Usuário inativo. Contate o administrador.');
+    }
+    if (user.status === 'pending') {
+      throw new HttpError(
+        403,
+        'CONTA_PENDENTE',
+        'Conta ainda não ativada. Crie sua senha pelo link do convite.',
+      );
     }
     user.lastLoginAt = nowIso();
     const token = buildMockToken({ sub: user.id, email: user.email, name: user.name, role: user.role });
@@ -427,7 +532,7 @@ export const mockApi: BaluarteApi = {
     return { message: 'Senha redefinida com sucesso.' };
   },
 
-  async changePassword(input: ChangePasswordInput): Promise<MessageResponse> {
+  async changePassword(input: ChangePasswordInput): Promise<ChangePasswordResult> {
     await delay();
     const user = requireUser();
     const current = state.passwords.get(user.email.toLowerCase());
@@ -440,7 +545,31 @@ export const mockApi: BaluarteApi = {
       throw new HttpError(400, 'SENHA_REPETIDA', 'A nova senha deve ser diferente da atual.');
     }
     state.passwords.set(user.email.toLowerCase(), input.newPassword);
-    return { message: 'Senha alterada com sucesso.' };
+    // Como na API real: o token anterior morre e quem chama precisa guardar este.
+    return { message: 'Senha alterada com sucesso.', token: emitirToken(user) };
+  },
+
+  async verifyAccountLink(token: string): Promise<AccountLink> {
+    await delay();
+    const email = state.resetTokens.get(token.trim());
+    const user = email ? state.users.find((u) => u.email.toLowerCase() === email) : undefined;
+    if (!email || !user) throw new HttpError(400, 'TOKEN_RESET_INVALIDO', 'Token inválido ou expirado');
+    return {
+      kind: user.status === 'pending' ? 'invite' : 'reset',
+      name: user.name,
+      email: user.email,
+      expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+    };
+  },
+
+  async logout(): Promise<void> {
+    await delay();
+    requireUser();
+  },
+
+  async renewSession(): Promise<string> {
+    await delay();
+    return emitirToken(requireUser());
   },
 
   // ---- Dashboard ----
@@ -450,6 +579,7 @@ export const mockApi: BaluarteApi = {
       // Colaboradores veem os índices e KPIs, mas não a lista técnica de achados nem as
       // métricas por campanha — mesma fronteira que /vulnerabilidades e /campanhas impõem.
       const manager = user.role === 'admin' || user.role === 'analyst';
+      advanceScans();
       const vulns = state.vulnerabilities;
       const open = vulns.filter(isOpen);
       const severityDistribution = emptySeverityMap();
@@ -527,6 +657,7 @@ export const mockApi: BaluarteApi = {
   async listAssets(): Promise<Asset[]> {
     return simulate(() => {
       requireUser();
+      advanceScans();
       return state.assets.map((a) => ({
         ...a,
         openFindings: state.vulnerabilities.filter((v) => v.assetId === a.id && isOpen(v)).length,
@@ -575,6 +706,7 @@ export const mockApi: BaluarteApi = {
   async listScans(): Promise<ScanReport[]> {
     return simulate(() => {
       requireUser();
+      advanceScans();
       return [...state.scans].sort(
         (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
       );
@@ -589,6 +721,14 @@ export const mockApi: BaluarteApi = {
     if (!asset) throw new HttpError(404, 'ATIVO_NAO_ENCONTRADO', 'Ativo não encontrado');
     if (asset.status !== 'active')
       throw new HttpError(422, 'ATIVO_INATIVO', 'Varredura não permitida: ativo está inativo');
+    // RN-003: uma varredura por vez no mesmo ativo.
+    advanceScans();
+    if (state.scans.some((s) => s.assetId === asset.id && (s.status === 'queued' || s.status === 'running')))
+      throw new HttpError(
+        409,
+        'VARREDURA_EM_ANDAMENTO',
+        'Já existe uma varredura em andamento para este ativo',
+      );
     const scan: ScanReport = {
       id: nextId('scan'),
       assetId: asset.id,
@@ -603,6 +743,7 @@ export const mockApi: BaluarteApi = {
       findingsBySeverity: emptySeverityMap(),
     };
     state.scans.unshift(scan);
+    state.runtimeScans.add(scan.id);
     asset.lastScanAt = scan.startedAt;
     pushTimeline({
       kind: 'scan',
@@ -617,6 +758,7 @@ export const mockApi: BaluarteApi = {
     return simulate(() => {
       const user = requireUser();
       requireRole(user, ['admin', 'analyst']);
+      advanceScans();
       let items = [...state.vulnerabilities];
       if (filters.severity && filters.severity !== 'all')
         items = items.filter((v) => v.severity === filters.severity);
@@ -882,6 +1024,44 @@ export const mockApi: BaluarteApi = {
     return clone(training);
   },
 
+  // ---- Link público do e-mail da campanha (/t/:token) ----
+  // Sem e-mail no modo mock, o "token do link" é o id do destinatário (ex.: o de um
+  // destinatário criado nesta sessão). Na API real é um token aleatório guardado como hash.
+  async getTrainingByLink(token: string): Promise<Training> {
+    return simulate(() => {
+      const recipient = recipientByLink(token);
+      if (!recipient.clickedAt) {
+        const now = nowIso();
+        recipient.clickedAt = now;
+        recipient.openedAt = recipient.openedAt ?? now;
+        recipient.sentAt = recipient.sentAt ?? now;
+      }
+      return linkTraining(token, recipient);
+    });
+  },
+
+  async completeTrainingByLink(token: string): Promise<Training> {
+    await delay();
+    const recipient = recipientByLink(token);
+    if (!recipient.clickedAt)
+      throw new HttpError(409, 'TREINAMENTO_NAO_INICIADO', 'Abra o treinamento antes de concluí-lo');
+    recipient.trainingCompleted = true;
+    return { ...linkTraining(token, recipient), completedAt: nowIso() };
+  },
+
+  async reportPhishing(token: string): Promise<PhishingReportResult> {
+    return simulate(() => {
+      const recipient = state.recipients.find((r) => r.id === token.trim());
+      if (!recipient) throw new HttpError(404, 'LINK_NAO_ENCONTRADO', 'Link de campanha não encontrado');
+      if (!recipient.reportedAt) {
+        recipient.reportedAt = nowIso();
+        recipient.openedAt = recipient.openedAt ?? recipient.reportedAt;
+        recipient.sentAt = recipient.sentAt ?? recipient.reportedAt;
+      }
+      return { reported: true as const, reportedAt: recipient.reportedAt };
+    });
+  },
+
   // ---- Departamentos (mesma lista do seed do backend) ----
   async listDepartments(): Promise<string[]> {
     return simulate(() => {
@@ -909,7 +1089,7 @@ export const mockApi: BaluarteApi = {
     });
   },
 
-  async createUser(input: UserInput): Promise<User> {
+  async createUser(input: UserInput): Promise<CreatedUser> {
     await delay();
     const actor = requireUser();
     requireRole(actor, ['admin']);
@@ -932,14 +1112,35 @@ export const mockApi: BaluarteApi = {
       lastLoginAt: null,
     };
     state.users.push(user);
-    state.passwords.set(email, 'Mudar@123');
+    // Nao existe senha provisoria: a conta nasce Pendente e so ganha senha pelo convite.
+    const convite = nextId('convite');
+    state.resetTokens.set(convite, email);
     pushTimeline({
       kind: 'user',
       title: 'Usuário cadastrado',
       description: `${user.name} (${user.email})`,
       href: '/users',
     });
-    return clone(user);
+    return { ...clone(user), inviteSent: true };
+  },
+
+  async resendInvite(id: string): Promise<MessageResponse> {
+    await delay();
+    const actor = requireUser();
+    requireRole(actor, ['admin', 'analyst']);
+    const alvo = state.users.find((u) => u.id === id);
+    if (!alvo) throw new HttpError(404, 'USUARIO_NAO_ENCONTRADO', 'Usuário não encontrado');
+    if (alvo.role === 'admin' && actor.role !== 'admin')
+      throw new HttpError(403, 'PERFIL_SEM_PERMISSAO', 'Acesso negado para o seu perfil');
+    if (alvo.status !== 'pending')
+      throw new HttpError(
+        409,
+        'USUARIO_NAO_PENDENTE',
+        'O convite só pode ser reenviado para contas pendentes',
+      );
+    const convite = nextId('convite');
+    state.resetTokens.set(convite, alvo.email.toLowerCase());
+    return { message: `Convite reenviado para ${alvo.email}` };
   },
 
   async updateUser(id: string, input: Partial<UserInput>): Promise<User> {

@@ -13,7 +13,7 @@ test.describe('Gestão de usuários (admin)', () => {
     await page.locator('#email').fill('teste.e2e@empresa.com');
     await page.locator('#perfil').selectOption('analyst');
     await page.getByRole('button', { name: 'Salvar' }).click();
-    await expect(toast(page, 'Usuário cadastrado com sucesso')).toBeVisible();
+    await expect(toast(page, 'Usuário cadastrado e convite enviado')).toBeVisible();
     await expect(page).toHaveURL(/\/users$/);
 
     await page.getByPlaceholder(/Buscar por nome/).fill('teste.e2e');

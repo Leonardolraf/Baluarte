@@ -4,6 +4,7 @@ import { exigeToken, exigePerfil, usuarioDe } from '../auth.js';
 import { lerRemediacao } from '../catalogo.js';
 import { mapUsuario, SELECT_USUARIO } from '../usuarios.js';
 import { enviar, erro, wrap, queryString, POLITICA_SENHA, STATUS_FINDING, STATUS_FINDING_ENCERRADO } from '../util.js';
+import { avancarVarreduras } from '../varredura.js';
 
 // -----------------------------------------------------------------------------
 // Endpoints de LEITURA/AGREGACAO que alimentam as telas do frontend.
@@ -111,6 +112,7 @@ export function registerReadRoutes(r: Router) {
   r.get('/dashboard', exigeToken, wrap(async (req, res) => {
     // Colaborador recebe so indices e KPIs; a lista tecnica de achados fica com Administrador/Analista.
     const operador = OPERADORES.includes(usuarioDe(req).perfil);
+    await avancarVarreduras();
     const findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
     // "Resolvida" e "Risco aceito" saem dos KPIs, dos alertas e da lista de recentes.
     const emAberto = findings.filter((f) => !encerrado(f));
@@ -151,13 +153,17 @@ export function registerReadRoutes(r: Router) {
   }));
 
   // ---- Varreduras ----
-  r.get('/scans', exigeToken, wrap(async (_req, res) => {
+  // Lista tecnica (nome e endereco dos ativos): so quem opera a plataforma (RN-006).
+  // O status (e os achados) avancam pelo tempo decorrido, gravados aqui na leitura (src/varredura.ts).
+  r.get('/scans', exigeToken, exigePerfil(...OPERADORES), wrap(async (_req, res) => {
+    await avancarVarreduras();
     const scans = await prisma.scan.findMany({ include: { asset: true, _count: { select: { findings: true } } }, orderBy: { criadoEm: 'desc' } });
     enviar(res, 200, { status: 'sucesso', dados: scans });
   }));
 
   // ---- Vulnerabilidades (findings achatados) com filtros ?severidade= ?status= ?q= ----
   r.get('/vulnerabilidades', exigeToken, exigePerfil(...OPERADORES), wrap(async (req, res) => {
+    await avancarVarreduras();
     let findings = await prisma.finding.findMany({ include: { scan: { include: { asset: true } } }, orderBy: { criadoEm: 'desc' } }) as unknown as FindingComScan[];
     // Coage a string: `?severidade[]=x` / `?q[$ne]=x` viram objeto/array no parser do Express.
     const severidade = queryString(req.query.severidade);
@@ -233,7 +239,12 @@ export function registerReadRoutes(r: Router) {
         id: c.id, nome: c.nome, template: c.template, status: c.status, criadoEm: c.criadoEm,
         destinatarios: c.eventos.length,
         funil: funilDe(c.eventos),
-        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, departamento: depDe(e), concluido: e.treinou, concluidoEm: e.treinouEm })),
+        treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, departamento: depDe(e), concluido: e.treinou, concluidoEm: e.treinouEm, reportouEm: e.reportouEm })),
+        // Quem reportou o e-mail simulado (pelo rodape do e-mail), clicando ou nao.
+        reportes: c.eventos
+          .filter((e) => e.reportouEm)
+          .sort((a, b) => a.reportouEm!.getTime() - b.reportouEm!.getTime())
+          .map((e) => ({ destinatario: e.destinatario, departamento: depDe(e), reportouEm: e.reportouEm, clicou: !!e.clicadoEm })),
         porDepartamento: [...grupos.entries()]
           .map(([departamento, g]) => ({
             departamento,
@@ -270,8 +281,12 @@ export function registerReadRoutes(r: Router) {
       status: 'sucesso',
       dados: {
         politicaSenha: { ...POLITICA_SENHA },
-        sessao: { algoritmoToken: 'JWT HS256', expiracaoMinutos: 30, limiteTentativasLogin: 5, doisFatores: false },
-        auditoria: { logImutavel: true, retencaoMeses: 12 },
+        // expiracaoMinutos: sem uso por esse tempo, a sessao expira (o frontend renova
+        // enquanto ha uso); nenhuma sessao passa de sessaoMaximaHoras desde o login.
+        sessao: { algoritmoToken: 'JWT HS256', expiracaoMinutos: 30, sessaoMaximaHoras: 8, limiteTentativasLogin: 5, doisFatores: false },
+        // So o que existe: as acoes sao registradas, mas o log ainda nao e imutavel nem
+        // tem politica de retencao (B29 do backlog). Publicar o contrario seria falso.
+        auditoria: { registraAcoes: true, logImutavel: false, retencaoMeses: null },
       },
     });
   }));

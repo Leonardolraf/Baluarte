@@ -24,6 +24,8 @@ export const ROUTE_ROLES = {
   dashboard: ['admin', 'analyst', 'collaborator'],
   vulnerabilities: ['admin', 'analyst'],
   assets: ['admin', 'analyst'],
+  /** GET /scans é restrito a Administrador/Analista no servidor (B02). */
+  scans: ['admin', 'analyst'],
   campaigns: ['admin', 'analyst'],
   training: ['admin', 'analyst', 'collaborator'],
   /** Consolidado de quem concluiu treinamento: dado individual, restrito à gestão (RN-006). */

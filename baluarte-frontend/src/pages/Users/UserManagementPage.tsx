@@ -148,6 +148,20 @@ export default function UserManagementPage() {
   const canEdit = FEATURES.userEdit;
   const canDelete = FEATURES.userDelete;
   const showActions = canEdit || canDelete;
+  // Conta pendente ainda não aceitou o convite: o reenvio é a única saída para ela entrar.
+  const [reenviando, setReenviando] = useState<string | null>(null);
+
+  async function reenviarConvite(user: User) {
+    setReenviando(user.id);
+    try {
+      const resposta = await trackOperation(api.resendInvite(user.id));
+      notify.success(resposta.message);
+    } catch (err) {
+      notify.error(errorMessage(err, 'Não foi possível reenviar o convite.'));
+    } finally {
+      setReenviando(null);
+    }
+  }
   const columnCount = showActions ? 7 : 6;
 
   const [query, setQuery] = useState('');
@@ -405,6 +419,17 @@ export default function UserManagementPage() {
                             {showActions && (
                               <Td align="right">
                                 <div className="flex justify-end gap-1">
+                                  {user.status === 'pending' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      aria-label={`Reenviar convite para ${user.name}`}
+                                      title="Reenviar convite"
+                                      loading={reenviando === user.id}
+                                      onClick={() => void reenviarConvite(user)}
+                                      leftIcon={<Icons.SendIcon size={16} />}
+                                    />
+                                  )}
                                   {canEdit && (
                                     <LinkButton
                                       to={`/users/${user.id}/edit`}

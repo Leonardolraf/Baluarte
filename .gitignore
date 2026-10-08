@@ -16,3 +16,6 @@ e2e/resultados*/
 # python / robot
 **/__pycache__/
 *.log
+
+# worktrees temporários dos agentes do Claude Code
+.claude/worktrees/

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   ADMIN,
   ANALISTA,
-  SENHA_PROVISORIA,
+  SENHA_CONTA,
   chamar,
   criarUsuario,
   encerrarServidor,
@@ -107,10 +107,13 @@ describe('catálogo do scanner', () => {
 });
 
 describe('achados da varredura com classificação e remediação', () => {
-  it('POST /scans grava CWE, vetor, nota derivada e remediação; a API devolve os passos numerados', async () => {
+  it('a varredura concluída grava CWE, vetor, nota derivada e remediação; a API devolve os passos numerados', async () => {
     const r = await chamar('POST', '/scans', { token: analista, body: { ativoId: 'ativo-001' } });
     assert.equal(r.status, 201);
     assert.equal(r.body.dados.statusVarredura, 'EM_FILA', 'contrato N2 AT1');
+    // B21: os achados nascem na conclusão. Recua a criação 1 min para simular o tempo.
+    await prisma.scan.update({ where: { id: r.body.dados.scanId }, data: { criadoEm: new Date(Date.now() - 60_000) } });
+    assert.equal((await chamar('GET', '/scans', { token: analista })).status, 200);
 
     const achados = await prisma.finding.findMany({ where: { scanId: r.body.dados.scanId } });
     assert.ok(achados.length >= 2 && achados.length <= 4);
@@ -194,7 +197,7 @@ describe('departamentos', () => {
   it('GET /me traz o departamento do usuário logado', async () => {
     const conta = await criarUsuario(admin, 'Colaborador', 'me.dep');
     assert.equal((await chamar('PATCH', `/users/${conta.id}`, { token: admin, body: { departamento: 'RH' } })).status, 200);
-    const token = await login(conta.email, SENHA_PROVISORIA);
+    const token = await login(conta.email, SENHA_CONTA);
     const me = await chamar('GET', '/me', { token });
     assert.equal(me.body.dados.departamento, 'RH');
   });
