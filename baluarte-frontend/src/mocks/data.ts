@@ -21,6 +21,9 @@ import type {
   NotificationPreferences,
   ScanReport,
   SecurityPolicy,
+  StationDetail,
+  StationPort,
+  StationSoftware,
   TimelineEvent,
   Training,
   User,
@@ -2053,3 +2056,163 @@ export const MOCK_AUDIT_LOG: AuditEntry[] = [
   },
   { id: 'aud-001', action: 'LOGIN', detail: null, at: daysAgo(31.1), user: ANALYST_REF },
 ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+// ---- Estações monitoradas (B13) ---------------------------------------------
+
+/**
+ * Janela do mock até a estação virar offline: a mesma do servidor fora de produção
+ * (3 intervalos de coleta de 5 min; ver `CICLOS_ATE_OFFLINE` no backend).
+ */
+export const MOCK_STATION_OFFLINE_AFTER_SEC = 900;
+
+/** Estação guardada no mock: o status e os totais são calculados na leitura, como no servidor. */
+export type MockStation = Omit<StationDetail, 'status' | 'softwareCount' | 'portCount' | 'offlineAfterSec'>;
+
+function sw(
+  name: string,
+  version: string,
+  vendor: string | null,
+  source: StationSoftware['source'],
+): StationSoftware {
+  return { name, version, vendor, source };
+}
+
+function tcp(port: number, address: string, process: string | null): StationPort {
+  return { port, protocol: 'TCP', address, process };
+}
+
+function udp(port: number, address: string, process: string | null): StationPort {
+  return { port, protocol: 'UDP', address, process };
+}
+
+/**
+ * Estações iniciais, com o último contato relativo a `nowMs` (o relógio real, para que o
+ * online/offline faça sentido na demonstração): Windows e Linux, uma parada há dias
+ * (offline) e uma recém-inscrita, ainda sem inventário. Os ativos delas não entram em
+ * MOCK_ASSETS: as telas de ativos e varreduras do mock seguem só com os ativos de rede.
+ */
+export function buildMockStations(nowMs: number = Date.now()): MockStation[] {
+  const ago = (ms: number) => new Date(nowMs - ms).toISOString();
+  const hostId = (n: number) => `4c4c4544-0042-3510-8052-b4c04f4d3${String(n).padStart(3, '0')}`;
+  return [
+    {
+      id: 'ws-001',
+      assetId: 'asset-ws-001',
+      name: 'FIN-NB-07',
+      host: 'fin-nb-07.empresa.local',
+      identifier: hostId(1),
+      os: 'Microsoft Windows 11 Pro 10.0.22631',
+      osPlatform: 'windows',
+      osBuild: '22631',
+      lastSeenAt: ago(2 * MINUTE_MS),
+      enrolledAt: ago(21 * DAY_MS),
+      inventoryAt: ago(4 * MINUTE_MS),
+      software: [
+        sw('7-Zip 23.01 (x64)', '23.01', 'Igor Pavlov', 'programs'),
+        sw('Adobe Acrobat Reader (64-bit)', '24.003.20112', 'Adobe', 'programs'),
+        sw('Google Chrome', '129.0.6668.90', 'Google LLC', 'programs'),
+        sw(
+          'Microsoft 365 Apps for business - pt-br',
+          '16.0.17928.20156',
+          'Microsoft Corporation',
+          'programs',
+        ),
+        sw('Microsoft Edge', '129.0.2792.79', 'Microsoft Corporation', 'programs'),
+        sw('osquery', '5.12.1', 'osquery', 'programs'),
+        sw('Zoom Workplace (64-bit)', '6.2.3', 'Zoom Video Communications, Inc.', 'programs'),
+      ],
+      ports: [
+        tcp(135, '0.0.0.0', 'svchost.exe'),
+        udp(137, '192.168.10.47', 'System'),
+        tcp(445, '0.0.0.0', 'System'),
+        tcp(3389, '0.0.0.0', 'svchost.exe'),
+        tcp(5040, '0.0.0.0', 'svchost.exe'),
+      ],
+    },
+    {
+      id: 'ws-002',
+      assetId: 'asset-ws-002',
+      name: 'dev-ws-02',
+      host: 'dev-ws-02.empresa.local',
+      identifier: hostId(2),
+      os: 'Ubuntu 22.04.4 LTS (Jammy Jellyfish)',
+      osPlatform: 'ubuntu',
+      osBuild: null,
+      lastSeenAt: ago(1 * MINUTE_MS),
+      enrolledAt: ago(34 * DAY_MS),
+      inventoryAt: ago(3 * MINUTE_MS),
+      software: [
+        sw('curl', '7.81.0-1ubuntu1.18', 'Ubuntu Developers', 'deb_packages'),
+        sw('docker-ce', '5:27.3.1-1~ubuntu.22.04~jammy', 'Docker', 'deb_packages'),
+        sw('git', '1:2.34.1-1ubuntu1.11', 'Ubuntu Developers', 'deb_packages'),
+        sw('openssh-server', '1:8.9p1-3ubuntu0.10', 'Ubuntu Developers', 'deb_packages'),
+        sw('openssl', '3.0.2-0ubuntu1.18', 'Ubuntu Developers', 'deb_packages'),
+        sw('osquery', '5.12.1-1.linux', 'osquery', 'deb_packages'),
+        sw('postgresql-16', '16.4-1.pgdg22.04+2', 'Debian PostgreSQL Maintainers', 'deb_packages'),
+        sw('python3', '3.10.6-1~22.04.1', 'Ubuntu Developers', 'deb_packages'),
+      ],
+      ports: [
+        tcp(22, '0.0.0.0', 'sshd'),
+        udp(68, '0.0.0.0', 'dhclient'),
+        tcp(5432, '127.0.0.1', 'postgres'),
+        tcp(8080, '0.0.0.0', 'node'),
+      ],
+    },
+    {
+      id: 'ws-003',
+      assetId: 'asset-ws-003',
+      name: 'RH-NB-03',
+      host: 'rh-nb-03.empresa.local',
+      identifier: hostId(3),
+      os: 'Microsoft Windows 10 Pro 10.0.19045',
+      osPlatform: 'windows',
+      osBuild: '19045',
+      lastSeenAt: ago(2 * DAY_MS + 5 * HOUR_MS),
+      enrolledAt: ago(48 * DAY_MS),
+      inventoryAt: ago(2 * DAY_MS + 5 * HOUR_MS),
+      software: [
+        sw('Google Chrome', '118.0.5993.118', 'Google LLC', 'programs'),
+        sw('Java 8 Update 381', '8.0.3810.9', 'Oracle Corporation', 'programs'),
+        sw('Microsoft Office Profissional Plus 2016', '16.0.4266.1001', 'Microsoft Corporation', 'programs'),
+        sw('osquery', '5.12.1', 'osquery', 'programs'),
+        sw('WinRAR 6.02 (64-bit)', '6.02.0', 'win.rar GmbH', 'programs'),
+      ],
+      ports: [tcp(135, '0.0.0.0', 'svchost.exe'), tcp(445, '0.0.0.0', 'System')],
+    },
+    {
+      id: 'ws-004',
+      assetId: 'asset-ws-004',
+      name: 'ops-ws-05',
+      host: 'ops-ws-05.empresa.local',
+      identifier: hostId(4),
+      os: 'Red Hat Enterprise Linux 9.4 (Plow)',
+      osPlatform: 'rhel',
+      osBuild: null,
+      lastSeenAt: ago(6 * MINUTE_MS),
+      enrolledAt: ago(12 * DAY_MS),
+      inventoryAt: ago(6 * MINUTE_MS),
+      software: [
+        sw('bash', '5.1.8-9.el9', 'Red Hat, Inc.', 'rpm_packages'),
+        sw('openssh-server', '8.7p1-38.el9', 'Red Hat, Inc.', 'rpm_packages'),
+        sw('openssl', '3.0.7-27.el9', 'Red Hat, Inc.', 'rpm_packages'),
+        sw('osquery', '5.12.1-1.linux', 'osquery', 'rpm_packages'),
+      ],
+      ports: [tcp(22, '0.0.0.0', 'sshd'), udp(323, '127.0.0.1', 'chronyd')],
+    },
+    {
+      id: 'ws-005',
+      assetId: 'asset-ws-005',
+      name: 'COM-NB-01',
+      host: 'com-nb-01.empresa.local',
+      identifier: hostId(5),
+      os: 'Microsoft Windows 11 Pro 10.0.26100',
+      osPlatform: 'windows',
+      osBuild: '26100',
+      lastSeenAt: ago(30_000),
+      enrolledAt: ago(30_000),
+      inventoryAt: null,
+      software: [],
+      ports: [],
+    },
+  ];
+}

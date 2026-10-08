@@ -17,6 +17,8 @@ const VulnDetailPage = lazy(() => import('@/pages/Vulnerabilities/VulnDetailPage
 const AssetListPage = lazy(() => import('@/pages/Assets/AssetListPage'));
 const AssetFormPage = lazy(() => import('@/pages/Assets/AssetFormPage'));
 const ScanListPage = lazy(() => import('@/pages/Scans/ScanListPage'));
+const StationListPage = lazy(() => import('@/pages/Stations/StationListPage'));
+const StationDetailPage = lazy(() => import('@/pages/Stations/StationDetailPage'));
 const FileAnalysisPage = lazy(() => import('@/pages/Files/FileAnalysisPage'));
 const CampaignListPage = lazy(() => import('@/pages/Campaigns/CampaignListPage'));
 const CampaignFormPage = lazy(() => import('@/pages/Campaigns/CampaignFormPage'));
@@ -49,7 +51,8 @@ function NotFound() {
  *  - Públicas: /login, /reset-password, /definir-senha, /about,
  *    /t/:token e /t/:token/reportar (links do e-mail simulado da campanha)
  *  - Protegidas (qualquer perfil): /dashboard, /files, /training/:id, /settings
- *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /scans, /trainings, /campaigns[/new|/:id]
+ *  - Admin + Analista: /vulnerabilities[/:id], /assets[/new], /scans, /stations[/:id], /trainings,
+ *    /campaigns[/new|/:id]
  *  - Admin: /users, /users/new, /users/:id/edit, /audit
  */
 export const routes: RouteObject[] = [
@@ -89,6 +92,14 @@ export const routes: RouteObject[] = [
               { path: '/campaigns', element: page(<CampaignListPage />) },
               { path: '/campaigns/new', element: page(<CampaignFormPage />) },
               { path: '/campaigns/:id', element: page(<CampaignDetailPage />) },
+            ],
+          },
+          {
+            // Estações monitoradas pelo agente osquery (B13).
+            element: <ProtectedRoute roles={ROUTE_ROLES.stations} />,
+            children: [
+              { path: '/stations', element: page(<StationListPage />) },
+              { path: '/stations/:id', element: page(<StationDetailPage />) },
             ],
           },
           {

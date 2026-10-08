@@ -62,6 +62,7 @@ A única porta de entrada das telas é `src/services/api.ts`, que exporta `api: 
 | Usuários | `GET /usuarios`, `POST /users`, `PATCH/DELETE /users/:id` (Administrador) |
 | Configurações | `GET /configuracoes/seguranca`, `GET/PUT /configuracoes/notificacoes` |
 | Análise de arquivos (B04, backend em andamento) | `POST /arquivos/analise` (multipart, campo `arquivo`), `GET /arquivos/analises` |
+| Estações monitoradas (B13) | `GET /estacoes` (lista com `resumo` de online/offline), `GET /estacoes/:id` (programas instalados e portas abertas) |
 
 Todas, exceto as de análise de arquivos (contrato do B04, cujo backend vem em seguida), estão implementadas em `../backend` (testes em `../backend/tests`). `src/services/api.ts` exporta `FEATURES`, um mapa de capacidades hoje todo ligado; as telas continuam consultando-o para esconder uma ação (em vez de mostrar um 404 genérico) caso uma implantação desligue alguma capacidade. Se uma rota não existir no servidor, a camada real converte o 404 `ROTA_NAO_ENCONTRADA` em **501 `NAO_IMPLEMENTADO`**.
 
@@ -107,6 +108,7 @@ VITE_USE_MOCKS=
 | `/vulnerabilities`, `/vulnerabilities/:id` | Lista com filtros/ordenação/paginação; detalhe com abas Visão geral · Evidências · Remediação · Histórico | Admin, Analista |
 | `/assets/new` | Cadastro de ativo | Admin, Analista |
 | `/scans` | Varreduras: iniciar por ativo e acompanhar o status (Em fila → Em andamento → Concluída), com consulta automática a cada 3 s enquanto houver varredura em curso | Admin, Analista |
+| `/stations`, `/stations/:id` | Estações monitoradas pelo agente osquery: lista com sistema, último contato e status online/offline; detalhe com abas Programas instalados (filtro, 25 por página) · Portas abertas | Admin, Analista |
 | `/campaigns`, `/campaigns/new`, `/campaigns/:id` | Campanhas de phishing: lista, criação, relatório (KPIs, funil, gauge de cliques, destinatários) | Admin, Analista |
 | `/files` | Análise de arquivos: enviar (arrastar e soltar ou escolher), veredito do antivírus, SHA-256 e histórico (o colaborador vê só as próprias análises; operadores veem quem enviou) | todos |
 | `/training/:id` | Treinamento contextual pós-clique (marcar como concluído) | todos |

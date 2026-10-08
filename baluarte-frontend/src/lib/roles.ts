@@ -27,6 +27,8 @@ export const ROUTE_ROLES = {
   /** GET /scans é restrito a Administrador/Analista no servidor (B02). */
   scans: ['admin', 'analyst'],
   campaigns: ['admin', 'analyst'],
+  /** Estações monitoradas pelo agente osquery (B13): GET /estacoes só para Administrador/Analista. */
+  stations: ['admin', 'analyst'],
   /** Análise de arquivos (B05): aberta aos três perfis; o colaborador só vê as próprias análises. */
   files: ['admin', 'analyst', 'collaborator'],
   training: ['admin', 'analyst', 'collaborator'],

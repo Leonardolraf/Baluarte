@@ -64,6 +64,8 @@ const BLOCKED: Array<[string, RBACRole]> = [
   ['/campaigns', 'collaborator'],
   ['/campaigns/new', 'collaborator'],
   ['/campaigns/camp-001', 'collaborator'],
+  ['/stations', 'collaborator'],
+  ['/stations/ws-001', 'collaborator'],
   ['/users', 'analyst'],
   ['/users/new', 'analyst'],
   ['/users/u-001/edit', 'analyst'],
@@ -98,6 +100,16 @@ describe('RBAC — guarda da tabela de rotas', () => {
 
     expect(
       await screen.findByRole('heading', { name: 'Trilha de auditoria' }, FIND_OPTIONS),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Acesso negado' })).not.toBeInTheDocument();
+    await waitForIdle();
+  });
+
+  it.each(['analyst', 'admin'] as const)('%s em /stations vê "Estações monitoradas"', async (role) => {
+    renderApp('/stations', authenticatedSession(role));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Estações monitoradas' }, FIND_OPTIONS),
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Acesso negado' })).not.toBeInTheDocument();
     await waitForIdle();
@@ -143,6 +155,7 @@ describe('RBAC — itens de navegação por perfil', () => {
         '/assets/new',
         '/campaigns',
         '/campaigns/new',
+        '/stations',
         '/files',
         '/settings',
       ]),

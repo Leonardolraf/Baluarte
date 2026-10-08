@@ -9,6 +9,7 @@ import {
   FileScanIcon,
   GraduationIcon,
   MailIcon,
+  MonitorIcon,
   PlusIcon,
   ServerIcon,
   SettingsIcon,
@@ -49,6 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/assets', label: 'Ativos', icon: <ServerIcon />, roles: ROUTE_ROLES.assets, end: true },
       { to: '/assets/new', label: 'Cadastrar ativo', icon: <PlusIcon />, roles: ROUTE_ROLES.assets },
       { to: '/scans', label: 'Varreduras', icon: <ActivityIcon />, roles: ROUTE_ROLES.scans, end: true },
+      { to: '/stations', label: 'Estações', icon: <MonitorIcon />, roles: ROUTE_ROLES.stations },
       {
         to: '/files',
         label: 'Análise de arquivos',

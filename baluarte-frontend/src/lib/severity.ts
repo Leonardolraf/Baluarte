@@ -240,6 +240,7 @@ export const ASSET_TYPE_LABEL: Record<AssetType, string> = {
   application: 'Aplicação',
   network: 'Rede',
   database: 'Banco de Dados',
+  workstation: 'Estação de trabalho',
 };
 
 export const ASSET_STATUS_LABEL: Record<AssetStatus, string> = {

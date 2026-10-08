@@ -33,6 +33,9 @@ import type {
   ScanReport,
   SecurityPolicy,
   Severity,
+  Station,
+  StationDetail,
+  StationListResponse,
   TimelineEvent,
   Training,
   TrainingOverview,
@@ -74,8 +77,11 @@ import {
   MOCK_TIMELINE,
   MOCK_TRAININGS,
   MOCK_USERS,
+  MOCK_STATION_OFFLINE_AFTER_SEC,
   MOCK_VULNERABILITIES,
+  buildMockStations,
   type MockFileScan,
+  type MockStation,
 } from '@/mocks/data';
 
 // -----------------------------------------------------------------------------
@@ -159,6 +165,8 @@ interface MockState {
   fileScanTimes: Map<string, number[]>;
   /** Simula o motor ClamAV fora do ar (503 ANTIVIRUS_INDISPONIVEL). */
   antivirusAvailable: boolean;
+  /** Estações inscritas pelo agente (B13); o último contato é relativo ao relógio real. */
+  stations: MockStation[];
 }
 
 function clone<T>(value: T): T {
@@ -193,6 +201,7 @@ function createState(): MockState {
     fileScans: clone(MOCK_FILE_SCANS),
     fileScanTimes: new Map<string, number[]>(),
     antivirusAvailable: true,
+    stations: buildMockStations(),
   };
 }
 
@@ -267,6 +276,18 @@ function requireUser(): User {
   const user = state.users.find((u) => u.id === payload.sub);
   if (!user) deny(401, 'TOKEN_INVALIDO', 'Sessão inválida. Faça login novamente.');
   return user;
+}
+
+/** Estação como o servidor devolve: status pelo último contato e os totais do inventário. */
+function stationView(station: MockStation, nowMs: number = Date.now()): StationDetail {
+  const silentMs = nowMs - new Date(station.lastSeenAt).getTime();
+  return {
+    ...station,
+    status: silentMs <= MOCK_STATION_OFFLINE_AFTER_SEC * 1000 ? 'online' : 'offline',
+    softwareCount: station.software.length,
+    portCount: station.ports.length,
+    offlineAfterSec: MOCK_STATION_OFFLINE_AFTER_SEC,
+  };
 }
 
 function requireRole(user: User, roles: User['role'][]): void {
@@ -1473,6 +1494,41 @@ export const mockApi: BaluarteApi = {
         .filter((entry) => operator || entry.userId === user.id)
         .sort((a, b) => new Date(b.scannedAt).getTime() - new Date(a.scannedAt).getTime())
         .map((entry) => fileScanView(entry, operator));
+    });
+  },
+
+  // ---- Estações monitoradas (B13) ----
+  async listStations(): Promise<StationListResponse> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin', 'analyst']);
+      const items: Station[] = [...state.stations]
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }))
+        .map((station) => {
+          const view: Partial<StationDetail> = stationView(station);
+          delete view.software;
+          delete view.ports;
+          delete view.offlineAfterSec;
+          return view as Station;
+        });
+      const online = items.filter((s) => s.status === 'online').length;
+      return {
+        items,
+        summary: {
+          total: items.length,
+          online,
+          offline: items.length - online,
+          offlineAfterSec: MOCK_STATION_OFFLINE_AFTER_SEC,
+        },
+      };
+    });
+  },
+
+  async getStation(id: string): Promise<StationDetail> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin', 'analyst']);
+      const station = state.stations.find((s) => s.id === id);
+      if (!station) throw new HttpError(404, 'ESTACAO_NAO_ENCONTRADA', 'Estação não encontrada');
+      return stationView(station);
     });
   },
 

@@ -62,11 +62,11 @@ npm run dev
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
-| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 424 testes. Unidade (102, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura e o progresso dela (percentual, etapa e estimativa nas bordas do ciclo, coerência com o status gravado, id do caminho), validações, política de senha, tokens, JWT/RBAC, erro de negócio, validação zod (ordem das regras do contrato), métricas de campanha, treinamento, e-mails, relatório em PDF (resumo, ordem por CVSS, fuso, WinAnsi, quebra de página)). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (202): progresso da varredura (`GET /scans` e `GET /scans/:id` com percentual, etapa e estimativa coerentes em cada fase, nada novo gravado no banco, 401/403/400/404, a consulta de uma varredura e o dashboard de qualquer perfil concluem as pendentes, `POST /scans` com a resposta do contrato intacta), relatório de vulnerabilidades em PDF (RBAC, cabeçalhos do download, conteúdo com acentos, filtros iguais aos da lista, filtro inválido → 400, auditoria da exportação), trilha de auditoria (ações novas registradas, consulta com filtros, paginação, RBAC e query inválida → 400), análise de arquivos (antivírus em fluxo, EICAR, limites, histórico por perfil), treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
+| **API — integração + pentest** (node:test, um banco Postgres isolado por arquivo) | `backend/tests/` | `cd backend && npm test` (precisa do Postgres local no ar) | 440 testes. Unidade (102, em `tests/unidade/`, sem banco nem servidor: CVSS 3.1, catálogo, varredura e o progresso dela (percentual, etapa e estimativa nas bordas do ciclo, coerência com o status gravado, id do caminho), validações, política de senha, tokens, JWT/RBAC, erro de negócio, validação zod (ordem das regras do contrato), métricas de campanha, treinamento, e-mails, relatório em PDF (resumo, ordem por CVSS, fuso, WinAnsi, quebra de página)). Banco (7): restrições CHECK, `citext`, cascata/restrição. Integração (218): estações monitoradas (lista, detalhe com programas e portas, online/offline pela janela, RBAC, id inválido e inexistente), progresso da varredura (`GET /scans` e `GET /scans/:id` com percentual, etapa e estimativa coerentes em cada fase, nada novo gravado no banco, 401/403/400/404, a consulta de uma varredura e o dashboard de qualquer perfil concluem as pendentes, `POST /scans` com a resposta do contrato intacta), relatório de vulnerabilidades em PDF (RBAC, cabeçalhos do download, conteúdo com acentos, filtros iguais aos da lista, filtro inválido → 400, auditoria da exportação), trilha de auditoria (ações novas registradas, consulta com filtros, paginação, RBAC e query inválida → 400), análise de arquivos (antivírus em fluxo, EICAR, limites, histórico por perfil), treinamentos consolidados, campos agregados de ativos, contrato, e-mail simulado da campanha e reporte de e-mail suspeito, ciclo da varredura simulada e uma varredura por vez no ativo, cadastro por convite, reenvio e verificação do link, logout no servidor, renovação de sessão, bloqueio de login guardado no banco, auditoria do login, RBAC por perfil, conta inativada, limite de login, senha, redefinição, notificações, treinamento (navegação interna e link do e-mail), usuários, "Risco aceito", campanhas (só destinatário cadastrado, unicidade, histórico, resultado por departamento), CVSS 3.1 calculado do vetor, catálogo do scanner (CWE/CVE/remediação), departamentos. Segurança (113, em `tests/seguranca/`): injeção (SQLi/NoSQL/prototype pollution/mass assignment), autorização (token forjado/alg=none/IDOR/escalada), força bruta e enumeração, validação de entrada e exposição de informação (CORS, cabeçalhos, vazamento de segredos, RBAC no payload) |
 | **API — Postman/Newman** (N2 AT1) | `testes-api/` | ver abaixo | 35 requisições / 70 asserções, 0 falhas |
 | **UI — Robot + Selenium** (N2 AT1) | `e2e/*.robot` | ver abaixo | 29 testes, 0 falhas |
-| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 480 testes |
-| **Frontend — ponta a ponta** (Playwright, modo mock, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 32 testes |
+| **Frontend — unitários, componentes, a11y** (Vitest + RTL + axe) | `baluarte-frontend/src/__tests__/` | `cd baluarte-frontend && npm test` | 508 testes |
+| **Frontend — ponta a ponta** (Playwright, modo mock, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 35 testes |
 | **Frontend — ponta a ponta em modo real** | `baluarte-frontend/e2e/real-backend.spec.ts` | `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test e2e/real-backend.spec.ts` (stack Docker; em dev use `:5174` com `VITE_USE_MOCKS=false`) | 10 testes |
 
 ### Cobertura e relatório de testes (roteiro 3.2)
@@ -107,7 +107,7 @@ Relatórios em `e2e/resultados/report.html` e `log.html`.
 
 **Contrato (testado pelo Postman — não muda):** `POST /login` · `POST /scans` · `POST /assets` · `POST /users` · `POST /campaigns` (aceita também `destinatarios[]`) · `GET /findings/classificacao?cvss=`
 
-**Leitura (alimentam as telas):** `GET /me` · `GET /dashboard` · `GET /assets` · `GET /scans[/:id]` (com progresso, B26) · `GET /vulnerabilidades[/:id]` (+ `PATCH`, inclusive status `Risco aceito`) · `GET /vulnerabilidades/relatorio.pdf` (B24, ver abaixo) · `GET /campanhas[/:id]` · `GET /usuarios` (com `departamento`) · `GET /departamentos` (Administrador/Analista) · `GET /configuracoes/seguranca` · `GET /treinamentos/:token` (protegido: o `:token` é o id do evento; Colaborador só o próprio)
+**Leitura (alimentam as telas):** `GET /me` · `GET /dashboard` · `GET /assets` · `GET /scans[/:id]` (com progresso, B26) · `GET /vulnerabilidades[/:id]` (+ `PATCH`, inclusive status `Risco aceito`) · `GET /vulnerabilidades/relatorio.pdf` (B24, ver abaixo) · `GET /campanhas[/:id]` · `GET /usuarios` (com `departamento`) · `GET /departamentos` (Administrador/Analista) · `GET /estacoes[/:id]` (Administrador/Analista; ver abaixo) · `GET /configuracoes/seguranca` · `GET /treinamentos/:token` (protegido: o `:token` é o id do evento; Colaborador só o próprio)
 
 **Achados:** cada vulnerabilidade traz `cwe`, `cve` (só em achado de componente), `cvssVetor` e `remediacao` (passos numerados com título, descrição e esforço). A nota `cvss` é calculada do vetor CVSS 3.1 (`src/cvss.ts`) e a severidade sai da nota; o scanner simulado sorteia tipos do catálogo em `src/catalogo.ts`.
 
@@ -173,13 +173,26 @@ mkcert -CAROOT                                      # pasta do rootCA.pem, para 
 
 `--host_identifier=uuid` é o recomendado: com o padrão (`hostname`), duas máquinas com o mesmo nome seriam a mesma estação. Para conferir na máquina: `osqueryd --flagfile osquery.flags --verbose` deve mostrar a inscrição e, depois de um intervalo, os envios do logger.
 
+### Estações monitoradas (B13)
+
+Leitura, pelo painel, do que o agente registrou. Rotas no envelope da API (`estacao.*.ts`), separadas das rotas do protocolo do osquery, com `exigeToken` + Administrador ou Analista (Colaborador: `403 PERFIL_SEM_PERMISSAO`):
+
+| Rota | Resposta |
+|---|---|
+| `GET /api/estacoes` | `dados[]`: `id`, `ativoId`, `nome`, `host`, `identificador` (host_identifier), `sistema`, `soNome`, `soVersao`, `soBuild`, `soPlataforma`, `status` (`Online`/`Offline`), `ultimoContato`, `inscritaEm`, `inventarioEm`, `totalProgramas`, `totalPortas`, por nome da máquina · `resumo`: `{ total, online, offline, janelaOfflineS }` |
+| `GET /api/estacoes/:id` | os mesmos campos, `janelaOfflineS`, `programas[]` (`nome`, `versao`, `fornecedor`, `fonte`, por nome) e `portas[]` (`porta`, `protocolo`, `endereco`, `processo`, por número) · `:id` fora do formato do Prisma (cuid): `400 ID_INVALIDO` · estação inexistente: `404 ESTACAO_NAO_ENCONTRADA` |
+
+- **Online ou offline** é calculado na leitura, nada é gravado: a estação está online enquanto o último contato do agente (`vistaEm`, atualizado em toda requisição com chave válida) estiver dentro de `CICLOS_ATE_OFFLINE` × intervalo de coleta (`models/estacao.model.ts`, hoje **3**). Com o intervalo padrão, a janela é de **3 h em produção e 15 min fora dela**; `OSQUERY_INTERVALO_S` muda as duas coisas juntas. Três intervalos e não um: o osquery fala pelo menos uma vez por intervalo (o snapshot de cada query agendada), mas o splay de 10%, o período do logger e uma coleta perdida não devem derrubar o status; três coletas seguidas sem contato, sim.
+- O hash da chave da estação nunca sai na resposta.
+- **Tela:** `/stations` no `baluarte-frontend/` (menu "Estações", só Administrador e Analista): lista com status e totais de online e offline; `/stations/:id` com abas de programas instalados (filtro por nome ou fornecedor, 25 por página) e portas abertas.
+
 ### RBAC efetivo (verificado no servidor, não só na interface)
 
 | Perfil | Pode |
 |---|---|
 | **Administrador** | tudo, inclusive `GET /usuarios`, `PATCH/DELETE /users/:id` e `GET /auditoria` |
-| **Analista** | operar a plataforma (varreduras, ativos, campanhas, status de vulnerabilidade, criar Analista/Colaborador), ler as listas técnicas e exportar o relatório de vulnerabilidades em PDF; **não** lista nem edita usuários |
-| **Colaborador** | `GET /me`, `GET /dashboard` (só índices e KPIs, sem a lista de achados), `GET /configuracoes/seguranca`, as próprias notificações e o próprio treinamento; nas listas técnicas e no relatório em PDF recebe 403 |
+| **Analista** | operar a plataforma (varreduras, ativos, campanhas, status de vulnerabilidade, criar Analista/Colaborador), ler as listas técnicas, inclusive as estações monitoradas (`GET /estacoes[/:id]`), e exportar o relatório de vulnerabilidades em PDF; **não** lista nem edita usuários |
+| **Colaborador** | `GET /me`, `GET /dashboard` (só índices e KPIs, sem a lista de achados), `GET /configuracoes/seguranca`, as próprias notificações, o próprio treinamento e a análise de arquivos (só as próprias); nas listas técnicas (inclusive as estações monitoradas) e no relatório em PDF recebe `403 PERFIL_SEM_PERMISSAO` |
 
 O perfil vem do banco a cada requisição (um token emitido antes de um rebaixamento deixa de valer), contas `Inativo` perdem o acesso na hora (401 `USUARIO_INATIVO`) e o login de conta inativa é recusado (403 `USUARIO_INATIVO`). O login bloqueia após 5 falhas por conta em 15 minutos (429 `MUITAS_TENTATIVAS`), como a política de `GET /configuracoes/seguranca` anuncia.
 
@@ -266,7 +279,7 @@ backend/            API real (Express + Prisma/PostgreSQL)
   src/              arquitetura em camadas: rota → controller → service → repository
                     (um arquivo por funcionalidade em cada camada: auth, usuario, departamento, ativo,
                     varredura, vulnerabilidade, campanha, treinamento, dashboard, notificacao, auditoria,
-                    agente)
+                    agente, estacao)
     app.ts          o app Express (fica aqui porque a Vercel o procura neste caminho)
     server.ts       sobe o servidor HTTP
     routes/         index.ts (roteador /api, ordem de registro) + <f>.routes.ts: caminho + middlewares + controller

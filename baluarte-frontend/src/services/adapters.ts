@@ -23,6 +23,11 @@ import type {
   ScanStatus,
   SecurityPolicy,
   Severity,
+  SoftwareSource,
+  Station,
+  StationDetail,
+  StationListResponse,
+  StationPort,
   TimelineEvent,
   Training,
   TrainingOverview,
@@ -276,6 +281,9 @@ const ASSET_TYPE_FROM_LABEL: Record<string, AssetType> = {
   aplicação: 'application',
   rede: 'network',
   'banco de dados': 'database',
+  // Criado só pela inscrição do agente osquery (B07).
+  'estação de trabalho': 'workstation',
+  'estacao de trabalho': 'workstation',
 };
 
 export const ASSET_TYPE_TO_LABEL: Record<AssetType, string> = {
@@ -283,6 +291,7 @@ export const ASSET_TYPE_TO_LABEL: Record<AssetType, string> = {
   application: 'Aplicacao',
   network: 'Rede',
   database: 'Banco de Dados',
+  workstation: 'Estação de trabalho',
 };
 
 export const ROLE_TO_LABEL: Record<RBACRole, string> = {
@@ -882,5 +891,103 @@ export function toAuditList(
     actions: Array.isArray(resumo?.acoes)
       ? resumo.acoes.filter((a): a is string => typeof a === 'string')
       : [],
+  };
+}
+
+// ---- Estações monitoradas (B13) ---------------------------------------------
+
+export interface BackendStation {
+  id: string;
+  ativoId: string;
+  nome: string;
+  host: string;
+  identificador: string;
+  sistema: string;
+  soNome?: string | null;
+  soVersao?: string | null;
+  soBuild?: string | null;
+  soPlataforma?: string | null;
+  /** "Online" | "Offline", calculado pelo servidor a partir do último contato. */
+  status: string;
+  ultimoContato: string;
+  inscritaEm: string;
+  inventarioEm: string | null;
+  totalProgramas: number;
+  totalPortas: number;
+}
+
+export interface BackendStationDetail extends BackendStation {
+  janelaOfflineS: number;
+  programas: Array<{ nome: string; versao: string; fornecedor: string | null; fonte: string }>;
+  portas: Array<{ porta: number; protocolo: string; endereco: string; processo: string | null }>;
+}
+
+export interface BackendStationSummary {
+  total?: number;
+  online?: number;
+  offline?: number;
+  janelaOfflineS?: number;
+}
+
+const SOFTWARE_SOURCES: readonly SoftwareSource[] = ['programs', 'deb_packages', 'rpm_packages', 'apps'];
+
+export function toStation(raw: BackendStation): Station {
+  return {
+    id: raw.id,
+    assetId: raw.ativoId,
+    name: raw.nome,
+    host: raw.host,
+    identifier: raw.identificador,
+    os: raw.sistema,
+    osPlatform: raw.soPlataforma ?? null,
+    osBuild: raw.soBuild ?? null,
+    status: norm(raw.status) === 'online' ? 'online' : 'offline',
+    lastSeenAt: raw.ultimoContato,
+    enrolledAt: raw.inscritaEm,
+    inventoryAt: raw.inventarioEm ?? null,
+    softwareCount: Number(raw.totalProgramas) || 0,
+    portCount: Number(raw.totalPortas) || 0,
+  };
+}
+
+function toStationPort(raw: BackendStationDetail['portas'][number]): StationPort {
+  return {
+    port: Number(raw.porta),
+    protocol: String(raw.protocolo).toUpperCase() === 'UDP' ? 'UDP' : 'TCP',
+    address: raw.endereco,
+    process: raw.processo ?? null,
+  };
+}
+
+export function toStationDetail(raw: BackendStationDetail): StationDetail {
+  return {
+    ...toStation(raw),
+    offlineAfterSec: Number(raw.janelaOfflineS) || 0,
+    software: raw.programas.map((p) => ({
+      name: p.nome,
+      version: p.versao ?? '',
+      vendor: p.fornecedor ?? null,
+      source: (SOFTWARE_SOURCES as readonly string[]).includes(p.fonte)
+        ? (p.fonte as SoftwareSource)
+        : 'other',
+    })),
+    ports: raw.portas.map(toStationPort),
+  };
+}
+
+export function toStationList(
+  raw: BackendStation[],
+  resumo: BackendStationSummary = {},
+): StationListResponse {
+  const items = raw.map(toStation);
+  const online = items.filter((s) => s.status === 'online').length;
+  return {
+    items,
+    summary: {
+      total: resumo.total ?? items.length,
+      online: resumo.online ?? online,
+      offline: resumo.offline ?? items.length - online,
+      offlineAfterSec: resumo.janelaOfflineS ?? 0,
+    },
   };
 }

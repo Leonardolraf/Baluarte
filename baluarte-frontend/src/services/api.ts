@@ -29,6 +29,8 @@ import type {
   ScanReport,
   SecurityPolicy,
   Severity,
+  StationDetail,
+  StationListResponse,
   Training,
   TrainingOverview,
   User,
@@ -63,6 +65,8 @@ import {
   toNotificationPreferences,
   toScan,
   toSecurityPolicy,
+  toStationDetail,
+  toStationList,
   toTraining,
   toTrainingOverview,
   toUser,
@@ -82,6 +86,9 @@ import {
   type BackendNotificationPreferences,
   type BackendScan,
   type BackendSecurityPolicy,
+  type BackendStation,
+  type BackendStationDetail,
+  type BackendStationSummary,
   type BackendTraining,
   type BackendTrainingOverview,
   type BackendUser,
@@ -736,6 +743,17 @@ export const realApi: BaluarteApi = {
       params,
     });
     return toAuditList(dados, resumo as BackendAuditSummary | undefined, { page, pageSize });
+  },
+
+  async listStations(): Promise<StationListResponse> {
+    const { dados, resumo } = await requestWithSummary<BackendStation[]>({ method: 'GET', url: '/estacoes' });
+    return toStationList(dados, resumo as BackendStationSummary | undefined);
+  },
+
+  async getStation(id: string): Promise<StationDetail> {
+    return toStationDetail(
+      await request<BackendStationDetail>({ method: 'GET', url: `/estacoes/${encodeURIComponent(id)}` }),
+    );
   },
 
   async getNotificationPreferences(): Promise<NotificationPreferences> {

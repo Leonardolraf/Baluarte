@@ -678,6 +678,62 @@ describe('realApi — usuários', () => {
   });
 });
 
+describe('realApi — estações monitoradas (B13)', () => {
+  const estacao = {
+    id: 'cm-1',
+    ativoId: 'cm-a',
+    nome: 'dev-ws-02',
+    host: 'dev-ws-02.empresa.local',
+    identificador: 'uuid-1',
+    sistema: 'Ubuntu 22.04.4 LTS',
+    soPlataforma: 'ubuntu',
+    status: 'Online',
+    ultimoContato: '2026-10-08T10:00:00.000Z',
+    inscritaEm: '2026-10-01T10:00:00.000Z',
+    inventarioEm: '2026-10-08T09:58:00.000Z',
+    totalProgramas: 1,
+    totalPortas: 1,
+  };
+
+  it('lista em GET /estacoes com o resumo do servidor', async () => {
+    on('GET /estacoes', {
+      status: 200,
+      data: {
+        status: 'sucesso',
+        dados: [estacao, { ...estacao, id: 'cm-2', nome: 'rh-nb-03', status: 'Offline' }],
+        resumo: { total: 2, online: 1, offline: 1, janelaOfflineS: 10800 },
+      },
+    });
+    const list = await realApi.listStations();
+    expect(list.items.map((s) => [s.name, s.status])).toEqual([
+      ['dev-ws-02', 'online'],
+      ['rh-nb-03', 'offline'],
+    ]);
+    expect(list.summary).toEqual({ total: 2, online: 1, offline: 1, offlineAfterSec: 10800 });
+  });
+
+  it('busca o detalhe em GET /estacoes/:id e propaga o 403 do servidor', async () => {
+    on(
+      'GET /estacoes/cm-1',
+      ok({
+        ...estacao,
+        janelaOfflineS: 900,
+        programas: [{ nome: 'curl', versao: '7.81.0', fornecedor: 'Ubuntu', fonte: 'deb_packages' }],
+        portas: [{ porta: 22, protocolo: 'TCP', endereco: '0.0.0.0', processo: 'sshd' }],
+      }),
+    );
+    const detail = await realApi.getStation('cm-1');
+    expect(detail.software).toEqual([
+      { name: 'curl', version: '7.81.0', vendor: 'Ubuntu', source: 'deb_packages' },
+    ]);
+    expect(detail.ports).toEqual([{ port: 22, protocol: 'TCP', address: '0.0.0.0', process: 'sshd' }]);
+
+    on('GET /estacoes', fail(403, 'PERFIL_SEM_PERMISSAO', 'Acesso negado para o seu perfil'));
+    const err = await rejection(realApi.listStations());
+    expect(err).toMatchObject({ status: 403, code: 'PERFIL_SEM_PERMISSAO' });
+  });
+});
+
 describe('realApi — configurações', () => {
   const prefs = {
     alertasEmail: true,

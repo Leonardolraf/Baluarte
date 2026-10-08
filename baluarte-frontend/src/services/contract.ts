@@ -21,6 +21,8 @@ import type {
   PhishingReportResult,
   ScanReport,
   SecurityPolicy,
+  StationDetail,
+  StationListResponse,
   Training,
   User,
   UserInput,
@@ -127,6 +129,12 @@ export interface BaluarteApi {
   // Auditoria (só Administrador)
   /** Trilha de auditoria filtrada e paginada no servidor, mais recente primeiro. */
   listAuditLog(filters?: AuditFilters): Promise<AuditListResponse>;
+
+  // Estações monitoradas (B13): só Administrador e Analista
+  /** Estações inscritas pelo agente, com status online/offline e o total de cada um. */
+  listStations(): Promise<StationListResponse>;
+  /** Detalhe com os programas instalados e as portas abertas. */
+  getStation(id: string): Promise<StationDetail>;
 
   // Configurações
   getNotificationPreferences(): Promise<NotificationPreferences>;
