@@ -5,7 +5,7 @@ import type { UsuarioAtual } from '../models/usuario.model.js';
 import { OPERADORES } from '../models/dominio.model.js';
 import {
   JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES,
-  ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
+  VALIDADE_RESERVA_ANALISE_MS, ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
   type CampanhaRecebidaDto, type FiltrosHistorico, type ResultadoAnalise,
 } from '../models/analiseArquivo.model.js';
 import { segundaOpiniaoDto } from '../models/segundaOpiniao.model.js';
@@ -29,21 +29,63 @@ export interface OrigemCampanha {
 }
 
 /**
- * Antes de receber o corpo (barato, sem ler o arquivo): antivirus no ar, limite por hora e, no
- * anexo de campanha (B23), a origem. A campanha tem de ser do proprio usuario e ja ter sido
- * enviada a ele; evento inexistente e evento de outra pessoa dao o mesmo 404, para a rota nao
- * servir de oraculo de ids. Devolve a origem conferida (ou null no envio avulso).
+ * Vaga reservada nos limites de envio (DT09) e a origem conferida (null no envio avulso). Vira o
+ * FileScan quando a analise termina; se nao terminar, quem recebeu devolve com `devolverVaga`.
  */
-export async function verificarAntesDeReceber(userId: string, eventoCampanha?: string): Promise<OrigemCampanha | null> {
+export interface VagaAnalise {
+  reservaId: string;
+  origem: OrigemCampanha | null;
+}
+
+const MSG_MUITAS_ANALISES = 'Limite de análises por hora atingido. Tente novamente mais tarde.';
+function limiteDaHora(): never {
+  falhar(429, MSG_MUITAS_ANALISES, 'MUITAS_ANALISES');
+}
+
+/**
+ * Antes de receber o corpo (barato, sem ler o arquivo): antivirus no ar, limite por hora e, no
+ * anexo de campanha (B23), a origem e o limite do evento. A campanha tem de ser do proprio
+ * usuario e ja ter sido enviada a ele; evento inexistente e evento de outra pessoa dao o mesmo
+ * 404, para a rota nao servir de oraculo de ids.
+ *
+ * DT09: os limites nao sao "conta agora, grava o FileScan depois do antivirus" (uma rajada
+ * paralela lia a mesma contagem e passava inteira). A vaga e reservada aqui, contando as
+ * reservas em curso, ANTES de o arquivo seguir para o antivirus; a ordem das recusas e a de
+ * sempre (hora, depois origem, depois anexos do evento).
+ */
+export async function verificarAntesDeReceber(userId: string, eventoCampanha?: string): Promise<VagaAnalise> {
   if (!antivirusConfigurado()) falhar(503, MSG_INDISPONIVEL, 'ANTIVIRUS_INDISPONIVEL');
-  if ((await repo.contarDesde(userId, new Date(Date.now() - UMA_HORA_MS))) >= LIMITE_ANALISES_POR_HORA)
-    falhar(429, 'Limite de análises por hora atingido. Tente novamente mais tarde.', 'MUITAS_ANALISES');
-  if (!eventoCampanha) return null;
-  const evento = await repo.eventoDoUsuario(eventoCampanha, userId);
-  if (!evento?.enviadoEm) falhar(404, 'Campanha não encontrada entre as que você recebeu', 'CAMPANHA_NAO_RECEBIDA');
-  if ((await repo.contarAnexosDoEvento(evento.id)) >= LIMITE_ANEXOS_POR_CAMPANHA)
+  const desde = new Date(Date.now() - UMA_HORA_MS);
+  const validaDesde = new Date(Date.now() - VALIDADE_RESERVA_ANALISE_MS);
+  let origem: OrigemCampanha | null = null;
+  if (eventoCampanha) {
+    const evento = await repo.eventoDoUsuario(eventoCampanha, userId);
+    if (!evento?.enviadoEm) {
+      // Origem recusada: nada segue para o antivirus, entao basta contar, sem reservar (so
+      // decide entre o 429 da hora, que vem primeiro, e o 404).
+      if ((await repo.contarNaHora(userId, desde, validaDesde)) >= LIMITE_ANALISES_POR_HORA) limiteDaHora();
+      falhar(404, 'Campanha não encontrada entre as que você recebeu', 'CAMPANHA_NAO_RECEBIDA');
+    }
+    origem = { eventoId: evento.id, campanha: evento.campaign };
+  }
+  const reserva = await repo.reservarVaga({
+    userId,
+    eventoId: origem?.eventoId ?? null,
+    desde,
+    validaDesde,
+    maximoHora: LIMITE_ANALISES_POR_HORA,
+    maximoEvento: LIMITE_ANEXOS_POR_CAMPANHA,
+  });
+  if (!reserva.id) {
+    if (reserva.naHora >= LIMITE_ANALISES_POR_HORA) limiteDaHora();
     falhar(429, `Limite de ${LIMITE_ANEXOS_POR_CAMPANHA} anexos por campanha atingido`, 'LIMITE_ANEXOS_CAMPANHA');
-  return { eventoId: evento.id, campanha: evento.campaign };
+  }
+  return { reservaId: reserva.id, origem };
+}
+
+/** Devolve a vaga de uma analise que nao terminou (antivirus fora, 413, corpo sem arquivo...). */
+export async function devolverVaga(vaga: VagaAnalise): Promise<void> {
+  await repo.liberarReserva(vaga.reservaId);
 }
 
 /** Fluxo do arquivo como recebido do multipart (busboy marca `truncated` ao passar do limite). */
@@ -64,8 +106,9 @@ async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: Return
     falhar(413, 'Arquivo maior que o limite de 10 MB', 'ARQUIVO_MUITO_GRANDE');
 }
 
-/** Analisa, registra e audita. Devolve a mensagem e o registro no formato da API. */
-export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | undefined, fluxo: FluxoArquivo, origem: OrigemCampanha | null = null) {
+/** Analisa, registra (consumindo a vaga reservada) e audita. Devolve a mensagem e o registro no formato da API. */
+export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | undefined, fluxo: FluxoArquivo, vaga: VagaAnalise) {
+  const { origem } = vaga;
   const medida = { bytes: 0, hash: createHash('sha256') };
   let veredito;
   try {
@@ -78,7 +121,8 @@ export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | und
     throw e;
   }
   const sha256 = medida.hash.digest('hex');
-  const registro = await repo.criar({
+  // A reserva vira o registro na mesma transacao (DT09).
+  const registro = await repo.criar(vaga.reservaId, {
     userId: usuario.id,
     nome: nomeParaExibir(nomeOriginal),
     tamanho: medida.bytes,

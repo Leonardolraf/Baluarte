@@ -14,6 +14,14 @@ export const LIMITE_ARQUIVO_BYTES = 10 * 1024 * 1024;
 /** Analises por usuario por hora (o antivirus e caro: cada envio ocupa o clamd). */
 export const LIMITE_ANALISES_POR_HORA = 20;
 
+/**
+ * Validade da vaga reservada antes do antivirus (DT09, tabela FileScanReserva). Uma analise
+ * leva segundos (10 MB no maximo, clamd com tempo limite de 60 s sem resposta); a reserva so
+ * fica para tras se o processo morrer no meio, e ai deixa de contar depois deste prazo, sem
+ * prender a vaga pelo resto da hora.
+ */
+export const VALIDADE_RESERVA_ANALISE_MS = 15 * 60 * 1000;
+
 /** Campo do formulario multipart que leva o arquivo. */
 export const CAMPO_ARQUIVO = 'arquivo';
 

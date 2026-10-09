@@ -1,12 +1,83 @@
+import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { hashToken } from '../utils/tokens.js';
 import type { ResultadoAnalise } from '../models/analiseArquivo.model.js';
 import type { SegundaOpiniaoGravada } from '../models/segundaOpiniao.model.js';
 
-// Acesso a dados das analises de arquivo (tabela FileScan).
+// Acesso a dados das analises de arquivo (tabela FileScan) e das vagas reservadas nos limites
+// de envio (tabela FileScanReserva, DT09).
 
-export function criar(dados: {
+// ---- Reserva de vaga nos limites (DT09) ----
+// Contar antes do antivirus e gravar o FileScan depois do veredito deixava N envios simultaneos
+// lerem a mesma contagem e passarem todos. A vaga e uma linha de FileScanReserva gravada antes
+// do antivirus, numa instrucao que conta e grava sob um advisory lock da transacao por usuario
+// (o padrao de auth.repository.ts#reservar). Uma trava so por usuario cobre tambem o limite do
+// evento de campanha: o evento e do proprio usuario (conferido antes), entao todo anexo dele
+// passa pela mesma trava. O lote tem tres instrucoes curtas, sem codigo da aplicacao no meio
+// (nunca o antivirus): a conexao fica presa so o tempo delas.
+
+export type ReservaAnalise = { id: string | null; naHora: number; noEvento: number };
+
+/**
+ * Reserva a vaga de uma analise: grava a linha so se o usuario tem menos de `maximoHora`
+ * analises (FileScan desde `desde` + reservas validas) e, com `eventoId`, o evento tem menos de
+ * `maximoEvento` anexos (FileScan + reservas validas). Devolve o id da reserva (null quando
+ * algum limite ja estava cheio) e as contagens que havia antes. Reservas anteriores a
+ * `validaDesde` nao contam e sao podadas.
+ */
+export async function reservarVaga(p: {
+  userId: string;
+  eventoId: string | null;
+  desde: Date;
+  validaDesde: Date;
+  maximoHora: number;
+  maximoEvento: number;
+}): Promise<ReservaAnalise> {
+  const id = randomUUID();
+  // Datas como texto UTC -> timestamp(3), como o Prisma grava (o default do banco dependeria
+  // do fuso da sessao).
+  const agora = new Date().toISOString();
+  const desde = p.desde.toISOString();
+  const validaDesde = p.validaDesde.toISOString();
+  const [, , linhas] = await prisma.$transaction([
+    // Duas chaves de 32 bits: espaco proprio, sem cruzar com as travas do login e da auditoria.
+    prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('baluarte.FileScanReserva'), hashtext(${p.userId}))`,
+    prisma.$executeRaw`DELETE FROM "FileScanReserva" WHERE "userId" = ${p.userId} AND "criadoEm" < ${validaDesde}::timestamp(3)`,
+    // Instrucao separada da trava: em READ COMMITTED ela le o que foi gravado ate a trava sair.
+    prisma.$queryRaw<Array<{ naHora: number; noEvento: number; id: string | null }>>`
+      WITH hora AS (
+        SELECT (SELECT count(*) FROM "FileScan"
+                 WHERE "userId" = ${p.userId} AND "criadoEm" >= ${desde}::timestamp(3))
+             + (SELECT count(*) FROM "FileScanReserva"
+                 WHERE "userId" = ${p.userId} AND "criadoEm" >= ${validaDesde}::timestamp(3)) AS n
+      ), evento AS (
+        SELECT CASE WHEN ${p.eventoId}::text IS NULL THEN 0 ELSE
+                 (SELECT count(*) FROM "FileScan" WHERE "campaignEventId" = ${p.eventoId}::text)
+               + (SELECT count(*) FROM "FileScanReserva"
+                   WHERE "campaignEventId" = ${p.eventoId}::text AND "criadoEm" >= ${validaDesde}::timestamp(3))
+               END AS n
+      ), nova AS (
+        INSERT INTO "FileScanReserva" ("id", "userId", "campaignEventId", "criadoEm")
+        SELECT ${id}, ${p.userId}, ${p.eventoId}::text, ${agora}::timestamp(3) FROM hora, evento
+         WHERE hora.n < ${p.maximoHora} AND evento.n < ${p.maximoEvento}
+        RETURNING "id"
+      )
+      SELECT hora.n::int AS "naHora", evento.n::int AS "noEvento", (SELECT "id" FROM nova) AS id FROM hora, evento`,
+  ]);
+  return { id: linhas[0].id, naHora: linhas[0].naHora, noEvento: linhas[0].noEvento };
+}
+
+/** Devolve a vaga de uma analise que nao chegou ao fim (antivirus fora, arquivo grande, sem arquivo). */
+export function liberarReserva(id: string) {
+  return prisma.fileScanReserva.deleteMany({ where: { id } });
+}
+
+/**
+ * Grava a analise e consome a reserva na mesma transacao: a vaga nunca fica contada duas vezes
+ * nem some entre um passo e outro.
+ */
+export async function criar(reservaId: string, dados: {
   userId: string;
   nome: string;
   tamanho: number;
@@ -15,7 +86,11 @@ export function criar(dados: {
   ameaca: string | null;
   campaignEventId?: string | null;
 } & SegundaOpiniaoGravada) {
-  return prisma.fileScan.create({ data: dados, include: INCLUI_CAMPANHA });
+  const [registro] = await prisma.$transaction([
+    prisma.fileScan.create({ data: dados, include: INCLUI_CAMPANHA }),
+    prisma.fileScanReserva.deleteMany({ where: { id: reservaId } }),
+  ]);
+  return registro;
 }
 
 /** Campanha de origem (B23) junto da analise: so o id e o nome, nunca o token do link. */
@@ -23,9 +98,17 @@ const INCLUI_CAMPANHA = {
   campaignEvent: { select: { campaign: { select: { id: true, nome: true } } } },
 } satisfies Prisma.FileScanInclude;
 
-/** Quantas analises o usuario fez desde o instante dado (limite por hora). */
-export function contarDesde(userId: string, desde: Date) {
-  return prisma.fileScan.count({ where: { userId, criadoEm: { gte: desde } } });
+/**
+ * Quantas analises contam no limite por hora do usuario: as feitas desde `desde` mais as vagas
+ * reservadas em curso (validas desde `validaDesde`). So leitura: quem vai mesmo analisar usa
+ * `reservarVaga`.
+ */
+export async function contarNaHora(userId: string, desde: Date, validaDesde: Date) {
+  const [feitas, emCurso] = await prisma.$transaction([
+    prisma.fileScan.count({ where: { userId, criadoEm: { gte: desde } } }),
+    prisma.fileScanReserva.count({ where: { userId, criadoEm: { gte: validaDesde } } }),
+  ]);
+  return feitas + emCurso;
 }
 
 /** Criterio do historico, ja resolvido pelo service (dono so para o Colaborador). */
@@ -91,11 +174,6 @@ export function eventoDoUsuario(eventoId: string, userId: string) {
     where: { id: eventoId, userId },
     select: { id: true, enviadoEm: true, campaign: { select: { id: true, nome: true } } },
   });
-}
-
-/** Quantos anexos ja foram enviados para analise a partir deste evento. */
-export function contarAnexosDoEvento(eventoId: string) {
-  return prisma.fileScan.count({ where: { campaignEventId: eventoId } });
 }
 
 /** Campanhas que o usuario recebeu (e-mail enviado), mais recente primeiro, com os anexos ja enviados. */
