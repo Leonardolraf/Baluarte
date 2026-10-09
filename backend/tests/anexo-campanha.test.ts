@@ -4,6 +4,7 @@
 // responde como o ClamAV com as regras de antivirus/regras carregadas (nome da regra YARA).
 // Nada de EICAR nem de material malicioso: as amostras sao textos inofensivos, montados em
 // memoria a partir de partes (o fonte nao contem o marcador inteiro).
+import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server, type Socket } from 'node:net';
@@ -305,6 +306,18 @@ describe('relatório da campanha: anexos reportados e vereditos (B23)', () => {
     assert.equal(await prisma.fileScan.count({ where: { campaignEvent: { campaignId: campanhaId } } }), antes);
     const hist = await chamar('GET', '/arquivos/analises?tamanho=100', { token: ana.token });
     assert.ok(hist.body.dados.find((a: any) => a.nome === 'fatura.pdf.txt').campanha);
+  });
+
+  it('campanha com anexo EM ANÁLISE (só reserva) também não é excluída; reserva vencida não segura', async () => {
+    const c = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Anexo em voo', destinatarios: [ana.email], template: 'autoridade' } });
+    const idCampanha = c.body.dados.idCampanha;
+    const evento = await prisma.campaignEvent.findFirstOrThrow({ where: { campaignId: idCampanha } });
+    const reserva = await prisma.fileScanReserva.create({ data: { id: randomUUID(), userId: evento.userId, campaignEventId: evento.id, criadoEm: new Date() } });
+    esperaErro(await chamar('DELETE', `/campanhas/${idCampanha}`, { token: analista }), 409, 'CAMPANHA_COM_ANALISES');
+    assert.ok(await prisma.campaign.findUnique({ where: { id: idCampanha } }));
+    // Reserva abandonada (processo morto no meio) vence em 15 min e deixa de segurar a exclusao.
+    await prisma.fileScanReserva.update({ where: { id: reserva.id }, data: { criadoEm: new Date(Date.now() - 16 * 60 * 1000) } });
+    assert.equal((await chamar('DELETE', `/campanhas/${idCampanha}`, { token: analista })).status, 200);
   });
 
   it('campanha sem anexo analisado continua podendo ser excluída', async () => {

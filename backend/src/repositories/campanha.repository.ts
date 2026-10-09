@@ -25,9 +25,17 @@ export function buscar(id: string) {
   return prisma.campaign.findUnique({ where: { id } });
 }
 
-/** Quantos anexos analisados (B23) estao ligados aos eventos da campanha. */
-export function contarAnalisesDaCampanha(id: string) {
-  return prisma.fileScan.count({ where: { campaignEvent: { campaignId: id } } });
+/**
+ * Quantos anexos (B23) estao ligados aos eventos da campanha: os ja analisados (FileScan) e os
+ * em analise agora (reservas validas desde `reservasDesde`), para a exclusao nao apagar o evento
+ * no meio de uma analise em curso.
+ */
+export async function contarAnalisesDaCampanha(id: string, reservasDesde: Date) {
+  const [analisados, emAnalise] = await Promise.all([
+    prisma.fileScan.count({ where: { campaignEvent: { campaignId: id } } }),
+    prisma.fileScanReserva.count({ where: { campaignEvent: { campaignId: id }, criadoEm: { gte: reservasDesde } } }),
+  ]);
+  return analisados + emAnalise;
 }
 
 export function excluir(id: string) {
