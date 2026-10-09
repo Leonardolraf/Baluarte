@@ -29,3 +29,6 @@ e2e/resultados*/
 !/certs/servidor/.gitkeep
 *.key
 *.pem
+
+# área de trabalho do sonar-scanner (B30, scripts/sonarqube.mjs)
+.scannerwork/

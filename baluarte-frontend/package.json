@@ -22,6 +22,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:real": "node ../scripts/e2e-real.mjs",
+    "test:e2e:navegadores": "node scripts/e2e-navegadores.mjs",
+    "test:e2e:navegadores:instalar": "node scripts/e2e-navegadores.mjs instalar",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "test:all": "npm run typecheck && npm run typecheck:e2e && npm run lint && npm test && npm run build && npm run test:e2e"
   },

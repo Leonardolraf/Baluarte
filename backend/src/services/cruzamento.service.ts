@@ -66,8 +66,17 @@ function corrigidaEm(v: VulnOsv, g: GrupoOsv): string | null {
   return v.corrigidas.find((c) => c.ecossistema === g.ecossistema && c.pacote === g.pacote)?.versao ?? null;
 }
 
+/**
+ * Ordem por unidade de código (a mesma do `sort()` sem argumento), explícita: nomes de pacote,
+ * programas e bases são identificadores, não texto para ordenar por idioma.
+ */
+function porCodigo(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
 function origemOsv(g: GrupoOsv): string {
-  const bins = [...g.binarios].sort();
+  const bins = [...g.binarios].sort(porCodigo);
   return `${g.fonte}: ${bins.slice(0, 5).join(', ')}${bins.length > 5 ? ` e mais ${bins.length - 5}` : ''}; OSV ${g.ecossistema}`;
 }
 
@@ -162,7 +171,7 @@ async function cruzarWindows(estacao: Estacao, s: SessaoConsulta, achados: Map<s
         cwe: c.cwe,
         resumo: c.descricao,
         registro: c.cve,
-        origem: `programs: ${[...item.nomes].sort().join(', ')}; NVD ${cpe}`,
+        origem: `programs: ${[...item.nomes].sort(porCodigo).join(', ')}; NVD ${cpe}`,
         corrigidaEm: null,
       });
     }
@@ -205,7 +214,7 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
     achadosExistentes: achados.size - novos.length + (novos.length - criados),
     semCvss: semCvss.size,
     pendentes: s.pendentes,
-    falhas: [...s.falhas].sort(),
+    falhas: [...s.falhas].sort(porCodigo),
     varreduraId: scanId,
   };
 }

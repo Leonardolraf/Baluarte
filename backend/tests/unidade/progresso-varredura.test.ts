@@ -137,9 +137,7 @@ describe('GET /scans/:id: regra do parâmetro', () => {
     assert.throws(() => validar({ id }, CONSULTA), (e: unknown) => e instanceof ErroNegocio && e.status === 400 && e.codigo === 'VARREDURA_ID_INVALIDO');
 
   it('aceita cuid e id legível', () => {
-    validar({ id: 'cm1abcdefghijklmnopqrstuv' }, CONSULTA);
-    validar({ id: 'scan-001' }, CONSULTA);
-    validar({ id: 'a_b' }, CONSULTA);
+    for (const id of ['cm1abcdefghijklmnopqrstuv', 'scan-001', 'a_b']) assert.doesNotThrow(() => validar({ id }, CONSULTA));
   });
 
   it('recusa vazio, longo demais e caracteres fora do formato', () => {

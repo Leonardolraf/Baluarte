@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
+import { STATUS_FINDING_ENCERRADO } from '../models/dominio.model.js';
 import type {
   FiltrosVulnerabilidade,
   FindingComOrigem,
@@ -80,9 +81,32 @@ export async function listarFiltrados(f: FiltrosVulnerabilidade): Promise<Findin
   return prisma.finding.findMany({ where: filtro(f), include: COM_ATIVO, orderBy: ordem({ campo: 'detectadoEm', direcao: 'desc' }) });
 }
 
-/** Todos os achados, o mais recente primeiro (o dashboard agrega em memoria). */
-export async function listar(): Promise<FindingComScan[]> {
-  return prisma.finding.findMany({ include: COM_ATIVO, orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }] });
+/** Achado em aberto: fora de "Resolvida" e "Risco aceito" (a regra dos KPIs). */
+const EM_ABERTO: Prisma.FindingWhereInput = { status: { notIn: STATUS_FINDING_ENCERRADO } };
+
+/**
+ * O que o dashboard usa dos achados em aberto, agregado no banco (B30, RNF-004): contagem por
+ * severidade, quantos tem nota >= `notaCritica` e so os `recentes` mais novos (mesma ordem da
+ * lista: o mais recente primeiro, depois o id). Antes o dashboard trazia todos os achados, com
+ * ativo e remediacao, a cada leitura: com 1.200 achados e 200 usuarios simultaneos, o p90 passava
+ * de 3 s.
+ */
+export async function panoramaAbertos(recentes: number, notaCritica: number) {
+  const [grupos, criticos, lista] = await Promise.all([
+    prisma.finding.groupBy({ by: ['severidade'], where: EM_ABERTO, _count: { _all: true } }),
+    prisma.finding.count({ where: { ...EM_ABERTO, cvss: { gte: notaCritica } } }),
+    prisma.finding.findMany({
+      where: EM_ABERTO,
+      include: COM_ATIVO,
+      orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+      take: recentes,
+    }),
+  ]);
+  return {
+    porSeveridade: grupos.map((g) => ({ severidade: g.severidade, total: g._count._all })),
+    criticos,
+    recentes: lista as FindingComScan[],
+  };
 }
 
 export async function buscar(id: string): Promise<FindingComOrigem | null> {
@@ -152,28 +176,76 @@ export function historicoStatus(findingId: string) {
  * eventos de algum achado esta incompleta. Achado sem nenhum evento ate o dia (inserido por
  * fora da API) usa o status gravado.
  *
- * Custo: para cada dia, uma busca pelo indice (findingId, registradaEm) por achado criado ate
- * ali, ou seja ~30 x achados buscas por leitura do dashboard. Adequado ate dezenas de milhares
- * de achados; acima disso, guardar uma foto diaria (o que este item evitou de proposito).
+ * Como (B30, RNF-004): o historico vira trechos (cada evento vale do seu instante ate o proximo
+ * evento do mesmo achado; empate no instante desempata pelo id, e o trecho do evento anterior fica
+ * vazio). Um dia passado conta o achado pelo trecho que contem o fim do dia; sem trecho ate ali
+ * (nenhum evento), pelo status gravado; o ultimo dia, sempre pelo status gravado. E o mesmo
+ * resultado da busca "ultimo evento ate o fim do dia" feita achado a achado, sem as ~30 x achados
+ * buscas no indice: com 1.200 achados, de ~125 ms para ~20 ms por leitura (e o dashboard volta a
+ * caber no p90 <= 3 s com 200 usuarios simultaneos; ver testes/carga/RELATORIO.md). Acima de
+ * dezenas de milhares de achados, guardar uma foto diaria (o que o B25b evitou de proposito).
  * `dia` e a posicao em `fins` (1 = o mais antigo).
  */
 export function abertosPorDia(fins: Date[], encerrados: readonly string[]) {
   const instantes = fins.map((f) => f.toISOString());
+  const n = instantes.length;
+  const fechados = Prisma.join([...encerrados]);
+  // `width_bucket(x, fins)` = quantos fins sao <= x (fins em ordem crescente, sem repeticao).
+  // Com a precisao de milissegundo das colunas, "quantos fins sao < x" = width_bucket(x - 1 ms).
   return prisma.$queryRaw<Array<{ dia: number; severidade: string; total: number }>>`
-    WITH dias AS (
-      SELECT t."fim"::timestamp(3) AS "fim", t."ordem"::int AS "dia", t."ordem" = ${instantes.length} AS "atual"
-      FROM unnest(${instantes}::text[]) WITH ORDINALITY AS t("fim", "ordem")
-    )
-    SELECT d."dia", f."severidade", COUNT(*)::int AS "total"
-    FROM dias d
-    JOIN "Finding" f ON f."criadoEm" <= d."fim"
-    LEFT JOIN LATERAL (
-      SELECT e."para"
+    WITH params AS (
+      SELECT ARRAY(SELECT t::timestamp(3) FROM unnest(${instantes}::text[]) AS t) AS "fins"
+    ),
+    trechos AS (
+      SELECT e."findingId", e."para", e."registradaEm" AS "inicio",
+             LEAD(e."registradaEm") OVER (PARTITION BY e."findingId" ORDER BY e."registradaEm", e."id") AS "termino"
       FROM "FindingStatusChange" e
-      WHERE e."findingId" = f."id" AND e."registradaEm" <= d."fim"
-      ORDER BY e."registradaEm" DESC, e."id" DESC
-      LIMIT 1
-    ) u ON NOT d."atual"
-    WHERE (CASE WHEN d."atual" THEN f."status" ELSE COALESCE(u."para", f."status") END) NOT IN (${Prisma.join([...encerrados])})
-    GROUP BY d."dia", f."severidade"`;
+    ),
+    primeiro AS (
+      SELECT e."findingId", MIN(e."registradaEm") AS "inicio" FROM "FindingStatusChange" e GROUP BY e."findingId"
+    ),
+    -- Dias passados (1..n-1) cobertos por cada trecho aberto, e pelo status gravado enquanto o
+    -- achado ainda nao tinha evento; sempre a partir do dia em que o achado ja existia.
+    faixas AS (
+      SELECT f."severidade",
+             GREATEST(width_bucket(u."inicio" - interval '1 millisecond', p."fins"),
+                      width_bucket(f."criadoEm" - interval '1 millisecond', p."fins")) + 1 AS "de",
+             LEAST(CASE WHEN u."termino" IS NULL THEN ${n}
+                        ELSE width_bucket(u."termino" - interval '1 millisecond', p."fins") END, ${n} - 1) AS "ate"
+      FROM trechos u
+      JOIN "Finding" f ON f."id" = u."findingId"
+      CROSS JOIN params p
+      WHERE u."para" NOT IN (${fechados})
+      UNION ALL
+      SELECT f."severidade",
+             width_bucket(f."criadoEm" - interval '1 millisecond', p."fins") + 1 AS "de",
+             LEAST(CASE WHEN pr."inicio" IS NULL THEN ${n}
+                        ELSE width_bucket(pr."inicio" - interval '1 millisecond', p."fins") END, ${n} - 1) AS "ate"
+      FROM "Finding" f
+      LEFT JOIN primeiro pr ON pr."findingId" = f."id"
+      CROSS JOIN params p
+      WHERE f."status" NOT IN (${fechados})
+    ),
+    -- Vetor de diferencas: +1 no primeiro dia coberto, -1 no dia seguinte ao ultimo.
+    marcas AS (
+      SELECT "severidade", "dia", SUM("delta")::int AS "delta" FROM (
+        SELECT "severidade", "de" AS "dia", 1 AS "delta" FROM faixas WHERE "de" <= "ate"
+        UNION ALL
+        SELECT "severidade", "ate" + 1 AS "dia", -1 AS "delta" FROM faixas WHERE "de" <= "ate"
+      ) m GROUP BY "severidade", "dia"
+    ),
+    passado AS (
+      SELECT g."dia", s."severidade",
+             SUM(COALESCE(m."delta", 0)) OVER (PARTITION BY s."severidade" ORDER BY g."dia")::int AS "total"
+      FROM generate_series(1, ${n} - 1) AS g("dia")
+      CROSS JOIN (SELECT DISTINCT "severidade" FROM marcas) s
+      LEFT JOIN marcas m ON m."dia" = g."dia" AND m."severidade" = s."severidade"
+    )
+    SELECT "dia", "severidade", "total" FROM passado WHERE "total" > 0
+    UNION ALL
+    -- Hoje: o status gravado (o fato atual, o mesmo dos KPIs)
+    SELECT ${n}::int AS "dia", f."severidade", COUNT(*)::int AS "total"
+    FROM "Finding" f CROSS JOIN params p
+    WHERE f."criadoEm" <= p."fins"[${n}] AND f."status" NOT IN (${fechados})
+    GROUP BY f."severidade"`;
 }

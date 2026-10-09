@@ -1939,7 +1939,10 @@ export const mockApi: BaluarteApi = {
       if (from) items = items.filter((e) => Date.parse(e.at) >= from.start);
       if (to) items = items.filter((e) => Date.parse(e.at) <= to.end);
       items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || b.id.localeCompare(a.id));
-      const actions = Array.from(new Set(state.auditLog.map((e) => e.action))).sort();
+      // Ordem por unidade de código, explícita (códigos de ação são identificadores).
+      const actions = Array.from(new Set(state.auditLog.map((e) => e.action))).sort((a, b) =>
+        a === b ? 0 : a < b ? -1 : 1,
+      );
       return {
         items: items.slice((page - 1) * pageSize, page * pageSize),
         total: items.length,

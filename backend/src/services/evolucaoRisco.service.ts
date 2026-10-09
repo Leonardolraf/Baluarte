@@ -22,23 +22,37 @@ import { indiceRiscoTecnico } from './indiceRisco.service.js';
 // - indice: a mesma formula do KPI `indiceRiscoTecnico` (services/indiceRisco.service.ts).
 // Por isso o ultimo ponto (hoje) e exatamente o KPI do dashboard.
 //
-// Custo: tres consultas por leitura (achados, arquivos e ativos por dia); a dos achados faz
-// ~30 buscas por achado no indice do historico. Ver `abertosPorDia` no repository.
+// Custo: tres consultas por leitura (achados, arquivos e ativos por dia); a dos achados le o
+// historico como trechos de status (B30). Ver `abertosPorDia` no repository.
 
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Um formatador por fuso, criado uma vez (B30): montar um `Intl.DateTimeFormat` custa caro e a
+ * janela de 30 dias pede dezenas deles por leitura do dashboard, na mesma thread da API.
+ */
+const formatadores = new Map<string, Intl.DateTimeFormat>();
+function formatadorDoFuso(fuso: string): Intl.DateTimeFormat {
+  let f = formatadores.get(fuso);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', {
+      timeZone: fuso,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    formatadores.set(fuso, f);
+  }
+  return f;
+}
+
 /** Partes da data e hora de um instante no fuso (relogio de 24 h). */
 function partesNoFuso(instante: Date, fuso: string) {
-  const partes = new Intl.DateTimeFormat('en-US', {
-    timeZone: fuso,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(instante);
+  const partes = formatadorDoFuso(fuso).formatToParts(instante);
   const valor = (tipo: string) => Number(partes.find((p) => p.type === tipo)?.value);
   return { ano: valor('year'), mes: valor('month'), dia: valor('day'), hora: valor('hour'), minuto: valor('minute'), segundo: valor('second') };
 }
