@@ -40,6 +40,7 @@ model User {
   resetTokens  PasswordResetToken[]
   eventos      CampaignEvent[]
   analises     FileScan[]
+  reservasAnalise FileScanReserva[]
   ciencias     MonitoringAcknowledgement[]
 
   @@index([departmentId])
@@ -253,6 +254,7 @@ model CampaignEvent {
   treinouEm    DateTime? // quando concluiu o treinamento pos-clique
   // Anexos suspeitos da campanha que o destinatario enviou para analise (B23).
   anexos       FileScan[]
+  reservasAnexo FileScanReserva[]
 
   @@unique([campaignId, userId]) // a mesma pessoa nao entra duas vezes na mesma campanha
   @@index([userId])
@@ -360,6 +362,24 @@ model FileScan {
   @@index([criadoEm])
   @@index([sha256, vtConsultadoEm]) // cache da segunda opiniao (tambem serve a busca so por sha256)
   @@index([campaignEventId]) // anexos reportados por campanha (relatorio) e limite por evento
+}
+
+// Vaga reservada nos limites da analise de arquivos (DT09): 20 por hora por usuario e 5 anexos
+// por destinatario na campanha. O FileScan so nasce depois do veredito do antivirus (com hash e
+// tamanho), entao a vaga e esta linha, gravada ANTES de o arquivo seguir para o antivirus e
+// trocada pelo FileScan na mesma transacao (ou apagada se a analise falhar). A contagem dos
+// limites soma FileScan + reservas em curso. Reserva mais velha que a validade (processo que
+// morreu no meio) deixa de contar e e podada na reserva seguinte do mesmo usuario.
+model FileScanReserva {
+  id              String         @id
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaignEventId String?
+  campaignEvent   CampaignEvent? @relation(fields: [campaignEventId], references: [id], onDelete: Cascade)
+  criadoEm        DateTime
+
+  @@index([userId, criadoEm])
+  @@index([campaignEventId])
 }
 
 // Consultas feitas ao VirusTotal (B20), para respeitar a cota gratuita (4 por minuto, 500 por

@@ -61,10 +61,18 @@ const daQuery = (req: Request, campo: string) => textoDeQuery.parse(req.query[ca
 export async function analisar(req: Request, res: Response) {
   const usuario = usuarioDe(req);
   validar(req.query, ORIGEM_ANALISE);
-  const origem = await analiseService.verificarAntesDeReceber(usuario.id, daQuery(req, 'eventoCampanha'));
-  if (!/^multipart\/form-data/i.test(req.headers['content-type'] ?? '')) throw SEM_ARQUIVO();
-  const { mensagem, dados } = await receberArquivo(req, (nome, fluxo) => analiseService.analisar(usuario, nome, fluxo, origem));
-  return enviar(res, 201, { status: 'sucesso', mensagem, dados });
+  // A vaga nos limites de envio fica reservada daqui em diante (DT09); se a analise nao chegar
+  // ao fim (corpo sem arquivo, 413, antivirus fora, qualquer erro), ela e devolvida.
+  const vaga = await analiseService.verificarAntesDeReceber(usuario.id, daQuery(req, 'eventoCampanha'));
+  let resultado;
+  try {
+    if (!/^multipart\/form-data/i.test(req.headers['content-type'] ?? '')) throw SEM_ARQUIVO();
+    resultado = await receberArquivo(req, (nome, fluxo) => analiseService.analisar(usuario, nome, fluxo, vaga));
+  } catch (e) {
+    await analiseService.devolverVaga(vaga).catch((falha) => console.error('[analise] vaga não devolvida:', falha));
+    throw e;
+  }
+  return enviar(res, 201, { status: 'sucesso', mensagem: resultado.mensagem, dados: resultado.dados });
 }
 
 /**
