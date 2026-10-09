@@ -536,6 +536,12 @@ O que o B25 deixou para depois por exigir migration: o histórico real de status
 - **Teste:** `tests/seguranca/limite-rajada-analise.test.ts` (4, requisições **paralelas**, com um clamd falso que segura o veredito 300 ms para a rajada inteira chegar ao limite antes): 25 envios simultâneos do mesmo usuário (no máximo 20 × 201, o resto 429 `MUITAS_ANALISES` com a mensagem do contrato, registros = aceitos, no máximo 20 arquivos chegam ao clamd); 8 anexos simultâneos para o mesmo evento (no máximo 5 × 201, o resto 429 `LIMITE_ANEXOS_CAMPANHA`, o envio avulso segue); rajada com o antivírus fora (503) e, em seguida, rajada com ele no ar passando **exatamente** 20 (as vagas voltaram); 413, 503 e corpo sem arquivo no anexo de campanha sem consumir a vaga do evento e nenhuma reserva sobrando. No código antigo os 4 falhavam (25 de 25 aceitos; 8 de 8; 25 em vez de 20 depois da rajada com falha; tabela de reservas inexistente); com a correção, 5 rodadas seguidas verdes, sempre 20 × 201 / 5 × 429 (20 pedidos ao clamd) e 5 × 201 / 3 × 429.
 - **Números** (sobre a main `4f6faf7`): backend 691 testes (175 unidade + 7 banco + 383 integração + 126 pentest), `tsc` limpo; Newman isolado (banco `baluarte_contract_limarq`, porta 8104) 35/70 sem falhas.
 
+## 2026-10-08 — Exclusão de campanha também respeita o anexo em análise
+
+- **Brecha (achada na verificação da migration 220000):** a recusa `409 CAMPANHA_COM_ANALISES` contava só os anexos já analisados (`FileScan`). Uma campanha com um anexo ainda no antivírus (só a reserva em `FileScanReserva`) podia ser excluída no meio da análise: o evento sumia, a reserva ia junto (CASCADE) e o `FileScan` gravado depois apontaria para um evento apagado.
+- **Correção:** `campanha.repository.ts#contarAnalisesDaCampanha` soma os `FileScan` da campanha e as reservas válidas (dentro de `VALIDADE_RESERVA_ANALISE_MS`). Reserva abandonada vence e deixa de segurar a exclusão. Sem migration.
+- **Teste:** campanha só com reserva em curso dá 409 e nada é apagado; com a reserva vencida, a exclusão passa.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
