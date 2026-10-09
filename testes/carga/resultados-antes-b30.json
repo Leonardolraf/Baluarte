@@ -1,0 +1,150 @@
+{
+  "ambiente": {
+    "data": "2026-10-09T00:54:38.111Z",
+    "so": "Windows_NT 10.0.26200",
+    "cpu": "AMD Ryzen 7 5700X 8-Core Processor (16 núcleos lógicos)",
+    "memoriaGiB": 48,
+    "node": "v24.16.0",
+    "postgres": "postgres:16-alpine",
+    "autocannon": "8.0.0"
+  },
+  "massa": "1.208 achados em 25 ativos",
+  "cenarios": [
+    {
+      "id": "dashboard",
+      "titulo": "Dashboard (`GET /api/dashboard`)",
+      "meta": 3000,
+      "metrica": "p90",
+      "metaTexto": "p90 ≤ 3 s (RNF-004)",
+      "conexoes": 200,
+      "duracaoS": 30,
+      "requisicoes": 600,
+      "rps": 20,
+      "p50": 8620.555,
+      "p90": 8751.5945,
+      "p95": 9026.8485,
+      "p99": 10069.3227,
+      "max": 10490.2863,
+      "status": {
+        "200": 600
+      },
+      "erros": 0,
+      "timeouts": 0,
+      "naoDois": 0,
+      "semCarga": 209.38730000000214,
+      "leitura": "600 requisições em 30 s (20/s), sem nenhuma resposta fora de 2xx; p90 de 8.752 ms. Fica acima da meta nesta máquina."
+    },
+    {
+      "id": "vulnerabilidades",
+      "titulo": "Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`)",
+      "meta": 3000,
+      "metrica": "p90",
+      "metaTexto": "p90 ≤ 3 s (US-003 / RNF-004)",
+      "conexoes": 200,
+      "duracaoS": 30,
+      "requisicoes": 14952,
+      "rps": 498.4,
+      "p50": 398.1003,
+      "p90": 424.0874,
+      "p95": 433.0224,
+      "p99": 446.4967,
+      "max": 521.5004,
+      "status": {
+        "200": 14952
+      },
+      "erros": 0,
+      "timeouts": 0,
+      "naoDois": 0,
+      "semCarga": 15.526700000002165,
+      "leitura": "14.952 requisições em 30 s (498,4/s), sem nenhuma resposta fora de 2xx; p90 de 424 ms. Atende com folga de 7,1× sobre a meta."
+    },
+    {
+      "id": "ativos",
+      "titulo": "Ativos com nota de risco (`GET /api/assets`)",
+      "meta": 3000,
+      "metrica": "p90",
+      "metaTexto": "p90 ≤ 3 s (mesma régua do dashboard)",
+      "conexoes": 200,
+      "duracaoS": 30,
+      "requisicoes": 21278,
+      "rps": 709.3,
+      "p50": 278.0062,
+      "p90": 303.018,
+      "p95": 312.3301,
+      "p99": 366.9006,
+      "max": 387.9545,
+      "status": {
+        "200": 21278
+      },
+      "erros": 0,
+      "timeouts": 0,
+      "naoDois": 0,
+      "semCarga": 9.407800000000861,
+      "leitura": "21.278 requisições em 30 s (709,3/s), sem nenhuma resposta fora de 2xx; p90 de 303 ms. Atende com folga de 9,9× sobre a meta."
+    },
+    {
+      "id": "pdf",
+      "titulo": "Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`)",
+      "meta": 60000,
+      "metrica": "p95",
+      "metaTexto": "p95 ≤ 60 s (RNF-004)",
+      "conexoes": 10,
+      "duracaoS": 30,
+      "requisicoes": 50,
+      "rps": 1.7,
+      "p50": 5925.8008,
+      "p90": 6072.0976,
+      "p95": 6079.2194,
+      "p99": 6083.2841,
+      "max": 6083.2841,
+      "status": {
+        "200": 50
+      },
+      "erros": 0,
+      "timeouts": 0,
+      "naoDois": 0,
+      "semCarga": 622.4213000000163,
+      "leitura": "50 requisições em 30 s (1,7/s), sem nenhuma resposta fora de 2xx; p95 de 6.079 ms. Atende com folga de 9,9× sobre a meta. O PDF é o relatório com todos os achados do filtro, gerado em memória; a varredura simulada conclui em 20 s por construção (`cicloVarredura.service.ts`), então o relatório de uma varredura nova fica pronto em cerca de 20 s mais este tempo. Medido com 10 conexões: exportar o PDF é ação de quem opera, não de 200 pessoas ao mesmo tempo."
+    },
+    {
+      "id": "login",
+      "titulo": "Login com senha certa (`POST /api/login`, bcrypt custo 10)",
+      "meta": null,
+      "metrica": "p90",
+      "metaTexto": "sem meta no DRS",
+      "conexoes": 50,
+      "duracaoS": 30,
+      "requisicoes": 471,
+      "rps": 15.7,
+      "p50": 3026.7466,
+      "p90": 3179.3963,
+      "p95": 3349.3805,
+      "p99": 3956.8179,
+      "max": 4221.1762,
+      "status": {
+        "200": 471
+      },
+      "erros": 0,
+      "timeouts": 0,
+      "naoDois": 0,
+      "semCarga": 74.95939999999246,
+      "leitura": "471 requisições em 30 s (15,7/s), sem nenhuma resposta fora de 2xx; p90 de 3.179 ms. O bcrypt (custo 10, `bcryptjs` em JavaScript puro) gasta CPU de propósito e roda na mesma thread da API: o login é a rota mais cara (cerca de 75 ms sozinho, ~16 por segundo no máximo), e uma rajada de logins atrasa as outras rotas enquanto dura. O DRS não dá meta para o login; com 50 logins simultâneos a resposta passa de 3 s."
+    }
+  ],
+  "limite": {
+    "email": "ana.souza@empresa.com",
+    "tentativas": 20,
+    "duracaoMs": 334,
+    "contagem": {
+      "401": 5,
+      "429": 15
+    },
+    "senhaCertaDepois": {
+      "status": 429,
+      "codigo": "MUITAS_TENTATIVAS"
+    },
+    "contasLogin": 206,
+    "status429NoLogin": 0,
+    "notas": "O limite segura a rajada: 5 senhas erradas avaliadas (401) e 15 recusadas com 429, sem chegar ao bcrypt. A primeira rodada do B30 mostrou 20 × 401 (a contagem vinha antes do bcrypt e o registro da falha depois, sem atomicidade); o DT09 corrigiu reservando a vaga por e-mail antes do bcrypt (`repositories/auth.repository.ts#reservar`, teste em `tests/seguranca/limite-rajada.test.ts`). Com o e-mail bloqueado, nem a senha certa entra até a janela de 15 min passar (comportamento esperado da política)."
+  }
+}

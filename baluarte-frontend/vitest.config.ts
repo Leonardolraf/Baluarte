@@ -19,7 +19,8 @@ export default defineConfig({
     restoreMocks: true,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html', 'json-summary'],
+      // lcov: lido pelo SonarQube (B30, scripts/sonarqube.mjs).
+      reporter: ['text', 'html', 'json-summary', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/__tests__/**', 'src/main.tsx', 'src/vite-env.d.ts'],
       // Meta minima (B03): abaixo disso `npm run test:coverage` falha. Linhas, ramos e funcoes

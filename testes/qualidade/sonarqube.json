@@ -1,0 +1,841 @@
+{
+  "data": "2026-10-08T21:31:15.345Z",
+  "sonarqube": "26.8.0.126808",
+  "imagens": {
+    "sonarqube": "sonarqube:26.8.0.126808-community",
+    "scanner": "sonarsource/sonar-scanner-cli:12.2.0.4256_8.1.0"
+  },
+  "projetos": [
+    {
+      "pasta": "backend",
+      "chave": "baluarte-backend",
+      "nome": "Backend (Express + Prisma)",
+      "lcov": "coverage/lcov.info",
+      "portao": {
+        "status": "OK",
+        "condicoes": []
+      },
+      "medidas": {
+        "coverage": "98.2",
+        "reliability_rating": "1.0",
+        "code_smells": "106",
+        "duplicated_lines_density": "1.4",
+        "security_rating": "1.0",
+        "security_hotspots": "0",
+        "security_review_rating": "1.0",
+        "sqale_rating": "1.0",
+        "alert_status": "OK",
+        "bugs": "0",
+        "branch_coverage": "94.8",
+        "ncloc": "5103",
+        "vulnerabilities": "0",
+        "line_coverage": "99.1"
+      },
+      "total": 106,
+      "porSeveridade": {
+        "MAJOR": 48,
+        "MINOR": 47,
+        "INFO": 6,
+        "CRITICAL": 5,
+        "BLOCKER": 0
+      },
+      "porImpacto": {
+        "HIGH": 5,
+        "MEDIUM": 49,
+        "LOW": 46,
+        "INFO": 6,
+        "BLOCKER": 0
+      },
+      "porQualidade": {
+        "MAINTAINABILITY": 99,
+        "SECURITY": 0,
+        "RELIABILITY": 8
+      },
+      "porTipo": {
+        "CODE_SMELL": 106,
+        "BUG": 0,
+        "VULNERABILITY": 0
+      },
+      "graves": [
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/models/cruzamento.model.ts",
+          "linha": 151,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 19 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/cruzamento.service.ts",
+          "linha": 84,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 45 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/agente.service.ts",
+          "linha": 184,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/models/cruzamento.model.ts",
+          "linha": 57,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 26 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/cruzamento.service.ts",
+          "linha": 139,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        }
+      ],
+      "criticas": [
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/models/cruzamento.model.ts",
+          "linha": 57,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 26 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/models/cruzamento.model.ts",
+          "linha": 151,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 19 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/agente.service.ts",
+          "linha": 184,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/cruzamento.service.ts",
+          "linha": 84,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 45 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/cruzamento.service.ts",
+          "linha": 139,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        }
+      ],
+      "bugsEVulnerabilidades": [],
+      "seguranca": [],
+      "hotspots": [],
+      "avisosScanner": []
+    },
+    {
+      "pasta": "baluarte-frontend",
+      "chave": "baluarte-frontend",
+      "nome": "Frontend do produto (React + Vite)",
+      "lcov": "coverage/lcov.info",
+      "portao": {
+        "status": "OK",
+        "condicoes": []
+      },
+      "medidas": {
+        "coverage": "90.9",
+        "reliability_rating": "1.0",
+        "code_smells": "234",
+        "duplicated_lines_density": "0.8",
+        "security_rating": "3.0",
+        "security_hotspots": "0",
+        "security_review_rating": "1.0",
+        "sqale_rating": "1.0",
+        "alert_status": "OK",
+        "bugs": "0",
+        "branch_coverage": "85.2",
+        "ncloc": "18045",
+        "vulnerabilities": "6",
+        "line_coverage": "92.2"
+      },
+      "total": 240,
+      "porSeveridade": {
+        "MINOR": 122,
+        "MAJOR": 93,
+        "CRITICAL": 21,
+        "INFO": 3,
+        "BLOCKER": 1
+      },
+      "porImpacto": {
+        "HIGH": 26,
+        "MEDIUM": 92,
+        "LOW": 119,
+        "INFO": 3,
+        "BLOCKER": 1
+      },
+      "porQualidade": {
+        "MAINTAINABILITY": 218,
+        "SECURITY": 14,
+        "RELIABILITY": 13
+      },
+      "porTipo": {
+        "CODE_SMELL": 234,
+        "VULNERABILITY": 6,
+        "BUG": 0
+      },
+      "graves": [
+        {
+          "regra": "typescript:S2699",
+          "arquivo": "e2e/screenshots.spec.ts",
+          "linha": 55,
+          "mensagem": "Add at least one assertion to this test case.",
+          "severidade": "BLOCKER",
+          "impactos": "MAINTAINABILITY:BLOCKER",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Campaigns/CampaignListPage.tsx",
+          "linha": 45,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Assets/AssetListPage.tsx",
+          "linha": 88,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 27 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 1392,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Stations/StationDetailPage.tsx",
+          "linha": 219,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 22 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/components/ui/Table.tsx",
+          "linha": 73,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Stations/StationListPage.tsx",
+          "linha": 70,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 22 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/api.ts",
+          "linha": 325,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 1556,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 22 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Files/FileAnalysisPage.tsx",
+          "linha": 344,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 35 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Scans/ScanListPage.tsx",
+          "linha": 140,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Audit/AuditLogPage.tsx",
+          "linha": 253,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Training/TrainedCollaboratorsPage.tsx",
+          "linha": 53,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 19 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Vulnerabilities/VulnDetailPage.tsx",
+          "linha": 299,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 20 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Training/TrainingPage.tsx",
+          "linha": 85,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 26 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Vulnerabilities/VulnListPage.tsx",
+          "linha": 97,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 1478,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 23 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Dashboard/DashboardPage.tsx",
+          "linha": 434,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 856,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 19 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S2004",
+          "arquivo": "src/pages/Scans/ScanListPage.tsx",
+          "linha": 181,
+          "mensagem": "Refactor this code to not nest functions more than 5 levels deep.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S2004",
+          "arquivo": "src/pages/Scans/ScanListPage.tsx",
+          "linha": 178,
+          "mensagem": "Refactor this code to not nest functions more than 5 levels deep.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Users/UserFormPage.tsx",
+          "linha": 75,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S7767",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 65,
+          "mensagem": "Use `Math.trunc` instead of `|= 0`.",
+          "severidade": "MAJOR",
+          "impactos": "MAINTAINABILITY:HIGH, RELIABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S7767",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 66,
+          "mensagem": "Use `Math.trunc` instead of `| 0`.",
+          "severidade": "MAJOR",
+          "impactos": "MAINTAINABILITY:HIGH, RELIABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S7746",
+          "arquivo": "src/services/api.ts",
+          "linha": 221,
+          "mensagem": "Prefer `throw error` over `return Promise.reject(error)`.",
+          "severidade": "MAJOR",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S7746",
+          "arquivo": "src/services/api.ts",
+          "linha": 216,
+          "mensagem": "Prefer `throw error` over `return Promise.reject(error)`.",
+          "severidade": "MAJOR",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S7746",
+          "arquivo": "src/services/api.ts",
+          "linha": 219,
+          "mensagem": "Prefer `throw error` over `return Promise.reject(error)`.",
+          "severidade": "MAJOR",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        }
+      ],
+      "criticas": [
+        {
+          "regra": "typescript:S2699",
+          "arquivo": "e2e/screenshots.spec.ts",
+          "linha": 55,
+          "mensagem": "Add at least one assertion to this test case.",
+          "severidade": "BLOCKER",
+          "impactos": "MAINTAINABILITY:BLOCKER",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/components/ui/Table.tsx",
+          "linha": 73,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 856,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 19 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 1392,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 1556,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 22 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 1478,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 23 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Assets/AssetListPage.tsx",
+          "linha": 88,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 27 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Audit/AuditLogPage.tsx",
+          "linha": 253,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Campaigns/CampaignListPage.tsx",
+          "linha": 45,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Dashboard/DashboardPage.tsx",
+          "linha": 434,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Files/FileAnalysisPage.tsx",
+          "linha": 344,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 35 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Scans/ScanListPage.tsx",
+          "linha": 140,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S2004",
+          "arquivo": "src/pages/Scans/ScanListPage.tsx",
+          "linha": 178,
+          "mensagem": "Refactor this code to not nest functions more than 5 levels deep.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S2004",
+          "arquivo": "src/pages/Scans/ScanListPage.tsx",
+          "linha": 181,
+          "mensagem": "Refactor this code to not nest functions more than 5 levels deep.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Stations/StationDetailPage.tsx",
+          "linha": 219,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 22 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Stations/StationListPage.tsx",
+          "linha": 70,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 22 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Training/TrainedCollaboratorsPage.tsx",
+          "linha": 53,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 19 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Training/TrainingPage.tsx",
+          "linha": 85,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 26 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Users/UserFormPage.tsx",
+          "linha": 75,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 17 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Vulnerabilities/VulnDetailPage.tsx",
+          "linha": 299,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 20 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/pages/Vulnerabilities/VulnListPage.tsx",
+          "linha": 97,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S3776",
+          "arquivo": "src/services/api.ts",
+          "linha": 325,
+          "mensagem": "Refactor this function to reduce its Cognitive Complexity from 16 to the 15 allowed.",
+          "severidade": "CRITICAL",
+          "impactos": "MAINTAINABILITY:HIGH",
+          "tipo": "CODE_SMELL"
+        }
+      ],
+      "bugsEVulnerabilidades": [
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 247,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 254,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 448,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 450,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2068",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 135,
+          "mensagem": "Review this potentially hard-coded password.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2068",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 136,
+          "mensagem": "Review this potentially hard-coded password.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        }
+      ],
+      "seguranca": [
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 247,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 254,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 448,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2245",
+          "arquivo": "src/mocks/api.ts",
+          "linha": 450,
+          "mensagem": "Make sure that using this pseudorandom number generator is safe here.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2068",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 135,
+          "mensagem": "Review this potentially hard-coded password.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S2068",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 136,
+          "mensagem": "Review this potentially hard-coded password.",
+          "severidade": "MAJOR",
+          "impactos": "SECURITY:MEDIUM",
+          "tipo": "VULNERABILITY"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 237,
+          "mensagem": "Make sure using a hardcoded IP address 192.168.0.10 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 250,
+          "mensagem": "Make sure using a hardcoded IP address 200.10.20.5 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 289,
+          "mensagem": "Make sure using a hardcoded IP address 10.0.5.20 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 301,
+          "mensagem": "Make sure using a hardcoded IP address 192.168.0.20 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 302,
+          "mensagem": "Make sure using a hardcoded IP address 192.168.0.20 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 1089,
+          "mensagem": "Make sure using a hardcoded IP address 192.168.0.20 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/mocks/data.ts",
+          "linha": 2182,
+          "mensagem": "Make sure using a hardcoded IP address 192.168.10.47 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        },
+        {
+          "regra": "typescript:S1313",
+          "arquivo": "src/pages/Assets/AssetFormPage.tsx",
+          "linha": 215,
+          "mensagem": "Make sure using a hardcoded IP address 192.168.0.10 is safe here.",
+          "severidade": "MINOR",
+          "impactos": "SECURITY:LOW",
+          "tipo": "CODE_SMELL"
+        }
+      ],
+      "hotspots": [],
+      "avisosScanner": []
+    }
+  ]
+}

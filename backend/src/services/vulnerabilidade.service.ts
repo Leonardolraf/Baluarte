@@ -50,10 +50,16 @@ export function mapFinding(f: FindingComScan) {
   };
 }
 
-/** Todos os achados (o status das varreduras avanca antes, na leitura). */
-export async function todos(): Promise<FindingComScan[]> {
+/** Nota a partir da qual o achado conta como critico no KPI do dashboard (faixa CVSS 3.1). */
+const NOTA_CRITICA = 9.0;
+
+/**
+ * Achados em aberto para o dashboard: contagens feitas no banco e so os `recentes` mais novos
+ * (o status das varreduras avanca antes, na leitura). "Critico" e nota >= 9,0 (CVSS 3.1).
+ */
+export async function panoramaAbertos(recentes: number) {
   await avancarVarreduras();
-  return repo.listar();
+  return repo.panoramaAbertos(recentes, NOTA_CRITICA);
 }
 
 /** Contagem por rotulo com todos os rotulos da lista oficial (zero incluso), na ordem dela. */

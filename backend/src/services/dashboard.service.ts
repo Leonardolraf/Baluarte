@@ -7,11 +7,13 @@ import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
 import { evolucaoRisco } from './evolucaoRisco.service.js';
 import { indiceRiscoTecnico } from './indiceRisco.service.js';
 import { ativosMaiorRisco } from './riscoAtivo.service.js';
-import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.service.js';
+import { mapFinding, panoramaAbertos } from './vulnerabilidade.service.js';
 
 // Dashboard unificado: risco tecnico (achados) + risco humano (campanhas) num painel so.
 // Nao tem repository proprio: agrega os de ativos e campanhas e os services de achados e de
-// analise de arquivos.
+// analise de arquivos. Os achados chegam ja agregados do banco (contagens e os mais recentes),
+// nunca a lista inteira: o painel e a tela mais aberta e precisa aguentar 200 usuarios
+// simultaneos com p90 <= 3 s (RNF-004, B30, medido em testes/carga/).
 //
 // Os achados das estacoes (B14, programas com CVE) contam junto com os do scanner: sao
 // Findings de uma varredura concluida no ativo da estacao (inclusive na nota de risco).
@@ -26,6 +28,10 @@ import { encerrado, mapFinding, todos as todosAchados } from './vulnerabilidade.
 // unicos PESO_SEVERIDADE sobre a distribuicao (services/indiceRisco.service.ts); o frontend so
 // exibe. `evolucaoRisco` traz os ultimos 30 dias reconstruidos do historico de status
 // (services/evolucaoRisco.service.ts); o ultimo ponto e o KPI de hoje.
+
+/** Quantos achados em aberto o painel lista em "recentes" e, destes, quantos viram alerta. */
+const RECENTES = 5;
+const ALERTAS = 3;
 
 /** Achado de estacao (B14) cita o CVE e o programa; o do scanner, a categoria OWASP. */
 function textoAlerta(f: { categoriaOwasp: string; cve: string | null; programa?: string | null; scan: { asset: { host: string } } }): string {
@@ -75,11 +81,11 @@ export async function painel(perfil: string) {
     };
   }
 
-  const findings = await todosAchados();
-  // "Resolvida" e "Risco aceito" saem dos KPIs, dos alertas e da lista de recentes.
-  const emAberto = findings.filter((f) => !encerrado(f));
+  // "Resolvida" e "Risco aceito" ficam fora dos KPIs, dos alertas e da lista de recentes.
+  const abertos = await panoramaAbertos(RECENTES);
   const sev: Record<string, number> = { 'Crítico': 0, 'Alto': 0, 'Médio': 0, 'Baixo': 0 };
-  for (const f of emAberto) sev[f.severidade] = (sev[f.severidade] || 0) + 1;
+  for (const g of abertos.porSeveridade) sev[g.severidade] = (sev[g.severidade] || 0) + g.total;
+  const vulnerabilidadesAbertas = abertos.porSeveridade.reduce((soma, g) => soma + g.total, 0);
   const arquivosMaliciosos = await contarArquivosMaliciosos();
   sev['Crítico'] += arquivosMaliciosos;
 
@@ -88,8 +94,8 @@ export async function painel(perfil: string) {
 
   return {
     kpis: {
-      vulnerabilidadesAbertas: emAberto.length,
-      criticas: emAberto.filter((f) => f.cvss >= 9.0).length + arquivosMaliciosos,
+      vulnerabilidadesAbertas,
+      criticas: abertos.criticos + arquivosMaliciosos,
       // KPI tecnico: so para operadores, como os outros (o Colaborador recebe null, B10).
       arquivosMaliciosos,
       resilienciaPhishing: resiliencia,
@@ -99,10 +105,10 @@ export async function painel(perfil: string) {
     },
     distribuicaoSeveridade: sev,
     evolucaoRisco: await evolucaoRisco(),
-    vulnerabilidadesRecentes: emAberto.slice(0, 5).map(mapFinding),
+    vulnerabilidadesRecentes: abertos.recentes.map(mapFinding),
     ativosMaiorRisco: await ativosMaiorRisco(),
-    alertas: emAberto
-      .slice(0, 3)
+    alertas: abertos.recentes
+      .slice(0, ALERTAS)
       .map((f) => ({ id: f.id, severidade: f.severidade, texto: textoAlerta(f), cvss: f.cvss, quando: f.criadoEm })),
     campanhas: campanhas.map(mapCampaign),
     funil: ativa ? funilDe(ativa.eventos) : null,

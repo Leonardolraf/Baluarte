@@ -94,7 +94,7 @@ describe('SQLi no login', () => {
     const payloads = [
       'admin@empresa.com\u0000',
       'admin@empresa.com%00',
-      'admin@empresa.com‮',
+      'admin@empresa.com\u202E', // RLO (bidirecional), escrito como escape para o fonte não carregar o caractere
       'ADMIN@EMPRESA.COM\t',
     ];
     for (const email of payloads) {

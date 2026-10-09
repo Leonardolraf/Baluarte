@@ -36,6 +36,7 @@ describe('CHECK: valores fixos garantidos pelo banco', () => {
     const asset = await prisma.asset.create({ data: { nome: 'A', host: `h${++seq}.empresa.com`, tipo: 'Servidor' } });
     const scan = await prisma.scan.create({ data: { assetId: asset.id } });
     for (const status of STATUS_FINDING) await prisma.finding.create({ data: { ...dadosAchado('injecao-sql'), scanId: scan.id, status } });
+    assert.equal(await prisma.finding.count({ where: { scanId: scan.id } }), STATUS_FINDING.length);
   });
 
   it('recusa valor fora da lista em cada coluna fixa', async () => {

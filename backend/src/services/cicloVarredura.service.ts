@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 // Ciclo de vida da varredura SIMULADA: EM_FILA -> EM_ANDAMENTO -> CONCLUIDA.
 //
 // E uma maquina de estados avaliada na leitura, nao um worker: nao ha timer em segundo
@@ -83,11 +84,11 @@ export function progressoDaVarredura(
 
 // Varredura simulada: sorteia de 2 a 4 tipos distintos do catalogo (models/catalogoAchado.model.ts).
 export function gerarFindings() {
-  const qtd = 2 + Math.floor(Math.random() * 3);
+  const qtd = 2 + randomInt(3);
   const chaves = Object.keys(CATALOGO_ACHADOS) as ChaveAchado[];
   const escolhidos: ChaveAchado[] = [];
   for (let i = 0; i < qtd && chaves.length; i++) {
-    escolhidos.push(chaves.splice(Math.floor(Math.random() * chaves.length), 1)[0]);
+    escolhidos.push(chaves.splice(randomInt(chaves.length), 1)[0]);
   }
   return escolhidos.map(dadosAchado);
 }

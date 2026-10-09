@@ -11,6 +11,7 @@
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
+    "seed:carga": "tsx prisma/seed-carga.ts",
     "auditoria:retencao": "tsx scripts/aplicar-retencao-auditoria.ts",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
@@ -20,8 +21,9 @@
     "vercel-build": "prisma generate",
     "test:unidade": "node --import tsx --test \"tests/unidade/**/*.test.ts\"",
     "cobertura:unidade": "c8 --reports-dir=coverage-unidade --reporter=text --reporter=html --reporter=json-summary --all --include=\"src/config/**/*.ts\" --include=\"src/utils/**/*.ts\" --include=\"src/models/dominio.model.ts\" --include=\"src/middlewares/auth.middleware.ts\" --include=\"src/services/cvss.service.ts\" --include=\"src/models/catalogoAchado.model.ts\" --include=\"src/services/cicloVarredura.service.ts\" --include=\"src/services/campanhaEmail.service.ts\" --include=\"src/services/token.service.ts\" --include=\"src/services/linkConta.service.ts\" --include=\"src/repositories/usuario.repository.ts\" --include=\"src/services/campanhaMetricas.service.ts\" --include=\"src/models/treinamento.model.ts\" --include=\"src/models/segundaOpiniao.model.ts\" --include=\"src/services/relatorioVulnerabilidade.service.ts\" --include=\"src/services/relatorioPdf.service.ts\" --check-coverage --lines 75 --branches 85 --functions 70 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage-unidade/junit.xml \"tests/unidade/**/*.test.ts\"",
-    "cobertura": "c8 --reports-dir=coverage --reporter=text-summary --reporter=html --reporter=json-summary --all --include=\"src/**/*.ts\" --exclude=src/server.ts --check-coverage --lines 90 --branches 85 --functions 90 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage/junit.xml \"tests/**/*.test.ts\"",
-    "test:relatorio": "npm run cobertura:unidade && npm run cobertura && node scripts/relatorio-testes.mjs"
+    "cobertura": "c8 --reports-dir=coverage --reporter=text-summary --reporter=html --reporter=json-summary --reporter=lcov --all --include=\"src/**/*.ts\" --exclude=src/server.ts --check-coverage --lines 90 --branches 85 --functions 90 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage/junit.xml \"tests/**/*.test.ts\"",
+    "test:relatorio": "npm run cobertura:unidade && npm run cobertura && node scripts/relatorio-testes.mjs",
+    "carga": "node scripts/carga.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -44,9 +46,15 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.0",
     "@types/pdfkit": "0.17.6",
+    "autocannon": "8.0.0",
     "c8": "^12.0.0",
     "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "hyperid": {
+      "uuid": "11.1.1"
+    }
   }
 }

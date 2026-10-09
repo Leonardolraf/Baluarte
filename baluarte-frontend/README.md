@@ -7,7 +7,7 @@ SPA em **React 18 + TypeScript + Vite + TailwindCSS** da plataforma de cibersegu
 ## Requisitos
 
 - Node.js ≥ 18.18 (testado com 24.x) e npm ≥ 9.
-- Para os testes ponta a ponta: Google Chrome instalado (o Playwright usa o canal `chrome` do sistema, sem baixar navegadores).
+- Para os testes ponta a ponta: Google Chrome instalado (o Playwright usa o canal `chrome` do sistema, sem baixar navegadores). Para os outros navegadores do RNF-007 (`npm run test:e2e:navegadores`): Microsoft Edge instalado (canal `msedge`; sem ele o projeto fica de fora, com aviso) e o Firefox e o WebKit do Playwright, baixados por `npm run test:e2e:navegadores:instalar` para dentro de `node_modules` (`PLAYWRIGHT_BROWSERS_PATH=0`).
 
 ## Como rodar
 
@@ -26,6 +26,7 @@ npm run dev          # http://localhost:5173 — usa a camada mock (sem backend)
 | `npm test` / `npm run test:watch` / `npm run test:coverage` | Vitest + React Testing Library + axe-core (jsdom) |
 | `npm run test:e2e` / `npm run test:e2e:headed` | Playwright (Chrome do sistema) contra o dev server em modo mock (`E2E_PORT` troca a porta 5173) |
 | `npm run test:e2e:real` | Playwright contra a API real: sobe banco descartável, API (`:8097`), OSV/NVD falsos e Vite (`:5200`), roda `e2e/real/` e derruba tudo (`../scripts/e2e-real.mjs`) |
+| `npm run test:e2e:navegadores` | A suíte mock no **Firefox**, no **WebKit** (motor do Safari; não é o Safari da Apple) e no **Edge** da máquina, em 1366×768 (RNF-007, B30). Sobe um Vite próprio na `5202` (`E2E_BASE_URL` usa outro). Instale antes com `npm run test:e2e:navegadores:instalar` (`scripts/e2e-navegadores.mjs`) |
 | `npm run test:all` | typecheck + lint + unit + build + E2E, em sequência |
 
 ## Credenciais de demonstração (camada mock)
@@ -98,6 +99,7 @@ VITE_USE_MOCKS=
 | Unitários e de componentes (Vitest + RTL) | `src/__tests__/*.test.ts(x)` | `ProtectedRoute`, RBAC por rota e por navegação, `SeverityBadge`, `DashboardPage`, `LoginPage`, hooks (`useAsync`, `useSort`, `usePagination`), bibliotecas (`format`, `severity`, `roles`, `jwt`, `storage`, `errors`), API mock (autenticação, redefinição de senha, RBAC por endpoint, validações, métricas), adapters e invariantes dos dados fictícios |
 | Acessibilidade (axe-core) | `src/__tests__/a11y.test.tsx` | Todas as páginas renderizadas com dados do mock, sem violações (a regra de contraste é auditada manualmente — o jsdom não calcula layout) |
 | Ponta a ponta — **suíte funcional oficial** (Playwright, Chrome do sistema, modo mock) | `e2e/*.spec.ts` | 39 testes: login/logout/redirecionamento, redefinição de senha (fluxo completo com token), RBAC, vulnerabilidades (filtros, busca global, detalhe, status), campanhas (lista, relatório, criação), usuários (criar/editar/excluir com diálogo), configurações (senha, notificações, tema), treinamento, estações (lista, detalhe com programas e portas, RBAC), análise de arquivos (envio, veredito, segunda opinião, histórico filtrado, limite de 10 MB, colaborador), layout mobile (gaveta com foco preso, sem rolagem horizontal). `screenshots.spec.ts` (14) só gera capturas de referência e fica pulado sem `E2E_SCREENSHOTS=1` |
+| Ponta a ponta nos outros navegadores (RNF-007, B30) | `e2e/*.spec.ts` | `npm run test:e2e:navegadores`: os 42 testes de desktop da suíte mock (sem o layout mobile e sem as capturas) no Firefox, no WebKit e no Edge, em 1366×768, a menor resolução do RNF-007 — 126 testes. O WebKit do Playwright é o motor do Safari compilado para Windows/Linux, não o Safari da Apple (que só roda no macOS/iOS); o Edge é o instalado na máquina. A suíte padrão (`npm run test:e2e`) continua só no Chrome |
 | Ponta a ponta em modo real | `e2e/real/*.spec.ts` | 19 testes contra a API real e o PostgreSQL, por `npm run test:e2e:real` (orquestrador `../scripts/e2e-real.mjs`, isolado: banco `baluarte_e2e` descartável, API `:8097`, Vite `:5200`, OSV/NVD falsos `:8098`, nunca a 8080/5173). `conta-e-operacao.spec.ts` (10): login, sessão, “Risco aceito” (ida e volta), campanha com dois destinatários, criar/editar/excluir usuário, convite lido no Mailpit, troca de senha, conta inativada perdendo acesso, RBAC de colaborador na própria API, preferências e redefinição de senha. `arquivos.spec.ts` (5): sem ClamAV a tela explica o 503; com ClamAV, arquivo limpo (SHA-256 conferido, segunda opinião desligada), EICAR montado em memória, histórico filtrado no servidor e colaborador. `estacoes.spec.ts` (4): estação inscrita simulando o osquery, lista e detalhe com programas e portas, “Verificar vulnerabilidades” contra a base falsa, base fora do ar e RBAC. Detalhes no README da raiz (“Funcional — Playwright”). Contra a stack Docker: `E2E_REAL=1 E2E_BASE_URL=http://localhost:8081 npx playwright test` (`E2E_API_URL` muda a API, padrão `http://localhost:8080/api`) |
 
 ## Rotas e RBAC
