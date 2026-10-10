@@ -579,6 +579,13 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **B29, trava no banco: depois da apresentação.** A branch `feat/b29-trava` (migration `20261008176000_auditoria_imutavel`) não entra agora. Até lá vale "cadeia de hash com verificação de integridade (detecta adulteração)". Só documentação: nenhum código nem migration mudou por isso.
 - **Testes:** backend 703/703 (175 unidade + 7 banco + 395 integração + 126 pentest; eram 696): no `aviso-monitoramento.test.ts`, o teste que confirmava a cascata na exclusão virou o 409, e entraram ciência de versão antiga também recusando, inativação permitida com a ciência guardada, conta sem ciência excluída, ciência gravada durante a exclusão, a ordem das recusas anteriores, a cascata só por SQL direto e a versão do texto aprovado; os testes de versão antiga passaram a usar `2026-10-08`. `tsc` limpo. Newman 35 requisições / 70 asserções sem falha numa instância isolada (8106, banco descartável `baluarte_contract_dec`). Frontend 622/622 (eram 620: mock recusa excluir quem tem ciência, inativação e exclusão sem ciência, pílula de rascunho só quando o texto não está aprovado), lint, typecheck (app e E2E) e build limpos; Playwright mock 46 passando + 14 pulados (novo: a tela de usuários mostra o 409 de quem tem ciência). A suíte em outros navegadores (B30) não foi refeita.
 
+## 2026-10-10 — DT01: `migrate dev` volta a funcionar
+
+- **Defeito:** a migration `20261007195320_habilita_rls` fazia `ALTER TABLE "_prisma_migrations" ENABLE ROW LEVEL SECURITY`. No banco-sombra do `prisma migrate dev` essa tabela não existe, e o comando parava com `P1014`. Desde 07/10 as migrations eram geradas por um contorno (banco descartável + `migrate diff`).
+- **Correção (decisão do Leo, "corrigir de vez"):** a linha virou condicional (`DO $$ … IF to_regclass('public."_prisma_migrations"') IS NOT NULL …`). Em banco real a tabela existe na hora da migration, e o RLS continua ligado nela (conferido). No banco-sombra, ela é pulada.
+- **Migration editada depois de aplicada:** o checksum novo é `e41c6b4bf5c635094c2ae91e0f8bc9ae3793c366b0fdafa744872f7d75f21ba7`. Testado: `migrate deploy` e `migrate status` NÃO conferem checksum de migration já aplicada (respondem "up to date" com o antigo), então a produção não quebra. Só o `migrate dev` acusa a diferença. Para alinhar, o checksum foi atualizado na `_prisma_migrations` do banco local de desenvolvimento e do Supabase.
+- **Verificação:** `migrate dev --create-only` funciona num banco limpo; `migrate reset` + `migrate diff --exit-code` sem diferença; backend 703/703.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
