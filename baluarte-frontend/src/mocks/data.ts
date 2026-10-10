@@ -1877,6 +1877,17 @@ const vtLink = (sha256: string) => `https://www.virustotal.com/gui/file/${sha256
  * Histórico inicial, mais recente primeiro. O hash do EICAR é o real do arquivo de teste de 68 bytes.
  * Cada análise mostra uma situação da segunda opinião do VirusTotal (B20).
  */
+// Analises de arquivo do mock ficam relativas ao RELOGIO REAL (como as estacoes, em
+// buildMockStations), e nao a MOCK_NOW: o dashboard conta os arquivos maliciosos dos ultimos 30
+// dias pelo relogio real, e com MOCK_NOW fixo o EICAR semeado saia da janela com o passar dos dias.
+const CARGA_MS = Date.now();
+function diasAntesDoRelogio(n: number): string {
+  return new Date(CARGA_MS - n * DAY_MS).toISOString();
+}
+function horasAntesDoRelogio(n: number): string {
+  return new Date(CARGA_MS - n * HOUR_MS).toISOString();
+}
+
 export const MOCK_FILE_SCANS: MockFileScan[] = [
   {
     id: 'arq-004',
@@ -1886,7 +1897,7 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     sha256: '41a8760770b6306e718f0b7a89eca7d188e9f4edfe519eccb1b136f6071e0a3e',
     result: 'clean',
     threat: null,
-    scannedAt: hoursAgo(5),
+    scannedAt: horasAntesDoRelogio(5),
     secondOpinion: {
       source: 'VirusTotal',
       status: 'no_detection',
@@ -1905,7 +1916,7 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     sha256: '275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f',
     result: 'threat',
     threat: 'Eicar-Signature',
-    scannedAt: daysAgo(1),
+    scannedAt: diasAntesDoRelogio(1),
     secondOpinion: {
       source: 'VirusTotal',
       status: 'malicious',
@@ -1924,7 +1935,7 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     sha256: 'a25c22a11d33d444ecb9aa93185aa15bf2b1e1264137dffc40b7cab7922deae9',
     result: 'clean',
     threat: null,
-    scannedAt: daysAgo(3),
+    scannedAt: diasAntesDoRelogio(3),
     secondOpinion: {
       source: 'VirusTotal',
       status: 'unknown',
@@ -1943,7 +1954,7 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     sha256: '3549553e9afd4ef7fd5a5e81e7f5220a595a6132c1058e877db55fa473e3e5cf',
     result: 'clean',
     threat: null,
-    scannedAt: daysAgo(6),
+    scannedAt: diasAntesDoRelogio(6),
     // Análise anterior à segunda opinião (B20).
     secondOpinion: null,
   },
@@ -1958,7 +1969,7 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     sha256: '9c1f0e3a7b5d2c4e6f8a0b1c3d5e7f9a2b4c6d8e0f1a3b5c7d9e1f2a4b6c8d0e',
     result: 'clean',
     threat: null,
-    scannedAt: daysAgo(90),
+    scannedAt: diasAntesDoRelogio(90),
     secondOpinion: {
       source: 'VirusTotal',
       status: 'unknown',

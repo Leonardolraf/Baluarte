@@ -563,6 +563,12 @@ O que entrou (rebase final sobre a main `6586295`, com B25b, B18, B23, DT09 e os
 - **Correção:** o `INSERT` do CTE grava `registradaEm` com `clock_timestamp()` em UTC (como o Prisma grava), lido já com a linha travada; o empate no mesmo milissegundo é desfeito pelo `id`, tirado também depois da trava. Sem migration, contrato sem mudança.
 - **Teste:** determinístico em `tests/historico-status.test.ts`: a transação do teste segura a linha, confere em `pg_stat_activity` que o PATCH está parado na trava e só então a solta; o instante do evento não pode ser anterior à liberação (no código antigo saía ~240 ms antes).
 
+## 2026-10-10 — Mock: análises de arquivo relativas ao relógio real
+
+- **Defeito:** dois testes do frontend (`fileScan.test.ts` "dashboard conta arquivo malicioso como crítico" e `DashboardPage.test.tsx` "contagens de vulnerabilidades abertas e críticas") passaram a falhar sozinhos a partir de 09/10/2026, sem mudança de código. As análises de arquivo do mock (`MOCK_FILE_SCANS`) eram datadas a partir de `MOCK_NOW` (10/09/2026), mas a janela de 30 dias dos arquivos maliciosos (B17) usa o relógio real. Com o passar dos dias, o EICAR semeado saiu da janela.
+- **Correção:** as datas de `MOCK_FILE_SCANS` passam a ser relativas ao instante de carga do módulo (o relógio real), como as estações em `buildMockStations`. O resto do mock continua ancorado em `MOCK_NOW`.
+- **Verificação (sobre a main `0e4f3db`):** frontend 620/620, lint e typecheck limpos, Playwright mock com 45 passando. Backend na mesma main: 696/696.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
