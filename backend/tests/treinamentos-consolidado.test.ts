@@ -100,6 +100,25 @@ describe('GET /treinamentos/consolidado', () => {
     assert.equal(rh(d) - rh(antes), 2);
   });
 
+  it('o KPI "colaboradores treinados" do dashboard é o nº de pessoas da lista (quem treinou em duas campanhas conta uma vez)', async () => {
+    const treinados = async () => {
+      const r = await chamar('GET', '/dashboard', { token: analista });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      return r.body.dados.kpis.colaboradoresTreinados as number;
+    };
+    const antes = await treinados();
+    assert.equal(antes, (await consolidado()).colaboradores.length);
+
+    const p = await criarUsuario(admin, 'Colaborador', 'cons-kpi');
+    const agora = new Date();
+    const evento = { userId: p.id, destinatario: p.email, enviadoEm: agora, clicadoEm: agora, treinou: true, treinouEm: agora };
+    for (const nome of ['KPI treinados 1', 'KPI treinados 2'])
+      await prisma.campaign.create({ data: { nome, template: 'urgencia', status: 'ATIVA', eventos: { create: [evento] } } });
+
+    assert.equal(await treinados(), antes + 1);
+    assert.equal(await treinados(), (await consolidado()).colaboradores.length);
+  });
+
   it('bate com a soma dos relatórios de cada campanha (mesma regra de conclusão)', async () => {
     const d = await consolidado();
     const lista = await chamar('GET', '/campanhas', { token: analista });
