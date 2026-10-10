@@ -244,6 +244,8 @@ export interface BackendDashboard {
     /** Já inclui os arquivos maliciosos (B17). */
     criticas: number | null;
     resilienciaPhishing: number | null;
+    /** Risco humano 0–100 calculado no servidor (clique e submissão, todas as campanhas); null sem envio. */
+    riscoHumano?: number | null;
     ativosMonitorados: number | null;
     /** Arquivos distintos com ameaça nos últimos 30 dias (B17); null para o Colaborador, ausente em backend anterior. */
     arquivosMaliciosos?: number | null;
@@ -848,8 +850,10 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
     raw.kpis.resilienciaPhishing === null || (technical && totalSent === 0)
       ? null
       : raw.kpis.resilienciaPhishing;
-  const clickRate = phishingResilience === null ? 0 : Math.max(0, Math.min(100, 100 - phishingResilience));
-  const humanRisk = Math.max(0, Math.min(100, Math.round(clickRate * 2.5)));
+  // Vem pronto do servidor (pesos únicos PESO_RISCO_HUMANO do backend: clique e submissão); a tela
+  // não tem fórmula. Não medido (sem envio, ou backend anterior sem o campo) aparece como 0.
+  const humanRisk =
+    phishingResilience === null ? 0 : Math.min(100, Math.round(countOrNull(raw.kpis.riscoHumano) ?? 0));
   const timeline: TimelineEvent[] = raw.alertas.map((a) => ({
     id: a.id,
     at: a.quando,
@@ -874,7 +878,8 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
       // Vem pronto do servidor: a lista de campanhas do dashboard não traz conclusões (toCampaign
       // zera `trained`), então somá-la dava sempre 0. Backend anterior sem o campo: mantém a soma.
       trainedCollaborators: technical
-        ? (countOrNull(raw.kpis.colaboradoresTreinados) ?? campaigns.reduce((sum, c) => sum + c.metrics.trained, 0))
+        ? (countOrNull(raw.kpis.colaboradoresTreinados) ??
+          campaigns.reduce((sum, c) => sum + c.metrics.trained, 0))
         : null,
     },
     severityDistribution,

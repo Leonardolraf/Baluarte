@@ -3,7 +3,7 @@ import { avancarVarreduras } from './cicloVarredura.service.js';
 import { contar as contarAtivos } from '../repositories/ativo.repository.js';
 import { listarComEventos } from '../repositories/campanha.repository.js';
 import { contarArquivosMaliciosos } from './analiseArquivo.service.js';
-import { colaboradoresTreinados, funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
+import { colaboradoresTreinados, funilDe, mapCampaign, riscoHumano, totais } from './campanhaMetricas.service.js';
 import { evolucaoRisco } from './evolucaoRisco.service.js';
 import { indiceRiscoTecnico } from './indiceRisco.service.js';
 import { ativosMaiorRisco } from './riscoAtivo.service.js';
@@ -56,6 +56,8 @@ export async function painel(perfil: string) {
   const campanhas = await listarComEventos();
   const { enviados, clicados } = totais(campanhas);
   const resiliencia = enviados ? Math.round((1 - clicados / enviados) * 100) : null;
+  // Risco humano (pesos unicos PESO_RISCO_HUMANO): como a resiliencia, visivel a todos os perfis.
+  const risco = riscoHumano(campanhas);
 
   if (!operador) {
     // Mesmo sem a parte tecnica, a leitura do dashboard conclui as varreduras pendentes
@@ -67,6 +69,7 @@ export async function painel(perfil: string) {
         criticas: null,
         arquivosMaliciosos: null, // KPI tecnico (B17): fica com os operadores, como os demais
         resilienciaPhishing: resiliencia,
+        riscoHumano: risco,
         ativosMonitorados: null,
         indiceRiscoTecnico: null, // B25b: tecnico, como os demais
         colaboradoresTreinados: null, // contagem de campanha: so para os operadores
@@ -100,6 +103,7 @@ export async function painel(perfil: string) {
       // KPI tecnico: so para operadores, como os outros (o Colaborador recebe null, B10).
       arquivosMaliciosos,
       resilienciaPhishing: resiliencia,
+      riscoHumano: risco,
       ativosMonitorados: ativos,
       // B25b: pesos unicos (PESO_SEVERIDADE) sobre a distribuicao, que ja tem os arquivos no Critico.
       indiceRiscoTecnico: indiceRiscoTecnico(sev, ativos),
