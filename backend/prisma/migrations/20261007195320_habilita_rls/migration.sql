@@ -14,7 +14,14 @@ ALTER TABLE "Finding" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Campaign" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "CampaignEvent" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AuditLog" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "_prisma_migrations" ENABLE ROW LEVEL SECURITY;
+-- A tabela de controle do Prisma existe no banco real, mas nao no banco-sombra do `migrate dev`
+-- (DT01): so liga o RLS nela se ela existir.
+DO $$
+BEGIN
+  IF to_regclass('public."_prisma_migrations"') IS NOT NULL THEN
+    ALTER TABLE "_prisma_migrations" ENABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;
 
 DO $$
 DECLARE papel text;
