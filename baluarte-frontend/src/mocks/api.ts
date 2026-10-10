@@ -360,8 +360,8 @@ function isOpen(v: Vulnerability): boolean {
 }
 
 // ---- Pesos de severidade (espelham PESO_SEVERIDADE em backend/src/models/dominio.model.ts) ----
-// Os mesmos para a nota por ativo, o índice global e a evolução do risco (B25b). Proposta
-// 10/7/4/1, pendente da escolha do Leo (DT07): se mudar no backend, muda aqui.
+// Os mesmos para a nota por ativo, o índice global e a evolução do risco (B25b). Escala
+// 10/7/4/1, aprovada pelo Leo em 10/10/2026 (DT07): se mudar no backend, muda aqui.
 // Nota do ativo: pontos = 10 × crítica + 7 × alta + 4 × média + 1 × baixa (abertas); nota = min(100, pontos).
 const RISK_WEIGHT: Record<Severity, number> = { critical: 10, high: 7, medium: 4, low: 1, info: 0 };
 const RISK_MAX = 100;
@@ -1736,10 +1736,16 @@ export const mockApi: BaluarteApi = {
     const admins = state.users.filter((u) => u.role === 'admin' && u.status !== 'inactive');
     if (user.role === 'admin' && admins.length <= 1)
       throw new HttpError(409, 'ULTIMO_ADMIN', 'Não é possível excluir o único administrador ativo.');
+    // Como a API (B18, decisão de 10/10/2026): a ciência do aviso de monitoramento, de qualquer
+    // versão, é a prova de que a pessoa foi avisada; a conta que a tem só pode ser inativada.
+    if (state.monitoringAcks.some((a) => a.userId === user.id))
+      throw new HttpError(
+        409,
+        'USUARIO_COM_CIENCIA',
+        'Usuário com ciência registrada do aviso de monitoramento: inative a conta em vez de excluir',
+      );
     state.users.splice(index, 1);
     state.passwords.delete(user.email.toLowerCase());
-    // Como no banco (onDelete: Cascade): a ciência do aviso de monitoramento sai com a conta.
-    state.monitoringAcks = state.monitoringAcks.filter((a) => a.userId !== user.id);
     pushTimeline({
       kind: 'user',
       title: 'Usuário removido',

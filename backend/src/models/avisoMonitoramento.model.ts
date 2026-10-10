@@ -9,10 +9,11 @@ import { INTERVALO_PRODUCAO_S, intervaloDaCategoriaNoBase, type CategoriaQuery }
 // GET /monitoramento/aviso e o frontend so o exibe (o mock do frontend guarda uma copia,
 // conferida contra o texto servido por tests/aviso-monitoramento.test.ts).
 //
-// RASCUNHO: o texto abaixo ainda precisa ser aprovado pelo Leo e, numa empresa real, pelo
-// encarregado pelo tratamento de dados pessoais (art. 41 da LGPD). Enquanto for rascunho,
-// AVISO_RASCUNHO fica true e a tela mostra isso. Ao aprovar, ou a qualquer mudanca no texto,
-// troque VERSAO_AVISO: a ciencia e por versao, entao todos precisam ler e registrar de novo.
+// APROVADO pelo Leo em 10/10/2026 (versao 2026-10-10), sem a frase sobre produtividade que o
+// rascunho de 2026-10-08 trazia; numa empresa real, o encarregado pelo tratamento de dados
+// pessoais (art. 41 da LGPD) tambem aprovaria. A qualquer mudanca no texto, troque VERSAO_AVISO
+// (a ciencia e por versao, entao todos precisam ler e registrar de novo) e, se o texto novo
+// ainda nao estiver aprovado, ponha AVISO_RASCUNHO = true (a tela mostra "Rascunho em aprovacao").
 //
 // O que o texto diz que e coletado tem de bater com QUERIES em models/agente.model.ts; o
 // teste tests/aviso-monitoramento.test.ts le a configuracao entregue ao osquery e falha se
@@ -23,11 +24,14 @@ import { INTERVALO_PRODUCAO_S, intervaloDaCategoriaNoBase, type CategoriaQuery }
 /** Registro de ciencia como esta no banco (tabela MonitoringAcknowledgement). */
 export type CienciaMonitoramento = MonitoringAcknowledgement;
 
-/** Versao do texto em vigor. Mudou o texto, mudou a versao (a ciencia antiga nao vale para a nova). */
-export const VERSAO_AVISO = '2026-10-08';
+/**
+ * Versao do texto em vigor. Mudou o texto, mudou a versao (a ciencia antiga nao vale para a nova).
+ * 2026-10-08 foi o rascunho publicado na demonstracao; 2026-10-10 e o texto aprovado.
+ */
+export const VERSAO_AVISO = '2026-10-10';
 
-/** O texto ainda nao foi aprovado (ver o comentario do topo). */
-export const AVISO_RASCUNHO = true;
+/** O texto em vigor ainda nao foi aprovado? false desde a aprovacao de 10/10/2026. */
+export const AVISO_RASCUNHO = false;
 
 /** Secao do aviso: paragrafos, a lista de itens (quando ha) e observacoes depois da lista. */
 export interface SecaoAviso {
@@ -96,7 +100,6 @@ export const TEXTO_AVISO: TextoAviso = {
       titulo: 'Para que serve',
       paragrafos: [
         'Para encontrar programas vulneráveis: o nome e a versão de cada programa são comparados com bases públicas de vulnerabilidades conhecidas, e as portas abertas mostram serviços expostos sem necessidade. Com isso a equipe de segurança sabe o que precisa ser atualizado ou corrigido.',
-        'O Baluarte não usa esses dados para medir produtividade nem o horário de uso da máquina.',
       ],
       itens: [],
       observacoes: [],

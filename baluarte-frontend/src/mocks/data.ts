@@ -2337,8 +2337,8 @@ export function buildMockStations(nowMs: number = Date.now()): MockStation[] {
 // demonstração em modo mock. O teste backend/tests/aviso-monitoramento.test.ts compara esta
 // cópia com o texto servido pela API: mudou lá, muda aqui.
 export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'acknowledgedAt'> = {
-  version: '2026-10-08',
-  draft: true,
+  version: '2026-10-10',
+  draft: false,
   title: 'Aviso sobre o monitoramento da estação de trabalho',
   intro:
     'A empresa usa o Baluarte para encontrar falhas de segurança nos computadores de trabalho antes que alguém as aproveite. Para isso, um programa chamado agente (o osquery) fica instalado na sua estação e envia ao Baluarte um inventário técnico da máquina: as portas de rede abertas a cada 15 minutos, a lista de programas instalados a cada 1 hora e a versão do sistema operacional a cada 6 horas. Este aviso explica o que o agente coleta, o que ele não coleta e para que isso serve.',
@@ -2376,7 +2376,6 @@ export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'ac
       title: 'Para que serve',
       paragraphs: [
         'Para encontrar programas vulneráveis: o nome e a versão de cada programa são comparados com bases públicas de vulnerabilidades conhecidas, e as portas abertas mostram serviços expostos sem necessidade. Com isso a equipe de segurança sabe o que precisa ser atualizado ou corrigido.',
-        'O Baluarte não usa esses dados para medir produtividade nem o horário de uso da máquina.',
       ],
       items: [],
       notes: [],
@@ -2429,7 +2428,7 @@ export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'ac
   ],
 };
 
-/** Ciências já registradas no seed do mock: o administrador e um analista. */
+/** Ciências já registradas no seed do mock (do texto aprovado, 2026-10-10): o administrador e um analista. */
 export interface MockMonitoringAcknowledgement {
   id: string;
   userId: string;
@@ -2438,6 +2437,6 @@ export interface MockMonitoringAcknowledgement {
 }
 
 export const MOCK_MONITORING_ACKS: MockMonitoringAcknowledgement[] = [
-  { id: 'ack-001', userId: 'u-000', version: '2026-10-08', acknowledgedAt: '2026-10-08T12:10:00.000Z' },
-  { id: 'ack-002', userId: 'u-003', version: '2026-10-08', acknowledgedAt: '2026-10-08T13:42:00.000Z' },
+  { id: 'ack-001', userId: 'u-000', version: '2026-10-10', acknowledgedAt: '2026-10-10T12:10:00.000Z' },
+  { id: 'ack-002', userId: 'u-003', version: '2026-10-10', acknowledgedAt: '2026-10-10T13:42:00.000Z' },
 ];

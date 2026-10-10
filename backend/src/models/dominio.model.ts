@@ -37,7 +37,7 @@ export const STATUS_INICIAL_FINDING = 'Aberta';
  * tecnico global do dashboard (`kpis.indiceRiscoTecnico`) e pela evolucao do risco em 30 dias
  * (services/indiceRisco.service.ts). O frontend nao tem formula propria: le os numeros prontos.
  *
- * PROPOSTA, pendente da escolha do Leo (cartao DT07 no Trello): 10/7/4/1, o piso da faixa
+ * Escala 10/7/4/1, aprovada pelo Leo em 10/10/2026 (cartao DT07 no Trello): o piso da faixa
  * CVSS 3.1 de cada severidade (Critico 9,0 arredondado para 10; Alto 7,0; Medio 4,0; Baixo 0,1
  * arredondado para 1). Ate o B25b o indice global do frontend usava 10/6/3/1. Trocar a escala
  * e mudar SO esta constante (e o teste de unidade que a fixa); nota, indice e evolucao acompanham.

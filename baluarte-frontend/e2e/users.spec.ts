@@ -30,6 +30,22 @@ test.describe('Gestão de usuários (admin)', () => {
     await expect(page.getByRole('row').filter({ hasText: 'teste.e2e@empresa.com' })).toHaveCount(0);
   });
 
+  test('recusa excluir quem tem ciência do aviso de monitoramento, com a mensagem da regra (B18)', async ({
+    page,
+  }) => {
+    await page.goto('/users');
+    const row = page.getByRole('row').filter({ hasText: 'edson.marcelino@empresa.com' });
+    await row.getByRole('button', { name: /Excluir Edson Marcelino/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Excluir' }).click();
+    await expect(
+      toast(
+        page,
+        'Usuário com ciência registrada do aviso de monitoramento: inative a conta em vez de excluir',
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'edson.marcelino@empresa.com' })).toHaveCount(1);
+  });
+
   test('rejeita e-mail duplicado e não permite excluir a própria conta', async ({ page }) => {
     await page.goto('/users/new');
     await page.locator('#nome').fill('Duplicado');

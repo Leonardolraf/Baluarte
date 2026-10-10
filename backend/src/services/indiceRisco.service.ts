@@ -2,9 +2,9 @@ import { PESO_SEVERIDADE, SEVERIDADES } from '../models/dominio.model.js';
 import { INDICE_MAXIMO, PONTOS_POR_ATIVO, type ContagemSeveridade } from '../models/dashboard.model.js';
 
 // Escala de risco por severidade num lugar so (B25b). Os pesos sao PESO_SEVERIDADE
-// (models/dominio.model.ts, proposta 10/7/4/1 pendente da escolha do Leo, DT07):
+// (models/dominio.model.ts, escala 10/7/4/1 aprovada pelo Leo em 10/10/2026, DT07):
 //
-//   pontos = soma de PESO_SEVERIDADE[s] x quantidade[s]   (com a proposta: 10C + 7A + 4M + 1B)
+//   pontos = soma de PESO_SEVERIDADE[s] x quantidade[s]   (com a escala: 10C + 7A + 4M + 1B)
 //
 // - nota do ativo (services/riscoAtivo.service.ts): min(100, pontos dos achados abertos do ativo);
 // - indice de risco tecnico global (dashboard): min(100, round(pontos / (ativos x 20) x 100)),

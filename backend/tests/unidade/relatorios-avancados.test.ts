@@ -21,7 +21,7 @@ import { validar } from '../../src/utils/esquemas.js';
 const abertos = (c: number, a: number, m: number, b: number) => ({ 'Crítico': c, 'Alto': a, 'Médio': m, 'Baixo': b });
 
 describe('nota de risco do ativo', () => {
-  it('pesos = piso da faixa CVSS 3.1 de cada severidade (proposta pendente do DT07; trocar = mudar só a constante)', () => {
+  it('pesos = piso da faixa CVSS 3.1 de cada severidade (escala 10/7/4/1 aprovada no DT07; trocar = mudar só a constante)', () => {
     assert.deepEqual(PESO_SEVERIDADE, { 'Crítico': 10, 'Alto': 7, 'Médio': 4, 'Baixo': 1 });
   });
 

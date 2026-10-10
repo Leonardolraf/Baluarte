@@ -396,8 +396,10 @@ model VirusTotalLookup {
 // estou ciente", quando e de qual versao do texto (VERSAO_AVISO em
 // src/models/avisoMonitoramento.model.ts). Uma linha por usuario e versao: texto novo pede
 // ciencia nova e a antiga continua guardada. Modelo em ingles e campos em portugues, como
-// Department. Cascade: excluir a conta leva as ciencias dela (dado pessoal, como FileScan);
-// o registro REGISTRAR_CIENCIA_MONITORAMENTO do AuditLog, sem FK, continua.
+// Department. A API NAO exclui conta com ciencia (409 USUARIO_COM_CIENCIA, decisao do Leo de
+// 10/10/2026: a ciencia e a prova do aviso; a saida e inativar). O Cascade fica so como rede de
+// seguranca para exclusao por SQL direto, fora da API; o registro REGISTRAR_CIENCIA_MONITORAMENTO
+// do AuditLog, sem FK, continua.
 model MonitoringAcknowledgement {
   id           String   @id @default(cuid())
   userId       String

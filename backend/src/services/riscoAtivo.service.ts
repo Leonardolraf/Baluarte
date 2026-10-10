@@ -7,7 +7,7 @@ export { pontosDeRisco };
 
 // Nota de risco por ativo (B25), calculada NA LEITURA e nunca gravada:
 //
-//   pontos = soma de PESO_SEVERIDADE x abertos da severidade   (proposta 10/7/4/1; so abertos)
+//   pontos = soma de PESO_SEVERIDADE x abertos da severidade   (escala 10/7/4/1, DT07; so abertos)
 //   nota   = min(100, pontos)
 //
 // "Aberto" e a mesma regra dos KPIs do dashboard: "Resolvida" e "Risco aceito" nao contam.

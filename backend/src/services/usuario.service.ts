@@ -84,10 +84,16 @@ export async function atualizar(ator: Ator, id: string, dados: AlteracaoUsuario,
   return repo.mapUsuario(atualizado);
 }
 
-/** Exclusao pelo Administrador. Quem tem historico de campanha so pode ser inativado. */
+/**
+ * Exclusao pelo Administrador. Quem tem historico de campanha ou ciencia registrada do aviso
+ * de monitoramento so pode ser inativado. Ordem das recusas: propria conta (422), inexistente
+ * (404), ultimo administrador, historico de campanha e ciencia (409).
+ */
 export async function excluir(ator: Ator, id: string): Promise<void> {
   if (id === ator.id) falhar(422, 'Você não pode excluir a própria conta', 'AUTO_EXCLUSAO');
   const email = await repo.emTransacao(async (tx) => {
+    // Trava a conta antes das contagens: nada novo entra nelas ate o DELETE (ver repo.travar).
+    await repo.travar(id, tx);
     const alvo = await repo.buscarPorId(id, tx);
     if (!alvo) falhar(404, 'Usuário não encontrado', 'USUARIO_NAO_ENCONTRADO');
     if (alvo.perfil === 'Administrador' && alvo.status === 'Ativo' && (await repo.contarOutrosAdmins(tx, alvo.id)) === 0)
@@ -96,6 +102,12 @@ export async function excluir(ator: Ator, id: string): Promise<void> {
     // distorceria as metricas historicas. Inativar a conta tem o mesmo efeito de acesso.
     if (await repo.contarEventosCampanha(alvo.id, tx))
       falhar(409, 'Usuário com histórico em campanhas de phishing: inative a conta em vez de excluir', 'USUARIO_COM_HISTORICO');
+    // B18 (decisao do Leo, 10/10/2026): a ciencia do aviso de monitoramento e a prova de que a
+    // pessoa foi avisada; excluir a conta a apagaria (a FK e Cascade). Qualquer versao conta.
+    // Inativar mantem a prova e tira o acesso. O Cascade do schema fica so como rede de
+    // seguranca para quem apaga a conta por SQL direto, fora da API.
+    if (await repo.contarCiencias(alvo.id, tx))
+      falhar(409, 'Usuário com ciência registrada do aviso de monitoramento: inative a conta em vez de excluir', 'USUARIO_COM_CIENCIA');
     // Preferencias e tokens de redefinicao caem em cascata (onDelete: Cascade).
     await repo.excluir(alvo.id, tx);
     return alvo.email;

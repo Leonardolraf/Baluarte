@@ -75,7 +75,7 @@ describe('cópia do texto no mock', () => {
 });
 
 describe('página "Monitoramento da estação"', () => {
-  it('mostra o texto vindo da API, a versão, o rascunho e o botão de ciência', async () => {
+  it('mostra o texto vindo da API, a versão e o botão de ciência (texto aprovado, sem a pílula de rascunho)', async () => {
     renderApp('/monitoring', 'collaborator');
     expect(
       await screen.findByRole('heading', { name: 'Monitoramento da estação', level: 1 }, FIND),
@@ -88,13 +88,23 @@ describe('página "Monitoramento da estação"', () => {
     }
     expect(screen.getByText('arquivos e documentos;')).toBeInTheDocument();
     expect(screen.getByText(/art\. 7º, inciso IX/)).toBeInTheDocument();
-    expect(screen.getByText('Rascunho em aprovação')).toBeInTheDocument();
+    expect(screen.queryByText('Rascunho em aprovação')).not.toBeInTheDocument();
     expect(screen.getByText(MOCK_MONITORING_NOTICE.version)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Li e estou ciente' })).toBeEnabled();
     // Na própria página do aviso o banner não aparece, e o colaborador não vê a lista.
     expect(screen.queryByTestId('monitoring-banner')).not.toBeInTheDocument();
     await waitForIdle();
     expect(screen.queryByText('Ciências registradas')).not.toBeInTheDocument();
+  });
+
+  it('texto novo ainda não aprovado (rascunho) mostra a pílula "Rascunho em aprovação"', async () => {
+    const original = mockApi.getMonitoringNotice.bind(mockApi);
+    vi.spyOn(mockApi, 'getMonitoringNotice').mockImplementation(async () => ({
+      ...(await original()),
+      draft: true,
+    }));
+    renderApp('/monitoring', 'collaborator');
+    expect(await screen.findByText('Rascunho em aprovação', {}, FIND)).toBeInTheDocument();
   });
 
   it('"Li e estou ciente" registra a versão lida, avisa e troca o botão pela data', async () => {
@@ -264,10 +274,26 @@ describe('mock da API (espelho das regras do servidor)', () => {
     });
   });
 
-  it('excluir o usuário leva a ciência dele (como o Cascade do banco)', async () => {
+  it('não exclui a conta que tem ciência (409 USUARIO_COM_CIENCIA, como a API); a ciência fica', async () => {
     signIn('admin');
-    await mockApi.deleteUser('u-003');
+    await expect(mockApi.deleteUser('u-003')).rejects.toMatchObject({
+      status: 409,
+      code: 'USUARIO_COM_CIENCIA',
+      message: 'Usuário com ciência registrada do aviso de monitoramento: inative a conta em vez de excluir',
+    });
+    expect((await mockApi.listUsers()).some((u) => u.id === 'u-003')).toBe(true);
     const list = await mockApi.listMonitoringAcknowledgements();
-    expect(list.items.map((a) => a.user.id)).toEqual(['u-000']);
+    expect(list.items.map((a) => a.user.id).sort()).toEqual(['u-000', 'u-003']);
+  });
+
+  it('a conta com ciência pode ser inativada e a conta sem ciência continua podendo ser excluída', async () => {
+    signIn('admin');
+    await expect(mockApi.updateUser('u-003', { status: 'inactive' })).resolves.toMatchObject({
+      status: 'inactive',
+    });
+    expect((await mockApi.listMonitoringAcknowledgements()).total).toBe(2);
+    const semCiencia = MOCK_USERS.find((u) => u.id !== 'u-000' && u.id !== 'u-003' && u.role !== 'admin')!;
+    await expect(mockApi.deleteUser(semCiencia.id)).resolves.toBeUndefined();
+    expect((await mockApi.listUsers()).some((u) => u.id === semCiencia.id)).toBe(false);
   });
 });
