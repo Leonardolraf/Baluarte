@@ -1,6 +1,6 @@
 # Teste de carga da API — RNF-004 (B30)
 
-Gerado por `npm run carga` (`backend/scripts/carga.mjs`) em 2026-10-09T01:10:24.880Z. **Não edite à mão:** rode de novo.
+Gerado por `npm run carga` (`backend/scripts/carga.mjs`) em 2026-10-10T05:02:02.189Z. **Não edite à mão:** rode de novo.
 
 ## O que o RNF-004 pede
 
@@ -18,11 +18,11 @@ DRS v4: "Relatórios de varredura em até 60s para até 50 endpoints. Dashboard 
 
 | Cenário | Sozinha | Conexões | Requisições | Req/s | p50 | p90 | p95 | p99 | máx. | não 2xx | erros / timeouts | Meta | Resultado |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
-| Dashboard (`GET /api/dashboard`) | 36 ms | 200 | 4.613 | 153,8 | 1.268 ms | 1.354 ms | 1.381 ms | 1.425 ms | 1.488 ms | 0 | 0 / 0 | p90 ≤ 3 s (RNF-004) | **atende** |
-| Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`) | 15 ms | 200 | 15.340 | 511,3 | 387 ms | 412 ms | 419 ms | 450 ms | 519 ms | 0 | 0 / 0 | p90 ≤ 3 s (US-003 / RNF-004) | **atende** |
-| Ativos com nota de risco (`GET /api/assets`) | 10 ms | 200 | 21.653 | 721,8 | 274 ms | 296 ms | 302 ms | 317 ms | 348 ms | 0 | 0 / 0 | p90 ≤ 3 s (mesma régua do dashboard) | **atende** |
-| Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`) | 641 ms | 10 | 50 | 1,7 | 5.915 ms | 6.332 ms | 6.337 ms | 6.342 ms | 6.342 ms | 0 | 0 / 0 | p95 ≤ 60 s (RNF-004) | **atende** |
-| Login com senha certa (`POST /api/login`, bcrypt custo 10) | 71 ms | 50 | 477 | 15,9 | 3.030 ms | 3.429 ms | 3.553 ms | 4.084 ms | 4.221 ms | 0 | 0 / 0 | sem meta no DRS | **informativo** |
+| Dashboard (`GET /api/dashboard`) | 38 ms | 200 | 4.400 | 146,7 | 1.331 ms | 1.404 ms | 1.427 ms | 1.480 ms | 1.582 ms | 0 | 0 / 0 | p90 ≤ 3 s (RNF-004) | **atende** |
+| Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`) | 13 ms | 200 | 13.391 | 446,4 | 445 ms | 484 ms | 495 ms | 530 ms | 558 ms | 0 | 0 / 0 | p90 ≤ 3 s (US-003 / RNF-004) | **atende** |
+| Ativos com nota de risco (`GET /api/assets`) | 11 ms | 200 | 19.448 | 648,3 | 300 ms | 333 ms | 353 ms | 402 ms | 422 ms | 0 | 0 / 0 | p90 ≤ 3 s (mesma régua do dashboard) | **atende** |
+| Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`) | 753 ms | 10 | 40 | 1,3 | 6.451 ms | 7.132 ms | 7.140 ms | 7.146 ms | 7.146 ms | 0 | 0 / 0 | p95 ≤ 60 s (RNF-004) | **atende** |
+| Login com senha certa (`POST /api/login`, bcrypt custo 10) | 73 ms | 50 | 460 | 15,3 | 3.081 ms | 3.351 ms | 3.459 ms | 3.710 ms | 3.963 ms | 0 | 0 / 0 | sem meta no DRS | **informativo** |
 
 ### Antes e depois das correções do dashboard (B30)
 
@@ -30,25 +30,25 @@ A rodada de referência, sobre o código da `main` sem o B30 (`4f6faf7`, já com
 
 | Cenário | Req/s | p50 | p90 | p99 |
 |---|---:|---:|---:|---:|
-| Dashboard (`GET /api/dashboard`) | 20 → 153,8 | 8.621 ms → 1.268 ms | 8.752 ms → 1.354 ms | 10.069 ms → 1.425 ms |
-| Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`) | 498,4 → 511,3 | 398 ms → 387 ms | 424 ms → 412 ms | 446 ms → 450 ms |
-| Ativos com nota de risco (`GET /api/assets`) | 709,3 → 721,8 | 278 ms → 274 ms | 303 ms → 296 ms | 367 ms → 317 ms |
-| Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`) | 1,7 → 1,7 | 5.926 ms → 5.915 ms | 6.072 ms → 6.332 ms | 6.083 ms → 6.342 ms |
-| Login com senha certa (`POST /api/login`, bcrypt custo 10) | 15,7 → 15,9 | 3.027 ms → 3.030 ms | 3.179 ms → 3.429 ms | 3.957 ms → 4.084 ms |
+| Dashboard (`GET /api/dashboard`) | 20 → 146,7 | 8.621 ms → 1.331 ms | 8.752 ms → 1.404 ms | 10.069 ms → 1.480 ms |
+| Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`) | 498,4 → 446,4 | 398 ms → 445 ms | 424 ms → 484 ms | 446 ms → 530 ms |
+| Ativos com nota de risco (`GET /api/assets`) | 709,3 → 648,3 | 278 ms → 300 ms | 303 ms → 333 ms | 367 ms → 402 ms |
+| Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`) | 1,7 → 1,3 | 5.926 ms → 6.451 ms | 6.072 ms → 7.132 ms | 6.083 ms → 7.146 ms |
+| Login com senha certa (`POST /api/login`, bcrypt custo 10) | 15,7 → 15,3 | 3.027 ms → 3.081 ms | 3.179 ms → 3.351 ms | 3.957 ms → 3.710 ms |
 
 ### Limite de tentativas de login
 
-O limite é **por e-mail** (5 falhas em 15 min, tabela `LoginFailure`) e conta só falhas: login com a senha certa nunca bate nele. O cenário de login acima reveza 206 contas válidas da massa de demonstração e recebeu 0 respostas 429. Para exercitar o limite, 20 tentativas com senha errada foram disparadas **ao mesmo tempo** para `ana.souza@empresa.com` (323 ms ao todo): 5 × 401, 15 × 429. Logo depois, a senha **certa** recebeu `429 MUITAS_TENTATIVAS`.
+O limite é **por e-mail** (5 falhas em 15 min, tabela `LoginFailure`) e conta só falhas: login com a senha certa nunca bate nele. O cenário de login acima reveza 206 contas válidas da massa de demonstração e recebeu 0 respostas 429. Para exercitar o limite, 20 tentativas com senha errada foram disparadas **ao mesmo tempo** para `ana.souza@empresa.com` (326 ms ao todo): 5 × 401, 15 × 429. Logo depois, a senha **certa** recebeu `429 MUITAS_TENTATIVAS`.
 
 O limite segura a rajada: 5 senhas erradas avaliadas (401) e 15 recusadas com 429, sem chegar ao bcrypt. A primeira rodada do B30 mostrou 20 × 401 (a contagem vinha antes do bcrypt e o registro da falha depois, sem atomicidade); o DT09 corrigiu reservando a vaga por e-mail antes do bcrypt (`repositories/auth.repository.ts#reservar`, teste em `tests/seguranca/limite-rajada.test.ts`). Com o e-mail bloqueado, nem a senha certa entra até a janela de 15 min passar (comportamento esperado da política).
 
 ## Leitura
 
-- **Dashboard (`GET /api/dashboard`):** 4.613 requisições em 30 s (153,8/s), sem nenhuma resposta fora de 2xx; p90 de 1.354 ms. Atende com folga de 2,2× sobre a meta.
-- **Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`):** 15.340 requisições em 30 s (511,3/s), sem nenhuma resposta fora de 2xx; p90 de 412 ms. Atende com folga de 7,3× sobre a meta.
-- **Ativos com nota de risco (`GET /api/assets`):** 21.653 requisições em 30 s (721,8/s), sem nenhuma resposta fora de 2xx; p90 de 296 ms. Atende com folga de 10,1× sobre a meta.
-- **Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`):** 50 requisições em 30 s (1,7/s), sem nenhuma resposta fora de 2xx; p95 de 6.337 ms. Atende com folga de 9,5× sobre a meta. O PDF é o relatório com todos os achados do filtro, gerado em memória; a varredura simulada conclui em 20 s por construção (`cicloVarredura.service.ts`), então o relatório de uma varredura nova fica pronto em cerca de 20 s mais este tempo. Medido com 10 conexões: exportar o PDF é ação de quem opera, não de 200 pessoas ao mesmo tempo.
-- **Login com senha certa (`POST /api/login`, bcrypt custo 10):** 477 requisições em 30 s (15,9/s), sem nenhuma resposta fora de 2xx; p90 de 3.429 ms. O bcrypt (custo 10, `bcryptjs` em JavaScript puro) gasta CPU de propósito e roda na mesma thread da API: o login é a rota mais cara (cerca de 71 ms sozinho, ~16 por segundo no máximo), e uma rajada de logins atrasa as outras rotas enquanto dura. O DRS não dá meta para o login; com 50 logins simultâneos a resposta passa de 3 s.
+- **Dashboard (`GET /api/dashboard`):** 4.400 requisições em 30 s (146,7/s), sem nenhuma resposta fora de 2xx; p90 de 1.404 ms. Atende com folga de 2,1× sobre a meta.
+- **Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`):** 13.391 requisições em 30 s (446,4/s), sem nenhuma resposta fora de 2xx; p90 de 484 ms. Atende com folga de 6,2× sobre a meta.
+- **Ativos com nota de risco (`GET /api/assets`):** 19.448 requisições em 30 s (648,3/s), sem nenhuma resposta fora de 2xx; p90 de 333 ms. Atende com folga de 9,0× sobre a meta.
+- **Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`):** 40 requisições em 30 s (1,3/s), sem nenhuma resposta fora de 2xx; p95 de 7.140 ms. Atende com folga de 8,4× sobre a meta. O PDF é o relatório com todos os achados do filtro, gerado em memória; a varredura simulada conclui em 20 s por construção (`cicloVarredura.service.ts`), então o relatório de uma varredura nova fica pronto em cerca de 20 s mais este tempo. Medido com 10 conexões: exportar o PDF é ação de quem opera, não de 200 pessoas ao mesmo tempo.
+- **Login com senha certa (`POST /api/login`, bcrypt custo 10):** 460 requisições em 30 s (15,3/s), sem nenhuma resposta fora de 2xx; p90 de 3.351 ms. O bcrypt (custo 10, `bcryptjs` em JavaScript puro) gasta CPU de propósito e roda na mesma thread da API: o login é a rota mais cara (cerca de 73 ms sozinho, ~15 por segundo no máximo), e uma rajada de logins atrasa as outras rotas enquanto dura. O DRS não dá meta para o login; com 50 logins simultâneos a resposta passa de 3 s.
 
 ## Como repetir
 

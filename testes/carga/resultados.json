@@ -1,6 +1,6 @@
 {
   "ambiente": {
-    "data": "2026-10-09T01:10:24.880Z",
+    "data": "2026-10-10T05:02:02.189Z",
     "so": "Windows_NT 10.0.26200",
     "cpu": "AMD Ryzen 7 5700X 8-Core Processor (16 núcleos lógicos)",
     "memoriaGiB": 48,
@@ -18,21 +18,21 @@
       "metaTexto": "p90 ≤ 3 s (RNF-004)",
       "conexoes": 200,
       "duracaoS": 30,
-      "requisicoes": 4613,
-      "rps": 153.8,
-      "p50": 1267.7099,
-      "p90": 1354.2565,
-      "p95": 1381.3209,
-      "p99": 1424.6309999999999,
-      "max": 1487.8737,
+      "requisicoes": 4400,
+      "rps": 146.7,
+      "p50": 1331.1229,
+      "p90": 1403.9928,
+      "p95": 1427.387,
+      "p99": 1480.4712,
+      "max": 1582.4915,
       "status": {
-        "200": 4613
+        "200": 4400
       },
       "erros": 0,
       "timeouts": 0,
       "naoDois": 0,
-      "semCarga": 36.15480000000025,
-      "leitura": "4.613 requisições em 30 s (153,8/s), sem nenhuma resposta fora de 2xx; p90 de 1.354 ms. Atende com folga de 2,2× sobre a meta."
+      "semCarga": 37.98739999999816,
+      "leitura": "4.400 requisições em 30 s (146,7/s), sem nenhuma resposta fora de 2xx; p90 de 1.404 ms. Atende com folga de 2,1× sobre a meta."
     },
     {
       "id": "vulnerabilidades",
@@ -42,21 +42,21 @@
       "metaTexto": "p90 ≤ 3 s (US-003 / RNF-004)",
       "conexoes": 200,
       "duracaoS": 30,
-      "requisicoes": 15340,
-      "rps": 511.3,
-      "p50": 387.3579,
-      "p90": 412.2896,
-      "p95": 418.7083,
-      "p99": 449.8708,
-      "max": 518.7709,
+      "requisicoes": 13391,
+      "rps": 446.4,
+      "p50": 444.7276,
+      "p90": 484.1695,
+      "p95": 495.182,
+      "p99": 530.4889,
+      "max": 557.8093,
       "status": {
-        "200": 15340
+        "200": 13391
       },
       "erros": 0,
       "timeouts": 0,
       "naoDois": 0,
-      "semCarga": 15.084900000001653,
-      "leitura": "15.340 requisições em 30 s (511,3/s), sem nenhuma resposta fora de 2xx; p90 de 412 ms. Atende com folga de 7,3× sobre a meta."
+      "semCarga": 12.762799999996787,
+      "leitura": "13.391 requisições em 30 s (446,4/s), sem nenhuma resposta fora de 2xx; p90 de 484 ms. Atende com folga de 6,2× sobre a meta."
     },
     {
       "id": "ativos",
@@ -66,21 +66,21 @@
       "metaTexto": "p90 ≤ 3 s (mesma régua do dashboard)",
       "conexoes": 200,
       "duracaoS": 30,
-      "requisicoes": 21653,
-      "rps": 721.8,
-      "p50": 273.7379,
-      "p90": 296.3852,
-      "p95": 302.2188,
-      "p99": 317.2263,
-      "max": 347.6508,
+      "requisicoes": 19448,
+      "rps": 648.3,
+      "p50": 300.4738,
+      "p90": 333.3762,
+      "p95": 353.1189,
+      "p99": 402.2213,
+      "max": 422.1161,
       "status": {
-        "200": 21653
+        "200": 19448
       },
       "erros": 0,
       "timeouts": 0,
       "naoDois": 0,
-      "semCarga": 10.093599999992875,
-      "leitura": "21.653 requisições em 30 s (721,8/s), sem nenhuma resposta fora de 2xx; p90 de 296 ms. Atende com folga de 10,1× sobre a meta."
+      "semCarga": 11.180500000002212,
+      "leitura": "19.448 requisições em 30 s (648,3/s), sem nenhuma resposta fora de 2xx; p90 de 333 ms. Atende com folga de 9,0× sobre a meta."
     },
     {
       "id": "pdf",
@@ -90,21 +90,21 @@
       "metaTexto": "p95 ≤ 60 s (RNF-004)",
       "conexoes": 10,
       "duracaoS": 30,
-      "requisicoes": 50,
-      "rps": 1.7,
-      "p50": 5915.0777,
-      "p90": 6331.8871,
-      "p95": 6337.3314,
-      "p99": 6341.5642,
-      "max": 6341.5642,
+      "requisicoes": 40,
+      "rps": 1.3,
+      "p50": 6450.6182,
+      "p90": 7132.2291,
+      "p95": 7139.6784,
+      "p99": 7146.1299,
+      "max": 7146.1299,
       "status": {
-        "200": 50
+        "200": 40
       },
       "erros": 0,
       "timeouts": 0,
       "naoDois": 0,
-      "semCarga": 640.9331999999995,
-      "leitura": "50 requisições em 30 s (1,7/s), sem nenhuma resposta fora de 2xx; p95 de 6.337 ms. Atende com folga de 9,5× sobre a meta. O PDF é o relatório com todos os achados do filtro, gerado em memória; a varredura simulada conclui em 20 s por construção (`cicloVarredura.service.ts`), então o relatório de uma varredura nova fica pronto em cerca de 20 s mais este tempo. Medido com 10 conexões: exportar o PDF é ação de quem opera, não de 200 pessoas ao mesmo tempo."
+      "semCarga": 752.6846000000078,
+      "leitura": "40 requisições em 30 s (1,3/s), sem nenhuma resposta fora de 2xx; p95 de 7.140 ms. Atende com folga de 8,4× sobre a meta. O PDF é o relatório com todos os achados do filtro, gerado em memória; a varredura simulada conclui em 20 s por construção (`cicloVarredura.service.ts`), então o relatório de uma varredura nova fica pronto em cerca de 20 s mais este tempo. Medido com 10 conexões: exportar o PDF é ação de quem opera, não de 200 pessoas ao mesmo tempo."
     },
     {
       "id": "login",
@@ -114,27 +114,27 @@
       "metaTexto": "sem meta no DRS",
       "conexoes": 50,
       "duracaoS": 30,
-      "requisicoes": 477,
-      "rps": 15.9,
-      "p50": 3029.536,
-      "p90": 3428.6369,
-      "p95": 3552.5562,
-      "p99": 4083.6276,
-      "max": 4221.0079,
+      "requisicoes": 460,
+      "rps": 15.3,
+      "p50": 3080.7616,
+      "p90": 3350.6473,
+      "p95": 3459.1804,
+      "p99": 3710.036,
+      "max": 3962.7069,
       "status": {
-        "200": 477
+        "200": 460
       },
       "erros": 0,
       "timeouts": 0,
       "naoDois": 0,
-      "semCarga": 71.39009999998962,
-      "leitura": "477 requisições em 30 s (15,9/s), sem nenhuma resposta fora de 2xx; p90 de 3.429 ms. O bcrypt (custo 10, `bcryptjs` em JavaScript puro) gasta CPU de propósito e roda na mesma thread da API: o login é a rota mais cara (cerca de 71 ms sozinho, ~16 por segundo no máximo), e uma rajada de logins atrasa as outras rotas enquanto dura. O DRS não dá meta para o login; com 50 logins simultâneos a resposta passa de 3 s."
+      "semCarga": 73.289300000004,
+      "leitura": "460 requisições em 30 s (15,3/s), sem nenhuma resposta fora de 2xx; p90 de 3.351 ms. O bcrypt (custo 10, `bcryptjs` em JavaScript puro) gasta CPU de propósito e roda na mesma thread da API: o login é a rota mais cara (cerca de 73 ms sozinho, ~15 por segundo no máximo), e uma rajada de logins atrasa as outras rotas enquanto dura. O DRS não dá meta para o login; com 50 logins simultâneos a resposta passa de 3 s."
     }
   ],
   "limite": {
     "email": "ana.souza@empresa.com",
     "tentativas": 20,
-    "duracaoMs": 323,
+    "duracaoMs": 326,
     "contagem": {
       "401": 5,
       "429": 15
