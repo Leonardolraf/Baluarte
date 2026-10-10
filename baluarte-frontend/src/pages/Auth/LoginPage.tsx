@@ -5,6 +5,7 @@ import type { RBACRole } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { USE_MOCKS } from '@/services/api';
 import { errorMessage } from '@/lib/errors';
+import { internalDestination } from '@/lib/redirect';
 import { ROLE_LABEL } from '@/lib/roles';
 import { notify } from '@/store/uiStore';
 import { Button, FormErrorBanner, FormField, Input, describedBy } from '@/components';
@@ -91,9 +92,8 @@ export default function LoginPage() {
 
   const redirectState = location.state as RedirectState | null;
   const from = redirectState?.from;
-  const destination = from?.pathname
-    ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
-    : '/dashboard';
+  // Só caminho interno (DT02): origem estranha ao site volta para o dashboard.
+  const destination = internalDestination(from);
 
   if (isAuthenticated) {
     return <Navigate to={destination} replace />;
