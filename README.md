@@ -1,4 +1,4 @@
-# Baluarte V2
+# Baluarte
 
 Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia de Software — UCB), construída como sistema **real** para a disciplina de **Teste de Software**: backend + frontend de verdade, contra os quais rodam as suítes de teste de API (Postman/Newman) e de UI (Robot Framework + Selenium) da N2 AT1 — não mais contra stubs — e a **suíte funcional oficial do produto** (Playwright, em modo mock e contra a API real).
 
