@@ -1736,6 +1736,14 @@ export const mockApi: BaluarteApi = {
     const admins = state.users.filter((u) => u.role === 'admin' && u.status !== 'inactive');
     if (user.role === 'admin' && admins.length <= 1)
       throw new HttpError(409, 'ULTIMO_ADMIN', 'Não é possível excluir o único administrador ativo.');
+    // Como a API: quem já foi destinatário de campanha de phishing tem histórico e só pode ser
+    // inativado (USUARIO_COM_HISTORICO), antes da regra da ciência, na mesma ordem do backend.
+    if (state.recipients.some((r) => r.email.toLowerCase() === user.email.toLowerCase()))
+      throw new HttpError(
+        409,
+        'USUARIO_COM_HISTORICO',
+        'Usuário com histórico em campanhas de phishing: inative a conta em vez de excluir',
+      );
     // Como a API (B18, decisão de 10/10/2026): a ciência do aviso de monitoramento, de qualquer
     // versão, é a prova de que a pessoa foi avisada; a conta que a tem só pode ser inativada.
     if (state.monitoringAcks.some((a) => a.userId === user.id))

@@ -8,7 +8,7 @@ import { HttpError } from '@/lib/errors';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage, userStorage } from '@/lib/storage';
 import { mockApi } from '@/mocks/api';
-import { MOCK_MONITORING_NOTICE, MOCK_USERS } from '@/mocks/data';
+import { MOCK_MONITORING_NOTICE, MOCK_RECIPIENTS, MOCK_USERS } from '@/mocks/data';
 import { routes } from '@/routes';
 import { notify } from '@/store/uiStore';
 
@@ -286,13 +286,35 @@ describe('mock da API (espelho das regras do servidor)', () => {
     expect(list.items.map((a) => a.user.id).sort()).toEqual(['u-000', 'u-003']);
   });
 
+  it('não exclui quem tem histórico de campanha (409 USUARIO_COM_HISTORICO, como a API)', async () => {
+    signIn('admin');
+    const emails = new Set(MOCK_RECIPIENTS.map((r) => r.email.toLowerCase()));
+    const destinatario = MOCK_USERS.find(
+      (u) => u.role !== 'admin' && u.id !== 'u-003' && emails.has(u.email.toLowerCase()),
+    );
+    expect(destinatario).toBeDefined();
+    await expect(mockApi.deleteUser(destinatario!.id)).rejects.toMatchObject({
+      status: 409,
+      code: 'USUARIO_COM_HISTORICO',
+      message: 'Usuário com histórico em campanhas de phishing: inative a conta em vez de excluir',
+    });
+    expect((await mockApi.listUsers()).some((u) => u.id === destinatario!.id)).toBe(true);
+  });
+
   it('a conta com ciência pode ser inativada e a conta sem ciência continua podendo ser excluída', async () => {
     signIn('admin');
     await expect(mockApi.updateUser('u-003', { status: 'inactive' })).resolves.toMatchObject({
       status: 'inactive',
     });
     expect((await mockApi.listMonitoringAcknowledgements()).total).toBe(2);
-    const semCiencia = MOCK_USERS.find((u) => u.id !== 'u-000' && u.id !== 'u-003' && u.role !== 'admin')!;
+    const comHistorico = new Set(MOCK_RECIPIENTS.map((r) => r.email.toLowerCase()));
+    const semCiencia = MOCK_USERS.find(
+      (u) =>
+        u.id !== 'u-000' &&
+        u.id !== 'u-003' &&
+        u.role !== 'admin' &&
+        !comHistorico.has(u.email.toLowerCase()),
+    )!;
     await expect(mockApi.deleteUser(semCiencia.id)).resolves.toBeUndefined();
     expect((await mockApi.listUsers()).some((u) => u.id === semCiencia.id)).toBe(false);
   });
