@@ -296,6 +296,23 @@ describe('services/adapters', () => {
     expect(colaborador.kpis.maliciousFiles).toBeNull();
   });
 
+  it('toDashboard: "colaboradores treinados" vem do servidor (a lista de campanhas do dashboard não traz conclusões)', () => {
+    const kpis = { vulnerabilidadesAbertas: 4, criticas: 1, resilienciaPhishing: 80, ativosMonitorados: 3 };
+    const campanhas = [backendCampaign({ status: 'Ativa', destinatarios: 10, taxaClique: 20 })];
+
+    expect(toDashboard(backendDashboard({ kpis: { ...kpis, colaboradoresTreinados: 59 }, campanhas })).kpis.trainedCollaborators).toBe(59);
+    // Backend anterior sem o campo: a soma das campanhas, nunca NaN.
+    expect(toDashboard(backendDashboard({ kpis, campanhas })).kpis.trainedCollaborators).toBe(0);
+    // Colaborador: contagem de campanha não é dele.
+    const colaborador = toDashboard(
+      backendDashboard({
+        kpis: { vulnerabilidadesAbertas: null, criticas: null, resilienciaPhishing: 80, ativosMonitorados: null, colaboradoresTreinados: null },
+        distribuicaoSeveridade: null,
+      }),
+    );
+    expect(colaborador.kpis.trainedCollaborators).toBeNull();
+  });
+
   it('toDashboard (B25b): o índice de risco técnico e a evolução vêm prontos do servidor, sem fórmula no frontend', () => {
     const ponto = {
       data: '2026-10-08',

@@ -405,6 +405,7 @@ describe('dashboard do Colaborador nao vaza dados tecnicos no payload', () => {
     assert.equal(kpis.criticas, null, 'Colaborador nao deve ver a contagem de criticas');
     assert.equal(kpis.ativosMonitorados, null, 'Colaborador nao deve ver a contagem de ativos');
     assert.equal(kpis.arquivosMaliciosos, null, 'Colaborador nao deve ver a contagem de arquivos maliciosos (B17)');
+    assert.equal(kpis.colaboradoresTreinados, null, 'Colaborador nao deve ver a contagem de colaboradores treinados');
     assert.equal(r.body.dados.distribuicaoSeveridade, null, 'Colaborador nao deve ver a distribuicao por severidade');
     assert.deepEqual(r.body.dados.vulnerabilidadesRecentes, [], 'Colaborador nao deve ver achados detalhados');
     assert.deepEqual(r.body.dados.alertas, [], 'Colaborador nao deve ver alertas tecnicos');

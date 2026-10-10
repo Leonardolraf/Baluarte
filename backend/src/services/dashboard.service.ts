@@ -3,7 +3,7 @@ import { avancarVarreduras } from './cicloVarredura.service.js';
 import { contar as contarAtivos } from '../repositories/ativo.repository.js';
 import { listarComEventos } from '../repositories/campanha.repository.js';
 import { contarArquivosMaliciosos } from './analiseArquivo.service.js';
-import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
+import { colaboradoresTreinados, funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
 import { evolucaoRisco } from './evolucaoRisco.service.js';
 import { indiceRiscoTecnico } from './indiceRisco.service.js';
 import { ativosMaiorRisco } from './riscoAtivo.service.js';
@@ -69,6 +69,7 @@ export async function painel(perfil: string) {
         resilienciaPhishing: resiliencia,
         ativosMonitorados: null,
         indiceRiscoTecnico: null, // B25b: tecnico, como os demais
+        colaboradoresTreinados: null, // contagem de campanha: so para os operadores
       },
       distribuicaoSeveridade: null,
       evolucaoRisco: null,
@@ -102,6 +103,8 @@ export async function painel(perfil: string) {
       ativosMonitorados: ativos,
       // B25b: pesos unicos (PESO_SEVERIDADE) sobre a distribuicao, que ja tem os arquivos no Critico.
       indiceRiscoTecnico: indiceRiscoTecnico(sev, ativos),
+      // Pessoas distintas que treinaram (a regra de /treinamentos/consolidado, destino do cartao).
+      colaboradoresTreinados: colaboradoresTreinados(campanhas),
     },
     distribuicaoSeveridade: sev,
     evolucaoRisco: await evolucaoRisco(),

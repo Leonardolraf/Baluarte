@@ -249,6 +249,8 @@ export interface BackendDashboard {
     arquivosMaliciosos?: number | null;
     /** Índice de risco técnico 0–100 calculado no servidor (B25b); null para o Colaborador. */
     indiceRiscoTecnico?: number | null;
+    /** Pessoas distintas que concluíram o treinamento (regra do /treinamentos/consolidado); null para o Colaborador. */
+    colaboradoresTreinados?: number | null;
   };
   distribuicaoSeveridade: Record<string, number> | null;
   /** Últimos 30 dias, do mais antigo a hoje (B25b); null para o Colaborador. */
@@ -869,7 +871,11 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
       monitoredAssets: raw.kpis.ativosMonitorados,
       // Contagens de campanha só existem para quem recebe as campanhas (operadores).
       activeCampaigns: technical ? campaigns.filter((c) => c.status === 'active').length : null,
-      trainedCollaborators: technical ? campaigns.reduce((sum, c) => sum + c.metrics.trained, 0) : null,
+      // Vem pronto do servidor: a lista de campanhas do dashboard não traz conclusões (toCampaign
+      // zera `trained`), então somá-la dava sempre 0. Backend anterior sem o campo: mantém a soma.
+      trainedCollaborators: technical
+        ? (countOrNull(raw.kpis.colaboradoresTreinados) ?? campaigns.reduce((sum, c) => sum + c.metrics.trained, 0))
+        : null,
     },
     severityDistribution,
     recentFindings: raw.vulnerabilidadesRecentes.map(toVulnerability),

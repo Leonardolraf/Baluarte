@@ -32,6 +32,16 @@ export function mapCampaign(c: { id: string; nome: string; template: string; sta
   };
 }
 
+/**
+ * Pessoas distintas que clicaram e concluiram o treinamento em alguma campanha: a mesma regra
+ * da lista de `GET /treinamentos/consolidado` (quem treinou em duas campanhas conta uma vez).
+ */
+export function colaboradoresTreinados(campanhas: { eventos: { userId: string; clicadoEm: Date | null; treinou: boolean }[] }[]) {
+  const pessoas = new Set<string>();
+  for (const c of campanhas) for (const e of c.eventos) if (e.clicadoEm && e.treinou) pessoas.add(e.userId);
+  return pessoas.size;
+}
+
 /** Enviados e clicados somados de todas as campanhas. */
 export function totais(campanhas: { eventos: { enviadoEm: Date | null; clicadoEm: Date | null }[] }[]) {
   const enviados = campanhas.reduce((a, c) => a + c.eventos.filter((e) => e.enviadoEm).length, 0);
