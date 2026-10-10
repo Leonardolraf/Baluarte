@@ -39,7 +39,7 @@ before(async () => {
   const scan = await prisma.scan.create({ data: { assetId: ativo.id, status: 'CONCLUIDA', criadoEm: detectadoEm, concluidoEm: detectadoEm } });
   scanId = scan.id;
   // Como a API cria: achado "Aberta" + evento de criacao no instante do achado.
-  for (const [apelido, chave] of [['sql', 'injecao-sql'], ['idor', 'idor'], ['cors', 'cors-curinga'], ['falha', 'controle-acesso']] as const) {
+  for (const [apelido, chave] of [['sql', 'injecao-sql'], ['idor', 'idor'], ['cors', 'cors-curinga'], ['falha', 'controle-acesso'], ['trava', 'cookie-inseguro']] as const) {
     const f = await prisma.finding.create({ data: { ...dadosAchado(chave), scanId, criadoEm: detectadoEm } });
     await prisma.findingStatusChange.create({ data: { findingId: f.id, de: null, para: 'Aberta', registradaEm: detectadoEm } });
     achado[apelido] = f.id;
@@ -120,6 +120,38 @@ describe('mudança de status grava o histórico (mesma transação)', () => {
     }
     assert.equal((await prisma.finding.findUniqueOrThrow({ where: { id } })).status, status);
     assert.equal((await detalhe(id)).historico.completo, true);
+  });
+
+  it('o instante do evento é o da gravação, depois da trava da linha, e não o do início da instrução', async () => {
+    // `now()` e o inicio da instrucao, antes de esperar o FOR UPDATE: quem esperava a trava
+    // gravava um instante anterior ao do evento que o precedeu, e a cadeia (ordenada pelo
+    // instante) saia fora de ordem sob concorrencia. Aqui o teste segura a linha, confere que o
+    // PATCH esta parado na trava e so entao a solta.
+    const id = achado.trava;
+    let patch: ReturnType<typeof chamar> | undefined;
+    let liberadaEm = new Date(0);
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Finding" WHERE "id" = ${id} FOR UPDATE`;
+      patch = chamar('PATCH', `/vulnerabilidades/${id}`, { token: analista, body: { status: 'Em revisão' } });
+      let esperando = 0;
+      for (let i = 0; i < 100 && !esperando; i++) {
+        await new Promise((ok) => setTimeout(ok, 20));
+        [{ esperando }] = await prisma.$queryRaw<Array<{ esperando: number }>>`
+          SELECT count(*)::int AS esperando FROM pg_stat_activity
+           WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%FindingStatusChange%'`;
+      }
+      assert.equal(esperando, 1, 'o PATCH ficou parado na trava da linha');
+      await new Promise((ok) => setTimeout(ok, 200));
+      [{ liberadaEm }] = await tx.$queryRaw<Array<{ liberadaEm: Date }>>`SELECT clock_timestamp() AS "liberadaEm"`;
+    }, { timeout: 10_000 });
+    const r = await patch!;
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const [mudanca] = (await eventosDe(id)).filter((e) => e.de !== null);
+    // 1 ms de folga: o timestamp(3) do evento arredonda os microssegundos.
+    assert.ok(
+      mudanca.registradaEm.getTime() >= liberadaEm.getTime() - 1,
+      `evento em ${mudanca.registradaEm.toISOString()}, trava liberada em ${liberadaEm.toISOString()}`,
+    );
   });
 
   it('achado inexistente: 404 e nenhum evento', async () => {

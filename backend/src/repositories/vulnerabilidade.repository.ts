@@ -120,6 +120,12 @@ export async function buscar(id: string): Promise<FindingComOrigem | null> {
  * em fila e a cadeia de eventos nunca registra um `de` que ja nao era o status. Repetir o status
  * atual nao grava evento. Devolve null se o achado nao existe.
  *
+ * O instante do evento e `clock_timestamp()`, lido ja com a linha travada, e nao o default
+ * `now()` da coluna: `now()` e o inicio da instrucao, ANTES de esperar a trava, e quem esperava
+ * gravava um instante anterior ao do evento que o precedeu (o historico e a evolucao, que ordenam
+ * pelo instante, viam a cadeia fora de ordem). Em UTC, como o Prisma grava; o empate no mesmo
+ * milissegundo e desfeito pelo `id`, tirado tambem depois da trava.
+ *
  * Nao e uma transacao interativa ($transaction com callback) de proposito: com varias mudancas
  * simultaneas no mesmo achado, as transacoes interativas ficavam esperando a trava segurando a
  * conexao e estouravam o maxWait do Prisma ("Unable to start a transaction in the given time").
@@ -137,8 +143,9 @@ export async function alterarStatus(
       FROM alvo WHERE f."id" = alvo."id"
       RETURNING alvo."status" AS anterior
     ), evento AS (
-      INSERT INTO "FindingStatusChange" ("findingId", "de", "para", "usuarioId")
-      SELECT ${id}, anterior, ${status}, ${usuarioId}::text FROM mudou WHERE anterior <> ${status}
+      INSERT INTO "FindingStatusChange" ("findingId", "de", "para", "usuarioId", "registradaEm")
+      SELECT ${id}, anterior, ${status}, ${usuarioId}::text, (clock_timestamp() AT TIME ZONE 'UTC')::timestamp(3)
+        FROM mudou WHERE anterior <> ${status}
     )
     SELECT anterior FROM mudou`;
   if (!linhas.length) return null;
