@@ -80,12 +80,13 @@ describe('GET /monitoramento/aviso', () => {
     ['Analista', () => analista],
     ['Colaborador', () => colaborador],
   ] as const) {
-    it(`${perfil}: texto, versão, rascunho e ciência ainda não registrada`, async () => {
+    it(`${perfil}: texto aprovado, versão e ciência ainda não registrada`, async () => {
       const r = await chamar('GET', AVISO, { token: token() });
       assert.equal(r.status, 200, JSON.stringify(r.body));
       const d = r.body.dados;
       assert.equal(d.versao, VERSAO_AVISO);
-      assert.equal(d.rascunho, true);
+      // Texto aprovado pelo Leo em 10/10/2026: deixou de ser rascunho.
+      assert.equal(d.rascunho, false);
       assert.equal(d.titulo, TEXTO_AVISO.titulo);
       assert.equal(d.introducao, TEXTO_AVISO.introducao);
       assert.deepEqual(d.secoes, TEXTO_AVISO.secoes);
@@ -105,6 +106,13 @@ describe('GET /monitoramento/aviso', () => {
       assert.ok(texto.includes(termo), `o texto não fala de "${termo}"`);
     for (const naoColetado of ['arquivos e documentos', 'e-mails', 'histórico de navegação', 'teclado', 'tela', 'localização'])
       assert.ok(texto.includes(naoColetado), `o texto não diz que não coleta "${naoColetado}"`);
+    // Aprovado sem a frase sobre produtividade (decisão do Leo, 10/10/2026).
+    assert.ok(!texto.includes('produtividade'), 'a frase sobre produtividade saiu do texto aprovado');
+  });
+
+  it('a versão em vigor é a do texto aprovado (2026-10-10), não a do rascunho publicado (2026-10-08)', () => {
+    assert.equal(VERSAO_AVISO, '2026-10-10');
+    assert.equal(AVISO_RASCUNHO, false);
   });
 });
 
@@ -173,13 +181,16 @@ describe('POST /monitoramento/ciencia', () => {
 
   it('ciência de uma versão antiga não vale para a atual', async () => {
     const u = await novoUsuario('Analista');
-    await prisma.monitoringAcknowledgement.create({ data: { userId: u.id, versao: '2026-01-01' } });
+    // 2026-10-08: o rascunho publicado na demonstração antes da aprovação. Quem deu ciência dele
+    // precisa ler o texto aprovado e registrar de novo.
+    await prisma.monitoringAcknowledgement.create({ data: { userId: u.id, versao: '2026-10-08' } });
     const r = await chamar('GET', AVISO, { token: u.token });
     assert.deepEqual(r.body.dados.ciencia, { registrada: false, registradaEm: null });
+    esperaErro(await chamar('POST', CIENCIA, { token: u.token, body: { versao: '2026-10-08' } }), 409, 'VERSAO_DESATUALIZADA');
     // A nova ciência convive com a antiga (histórico por versão).
     assert.equal((await chamar('POST', CIENCIA, { token: u.token, body: { versao: VERSAO_AVISO } })).status, 201);
     const versoes = (await prisma.monitoringAcknowledgement.findMany({ where: { userId: u.id } })).map((c) => c.versao).sort();
-    assert.deepEqual(versoes, ['2026-01-01', VERSAO_AVISO].sort());
+    assert.deepEqual(versoes, ['2026-10-08', VERSAO_AVISO].sort());
   });
 
   it('o banco recusa versão fora do formato (CHECK) e a mesma versão duas vezes (único)', async () => {
@@ -208,15 +219,15 @@ describe('GET /monitoramento/ciencias (só Administrador)', () => {
     assert.ok(colab);
     assert.equal(colab.versao, VERSAO_AVISO);
     assert.deepEqual(colab.usuario, { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', perfil: 'Colaborador', status: 'Ativo' });
-    assert.ok(dados.some((c) => c.versao === '2026-01-01'), 'a versão antiga também aparece');
+    assert.ok(dados.some((c) => c.versao === '2026-10-08'), 'a versão antiga também aparece');
     // Nada de dado sensível da conta na resposta.
     assert.doesNotMatch(JSON.stringify(dados), /senhaHash|\$2[aby]\$/);
   });
 
   it('filtra por versão e pagina no servidor sem repetir nem pular', async () => {
-    const soAntiga = await listar('?versao=2026-01-01');
+    const soAntiga = await listar('?versao=2026-10-08');
     assert.ok(soAntiga.dados.length >= 1);
-    assert.ok(soAntiga.dados.every((c) => c.versao === '2026-01-01'));
+    assert.ok(soAntiga.dados.every((c) => c.versao === '2026-10-08'));
     assert.equal(soAntiga.resumo.total, soAntiga.dados.length);
 
     const todos = await listar('?tamanho=100');
@@ -254,12 +265,75 @@ describe('GET /monitoramento/ciencias (só Administrador)', () => {
 });
 
 describe('exclusão de usuário', () => {
-  it('excluir a conta leva as ciências dela (dado pessoal), e o registro da auditoria continua', async () => {
+  // Decisão do Leo (10/10/2026): a ciência é a prova de que a pessoa foi avisada, então a conta
+  // que tem ciência não é excluída pela API (409 USUARIO_COM_CIENCIA); a saída é inativar. O
+  // Cascade do schema continua só como rede de segurança para exclusão por SQL direto.
+  it('conta com ciência registrada: 409 USUARIO_COM_CIENCIA, e a conta e a ciência ficam', async () => {
     const u = await novoUsuario();
     assert.equal((await chamar('POST', CIENCIA, { token: u.token, body: { versao: VERSAO_AVISO } })).status, 201);
     const r = await chamar('DELETE', `/users/${u.id}`, { token: admin });
+    esperaErro(r, 409, 'USUARIO_COM_CIENCIA');
+    assert.equal(r.body.mensagem, 'Usuário com ciência registrada do aviso de monitoramento: inative a conta em vez de excluir');
+    assert.ok(await prisma.user.findUnique({ where: { id: u.id } }));
+    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: u.id } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { acao: 'EXCLUIR_USUARIO', detalhe: { startsWith: u.id } } }), 0);
+  });
+
+  it('ciência de uma versão antiga também impede a exclusão (qualquer versão é prova do aviso)', async () => {
+    const u = await novoUsuario();
+    await prisma.monitoringAcknowledgement.create({ data: { userId: u.id, versao: '2026-10-08' } });
+    esperaErro(await chamar('DELETE', `/users/${u.id}`, { token: admin }), 409, 'USUARIO_COM_CIENCIA');
+  });
+
+  it('a conta com ciência pode ser inativada: perde o acesso e a ciência continua guardada', async () => {
+    const u = await novoUsuario();
+    assert.equal((await chamar('POST', CIENCIA, { token: u.token, body: { versao: VERSAO_AVISO } })).status, 201);
+    const r = await chamar('PATCH', `/users/${u.id}`, { token: admin, body: { status: 'Inativo' } });
     assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.dados.status, 'Inativo');
+    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: u.id } }), 1);
+    esperaErro(await chamar('GET', AVISO, { token: u.token }), 401, 'USUARIO_INATIVO');
+  });
+
+  it('conta sem ciência continua podendo ser excluída', async () => {
+    const u = await novoUsuario();
+    const r = await chamar('DELETE', `/users/${u.id}`, { token: admin });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(await prisma.user.findUnique({ where: { id: u.id } }), null);
+  });
+
+  it('ciência gravada durante a exclusão entra na contagem (a conta é travada antes de contar)', async () => {
+    const u = await novoUsuario();
+    let exclusao: ReturnType<typeof chamar> | undefined;
+    // A ciência fica gravada e ainda sem commit enquanto o DELETE chega: sem a trava da linha
+    // do usuário, a contagem dava zero e a cascata apagava a ciência ao fim do DELETE.
+    await prisma.$transaction(async (tx) => {
+      await tx.monitoringAcknowledgement.create({ data: { userId: u.id, versao: VERSAO_AVISO } });
+      exclusao = chamar('DELETE', `/users/${u.id}`, { token: admin });
+      await new Promise((ok) => setTimeout(ok, 300));
+    });
+    esperaErro(await exclusao!, 409, 'USUARIO_COM_CIENCIA');
+    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: u.id } }), 1);
+  });
+
+  it('as regras anteriores vêm antes: histórico de campanha e conta inexistente mantêm a resposta', async () => {
+    const outro = await novoUsuario('Colaborador');
+    assert.equal((await chamar('POST', CIENCIA, { token: outro.token, body: { versao: VERSAO_AVISO } })).status, 201);
+    const campanha = await chamar('POST', '/campaigns', {
+      token: analista,
+      body: { nome: 'Histórico e ciência', destinatario: outro.email, template: 'urgencia' },
+    });
+    assert.equal(campanha.status, 201, JSON.stringify(campanha.body));
+    esperaErro(await chamar('DELETE', `/users/${outro.id}`, { token: admin }), 409, 'USUARIO_COM_HISTORICO');
+    esperaErro(await chamar('DELETE', '/users/nao-existe', { token: admin }), 404, 'USUARIO_NAO_ENCONTRADO');
+  });
+
+  it('por SQL direto, fora da API, o Cascade do banco ainda leva as ciências (rede de segurança)', async () => {
+    const u = await novoUsuario();
+    assert.equal((await chamar('POST', CIENCIA, { token: u.token, body: { versao: VERSAO_AVISO } })).status, 201);
+    await prisma.$executeRaw`DELETE FROM "User" WHERE id = ${u.id}`;
     assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: u.id } }), 0);
+    // O registro da auditoria (sem FK) continua.
     assert.equal(await prisma.auditLog.count({ where: { acao: 'REGISTRAR_CIENCIA_MONITORAMENTO', usuarioId: u.id } }), 1);
   });
 });

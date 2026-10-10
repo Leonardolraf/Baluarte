@@ -61,6 +61,24 @@ export function contarEventosCampanha(userId: string, db: Db = prisma) {
   return db.campaignEvent.count({ where: { userId } });
 }
 
+/**
+ * Quantas ciencias do aviso de monitoramento o usuario registrou, de qualquer versao (B18):
+ * a prova de que a pessoa foi avisada impede a exclusao da conta.
+ */
+export function contarCiencias(userId: string, db: Db = prisma) {
+  return db.monitoringAcknowledgement.count({ where: { userId } });
+}
+
+/**
+ * Trava a linha do usuario ate o fim da transacao (FOR UPDATE). Na exclusao, vem ANTES das
+ * contagens: uma ciencia gravada ao mesmo tempo (o INSERT segura a linha do usuario pela FK)
+ * termina antes e entra na contagem, ou espera a exclusao e falha pela FK. Sem a trava, a
+ * contagem podia dar zero e o DELETE apagar a ciencia recem-gravada pela cascata.
+ */
+export async function travar(id: string, db: Db): Promise<void> {
+  await db.$queryRaw`SELECT id FROM "User" WHERE id = ${id} FOR UPDATE`;
+}
+
 /** Transacao para as regras que dependem do estado atual (check-then-act atomico). */
 export function emTransacao<T>(fn: (tx: Db) => Promise<T>): Promise<T> {
   return prisma.$transaction(fn);
