@@ -103,6 +103,18 @@ describe('LoginPage', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('?status=active#relatorio');
   });
 
+  it('origem que aponta para outro site (barra invertida, DT02) leva ao dashboard, não para fora', async () => {
+    const user = userEvent.setup();
+    renderLogin(ANONYMOUS, { pathname: '/login', state: { from: { pathname: '/\\evil.example/x' } } });
+
+    const { email, password, submit } = fields();
+    await user.type(email, ADMIN.email);
+    await user.type(password, ADMIN.password);
+    await user.click(submit);
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard (stub)' })).toBeInTheDocument();
+  });
+
   it('mostra a mensagem de erro da API para credenciais inválidas e não navega', async () => {
     const user = userEvent.setup();
     renderLogin();

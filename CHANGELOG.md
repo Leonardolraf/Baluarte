@@ -599,6 +599,12 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Números** (sobre a main `a888ad0`): backend 707/707 (175 unidade + 10 banco + 396 integração + 126 pentest). Eram 704 na main: o PR #47 tinha acrescentado 1 de integração sem atualizar as contagens.
 - **Produção:** entra pelo ciclo congelado (PR verde → migration aplicada no Supabase → merge).
 
+## 2026-10-10 — DT02: login só volta para caminho interno
+
+- **Risco:** o `npm audit` do frontend acusa 2 avisos moderados no react-router 6 (correção só no 7, versão maior). O GHSA-337j-9hxr-rhxg é da hidratação SSR, que o Baluarte não usa (SPA). O GHSA-wrjc-x8rr-h8h6 (redirecionamento aberto com barra invertida em `<Link>`/`useNavigate`) só se aplica a destino vindo de fora, e o único `navigate` com destino dinâmico é o do login (a origem que o `ProtectedRoute` guarda em `state.from`).
+- **Correção:** `src/lib/redirect.ts#internalDestination`: o login só aceita caminho interno (começa com `/`, o segundo caractere não é `/` nem barra invertida, sem barra invertida no caminho, sem caractere de controle); o resto volta para `/dashboard`. O upgrade para o react-router 7 fica como risco aceito até depois da apresentação, agora sem o ponto de exploração.
+- **Teste:** 11 casos da função em `lib.test.ts` e 1 no `LoginPage.test.tsx` (origem com barra invertida leva ao dashboard; conferido que falha sem a correção). Frontend 636/636.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -606,7 +612,7 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração) e retenção de 12 meses; trava no banco na branch `feat/b29-trava`, para depois da apresentação) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 707 no backend (175 unidade + 10 banco + 396 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 624 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 707 no backend (175 unidade + 10 banco + 396 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 636 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

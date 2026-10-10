@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INTERNAL_DOMAIN, internalDomain } from '@/lib/domain';
 import { normalizeAssetHost } from '@/lib/host';
+import { DEFAULT_DESTINATION, internalDestination } from '@/lib/redirect';
 import {
   formatCvss,
   formatDate,
@@ -244,5 +245,32 @@ describe('lib/errors e lib/cn', () => {
 
   it('combina classes condicionalmente', () => {
     expect(cn('a', false && 'b', undefined, 'c')).toBe('a c');
+  });
+});
+
+describe('lib/redirect — destino do login só interno (DT02)', () => {
+  it('mantém caminho interno com busca e fragmento (inclusive barra invertida na busca)', () => {
+    expect(
+      internalDestination({ pathname: '/campaigns', search: '?status=active', hash: '#relatorio' }),
+    ).toBe('/campaigns?status=active#relatorio');
+    expect(internalDestination({ pathname: '/files', search: '?link=abc' })).toBe('/files?link=abc');
+    expect(internalDestination({ pathname: '/vulnerabilities', search: '?q=a\\b' })).toBe(
+      '/vulnerabilities?q=a\\b',
+    );
+  });
+
+  it.each([
+    ['sem origem', null],
+    ['sem caminho', {}],
+    ['protocolo relativo', { pathname: '//evil.example/x' }],
+    ['barra invertida logo após a raiz', { pathname: '/\\evil.example' }],
+    ['barra invertida no meio do caminho', { pathname: '/files\\..\\evil' }],
+    ['endereço absoluto', { pathname: 'https://evil.example' }],
+    ['javascript:', { pathname: 'javascript:alert(1)' }],
+    ['caminho relativo', { pathname: 'dashboard' }],
+    ['caractere de controle', { pathname: '/\tevil.example' }],
+    ['caractere de controle na busca', { pathname: '/files', search: '?x=\n' }],
+  ])('%s → dashboard', (_caso, from) => {
+    expect(internalDestination(from as Parameters<typeof internalDestination>[0])).toBe(DEFAULT_DESTINATION);
   });
 });
