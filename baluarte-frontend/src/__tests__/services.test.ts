@@ -226,16 +226,16 @@ describe('services/adapters', () => {
     expect(dashboard.humanRisk).toBe(0);
   });
 
-  it('toDashboard: com envios, resiliência é medida e o risco humano deriva da taxa de clique', () => {
-    const dashboard = toDashboard(
-      backendDashboard({
-        kpis: { vulnerabilidadesAbertas: 4, criticas: 1, resilienciaPhishing: 80, ativosMonitorados: 3 },
-        campanhas: [backendCampaign({ status: 'Ativa', destinatarios: 100, taxaClique: 20 })],
-      }),
-    );
+  it('toDashboard: com envios, resiliência é medida e o risco humano vem pronto do servidor (sem fórmula na tela)', () => {
+    const kpis = { vulnerabilidadesAbertas: 4, criticas: 1, resilienciaPhishing: 80, ativosMonitorados: 3 };
+    const campanhas = [backendCampaign({ status: 'Ativa', destinatarios: 100, taxaClique: 20 })];
+    const dashboard = toDashboard(backendDashboard({ kpis: { ...kpis, riscoHumano: 56 }, campanhas }));
 
     expect(dashboard.kpis.phishingResilience).toBe(80);
-    expect(dashboard.humanRisk).toBe(50);
+    // 56 não sai de nenhuma conta sobre os 20 % de clique: é o número do servidor.
+    expect(dashboard.humanRisk).toBe(56);
+    // Backend anterior, sem o campo: não medido (0), e não uma fórmula própria da tela.
+    expect(toDashboard(backendDashboard({ kpis, campanhas })).humanRisk).toBe(0);
     expect(dashboard.kpis.activeCampaigns).toBe(1);
     expect(dashboard.recentCampaigns[0]?.metrics).toMatchObject({ sent: 100, clicked: 20, clickRate: 20 });
   });
@@ -300,13 +300,22 @@ describe('services/adapters', () => {
     const kpis = { vulnerabilidadesAbertas: 4, criticas: 1, resilienciaPhishing: 80, ativosMonitorados: 3 };
     const campanhas = [backendCampaign({ status: 'Ativa', destinatarios: 10, taxaClique: 20 })];
 
-    expect(toDashboard(backendDashboard({ kpis: { ...kpis, colaboradoresTreinados: 59 }, campanhas })).kpis.trainedCollaborators).toBe(59);
+    expect(
+      toDashboard(backendDashboard({ kpis: { ...kpis, colaboradoresTreinados: 59 }, campanhas })).kpis
+        .trainedCollaborators,
+    ).toBe(59);
     // Backend anterior sem o campo: a soma das campanhas, nunca NaN.
     expect(toDashboard(backendDashboard({ kpis, campanhas })).kpis.trainedCollaborators).toBe(0);
     // Colaborador: contagem de campanha não é dele.
     const colaborador = toDashboard(
       backendDashboard({
-        kpis: { vulnerabilidadesAbertas: null, criticas: null, resilienciaPhishing: 80, ativosMonitorados: null, colaboradoresTreinados: null },
+        kpis: {
+          vulnerabilidadesAbertas: null,
+          criticas: null,
+          resilienciaPhishing: 80,
+          ativosMonitorados: null,
+          colaboradoresTreinados: null,
+        },
         distribuicaoSeveridade: null,
       }),
     );

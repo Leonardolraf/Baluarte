@@ -605,6 +605,13 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Correção:** `src/lib/redirect.ts#internalDestination`: o login só aceita caminho interno (começa com `/`, o segundo caractere não é `/` nem barra invertida, sem barra invertida no caminho, sem caractere de controle); o resto volta para `/dashboard`. O upgrade para o react-router 7 fica como risco aceito até depois da apresentação, agora sem o ponto de exploração.
 - **Teste:** 11 casos da função em `lib.test.ts` e 1 no `LoginPage.test.tsx` (origem com barra invertida leva ao dashboard; conferido que falha sem a correção). Frontend 636/636.
 
+## 2026-10-10 — Risco humano calculado no servidor
+
+- **Defeito:** o gauge "Risco humano" do dashboard era calculado na tela, e de dois jeitos: com a API real, `clique × 2,5` (`adapters.ts`), sem a submissão de credenciais que o texto da tela cita; no mock, `clique × 2 + submissão × 2`. É o terceiro caso do mesmo padrão, depois dos pesos de severidade (DT07) e da contagem de treinados (DT14).
+- **Correção:** `GET /dashboard` manda `kpis.riscoHumano` = `min(100, taxa de clique % × 2 + taxa de submissão % × 2)` sobre todas as campanhas (taxas inteiras, como no funil), `null` sem envio, visível a todos os perfis como a resiliência. Os pesos ficam só em `PESO_RISCO_HUMANO` (`models/dominio.model.ts`), aprovados pelo Leo em 10/10/2026. O frontend só exibe; o mock já usava a mesma conta.
+- **Efeito na demo:** 539 envios, 104 cliques (19 %) e 48 submissões (9 %): de 48 % (MÉDIO) para 56 % (ALTO).
+- **Teste:** 2 de unidade (pesos fixados, teto, arredondamento, `null` sem envio) e 1 de integração (sem envio é `null`; 5 destinatários com 1 clique e 1 submissão dá 80, igual para Analista e Colaborador). No frontend, o adapter lê o número e, sem o campo, mostra não medido em vez de calcular.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -612,7 +619,7 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração) e retenção de 12 meses; trava no banco na branch `feat/b29-trava`, para depois da apresentação) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 707 no backend (175 unidade + 10 banco + 396 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 636 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 710 no backend (177 unidade + 10 banco + 397 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 636 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

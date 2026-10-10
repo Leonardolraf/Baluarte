@@ -1013,6 +1013,7 @@ export const mockApi: BaluarteApi = {
       const totalSubmitted = measured.reduce((a, c) => a + c.metrics.submitted, 0);
       const clickRate = pct(totalClicked, totalSent);
       const submitRate = pct(totalSubmitted, totalSent);
+      // Mesma conta do servidor (PESO_RISCO_HUMANO = clique 2, submissão 2, em backend/src/models/dominio.model.ts).
       const humanRisk = clampPct(clickRate * 2 + submitRate * 2);
 
       const byDate = <T extends { [K in F]: string }, F extends keyof T>(items: T[], field: F) =>

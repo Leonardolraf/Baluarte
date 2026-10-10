@@ -5,7 +5,7 @@
 // Banco Postgres isolado (baluarte_test_dashboard) — ver helpers.ts.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ANALISTA, chamar, encerrarServidor, iniciarServidor, login, prepararBanco } from './helpers.js';
+import { ADMIN, ANALISTA, SENHA_CONTA, chamar, criarUsuario, encerrarServidor, iniciarServidor, login, prepararBanco } from './helpers.js';
 
 prepararBanco(import.meta.url);
 
@@ -132,5 +132,36 @@ describe('evolução de 30 dias por trechos do histórico (B30, RNF-004)', () =>
     });
     const comoMapa = new Map(obtido.map((r) => [`${r.dia}|${r.severidade}`, Number(r.total)]));
     assert.deepEqual([...comoMapa.entries()].sort(), [...esperado.entries()].sort());
+  });
+});
+
+describe('risco humano calculado no servidor (pesos únicos PESO_RISCO_HUMANO)', () => {
+  it('sem envio é null; com envio é a fórmula sobre os eventos, igual para Analista e Colaborador', async () => {
+    const { PESO_RISCO_HUMANO } = await import('../src/models/dominio.model.js');
+    const risco = async (token: string) => {
+      const r = await chamar('GET', '/dashboard', { token });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      return r.body.dados.kpis.riscoHumano as number | null;
+    };
+    assert.equal(await prisma.campaignEvent.count({ where: { enviadoEm: { not: null } } }), 0);
+    assert.equal(await risco(analista), null, 'sem envio o risco humano não é medido (null, nunca 0)');
+
+    // 5 destinatários: 1 clicou e entregou a senha, 4 só receberam -> clique 20 %, submissão 20 % -> 20x2 + 20x2 = 80.
+    const admin = await login(ADMIN.email, ADMIN.senha);
+    const pessoas = await Promise.all(['rh-1', 'rh-2', 'rh-3', 'rh-4', 'rh-5'].map((s) => criarUsuario(admin, 'Colaborador', s)));
+    const agora = new Date();
+    await prisma.campaign.create({
+      data: {
+        nome: 'Risco humano', template: 'urgencia', status: 'ATIVA',
+        eventos: { create: pessoas.map((p, i) => ({
+          userId: p.id, destinatario: p.email, enviadoEm: agora,
+          clicadoEm: i === 0 ? agora : null, submeteuEm: i === 0 ? agora : null,
+        })) },
+      },
+    });
+    assert.equal(20 * PESO_RISCO_HUMANO.clique + 20 * PESO_RISCO_HUMANO.submissao, 80);
+    assert.equal(await risco(analista), 80);
+    // Como a resiliência, o risco humano é visível ao Colaborador (o gauge aparece no dashboard dele).
+    assert.equal(await risco(await login(pessoas[1].email, SENHA_CONTA)), 80);
   });
 });

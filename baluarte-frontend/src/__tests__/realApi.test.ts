@@ -337,6 +337,7 @@ describe('realApi — dashboard, ativos e varreduras', () => {
           criticas: null,
           arquivosMaliciosos: null,
           resilienciaPhishing: 75,
+          riscoHumano: 63,
           ativosMonitorados: null,
         },
         distribuicaoSeveridade: null,

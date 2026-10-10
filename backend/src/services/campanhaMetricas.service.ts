@@ -1,4 +1,5 @@
 import type { EventoFunil } from '../models/campanha.model.js';
+import { PESO_RISCO_HUMANO } from '../models/dominio.model.js';
 
 // Metricas de campanha usadas pelo relatorio, pela lista e pelo dashboard.
 
@@ -40,6 +41,20 @@ export function colaboradoresTreinados(campanhas: { eventos: { userId: string; c
   const pessoas = new Set<string>();
   for (const c of campanhas) for (const e of c.eventos) if (e.clicadoEm && e.treinou) pessoas.add(e.userId);
   return pessoas.size;
+}
+
+/**
+ * Risco humano 0–100 de todas as campanhas, com os pesos de PESO_RISCO_HUMANO sobre as taxas
+ * de clique e de submissao (em % inteiros, como no funil). `null` sem envio: nao medido, nunca 0.
+ */
+export function riscoHumano(campanhas: { eventos: { enviadoEm: Date | null; clicadoEm: Date | null; submeteuEm: Date | null }[] }[]) {
+  const eventos = campanhas.flatMap((c) => c.eventos);
+  const enviados = eventos.filter((e) => e.enviadoEm).length;
+  if (!enviados) return null;
+  const pct = (n: number) => Math.round((n / enviados) * 100);
+  const clique = pct(eventos.filter((e) => e.clicadoEm).length);
+  const submissao = pct(eventos.filter((e) => e.submeteuEm).length);
+  return Math.max(0, Math.min(100, Math.round(clique * PESO_RISCO_HUMANO.clique + submissao * PESO_RISCO_HUMANO.submissao)));
 }
 
 /** Enviados e clicados somados de todas as campanhas. */

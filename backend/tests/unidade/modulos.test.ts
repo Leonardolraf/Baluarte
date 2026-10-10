@@ -5,9 +5,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Request, Response } from 'express';
 import { ErroNegocio, falhar, wrap } from '../../src/utils/resposta.js';
-import { funilDe, mapCampaign, totais } from '../../src/services/campanhaMetricas.service.js';
+import { funilDe, mapCampaign, riscoHumano, totais } from '../../src/services/campanhaMetricas.service.js';
 import { dadosTreinamento, podeVerTreinamento } from '../../src/models/treinamento.model.js';
-import { OPERADORES, PERFIS, STATUS_FINDING, STATUS_FINDING_ENCERRADO, dominioInterno } from '../../src/models/dominio.model.js';
+import { OPERADORES, PERFIS, PESO_RISCO_HUMANO, STATUS_FINDING, STATUS_FINDING_ENCERRADO, dominioInterno } from '../../src/models/dominio.model.js';
 
 function resposta(jaEnviada = false) {
   const r = {
@@ -69,6 +69,25 @@ describe('métricas de campanha', () => {
     assert.deepEqual(f.clicados, { valor: 2, pct: 50 });
     assert.deepEqual(f.submeteram, { valor: 1, pct: 25 });
     assert.deepEqual(f.reportaram, { valor: 1, pct: 25 });
+  });
+
+  it('riscoHumano: pesos 2/2 sobre as taxas de clique e de submissão de todas as campanhas, com teto 100', () => {
+    assert.deepEqual(PESO_RISCO_HUMANO, { clique: 2, submissao: 2 });
+    // 4 enviados em duas campanhas: 2 cliques (50 %), 1 submissão (25 %) -> 50x2 + 25x2 = 150 -> 100.
+    const c1 = { eventos: [ev({ enviadoEm: d, clicadoEm: d }), ev({ enviadoEm: d })] };
+    const c2 = { eventos: [ev({ enviadoEm: d, clicadoEm: d, submeteuEm: d }), ev({ enviadoEm: d })] };
+    assert.equal(riscoHumano([c1, c2]), 100);
+    // 10 enviados, 1 clique (10 %), nenhuma submissão -> 20; quem não recebeu não entra na conta.
+    const dez = { eventos: [ev({ enviadoEm: d, clicadoEm: d }), ...Array.from({ length: 9 }, () => ev({ enviadoEm: d })), ev({})] };
+    assert.equal(riscoHumano([dez]), 20);
+    // 3 enviados, 1 clique e 1 submissão: taxas arredondadas antes do peso (33 % e 33 %) -> 132 -> 100.
+    assert.equal(riscoHumano([{ eventos: [ev({ enviadoEm: d, clicadoEm: d, submeteuEm: d }), ev({ enviadoEm: d }), ev({ enviadoEm: d })] }]), 100);
+    assert.equal(riscoHumano([{ eventos: [ev({ enviadoEm: d }), ev({ enviadoEm: d })] }]), 0);
+  });
+
+  it('riscoHumano sem envio é null (não medido), nunca 0', () => {
+    assert.equal(riscoHumano([]), null);
+    assert.equal(riscoHumano([{ eventos: [ev({})] }]), null);
   });
 
   it('funilDe sem envios não divide por zero', () => {

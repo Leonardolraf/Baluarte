@@ -44,6 +44,16 @@ export const STATUS_INICIAL_FINDING = 'Aberta';
  */
 export const PESO_SEVERIDADE: Readonly<Record<string, number>> = { 'Crítico': 10, 'Alto': 7, 'Médio': 4, 'Baixo': 1 };
 
+/**
+ * Pesos do risco humano do dashboard (`kpis.riscoHumano`): o UNICO lugar que define a formula
+ * (services/campanhaMetricas.service.ts#riscoHumano), sobre todas as campanhas:
+ * `min(100, taxa de clique % x clique + taxa de submissao de credenciais % x submissao)`.
+ * Com 2/2, 50 % de cliques sozinhos ja e risco maximo, e quem entrega a senha pesa de novo
+ * (todo submetedor tambem clicou). Aprovado pelo Leo em 10/10/2026; ate entao o frontend
+ * calculava clique x 2,5 sem a submissao, contra o texto da tela e contra o mock (2/2).
+ */
+export const PESO_RISCO_HUMANO = { clique: 2, submissao: 2 } as const;
+
 /** Perfis que operam a plataforma (varreduras, ativos, campanhas, listas tecnicas). */
 export const OPERADORES = ['Administrador', 'Analista'];
 
