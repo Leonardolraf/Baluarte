@@ -29,9 +29,18 @@ function consultar(parametros: Record<string, string>): Promise<unknown | null> 
   return obterJson('NVD', `${urlBase()}/rest/json/cves/2.0?${qs}`, { headers: cabecalhos() });
 }
 
-/** CVEs que afetam o CPE (primeira pagina, ate 2000); null se o NVD responde 404. */
-export function cvesPorCpe(cpe: string): Promise<unknown | null> {
-  return consultar({ cpeName: cpe, resultsPerPage: String(RESULTADOS_POR_PAGINA) });
+/** Tamanho da pagina; NVD_RESULTADOS_POR_PAGINA so existe para os testes paginarem com pouco dado. */
+export function resultadosPorPagina(): number {
+  const n = Number(process.env.NVD_RESULTADOS_POR_PAGINA);
+  return Number.isInteger(n) && n > 0 && n <= RESULTADOS_POR_PAGINA ? n : RESULTADOS_POR_PAGINA;
+}
+
+/**
+ * Uma pagina dos CVEs que afetam o CPE, a partir de `inicio` (startIndex); null se o NVD
+ * responde 404. Quem pagina e o service (cada pagina conta no orcamento do NVD).
+ */
+export function cvesPorCpe(cpe: string, inicio = 0): Promise<unknown | null> {
+  return consultar({ cpeName: cpe, resultsPerPage: String(resultadosPorPagina()), startIndex: String(inicio) });
 }
 
 /** Um CVE pelo identificador; null se o NVD responde 404. */

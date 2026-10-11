@@ -194,8 +194,11 @@ export interface CveNvd {
    * Versao corrigida por produto ("fornecedor:produto" do CPE): o `versionEndExcluding` das
    * configuracoes vulneraveis. Sem ele (configuracao so com versoes exatas, ou ate uma versao
    * inclusive) nao ha versao corrigida conhecida. Ausente = entrada de cache anterior a este campo.
+   * DT21: `plataformas` sao os sistemas ("fornecedor:produto" de CPE do tipo "o", nao
+   * vulneraveis) exigidos por uma configuracao AND ("Chrome no Android"); vazio = qualquer
+   * plataforma. Uma entrada por configuracao, entao o mesmo produto pode aparecer mais de uma vez.
    */
-  correcoes?: { produto: string; versao: string }[];
+  correcoes?: { produto: string; versao: string; plataformas: string[] }[];
 }
 
 const metricaNvd = z.object({ type: z.string().optional(), cvssData: z.object({ vectorString: z.string() }).passthrough() }).passthrough();
@@ -217,6 +220,7 @@ const cveNvdBruto = z.object({
         .array(
           z
             .object({
+              operator: z.string().optional(),
               nodes: z
                 .array(
                   z
@@ -243,15 +247,48 @@ export function produtoDoCpe(cpe: string): string | null {
   return partes.length >= 5 && partes[0] === 'cpe' && partes[3] && partes[4] ? `${partes[3]}:${partes[4]}`.toLowerCase() : null;
 }
 
-function correcoesNvd(configuracoes: z.infer<typeof cveNvdBruto>['cve']['configurations']): { produto: string; versao: string }[] {
-  const correcoes = new Map<string, string>();
-  for (const c of configuracoes ?? [])
-    for (const n of c.nodes ?? [])
-      for (const m of n.cpeMatch ?? []) {
-        const produto = produtoDoCpe(m.criteria);
-        if (m.vulnerable !== false && produto && m.versionEndExcluding && !correcoes.has(produto)) correcoes.set(produto, m.versionEndExcluding.slice(0, 255));
-      }
-  return [...correcoes].slice(0, 20).map(([produto, versao]) => ({ produto, versao }));
+/** Tipo do CPE ("a" aplicacao, "o" sistema, "h" hardware); null se o formato nao confere. */
+function tipoDoCpe(cpe: string): string | null {
+  const partes = cpe.split(':');
+  return partes.length >= 5 && partes[0] === 'cpe' ? partes[2] : null;
+}
+
+function correcoesNvd(configuracoes: z.infer<typeof cveNvdBruto>['cve']['configurations']): NonNullable<CveNvd['correcoes']> {
+  const correcoes: NonNullable<CveNvd['correcoes']> = [];
+  const vistas = new Set<string>();
+  for (const c of configuracoes ?? []) {
+    const matches = (c.nodes ?? []).flatMap((n) => n.cpeMatch ?? []);
+    // DT21: configuracao AND com sistema nao vulneravel = o produto so e afetado naquela
+    // plataforma ("Chrome no Android"). Sem AND, a configuracao vale para qualquer plataforma.
+    const plataformas =
+      (c.operator ?? '').toUpperCase() === 'AND'
+        ? [...new Set(matches.filter((m) => m.vulnerable === false && tipoDoCpe(m.criteria) === 'o').map((m) => produtoDoCpe(m.criteria)).filter((p): p is string => Boolean(p)))].sort()
+        : [];
+    for (const m of matches) {
+      const produto = produtoDoCpe(m.criteria);
+      if (m.vulnerable === false || !produto || !m.versionEndExcluding) continue;
+      const versao = m.versionEndExcluding.slice(0, 255);
+      const chave = `${produto}|${versao}|${plataformas.join(',')}`;
+      if (vistas.has(chave)) continue;
+      vistas.add(chave);
+      correcoes.push({ produto, versao, plataformas });
+    }
+  }
+  return correcoes.slice(0, 20);
+}
+
+/**
+ * DT21: a correcao vale para a plataforma da estacao? Sem plataforma exigida, sim. Com
+ * plataforma, so se uma delas for a da estacao; plataforma desconhecida conta como outra
+ * (na duvida, nao registra). Hoje so o Windows passa pelo NVD.
+ */
+export function correcaoValeNaPlataforma(plataformas: string[], plataformaEstacao: string | null): boolean {
+  if (!plataformas.length) return true;
+  const p = (plataformaEstacao ?? '').toLowerCase();
+  if (p === 'windows') return plataformas.some((x) => x.startsWith('microsoft:windows'));
+  if (p === 'darwin' || p === 'macos') return plataformas.some((x) => x === 'apple:macos' || x === 'apple:mac_os_x' || x === 'apple:mac_os');
+  if (['ubuntu', 'debian', 'rhel', 'linux', 'centos', 'almalinux', 'rocky'].includes(p)) return plataformas.some((x) => x === 'linux:linux_kernel' || x.endsWith(':linux'));
+  return false;
 }
 
 const respostaNvd = z.object({ totalResults: z.number().optional(), vulnerabilities: z.array(z.unknown()) }).passthrough();
@@ -259,6 +296,19 @@ const respostaNvd = z.object({ totalResults: z.number().optional(), vulnerabilit
 function vetorNvd(lista: z.infer<typeof metricaNvd>[] | undefined): string | null {
   if (!lista?.length) return null;
   return (lista.find((m) => m.type === 'Primary') ?? lista[0]).cvssData.vectorString;
+}
+
+/**
+ * Paginacao da resposta do NVD: quantos registros vieram nesta pagina (contando os que a
+ * leitura descarta, como os rejeitados, porque o startIndex anda por registro) e o total.
+ * Sem totalResults, a pagina e tratada como a ultima. null se o formato nao confere.
+ */
+export function contagemNvd(json: unknown): { naPagina: number; total: number } | null {
+  const r = respostaNvd.safeParse(json);
+  if (!r.success) return null;
+  const naPagina = r.data.vulnerabilities.length;
+  const total = r.data.totalResults ?? naPagina;
+  return { naPagina, total };
 }
 
 /** Le a resposta da API de CVEs; CVE rejeitado ou sem id valido fica de fora. null se o formato nao confere. */
@@ -388,6 +438,8 @@ export interface ResultadoVerificacao {
    * Contam em `vulnerabilidadesEncontradas`; o analista nao tem o que aplicar enquanto nao sai.
    */
   semCorrecao: number;
+  /** DT21: CVEs com correcao so para outra plataforma ("Chrome no Android"): nao viram achado. */
+  outraPlataforma: number;
   /** Consultas que ficaram para a proxima verificacao (limite por verificacao). */
   pendentes: number;
   /** Bases que falharam nesta verificacao (os achados delas ficam para a proxima). */
