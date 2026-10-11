@@ -1,4 +1,3 @@
-import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import type { BaseVulnerabilidade } from '../models/cruzamento.model.js';
 
@@ -14,20 +13,30 @@ export async function lerValidas(base: BaseVulnerabilidade, chaves: string[], ag
   return new Map(linhas.map((l) => [l.chave, l.dados]));
 }
 
-/** Grava (ou renova) as respostas: upsert por base + chave. */
+/** Entradas por instrucao na gravacao do cache (cada uma leva a resposta inteira da base em JSON). */
+const LOTE_CACHE = 200;
+
+/**
+ * Grava (ou renova) as respostas: upsert por base + chave, numa instrucao por lote (DT17). Um
+ * upsert por entrada eram centenas de idas e voltas ao banco remoto numa verificacao (705
+ * programas na estacao Ubuntu), segurando a conexao por minutos. Cache nao precisa ser atomico:
+ * lote que falha so faz a proxima verificacao consultar de novo. Chave repetida fica a ultima.
+ */
 export async function gravar(base: BaseVulnerabilidade, entradas: { chave: string; dados: unknown }[], validadeMs: number): Promise<void> {
-  if (!entradas.length) return;
+  const unicas = [...new Map(entradas.map((e) => [e.chave, e])).values()];
+  if (!unicas.length) return;
   const consultadoEm = new Date();
   const expiraEm = new Date(consultadoEm.getTime() + validadeMs);
-  await prisma.$transaction(
-    entradas.map((e) =>
-      prisma.vulnerabilityCache.upsert({
-        where: { base_chave: { base, chave: e.chave } },
-        create: { base, chave: e.chave, dados: e.dados as Prisma.InputJsonValue, consultadoEm, expiraEm },
-        update: { dados: e.dados as Prisma.InputJsonValue, consultadoEm, expiraEm },
-      }),
-    ),
-  );
+  for (let i = 0; i < unicas.length; i += LOTE_CACHE) {
+    const lote = JSON.stringify(unicas.slice(i, i + LOTE_CACHE).map((e) => ({ chave: e.chave, dados: e.dados })));
+    await prisma.$executeRaw`
+      INSERT INTO "VulnerabilityCache" ("id", "base", "chave", "dados", "consultadoEm", "expiraEm")
+      SELECT gen_random_uuid()::text, ${base}, x.chave, x.dados,
+             (${consultadoEm.toISOString()}::timestamptz AT TIME ZONE 'UTC'), (${expiraEm.toISOString()}::timestamptz AT TIME ZONE 'UTC')
+      FROM jsonb_to_recordset(${lote}::jsonb) AS x(chave text, dados jsonb)
+      ON CONFLICT ("base", "chave") DO UPDATE
+        SET "dados" = EXCLUDED."dados", "consultadoEm" = EXCLUDED."consultadoEm", "expiraEm" = EXCLUDED."expiraEm"`;
+  }
 }
 
 /** Apaga o que venceu ha mais de um dia (o que venceu ha pouco ainda pode ser renovado no lugar). */

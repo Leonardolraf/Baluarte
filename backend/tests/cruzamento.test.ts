@@ -35,7 +35,7 @@ const V = {
 const OSV_IDS: Record<string, string[]> = {
   'Ubuntu:22.04:LTS|openssl|3.0.2-0ubuntu1.10': ['UBUNTU-CVE-2023-5678', 'USN-6450-1'],
   'Ubuntu:22.04:LTS|openssl|3.0.2-0ubuntu1.11': ['UBUNTU-CVE-2023-5678'],
-  'Ubuntu:22.04:LTS|curl|7.81.0-1ubuntu1.13': ['UBUNTU-CVE-2023-38545', 'UBUNTU-CVE-2023-99999', 'UBUNTU-CVE-2020-0001'],
+  'Ubuntu:22.04:LTS|curl|7.81.0-1ubuntu1.13': ['UBUNTU-CVE-2023-38545', 'UBUNTU-CVE-2023-99999', 'UBUNTU-CVE-2020-0001', 'UBUNTU-CVE-2024-11111'],
   'Ubuntu:22.04:LTS|curl|7.81.0-1ubuntu1.15': ['UBUNTU-CVE-2023-38545'],
   'Ubuntu:22.04:LTS|curl|7.81.0-1ubuntu1.16': ['UBUNTU-CVE-2023-38545'],
   'Debian:12|glibc|2.36-9+deb12u3': ['DEBIAN-CVE-2023-4911'],
@@ -49,7 +49,13 @@ const OSV_VULNS: Record<string, unknown> = {
     severity: [{ type: 'Ubuntu', score: 'low' }, { type: 'CVSS_V3', score: `${V.medio}/E:U/RL:O` }],
     affected: [{ package: { name: 'openssl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }, { fixed: '3.0.2-0ubuntu1.12' }] }] }],
   },
-  'USN-6450-1': { id: 'USN-6450-1', summary: 'OpenSSL vulnerabilities', upstream: ['CVE-2023-5678', 'CVE-2023-3817'], severity: [{ type: 'Ubuntu', score: 'medium' }] },
+  'USN-6450-1': {
+    id: 'USN-6450-1',
+    summary: 'OpenSSL vulnerabilities',
+    upstream: ['CVE-2023-5678', 'CVE-2023-3817'],
+    severity: [{ type: 'Ubuntu', score: 'medium' }],
+    affected: [{ package: { name: 'openssl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }, { fixed: '3.0.2-0ubuntu1.12' }] }] }],
+  },
   'UBUNTU-CVE-2023-38545': {
     id: 'UBUNTU-CVE-2023-38545',
     summary: 'SOCKS5 heap buffer overflow',
@@ -57,16 +63,33 @@ const OSV_VULNS: Record<string, unknown> = {
     severity: [{ type: 'CVSS_V3', score: V.critico }],
     affected: [{ package: { name: 'curl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }, { fixed: '7.81.0-1ubuntu1.14' }] }] }],
   },
-  'UBUNTU-CVE-2023-99999': { id: 'UBUNTU-CVE-2023-99999', summary: 'Sem nota', upstream: ['CVE-2023-99999'], severity: [{ type: 'Ubuntu', score: 'negligible' }] },
+  'UBUNTU-CVE-2023-99999': {
+    id: 'UBUNTU-CVE-2023-99999',
+    summary: 'Sem nota',
+    upstream: ['CVE-2023-99999'],
+    severity: [{ type: 'Ubuntu', score: 'negligible' }],
+    affected: [{ package: { name: 'curl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }, { fixed: '7.81.0-1ubuntu1.14' }] }] }],
+  },
+  // DT17: afeta a versao instalada, tem nota, mas a distribuicao ainda nao publicou correcao.
+  'UBUNTU-CVE-2024-11111': {
+    id: 'UBUNTU-CVE-2024-11111',
+    summary: 'Ainda sem correcao',
+    upstream: ['CVE-2024-11111'],
+    severity: [{ type: 'CVSS_V3', score: V.critico }],
+    affected: [{ package: { name: 'curl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }] }] }],
+  },
   'UBUNTU-CVE-2020-0001': { id: 'UBUNTU-CVE-2020-0001', upstream: ['CVE-2020-0001'], withdrawn: '2021-01-01T00:00:00Z', severity: [{ type: 'CVSS_V3', score: V.critico }] },
   'CVE-2023-99999': { id: 'CVE-2023-99999', details: 'Registro do CVE sem nota' },
   'DEBIAN-CVE-2023-4911': { id: 'DEBIAN-CVE-2023-4911', details: 'glibc: buffer overflow in ld.so', affected: [{ package: { name: 'glibc', ecosystem: 'Debian:12' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }, { fixed: '2.36-9+deb12u3' }] }] }] },
   'CVE-2023-4911': { id: 'CVE-2023-4911', summary: 'Looney Tunables', severity: [{ type: 'CVSS_V3', score: V.alto }], database_specific: { cwe_ids: ['CWE-787'] } },
 };
 
-const cveNvd = (id: string, metrics: Record<string, unknown>, cwe?: string) => ({
-  cve: { id, vulnStatus: 'Analyzed', descriptions: [{ lang: 'en', value: `Descricao ${id}` }], metrics, weaknesses: cwe ? [{ description: [{ lang: 'en', value: cwe }] }] : [] },
+const cveNvd = (id: string, metrics: Record<string, unknown>, cwe?: string, configurations?: unknown[]) => ({
+  cve: { id, vulnStatus: 'Analyzed', descriptions: [{ lang: 'en', value: `Descricao ${id}` }], metrics, weaknesses: cwe ? [{ description: [{ lang: 'en', value: cwe }] }] : [], configurations },
 });
+/** Configuracao do NVD: o produto afetado ate uma versao (exclusive) ou so numa versao exata. */
+const ate = (criteria: string, versionEndExcluding?: string) => [{ nodes: [{ operator: 'OR', negate: false, cpeMatch: [{ vulnerable: true, criteria, ...(versionEndExcluding ? { versionEndExcluding } : {}) }] }] }];
+const CHROME = 'cpe:2.3:a:google:chrome:*:*:*:*:*:*:*:*';
 const v31 = (vetor: string, type = 'Primary') => ({ cvssMetricV31: [{ source: 'nvd@nist.gov', type, cvssData: { version: '3.1', vectorString: vetor } }] });
 
 const NVD_CVE: Record<string, unknown> = {
@@ -74,7 +97,12 @@ const NVD_CVE: Record<string, unknown> = {
   'CVE-2023-99999': cveNvd('CVE-2023-99999', { cvssMetricV2: [{ cvssData: { vectorString: 'AV:N/AC:L/Au:N/C:P/I:P/A:P' } }] }),
 };
 const NVD_CPE: Record<string, unknown[] | null> = {
-  'cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*': [cveNvd('CVE-2024-9602', v31(V.altoUI), 'CWE-843'), cveNvd('CVE-2024-9603', {})],
+  'cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*': [
+    cveNvd('CVE-2024-9602', v31(V.altoUI), 'CWE-843', ate(CHROME, '129.0.6668.70')),
+    cveNvd('CVE-2024-9603', {}, undefined, ate(CHROME, '129.0.6668.70')),
+    // DT17: so a versao exata na configuracao, sem versionEndExcluding: nenhuma correcao conhecida.
+    cveNvd('CVE-2024-9604', v31(V.critico), undefined, ate('cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*')),
+  ],
   'cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*': null, // 404: CPE fora do dicionario
 };
 
@@ -207,10 +235,11 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.equal(d.estacaoId, e.id);
     assert.equal(d.ativoId, e.assetId);
     assert.equal(d.programasConsultados, 4);
-    assert.equal(d.vulnerabilidadesEncontradas, 4, 'CVE-2023-5678 e -3817 no openssl; -38545 e -99999 no curl (o retirado não conta)');
+    assert.equal(d.vulnerabilidadesEncontradas, 5, 'CVE-2023-5678 e -3817 no openssl; -38545, -99999 e -2024-11111 no curl (o retirado não conta)');
     assert.equal(d.achadosNovos, 3);
     assert.equal(d.achadosExistentes, 0);
     assert.equal(d.semCvss, 1, 'CVE-2023-99999 não tem vetor 3.x em nenhuma base: não vira achado');
+    assert.equal(d.semCorrecao, 1, 'DT17: CVE-2024-11111 tem nota crítica, mas não tem versão corrigida: não vira achado');
     assert.deepEqual(d.falhas, []);
     assert.ok(d.varreduraId);
 
@@ -250,9 +279,11 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.equal(scan.progresso, 100);
     assert.equal(scan.etapa, 'Concluída');
 
-    // OSV: 1 querybatch + 5 registros + 2 registros de CVE (fallback); NVD: 2 CVEs sem nota no OSV.
-    assert.equal(conta('OSV'), 8);
+    // OSV: 1 querybatch + 6 registros + 2 registros de CVE (fallback); NVD: 2 CVEs sem nota no OSV.
+    // O CVE sem correcao nao gasta consulta atras de nota.
+    assert.equal(conta('OSV'), 9);
     assert.equal(conta('NVD'), 2);
+    assert.ok(!pedidos.some((p) => p.caminho.endsWith('/vulns/CVE-2024-11111') || p.caminho.includes('cveId=CVE-2024-11111')), 'nada consultado atrás da nota do CVE sem correção');
     const lote = JSON.parse(pedidos.find((p) => p.caminho.endsWith('/querybatch'))!.corpo);
     assert.deepEqual(lote.queries.map((q: { package: { name: string } }) => q.package.name).sort(), ['bash', 'curl', 'openssl'], 'libssl3 vira o pacote-fonte openssl');
   });
@@ -290,7 +321,7 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     await verificar(e.id);
     const chave = 'consulta:Ubuntu:22.04:LTS|curl|7.81.0-1ubuntu1.13';
     const entrada = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'OSV', chave } } });
-    assert.deepEqual(entrada.dados, { ids: ['UBUNTU-CVE-2023-38545', 'UBUNTU-CVE-2023-99999', 'UBUNTU-CVE-2020-0001'] });
+    assert.deepEqual(entrada.dados, { ids: ['UBUNTU-CVE-2023-38545', 'UBUNTU-CVE-2023-99999', 'UBUNTU-CVE-2020-0001', 'UBUNTU-CVE-2024-11111'] });
     const horas = (entrada.expiraEm.getTime() - entrada.consultadoEm.getTime()) / 3600_000;
     assert.equal(horas, 24, 'validade padrão de 24 h');
     assert.ok(await prisma.vulnerabilityCache.findUnique({ where: { base_chave: { base: 'OSV', chave: 'consulta:Ubuntu:22.04:LTS|bash|5.1-6ubuntu1' } } }), 'resposta vazia também fica no cache');
@@ -303,6 +334,22 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     const renovada = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'OSV', chave } } });
     assert.ok(renovada.expiraEm.getTime() > Date.now() + 23 * 3600_000);
     assert.equal(await prisma.finding.count({ where: { workstationId: e.id } }), 3);
+  });
+
+  it('DT17: o cache grava em lotes (mais de um lote, chave repetida fica a última) e renova no lugar', async () => {
+    const { gravar } = await import('../src/repositories/baseVulnerabilidade.repository.js');
+    const entradas = Array.from({ length: 450 }, (_, i) => ({ chave: `lote-dt17:${i}`, dados: { ids: [`X-${i}`] } }));
+    entradas.push({ chave: 'lote-dt17:7', dados: { ids: ['ULTIMA'] } });
+    await gravar('OSV', entradas, 3600_000);
+    assert.equal(await prisma.vulnerabilityCache.count({ where: { chave: { startsWith: 'lote-dt17:' } } }), 450);
+    const sete = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'OSV', chave: 'lote-dt17:7' } } });
+    assert.deepEqual(sete.dados, { ids: ['ULTIMA'] });
+    assert.equal((sete.expiraEm.getTime() - sete.consultadoEm.getTime()) / 1000, 3600, 'validade gravada como pedida');
+    await gravar('OSV', [{ chave: 'lote-dt17:7', dados: { ids: ['RENOVADA'] } }], 7200_000);
+    const renovada = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'OSV', chave: 'lote-dt17:7' } } });
+    assert.equal(renovada.id, sete.id, 'renova a mesma linha (upsert)');
+    assert.deepEqual(renovada.dados, { ids: ['RENOVADA'] });
+    assert.ok(renovada.expiraEm.getTime() > sete.expiraEm.getTime());
   });
 
   it('o banco recusa o mesmo CVE no mesmo programa da mesma estação (unicidade)', async () => {
@@ -338,17 +385,37 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     const d = r.body.dados;
     assert.equal(d.programasConsultados, 2);
     assert.equal(d.programasSemCobertura, 1);
-    assert.equal(d.vulnerabilidadesEncontradas, 2);
+    assert.equal(d.vulnerabilidadesEncontradas, 3);
     assert.equal(d.achadosNovos, 1);
     assert.equal(d.semCvss, 1);
+    assert.equal(d.semCorrecao, 1, 'DT17: CVE-2024-9604 só tem a versão exata na configuração do NVD');
     const f = await prisma.finding.findFirstOrThrow({ where: { workstationId: e.id } });
     assert.deepEqual([f.cve, f.programa, f.programaVersao, f.cvss, f.severidade, f.baseVulnerabilidade, f.cwe], ['CVE-2024-9602', 'Google Chrome', '129.0.6668.58', 8.8, 'Alto', 'NVD', 'CWE-843']);
     assert.match(f.evidencia, /cpe:2\.3:a:google:chrome:129\.0\.6668\.58/);
+    assert.match(JSON.stringify(f.remediacao), /129\.0\.6668\.70 ou mais nova/, 'a remediação traz a versão corrigida do NVD');
     assert.equal(conta('NVD'), 2);
     assert.ok(pedidos.filter((p) => p.base === 'NVD').every((p) => p.apiKey === 'chave-falsa-nvd-b14'));
     assert.equal(conta('OSV'), 0, 'Windows não vai ao OSV');
     const cache404 = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'NVD', chave: 'cpe:cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*' } } });
     assert.deepEqual(cache404.dados, { cves: [] }, 'CPE fora do dicionário (404) é "nenhum CVE", não falha');
+  });
+
+  it('DT17: cache do NVD gravado antes das versões corrigidas é consultado de novo (não some o CVE)', async () => {
+    const cpe = 'cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*';
+    const antigo = { cves: [{ cve: 'CVE-2024-9602', vetor: V.altoUI, cwe: 'CWE-843', descricao: 'antes do DT17' }] };
+    await prisma.vulnerabilityCache.upsert({
+      where: { base_chave: { base: 'NVD', chave: `cpe:${cpe}` } },
+      create: { base: 'NVD', chave: `cpe:${cpe}`, dados: antigo, consultadoEm: new Date(), expiraEm: new Date(Date.now() + 3600_000) },
+      update: { dados: antigo, consultadoEm: new Date(), expiraEm: new Date(Date.now() + 3600_000) },
+    });
+    const e = await estacao(WINDOWS);
+    await e.enviar('baluarte_programas_windows', [{ name: 'Google Chrome', version: '129.0.6668.58', fornecedor: 'Google LLC' }]);
+    const r = await verificar(e.id);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.dados.achadosNovos, 1, 'o CVE com correção entra mesmo com a entrada antiga no cache');
+    assert.equal(conta('NVD'), 1, 'consultou o NVD de novo');
+    const renovado = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'NVD', chave: `cpe:${cpe}` } } });
+    assert.ok((renovado.dados as { cves: { correcoes?: unknown }[] }).cves.every((c) => Array.isArray(c.correcoes)), 'regravado com as versões corrigidas');
   });
 
   it('sem chave do NVD, no máximo 5 consultas por verificação; o resto fica pendente', async () => {

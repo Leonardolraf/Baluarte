@@ -56,6 +56,13 @@ export async function achadosExistentes(workstationId: string): Promise<Set<stri
 class NadaNovo extends Error {}
 
 /**
+ * Limites da transacao dos achados da estacao (DT17). O padrao do Prisma (5 s) estourava com o
+ * banco remoto: a VM no Brasil e o Supabase nos EUA, centenas de achados com remediacao em JSON e
+ * o evento de historico de cada um. Estourado, o Prisma desfaz tudo e a verificacao nao conclui.
+ */
+const TRANSACAO_ACHADOS = { maxWait: 10_000, timeout: 60_000 };
+
+/**
  * Grava os achados novos numa varredura propria (a "verificacao do inventario"), ja concluida,
  * no ativo da estacao. A unicidade workstationId + cve + programa descarta o que outra
  * verificacao simultanea ja gravou; se nada sobrar, a varredura vazia e desfeita (rollback).
@@ -79,7 +86,7 @@ export async function registrarAchados(
       // B25b: o evento de criacao dos achados novos (a varredura acabou de nascer) na mesma transacao.
       await registrarCriacaoDosAchados(tx, scan.id);
       return { scanId: scan.id, criados: count };
-    });
+    }, TRANSACAO_ACHADOS);
   } catch (e) {
     if (e instanceof NadaNovo) return { scanId: null, criados: 0 };
     throw e;
