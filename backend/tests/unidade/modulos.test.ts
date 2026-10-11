@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { ErroNegocio, falhar, wrap } from '../../src/utils/resposta.js';
 import { funilDe, mapCampaign, riscoHumano, totais } from '../../src/services/campanhaMetricas.service.js';
 import { dadosTreinamento, podeVerTreinamento } from '../../src/models/treinamento.model.js';
-import { OPERADORES, PERFIS, PESO_RISCO_HUMANO, STATUS_FINDING, STATUS_FINDING_ENCERRADO, dominioInterno } from '../../src/models/dominio.model.js';
+import { OPERADORES, PERFIS, PESO_RISCO_HUMANO, STATUS_FINDING, STATUS_FINDING_ENCERRADO, destinatarioInterno, destinatariosInternos, dominioInterno } from '../../src/models/dominio.model.js';
 
 function resposta(jaEnviada = false) {
   const r = {
@@ -150,6 +150,29 @@ describe('constantes de domínio', () => {
       assert.equal(dominioInterno(), '@filial.exemplo.com.br');
       process.env.DOMINIO_INTERNO = '@outra.com';
       assert.equal(dominioInterno(), '@outra.com');
+    } finally {
+      if (original === undefined) delete process.env.DOMINIO_INTERNO;
+      else process.env.DOMINIO_INTERNO = original;
+    }
+  });
+
+  it('destinatarioInterno (DT19): lista de domínios e endereços liberados, sem liberar o provedor inteiro', () => {
+    const original = process.env.DOMINIO_INTERNO;
+    try {
+      process.env.DOMINIO_INTERNO = '@baluarte.test, Pessoa@Gmail.com;filial.exemplo';
+      assert.deepEqual(destinatariosInternos(), { dominios: ['@baluarte.test', '@filial.exemplo'], enderecos: ['pessoa@gmail.com'] });
+      assert.equal(dominioInterno(), '@baluarte.test', 'o primeiro domínio da lista');
+      assert.equal(destinatarioInterno('ana@baluarte.test'), true);
+      assert.equal(destinatarioInterno(' PESSOA@gmail.com '), true, 'endereço liberado, sem diferença de maiúsculas');
+      assert.equal(destinatarioInterno('outra@gmail.com'), false, 'o resto do provedor continua externo');
+      assert.equal(destinatarioInterno('x@sub.filial.exemplo'), false, 'subdomínio não é o domínio');
+      assert.equal(destinatarioInterno('ana@empresa.com'), false);
+      process.env.DOMINIO_INTERNO = 'so@endereco.com';
+      assert.deepEqual(destinatariosInternos(), { dominios: [], enderecos: ['so@endereco.com'] });
+      assert.equal(dominioInterno(), '@empresa.com', 'sem domínio na lista, o rótulo cai no padrão');
+      assert.equal(destinatarioInterno('ana@empresa.com'), false, 'mas o padrão não é aceito se a lista só tem endereços');
+      delete process.env.DOMINIO_INTERNO;
+      assert.equal(destinatarioInterno('ana@empresa.com'), true);
     } finally {
       if (original === undefined) delete process.env.DOMINIO_INTERNO;
       else process.env.DOMINIO_INTERNO = original;

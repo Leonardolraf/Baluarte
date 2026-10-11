@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { INTERNAL_DOMAIN, internalDomain } from '@/lib/domain';
+import {
+  INTERNAL_DOMAIN,
+  internalDomain,
+  internalRecipients,
+  internalRecipientsLabel,
+  isInternalRecipient,
+} from '@/lib/domain';
 import { normalizeAssetHost } from '@/lib/host';
 import { DEFAULT_DESTINATION, internalDestination } from '@/lib/redirect';
 import {
@@ -45,6 +51,21 @@ describe('lib/host e lib/domain (B10)', () => {
     expect(internalDomain(' Filial.Exemplo.com.br ')).toBe('@filial.exemplo.com.br');
     expect(internalDomain('@outra.com')).toBe('@outra.com');
     expect(INTERNAL_DOMAIN).toBe('@empresa.com');
+  });
+
+  it('DT19: lista de domínios e endereços liberados, sem liberar o provedor inteiro', () => {
+    const rules = internalRecipients('@baluarte.test, Pessoa@Gmail.com;filial.exemplo');
+    expect(rules).toEqual({
+      domains: ['@baluarte.test', '@filial.exemplo'],
+      addresses: ['pessoa@gmail.com'],
+    });
+    expect(isInternalRecipient('ana@baluarte.test', rules)).toBe(true);
+    expect(isInternalRecipient(' PESSOA@gmail.com ', rules)).toBe(true);
+    expect(isInternalRecipient('outra@gmail.com', rules)).toBe(false);
+    expect(internalRecipientsLabel(rules)).toBe('@baluarte.test, @filial.exemplo e 1 endereço liberado');
+    expect(internalRecipientsLabel(internalRecipients('a@x.com b@y.com'))).toBe('2 endereços liberados');
+    expect(internalDomain('so@endereco.com')).toBe('@empresa.com');
+    expect(isInternalRecipient('ana@empresa.com', internalRecipients('so@endereco.com'))).toBe(false);
   });
 });
 

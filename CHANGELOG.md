@@ -621,6 +621,14 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Testes:** backend 712/712 (177 unidade + 10 banco + 399 integração + 126 pentest): CVE sem correção no OSV e no NVD, cache antigo do NVD consultado de novo, cache em lotes (450 entradas, chave repetida, renovação na mesma linha), NVD fora do ar no meio sem achado nenhum e depois tudo numa varredura só, orçamento do NVD com verificação incompleta. Frontend 636/636 (resultado incompleto e adapter).
 - **Produção:** sem migration. Os achados atuais das estações vieram da regra antiga e precisam ser refeitos (passo destrutivo, com dump na hora e ok do Leo, depois da troca do banco).
 
+## 2026-10-11 — DT19: destinatário de campanha nunca em domínio de terceiro
+
+- **Problema:** a demo usava o padrão `@empresa.com` nos 210 usuários e no domínio interno das campanhas. `empresa.com` é um domínio registrado, com dono. Hoje não tem servidor de e-mail, mas isso pode mudar e a plataforma passaria a entregar phishing simulado a uma empresa que não autorizou nada.
+- **Dados (manutenção autorizada pelo Leo, com dump antes):** os 210 e-mails `@empresa.com` viraram `@baluarte.test` (domínio reservado, RFC 2606) no banco da VM e no Supabase do plano B, com registro `TROCAR_DOMINIO_DEMO` na auditoria. Na VM, `DOMINIO_INTERNO` no `docker-compose.servidor.yml`.
+- **Código:** `DOMINIO_INTERNO` (backend) e `VITE_DOMINIO_INTERNO` (frontend) aceitam lista de domínios e de endereços liberados um a um, para a demonstração mandar campanha a uma caixa real sem liberar o provedor inteiro. `destinatarioInterno()` no backend; `isInternalRecipient()` e `internalRecipientsLabel()` no frontend, que mostra os domínios e quantos endereços estão liberados, sem expor os endereços. O padrão sem variável continua `@empresa.com` (contrato N2 AT1, suítes).
+- **Relacionado (DT15, mesma noite):** 3 contas da demo (1 Administrador, 1 Analista, 1 Colaborador) ainda usavam as senhas públicas do README; trocadas por senhas aleatórias nos dois bancos, conferido por hash: 0 de 213 com senha do README.
+- **Testes:** backend 714/714 (178 unidade + 10 banco + 400 integração + 126 pentest), frontend 637/637.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -628,7 +636,7 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração) e retenção de 12 meses; trava no banco na branch `feat/b29-trava`, para depois da apresentação) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 712 no backend (177 unidade + 10 banco + 399 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 636 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 714 no backend (178 unidade + 10 banco + 400 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 637 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

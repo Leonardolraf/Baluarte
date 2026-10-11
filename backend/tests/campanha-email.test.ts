@@ -170,6 +170,27 @@ describe('POST /campaigns envia o e-mail simulado', () => {
     }
   });
 
+  it('DT19: DOMINIO_INTERNO em lista — domínio e endereço liberado um a um; o resto do provedor continua externo', async () => {
+    const original = process.env.DOMINIO_INTERNO;
+    try {
+      const liberado = `convidado.${Date.now()}@provedor.exemplo`;
+      const vizinho = `vizinho.${Date.now()}@provedor.exemplo`;
+      for (const email of [liberado, vizinho]) {
+        const c = await chamar('POST', '/users', { token: admin, body: { nome: 'Destino Lista', email, perfil: 'Colaborador' } });
+        assert.equal(c.status, 201, JSON.stringify(c.body));
+      }
+      process.env.DOMINIO_INTERNO = ` @EMPRESA.com ; ${liberado.toUpperCase()} `;
+
+      const ok = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Lista', destinatarios: [ana.email, liberado], template: 'urgencia' } });
+      assert.equal(ok.status, 201, JSON.stringify(ok.body));
+      // Mesmo provedor, mas não está na lista: externo (a lista libera o endereço, não o domínio).
+      esperaErro(await chamar('POST', '/campaigns', { token: analista, body: { nome: 'X', destinatario: vizinho, template: 'urgencia' } }), 422, 'DESTINATARIO_EXTERNO');
+    } finally {
+      if (original === undefined) delete process.env.DOMINIO_INTERNO;
+      else process.env.DOMINIO_INTERNO = original;
+    }
+  });
+
   it('registra a criação e o envio na auditoria', async () => {
     const { r } = await criarCampanha('curiosidade', [bruno.email]);
     const id = r.body.dados.idCampanha as string;
