@@ -612,6 +612,15 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Efeito na demo:** 539 envios, 104 cliques (19 %) e 48 submissões (9 %): de 48 % (MÉDIO) para 56 % (ALTO).
 - **Teste:** 2 de unidade (pesos fixados, teto, arredondamento, `null` sem envio) e 1 de integração (sem envio é `null`; 5 destinatários com 1 clique e 1 submissão dá 80, igual para Analista e Colaborador). No frontend, o adapter lê o número e, sem o campo, mostra não medido em vez de calcular.
 
+## 2026-10-11 — DT17: cruzamento das estações (só CVE com correção, só verificação inteira, banco remoto)
+
+- **Defeito:** com a API no servidor próprio (VM no Brasil) e o banco no Supabase (EUA), o cruzamento automático falhava com `Transaction already closed ... timeout 5000 ms`: a gravação dos achados estourava o limite padrão do Prisma. A estação Windows nunca concluiu, e a Ubuntu foi recebendo achados em verificações sucessivas (501, 508, 121), até 1.130, quase todos de CVEs sem correção publicada.
+- **Correção:** transação dos achados com `timeout` 60 s / `maxWait` 10 s; cache das bases gravado com um `INSERT ... ON CONFLICT` por lote de 200, no lugar de um upsert por entrada (que eram centenas de idas e voltas ao banco remoto).
+- **Regra nova (decisão do Leo):** só vira achado o CVE com versão corrigida publicada (OSV: evento `fixed` do pacote; NVD: `versionEndExcluding` do produto). Conta em `semCorrecao`, que a tela da estação mostra. A remediação do Windows passa a citar a versão corrigida.
+- **Regra nova (decisão do Leo):** achado de estação só aparece depois de uma verificação **inteira**. Com consulta pendente ou base sem resposta, nada é gravado, `verificadaEm` não muda, a resposta traz `completa: false` e a mensagem "Verificação incompleta... Nada foi registrado"; a tela da estação diz o mesmo.
+- **Testes:** backend 712/712 (177 unidade + 10 banco + 399 integração + 126 pentest): CVE sem correção no OSV e no NVD, cache antigo do NVD consultado de novo, cache em lotes (450 entradas, chave repetida, renovação na mesma linha), NVD fora do ar no meio sem achado nenhum e depois tudo numa varredura só, orçamento do NVD com verificação incompleta. Frontend 636/636 (resultado incompleto e adapter).
+- **Produção:** sem migration. Os achados atuais das estações vieram da regra antiga e precisam ser refeitos (passo destrutivo, com dump na hora e ok do Leo, depois da troca do banco).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -619,7 +628,7 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração) e retenção de 12 meses; trava no banco na branch `feat/b29-trava`, para depois da apresentação) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 710 no backend (177 unidade + 10 banco + 397 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 636 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 712 no backend (177 unidade + 10 banco + 399 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 636 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

@@ -218,6 +218,27 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
 
   const existentes = await repo.achadosExistentes(estacao.id);
   const novos = [...achados.entries()].filter(([k]) => !existentes.has(k)).map(([, a]) => a);
+  const base = {
+    estacaoId: estacao.id,
+    ativoId: estacao.assetId,
+    host: estacao.asset.host,
+    programasConsultados: win.consultados + linux.consultados,
+    programasSemCobertura: win.semCobertura + linux.semCobertura + macos,
+    vulnerabilidadesEncontradas: encontradas.size,
+    semCvss: semCvss.size,
+    semCorrecao: semCorrecao.size,
+    pendentes: s.pendentes,
+    falhas: [...s.falhas].sort(porCodigo),
+  };
+
+  // DT17: so grava o resultado de uma verificacao INTEIRA. Com consulta pendente (orcamento do
+  // NVD) ou base sem resposta, nada vai para a tela nem muda a data da verificacao: o que ja foi
+  // consultado fica no cache e a proxima verificacao continua de onde esta parou.
+  if (s.pendentes > 0 || s.falhas.size > 0) {
+    await limparCache();
+    return { ...base, completa: false, verificadaEm: estacao.verificadaEm?.toISOString() ?? null, achadosNovos: 0, achadosExistentes: 0, varreduraId: null };
+  }
+
   const { scanId, criados } = await repo.registrarAchados(estacao.assetId, estacao.id, novos.map(dadosAchadoEstacao));
   if (criados > 0) {
     const cves = novos.map((a) => `${a.cve} (${a.programa})`);
@@ -231,19 +252,11 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
   await repo.marcarVerificada(estacao.id, verificadaEm);
   await limparCache();
   return {
-    estacaoId: estacao.id,
-    ativoId: estacao.assetId,
-    host: estacao.asset.host,
+    ...base,
+    completa: true,
     verificadaEm: verificadaEm.toISOString(),
-    programasConsultados: win.consultados + linux.consultados,
-    programasSemCobertura: win.semCobertura + linux.semCobertura + macos,
-    vulnerabilidadesEncontradas: encontradas.size,
     achadosNovos: criados,
     achadosExistentes: achados.size - novos.length + (novos.length - criados),
-    semCvss: semCvss.size,
-    semCorrecao: semCorrecao.size,
-    pendentes: s.pendentes,
-    falhas: [...s.falhas].sort(porCodigo),
     varreduraId: scanId,
   };
 }
@@ -261,7 +274,13 @@ export async function verificar(id: string, atorId: string | null): Promise<Resu
   try {
     const r = await cruzar(estacao, atorId);
     if (atorId)
-      await registrarAuditoria(atorId, 'VERIFICAR_ESTACAO', `${r.host}: ${r.achadosNovos} achado(s) novo(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''}`);
+      await registrarAuditoria(
+        atorId,
+        'VERIFICAR_ESTACAO',
+        r.completa
+          ? `${r.host}: ${r.achadosNovos} achado(s) novo(s)`
+          : `${r.host}: incompleta, nada registrado (${r.pendentes} pendente(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''})`,
+      );
     return r;
   } finally {
     emAndamento.delete(estacao.id);
@@ -285,8 +304,9 @@ export function verificarEmSegundoPlano(estacaoId: string): void {
   if (!cruzamentoAutomatico() || emAndamento.has(estacaoId)) return;
   const tarefa = verificar(estacaoId, null)
     .then((r) => {
-      if (r.achadosNovos || r.falhas.length)
-        console.log(`[cruzamento] ${r.host}: ${r.achadosNovos} achado(s) novo(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''}`);
+      if (!r.completa)
+        console.log(`[cruzamento] ${r.host}: incompleta, nada registrado (${r.pendentes} consulta(s) pendente(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''})`);
+      else if (r.achadosNovos) console.log(`[cruzamento] ${r.host}: ${r.achadosNovos} achado(s) novo(s)`);
     })
     .catch((e) => {
       if (e instanceof ErroNegocio) return; // estacao inativa ou ja em verificacao

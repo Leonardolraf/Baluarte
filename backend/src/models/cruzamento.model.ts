@@ -368,7 +368,13 @@ export interface ResultadoVerificacao {
   estacaoId: string;
   ativoId: string;
   host: string;
-  verificadaEm: string;
+  /**
+   * DT17: true so quando nada ficou pendente e todas as bases responderam; so entao os achados
+   * sao gravados e a data da verificacao muda. false = nada registrado, a proxima continua.
+   */
+  completa: boolean;
+  /** Data da ultima verificacao completa (null se nunca completou). */
+  verificadaEm: string | null;
   programasConsultados: number;
   /** Programas que nao tem como ser consultados (Windows fora da tabela, sistema sem suporte no OSV). */
   programasSemCobertura: number;

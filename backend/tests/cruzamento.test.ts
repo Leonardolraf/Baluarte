@@ -426,10 +426,14 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.equal(r.body.dados.programasConsultados, 7);
     assert.equal(conta('NVD'), 5);
     assert.equal(r.body.dados.pendentes, 2);
+    assert.equal(r.body.dados.completa, false, 'DT17: com consulta pendente, nada é registrado');
+    assert.equal(r.body.mensagem, 'Verificação incompleta: 2 consulta(s) para a próxima verificação. Nada foi registrado');
+    assert.equal((await prisma.workstation.findUniqueOrThrow({ where: { id: e.id } })).verificadaEm, null);
     pedidos.length = 0;
     const r2 = await verificar(e.id);
     assert.equal(conta('NVD'), 2, 'a próxima verificação consulta só o que faltou');
     assert.equal(r2.body.dados.pendentes, 0);
+    assert.equal(r2.body.dados.completa, true);
   });
 
   it('dashboard: os achados das estações contam junto com os do scanner', async () => {
@@ -504,7 +508,9 @@ describe('falha da base externa', () => {
     const r = await verificar(e.id);
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.deepEqual(r.body.dados.falhas, ['OSV']);
-    assert.equal(r.body.mensagem, 'Verificação concluída sem resposta de: OSV');
+    assert.equal(r.body.mensagem, 'Verificação incompleta, sem resposta de: OSV. Nada foi registrado');
+    assert.equal(r.body.dados.completa, false);
+    assert.equal(r.body.dados.verificadaEm, null, 'verificação incompleta não conta como verificada');
     assert.equal(r.body.dados.achadosNovos, 0);
     assert.equal(await prisma.finding.count({ where: { workstationId: e.id } }), 0);
     assert.equal(await prisma.vulnerabilityCache.count({ where: { chave: { contains: '7.81.0-1ubuntu1.15' } } }), 0, 'falha não vai para o cache');
@@ -515,16 +521,29 @@ describe('falha da base externa', () => {
     assert.equal(r2.body.dados.achadosNovos, 1);
   });
 
-  it('NVD fora do ar: o que depende dele fica para depois; o que o OSV confirmou entra', async () => {
+  it('DT17: NVD fora do ar no meio: nada aparece (nem o que o OSV já confirmou); depois grava tudo de uma vez', async () => {
     await prisma.vulnerabilityCache.deleteMany({ where: { base: 'NVD' } });
     const e = await estacaoUbuntu();
     modo.NVD = 'erro';
     const r = await verificar(e.id);
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.dados.falhas, ['NVD']);
-    const cves = (await prisma.finding.findMany({ where: { workstationId: e.id } })).map((f) => f.cve).sort();
-    assert.deepEqual(cves, ['CVE-2023-38545', 'CVE-2023-5678'], 'CVE-2023-3817 precisa do NVD: não vira achado sem nota');
+    assert.equal(r.body.dados.completa, false);
+    assert.equal(await prisma.finding.count({ where: { workstationId: e.id } }), 0, 'resultado parcial não vai para a tela');
+    assert.equal((await prisma.workstation.findUniqueOrThrow({ where: { id: e.id } })).verificadaEm, null);
     assert.equal(conta('NVD'), 1, 'depois da primeira falha não insiste no NVD');
+    assert.equal(await prisma.auditLog.count({ where: { acao: 'REGISTRAR_ACHADOS_ESTACAO', detalhe: { contains: e.host } } }), 0);
+    const pedido = await prisma.auditLog.findFirstOrThrow({ where: { acao: 'VERIFICAR_ESTACAO', detalhe: { startsWith: `${e.host}:` } } });
+    assert.match(pedido.detalhe!, /incompleta, nada registrado .*falhas: NVD/);
+
+    modo.NVD = 'normal';
+    const r2 = await verificar(e.id);
+    assert.equal(r2.body.dados.completa, true);
+    assert.equal(r2.body.mensagem, 'Verificação concluída');
+    const cves = (await prisma.finding.findMany({ where: { workstationId: e.id } })).map((f) => f.cve).sort();
+    assert.deepEqual(cves, ['CVE-2023-3817', 'CVE-2023-38545', 'CVE-2023-5678'], 'os três numa verificação só');
+    assert.equal(new Set((await prisma.finding.findMany({ where: { workstationId: e.id } })).map((f) => f.scanId)).size, 1, 'uma varredura só');
+    assert.ok((await prisma.workstation.findUniqueOrThrow({ where: { id: e.id } })).verificadaEm);
   });
 
   it('tempo esgotado: responde dentro do limite, com a falha listada', async () => {

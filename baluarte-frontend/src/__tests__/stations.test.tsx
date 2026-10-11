@@ -363,7 +363,9 @@ describe('mock — estações iniciais', () => {
 
 describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
   const resultado = (extra: Partial<StationVerification> = {}): StationVerification => ({
+    complete: true,
     verifiedAt: '2026-10-08T12:00:00.000Z',
+    noFix: 0,
     checkedPrograms: 7,
     uncoveredPrograms: 0,
     vulnerabilitiesFound: 3,
@@ -410,15 +412,18 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
     expect(screen.getByRole('button', { name: 'Verificar vulnerabilidades' })).toBeDisabled();
   });
 
-  it('base fora do ar e consultas pendentes aparecem no resultado', async () => {
+  it('DT17: verificação incompleta avisa que nada foi registrado e mostra os motivos', async () => {
     const user = userEvent.setup();
     vi.spyOn(mockApi, 'verifyStation').mockResolvedValue(
       resultado({
+        complete: false,
+        verifiedAt: null,
         newFindings: 0,
-        existingFindings: 1,
+        existingFindings: 0,
         failures: ['OSV'],
         pending: 2,
         noCvss: 1,
+        noFix: 5,
         uncoveredPrograms: 4,
       }),
     );
@@ -426,7 +431,9 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
     await screen.findByRole('heading', { name: 'dev-ws-02' });
     await user.click(screen.getByRole('button', { name: 'Verificar vulnerabilidades' }));
     const status = await screen.findByTestId('verification-result');
-    expect(status).toHaveTextContent('0 achados novos, 1 já registrado.');
+    expect(status).toHaveTextContent('Verificação incompleta: nada foi registrado.');
+    expect(status).not.toHaveTextContent('Verificação concluída');
+    expect(status).toHaveTextContent('5 CVEs sem correção publicada (não vira achado)');
     expect(status).toHaveTextContent('Sem resposta de OSV');
     expect(status).toHaveTextContent('2 consultas ficaram para a próxima verificação');
     expect(status).toHaveTextContent('1 CVE sem nota CVSS');
@@ -486,6 +493,8 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
         falhas: ['NVD', 'OUTRA'],
       }),
     ).toEqual({
+      complete: true,
+      noFix: 0,
       verifiedAt: '2026-10-08T12:00:00.000Z',
       checkedPrograms: 4,
       uncoveredPrograms: 1,
@@ -496,6 +505,26 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
       pending: 0,
       failures: ['NVD'],
     });
+    // DT17: incompleta e sem data; os campos novos vêm do backend.
+    const incompleta = toStationVerification({
+      completa: false,
+      verificadaEm: null,
+      programasConsultados: 4,
+      programasSemCobertura: 0,
+      vulnerabilidadesEncontradas: 9,
+      achadosNovos: 0,
+      achadosExistentes: 0,
+      semCvss: 0,
+      semCorrecao: 6,
+      pendentes: 3,
+      falhas: [],
+    });
+    expect([incompleta.complete, incompleta.verifiedAt, incompleta.noFix, incompleta.pending]).toEqual([
+      false,
+      null,
+      6,
+      3,
+    ]);
     const raw = {
       id: 'cm1',
       ativoId: 'cm2',

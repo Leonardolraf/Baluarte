@@ -188,18 +188,26 @@ function VerificationResult({ result }: { result: StationVerification }) {
       data-testid="verification-result"
       className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200 dark:bg-slate-800/60 dark:text-slate-200 dark:ring-slate-700"
     >
-      <p className="font-medium text-ink dark:text-white">Verificação concluída: {parts.join(', ')}.</p>
+      {result.complete ? (
+        <p className="font-medium text-ink dark:text-white">Verificação concluída: {parts.join(', ')}.</p>
+      ) : (
+        <p className="font-medium text-amber-700 dark:text-amber-300">
+          Verificação incompleta: nada foi registrado. O que já foi consultado fica guardado e a próxima
+          verificação continua de onde esta parou.
+        </p>
+      )}
       <p className="mt-1 text-slate-600 dark:text-slate-300">
         {plural(result.checkedPrograms, 'programa consultado', 'programas consultados')}
         {result.uncoveredPrograms > 0 &&
           ` · ${plural(result.uncoveredPrograms, 'sem cobertura nas bases', 'sem cobertura nas bases')}`}
         {result.noCvss > 0 &&
           ` · ${plural(result.noCvss, 'CVE sem nota CVSS', 'CVEs sem nota CVSS')} (não vira achado)`}
+        {result.noFix > 0 &&
+          ` · ${plural(result.noFix, 'CVE sem correção publicada', 'CVEs sem correção publicada')} (não vira achado)`}
       </p>
       {result.failures.length > 0 && (
         <p className="mt-1 font-medium text-amber-700 dark:text-amber-300">
-          Sem resposta de {result.failures.join(' e ')}: o que depende dessa base fica para a próxima
-          verificação.
+          Sem resposta de {result.failures.join(' e ')}.
         </p>
       )}
       {result.pending > 0 && (
