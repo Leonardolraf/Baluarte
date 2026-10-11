@@ -629,6 +629,13 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Relacionado (DT15, mesma noite):** 3 contas da demo (1 Administrador, 1 Analista, 1 Colaborador) ainda usavam as senhas públicas do README; trocadas por senhas aleatórias nos dois bancos, conferido por hash: 0 de 213 com senha do README.
 - **Testes:** backend 714/714 (178 unidade + 10 banco + 400 integração + 126 pentest), frontend 637/637.
 
+## 2026-10-11 — DT20: endereço de pessoa fora do JavaScript público
+
+- **Defeito (criado pela publicação do DT19):** o endereço liberado para a campanha de teste foi posto em `VITE_DOMINIO_INTERNO`, e toda variável `VITE_` vai para o pacote público. O e-mail de uma pessoa ficou legível no chunk da tela de campanha da demo. A tela não mostrava, mas o código tinha.
+- **Correção:** o frontend deixa de decidir o destinatário. `lib/domain.ts` só lê DOMÍNIOS (entrada com endereço é ignorada) e só serve ao texto da tela; a recusa de destinatário de fora vem da API (`DESTINATARIO_EXTERNO`, já mapeado para o campo). O endereço liberado fica só no `DOMINIO_INTERNO` do servidor. Na Vercel, `VITE_DOMINIO_INTERNO` volta a ter só `@baluarte.test`.
+- **Alcance:** os deploys antigos do projeto `baluarte` ficam atrás do login da Vercel (`ssoProtection: all_except_custom_domains`, URL própria responde 302), então o endereço sai do ar no primeiro deploy de produção depois disto.
+- **Testes:** frontend 637/637 (domínios só, endereço ignorado) e Playwright mock de campanhas 4/4 (a recusa de destinatário externo vem da API).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
