@@ -3,6 +3,7 @@ import {
   dadosAchadoEstacao,
   ecossistemaOsv,
   pacoteDeConsulta,
+  produtoDoCpe,
   vetorBase31,
   type AchadoEstacao,
   type ResultadoVerificacao,
@@ -81,7 +82,7 @@ function origemOsv(g: GrupoOsv): string {
 }
 
 /** Cruza os pacotes Linux com o OSV; preenche `achados` e as contagens. */
-async function cruzarLinux(estacao: Estacao, s: SessaoConsulta, achados: Map<string, AchadoEstacao>, encontradas: Set<string>, semCvss: Set<string>) {
+async function cruzarLinux(estacao: Estacao, s: SessaoConsulta, achados: Map<string, AchadoEstacao>, encontradas: Set<string>, semCvss: Set<string>, semCorrecao: Set<string>) {
   const { grupos, consultados, semCobertura } = gruposOsv(estacao);
   if (!grupos.size) return { consultados, semCobertura };
   const ids = await idsOsv([...grupos.values()].map((g) => ({ ecossistema: g.ecossistema, nome: g.pacote, versao: g.versao })), s);
@@ -89,7 +90,9 @@ async function cruzarLinux(estacao: Estacao, s: SessaoConsulta, achados: Map<str
 
   // CVE + programa que o OSV confirmou, com o registro de onde veio; o vetor vem do registro
   // quando ele trata de um CVE so (boletins como USN/DSA juntam varios e tem uma nota para todos).
+  // A versao corrigida pode estar em qualquer registro do mesmo CVE (o do CVE ou o boletim).
   const semVetor = new Map<string, { cve: string; g: GrupoOsv; v: VulnOsv }>();
+  const correcao = new Map<string, string>();
   for (const [k, g] of grupos) {
     for (const id of ids.get(k) ?? []) {
       const v = registros.get(id);
@@ -97,16 +100,33 @@ async function cruzarLinux(estacao: Estacao, s: SessaoConsulta, achados: Map<str
       for (const cve of v.cves) {
         const kk = chave(cve, g.pacote);
         encontradas.add(kk);
+        const versao = corrigidaEm(v, g);
+        if (versao && !correcao.has(kk)) correcao.set(kk, versao);
         if (achados.has(kk)) continue;
         const vetor = v.cves.length === 1 ? vetorBase31(v.vetor) : null;
         if (vetor && v.vetor) {
           semVetor.delete(kk);
-          achados.set(kk, { programa: g.pacote, programaVersao: g.versao, cve, base: 'OSV', vetor: v.vetor, cwe: v.cwe, resumo: v.resumo, registro: v.id, origem: origemOsv(g), corrigidaEm: corrigidaEm(v, g) });
+          achados.set(kk, { programa: g.pacote, programaVersao: g.versao, cve, base: 'OSV', vetor: v.vetor, cwe: v.cwe, resumo: v.resumo, registro: v.id, origem: origemOsv(g), corrigidaEm: null });
         } else if (!semVetor.has(kk) || v.cves.length === 1) {
           semVetor.set(kk, { cve, g, v });
         }
       }
     }
+  }
+  // DT17: so vira achado o CVE que tem versao corrigida publicada para o pacote instalado.
+  // O resto sai antes de gastar consulta (registro do CVE, NVD) atras da nota.
+  for (const [kk, a] of achados) {
+    const versao = correcao.get(kk);
+    if (versao) a.corrigidaEm = versao;
+    else {
+      achados.delete(kk);
+      semCorrecao.add(kk);
+    }
+  }
+  for (const kk of semVetor.keys()) {
+    if (correcao.has(kk)) continue;
+    semVetor.delete(kk);
+    semCorrecao.add(kk);
   }
   if (!semVetor.size) return { consultados, semCobertura };
 
@@ -130,13 +150,13 @@ async function cruzarLinux(estacao: Estacao, s: SessaoConsulta, achados: Map<str
       semCvss.add(kk);
       continue;
     }
-    achados.set(kk, { programa: g.pacote, programaVersao: g.versao, cve, base: 'OSV', vetor, cwe, resumo, registro: v.id, origem: origemOsv(g), corrigidaEm: corrigidaEm(v, g) });
+    achados.set(kk, { programa: g.pacote, programaVersao: g.versao, cve, base: 'OSV', vetor, cwe, resumo, registro: v.id, origem: origemOsv(g), corrigidaEm: correcao.get(kk)! });
   }
   return { consultados, semCobertura };
 }
 
 /** Cruza os programas Windows da tabela de CPE com o NVD. */
-async function cruzarWindows(estacao: Estacao, s: SessaoConsulta, achados: Map<string, AchadoEstacao>, encontradas: Set<string>, semCvss: Set<string>) {
+async function cruzarWindows(estacao: Estacao, s: SessaoConsulta, achados: Map<string, AchadoEstacao>, encontradas: Set<string>, semCvss: Set<string>, semCorrecao: Set<string>) {
   const porCpe = new Map<string, { programa: string; versao: string; nomes: Set<string> }>();
   let consultados = 0, semCobertura = 0;
   for (const p of estacao.programas) {
@@ -154,10 +174,17 @@ async function cruzarWindows(estacao: Estacao, s: SessaoConsulta, achados: Map<s
   for (const [cpe, item] of porCpe) {
     const cves = await cvesPorCpe(cpe, s);
     if (!cves) continue;
+    const produto = produtoDoCpe(cpe);
     for (const c of cves) {
       const kk = chave(c.cve, item.programa);
       encontradas.add(kk);
       if (achados.has(kk)) continue;
+      // DT17: so com versao corrigida publicada para este produto (versionEndExcluding no NVD).
+      const corrigida = c.correcoes?.find((x) => x.produto === produto)?.versao ?? null;
+      if (!corrigida) {
+        semCorrecao.add(kk);
+        continue;
+      }
       if (!vetorBase31(c.vetor)) {
         semCvss.add(kk);
         continue;
@@ -172,7 +199,7 @@ async function cruzarWindows(estacao: Estacao, s: SessaoConsulta, achados: Map<s
         resumo: c.descricao,
         registro: c.cve,
         origem: `programs: ${[...item.nomes].sort(porCodigo).join(', ')}; NVD ${cpe}`,
-        corrigidaEm: null,
+        corrigidaEm: corrigida,
       });
     }
   }
@@ -184,12 +211,34 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
   const achados = new Map<string, AchadoEstacao>();
   const encontradas = new Set<string>();
   const semCvss = new Set<string>();
-  const win = await cruzarWindows(estacao, s, achados, encontradas, semCvss);
-  const linux = await cruzarLinux(estacao, s, achados, encontradas, semCvss);
+  const semCorrecao = new Set<string>();
+  const win = await cruzarWindows(estacao, s, achados, encontradas, semCvss, semCorrecao);
+  const linux = await cruzarLinux(estacao, s, achados, encontradas, semCvss, semCorrecao);
   const macos = estacao.programas.filter((p) => p.fonte === 'apps').length;
 
   const existentes = await repo.achadosExistentes(estacao.id);
   const novos = [...achados.entries()].filter(([k]) => !existentes.has(k)).map(([, a]) => a);
+  const base = {
+    estacaoId: estacao.id,
+    ativoId: estacao.assetId,
+    host: estacao.asset.host,
+    programasConsultados: win.consultados + linux.consultados,
+    programasSemCobertura: win.semCobertura + linux.semCobertura + macos,
+    vulnerabilidadesEncontradas: encontradas.size,
+    semCvss: semCvss.size,
+    semCorrecao: semCorrecao.size,
+    pendentes: s.pendentes,
+    falhas: [...s.falhas].sort(porCodigo),
+  };
+
+  // DT17: so grava o resultado de uma verificacao INTEIRA. Com consulta pendente (orcamento do
+  // NVD) ou base sem resposta, nada vai para a tela nem muda a data da verificacao: o que ja foi
+  // consultado fica no cache e a proxima verificacao continua de onde esta parou.
+  if (s.pendentes > 0 || s.falhas.size > 0) {
+    await limparCache();
+    return { ...base, completa: false, verificadaEm: estacao.verificadaEm?.toISOString() ?? null, achadosNovos: 0, achadosExistentes: 0, varreduraId: null };
+  }
+
   const { scanId, criados } = await repo.registrarAchados(estacao.assetId, estacao.id, novos.map(dadosAchadoEstacao));
   if (criados > 0) {
     const cves = novos.map((a) => `${a.cve} (${a.programa})`);
@@ -203,18 +252,11 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
   await repo.marcarVerificada(estacao.id, verificadaEm);
   await limparCache();
   return {
-    estacaoId: estacao.id,
-    ativoId: estacao.assetId,
-    host: estacao.asset.host,
+    ...base,
+    completa: true,
     verificadaEm: verificadaEm.toISOString(),
-    programasConsultados: win.consultados + linux.consultados,
-    programasSemCobertura: win.semCobertura + linux.semCobertura + macos,
-    vulnerabilidadesEncontradas: encontradas.size,
     achadosNovos: criados,
     achadosExistentes: achados.size - novos.length + (novos.length - criados),
-    semCvss: semCvss.size,
-    pendentes: s.pendentes,
-    falhas: [...s.falhas].sort(porCodigo),
     varreduraId: scanId,
   };
 }
@@ -232,7 +274,13 @@ export async function verificar(id: string, atorId: string | null): Promise<Resu
   try {
     const r = await cruzar(estacao, atorId);
     if (atorId)
-      await registrarAuditoria(atorId, 'VERIFICAR_ESTACAO', `${r.host}: ${r.achadosNovos} achado(s) novo(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''}`);
+      await registrarAuditoria(
+        atorId,
+        'VERIFICAR_ESTACAO',
+        r.completa
+          ? `${r.host}: ${r.achadosNovos} achado(s) novo(s)`
+          : `${r.host}: incompleta, nada registrado (${r.pendentes} pendente(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''})`,
+      );
     return r;
   } finally {
     emAndamento.delete(estacao.id);
@@ -256,8 +304,9 @@ export function verificarEmSegundoPlano(estacaoId: string): void {
   if (!cruzamentoAutomatico() || emAndamento.has(estacaoId)) return;
   const tarefa = verificar(estacaoId, null)
     .then((r) => {
-      if (r.achadosNovos || r.falhas.length)
-        console.log(`[cruzamento] ${r.host}: ${r.achadosNovos} achado(s) novo(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''}`);
+      if (!r.completa)
+        console.log(`[cruzamento] ${r.host}: incompleta, nada registrado (${r.pendentes} consulta(s) pendente(s)${r.falhas.length ? `; falhas: ${r.falhas.join(', ')}` : ''})`);
+      else if (r.achadosNovos) console.log(`[cruzamento] ${r.host}: ${r.achadosNovos} achado(s) novo(s)`);
     })
     .catch((e) => {
       if (e instanceof ErroNegocio) return; // estacao inativa ou ja em verificacao

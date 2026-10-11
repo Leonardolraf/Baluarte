@@ -190,6 +190,12 @@ export interface CveNvd {
   vetor: string | null;
   cwe: string | null;
   descricao: string;
+  /**
+   * Versao corrigida por produto ("fornecedor:produto" do CPE): o `versionEndExcluding` das
+   * configuracoes vulneraveis. Sem ele (configuracao so com versoes exatas, ou ate uma versao
+   * inclusive) nao ha versao corrigida conhecida. Ausente = entrada de cache anterior a este campo.
+   */
+  correcoes?: { produto: string; versao: string }[];
 }
 
 const metricaNvd = z.object({ type: z.string().optional(), cvssData: z.object({ vectorString: z.string() }).passthrough() }).passthrough();
@@ -207,9 +213,46 @@ const cveNvdBruto = z.object({
         .optional()
         .catch(undefined),
       weaknesses: z.array(z.object({ description: textoNvd }).passthrough()).optional().catch(undefined),
+      configurations: z
+        .array(
+          z
+            .object({
+              nodes: z
+                .array(
+                  z
+                    .object({
+                      cpeMatch: z
+                        .array(z.object({ vulnerable: z.boolean().optional(), criteria: z.string(), versionEndExcluding: z.string().optional() }).passthrough())
+                        .optional(),
+                    })
+                    .passthrough(),
+                )
+                .optional(),
+            })
+            .passthrough(),
+        )
+        .optional()
+        .catch(undefined),
     })
     .passthrough(),
 });
+
+/** "fornecedor:produto" de um CPE 2.3 (cpe:2.3:a:google:chrome:...); null se o formato nao confere. */
+export function produtoDoCpe(cpe: string): string | null {
+  const partes = cpe.split(':');
+  return partes.length >= 5 && partes[0] === 'cpe' && partes[3] && partes[4] ? `${partes[3]}:${partes[4]}`.toLowerCase() : null;
+}
+
+function correcoesNvd(configuracoes: z.infer<typeof cveNvdBruto>['cve']['configurations']): { produto: string; versao: string }[] {
+  const correcoes = new Map<string, string>();
+  for (const c of configuracoes ?? [])
+    for (const n of c.nodes ?? [])
+      for (const m of n.cpeMatch ?? []) {
+        const produto = produtoDoCpe(m.criteria);
+        if (m.vulnerable !== false && produto && m.versionEndExcluding && !correcoes.has(produto)) correcoes.set(produto, m.versionEndExcluding.slice(0, 255));
+      }
+  return [...correcoes].slice(0, 20).map(([produto, versao]) => ({ produto, versao }));
+}
 
 const respostaNvd = z.object({ totalResults: z.number().optional(), vulnerabilities: z.array(z.unknown()) }).passthrough();
 
@@ -233,6 +276,7 @@ export function lerCvesNvd(json: unknown): CveNvd[] | null {
       vetor: vetorNvd(cve.metrics?.cvssMetricV31) ?? vetorNvd(cve.metrics?.cvssMetricV30),
       cwe,
       descricao: (cve.descriptions?.find((d) => d.lang === 'en')?.value ?? '').replace(/\s+/g, ' ').trim().slice(0, 300),
+      correcoes: correcoesNvd(cve.configurations),
     });
   }
   return lista;
@@ -290,8 +334,9 @@ function remediacao(a: AchadoEstacao): PassoRemediacao[] {
       { titulo: 'Conferir o boletim', descricao: `Ler o registro ${a.registro} em https://osv.dev/vulnerability/${encodeURIComponent(a.registro)} para saber se há mitigação enquanto a correção não chega.`, esforco: 'baixo' },
     ];
   }
+  const alvo = a.corrigidaEm ? `a ${a.corrigidaEm} ou mais nova` : 'a versão mais recente do fornecedor';
   return [
-    { titulo: 'Atualizar o programa', descricao: `Atualizar ${a.programa} para a versão mais recente do fornecedor (a ${a.programaVersao} instalada é afetada pelo ${a.cve}).`, esforco: 'baixo' },
+    { titulo: 'Atualizar o programa', descricao: `Atualizar ${a.programa} para ${alvo} (a ${a.programaVersao} instalada é afetada pelo ${a.cve}).`, esforco: 'baixo' },
     { titulo: 'Conferir o CVE', descricao: `Ler https://nvd.nist.gov/vuln/detail/${a.cve} para confirmar as versões corrigidas e as mitigações.`, esforco: 'baixo' },
   ];
 }
@@ -323,7 +368,13 @@ export interface ResultadoVerificacao {
   estacaoId: string;
   ativoId: string;
   host: string;
-  verificadaEm: string;
+  /**
+   * DT17: true so quando nada ficou pendente e todas as bases responderam; so entao os achados
+   * sao gravados e a data da verificacao muda. false = nada registrado, a proxima continua.
+   */
+  completa: boolean;
+  /** Data da ultima verificacao completa (null se nunca completou). */
+  verificadaEm: string | null;
   programasConsultados: number;
   /** Programas que nao tem como ser consultados (Windows fora da tabela, sistema sem suporte no OSV). */
   programasSemCobertura: number;
@@ -332,6 +383,11 @@ export interface ResultadoVerificacao {
   achadosExistentes: number;
   /** CVEs sem vetor CVSS 3.x em nenhuma base: nao viram achado (a nota nao e inventada). */
   semCvss: number;
+  /**
+   * CVEs sem versao corrigida publicada para o pacote/produto instalado: nao viram achado (DT17).
+   * Contam em `vulnerabilidadesEncontradas`; o analista nao tem o que aplicar enquanto nao sai.
+   */
+  semCorrecao: number;
   /** Consultas que ficaram para a proxima verificacao (limite por verificacao). */
   pendentes: number;
   /** Bases que falharam nesta verificacao (os achados delas ficam para a proxima). */

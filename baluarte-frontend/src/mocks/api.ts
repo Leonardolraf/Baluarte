@@ -1920,7 +1920,9 @@ export const mockApi: BaluarteApi = {
       station.findingsOpen = (station.findingsOpen ?? 0) + created;
       station.verifiedAt = new Date().toISOString();
       return {
+        complete: true,
         verifiedAt: station.verifiedAt,
+        noFix: 0,
         checkedPrograms: covered ? station.software.length : 0,
         uncoveredPrograms: covered ? 0 : station.software.length,
         vulnerabilitiesFound: found,

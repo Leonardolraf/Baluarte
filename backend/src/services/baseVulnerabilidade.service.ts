@@ -122,7 +122,10 @@ function reservarNvd(s: SessaoConsulta): boolean {
 export async function cvesPorCpe(cpe: string, s: SessaoConsulta): Promise<CveNvd[] | undefined> {
   const chave = `cpe:${cpe}`;
   const emCache = (await cache.lerValidas('NVD', [chave])).get(chave);
-  if (emCache) return (emCache as { cves?: CveNvd[] }).cves ?? [];
+  const cacheadas = (emCache as { cves?: CveNvd[] } | undefined)?.cves ?? [];
+  // Entrada gravada antes das versoes corrigidas (DT17) nao serve: sem `correcoes`, todo CVE
+  // pareceria sem correcao e sumiria ate o cache vencer. Consulta de novo e regrava.
+  if (emCache && cacheadas.every((c) => Array.isArray(c.correcoes))) return cacheadas;
   if (!reservarNvd(s)) return undefined;
   try {
     const json = await nvd.cvesPorCpe(cpe);

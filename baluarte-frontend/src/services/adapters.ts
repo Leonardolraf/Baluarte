@@ -1474,20 +1474,25 @@ export function toStationDetail(raw: BackendStationDetail): StationDetail {
 
 /** Resposta de POST /estacoes/:id/verificar (B14). */
 export interface BackendStationVerification {
-  verificadaEm: string;
+  /** DT17; ausente em backend anterior, que sempre gravava (conta como completa). */
+  completa?: boolean;
+  verificadaEm: string | null;
   programasConsultados: number;
   programasSemCobertura: number;
   vulnerabilidadesEncontradas: number;
   achadosNovos: number;
   achadosExistentes: number;
   semCvss: number;
+  semCorrecao?: number;
   pendentes: number;
   falhas: string[];
 }
 
 export function toStationVerification(raw: BackendStationVerification): StationVerification {
   return {
-    verifiedAt: raw.verificadaEm,
+    complete: raw.completa !== false,
+    verifiedAt: raw.verificadaEm ?? null,
+    noFix: Number(raw.semCorrecao) || 0,
     checkedPrograms: Number(raw.programasConsultados) || 0,
     uncoveredPrograms: Number(raw.programasSemCobertura) || 0,
     vulnerabilitiesFound: Number(raw.vulnerabilidadesEncontradas) || 0,

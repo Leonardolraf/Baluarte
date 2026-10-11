@@ -29,6 +29,11 @@ export async function detalhe(req: Request, res: Response) {
 export async function verificar(req: Request, res: Response) {
   const { id } = validar(req.params, PARAMETRO_ID);
   const dados = await cruzamentoService.verificar(id as string, usuarioDe(req).id);
-  const mensagem = dados.falhas.length ? `Verificação concluída sem resposta de: ${dados.falhas.join(', ')}` : 'Verificação concluída';
+  // DT17: verificacao incompleta nao registra nada; a mensagem diz o motivo.
+  const mensagem = dados.completa
+    ? 'Verificação concluída'
+    : dados.falhas.length
+      ? `Verificação incompleta, sem resposta de: ${dados.falhas.join(', ')}. Nada foi registrado`
+      : `Verificação incompleta: ${dados.pendentes} consulta(s) para a próxima verificação. Nada foi registrado`;
   enviar(res, 200, { status: 'sucesso', mensagem, dados });
 }

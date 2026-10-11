@@ -818,7 +818,13 @@ export type VulnerabilitySource = 'OSV' | 'NVD';
 
 /** Resultado de POST /estacoes/:id/verificar (B14). */
 export interface StationVerification {
-  verifiedAt: string;
+  /**
+   * DT17: true só quando a verificação terminou inteira (nada pendente, todas as bases
+   * responderam). Incompleta não registra nada nem muda a data da última verificação.
+   */
+  complete: boolean;
+  /** Última verificação completa (null se nunca completou). */
+  verifiedAt: string | null;
   /** Programas consultados numa base (pacotes Linux no OSV, programas Windows da tabela no NVD). */
   checkedPrograms: number;
   /** Programas sem como consultar (Windows fora da tabela, sistema sem suporte no OSV). */
@@ -828,6 +834,8 @@ export interface StationVerification {
   existingFindings: number;
   /** CVEs sem nota CVSS 3.x em nenhuma base: não viram achado. */
   noCvss: number;
+  /** DT17: CVEs sem versão corrigida publicada: não viram achado. */
+  noFix: number;
   /** Consultas que ficaram para a próxima verificação (limite por verificação). */
   pending: number;
   /** Bases que não responderam nesta verificação. */
