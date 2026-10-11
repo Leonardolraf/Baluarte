@@ -90,6 +90,18 @@ const cveNvd = (id: string, metrics: Record<string, unknown>, cwe?: string, conf
 /** Configuracao do NVD: o produto afetado ate uma versao (exclusive) ou so numa versao exata. */
 const ate = (criteria: string, versionEndExcluding?: string) => [{ nodes: [{ operator: 'OR', negate: false, cpeMatch: [{ vulnerable: true, criteria, ...(versionEndExcluding ? { versionEndExcluding } : {}) }] }] }];
 const CHROME = 'cpe:2.3:a:google:chrome:*:*:*:*:*:*:*:*';
+/** DT21: configuracao AND do NVD, "produto ate a versao X, so nesta plataforma" (sistema nao vulneravel). */
+const ateEm = (criteria: string, versionEndExcluding: string, sistema: string) => [
+  {
+    operator: 'AND',
+    nodes: [
+      { operator: 'OR', negate: false, cpeMatch: [{ vulnerable: true, criteria, versionEndExcluding }] },
+      { operator: 'OR', negate: false, cpeMatch: [{ vulnerable: false, criteria: sistema }] },
+    ],
+  },
+];
+const ANDROID = 'cpe:2.3:o:google:android:-:*:*:*:*:*:*:*';
+const WINDOWS_OS = 'cpe:2.3:o:microsoft:windows:-:*:*:*:*:*:*:*';
 const v31 = (vetor: string, type = 'Primary') => ({ cvssMetricV31: [{ source: 'nvd@nist.gov', type, cvssData: { version: '3.1', vectorString: vetor } }] });
 
 const NVD_CVE: Record<string, unknown> = {
@@ -104,6 +116,12 @@ const NVD_CPE: Record<string, unknown[] | null> = {
     cveNvd('CVE-2024-9604', v31(V.critico), undefined, ate('cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*')),
   ],
   'cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*': null, // 404: CPE fora do dicionario
+  // DT21: o mesmo Chrome com um CVE so de Android, um so de Windows e um sem plataforma.
+  'cpe:2.3:a:google:chrome:130.0.6723.58:*:*:*:*:*:*:*': [
+    cveNvd('CVE-2026-13887', v31(V.altoUI), undefined, ateEm(CHROME, '130.0.6723.91', ANDROID)),
+    cveNvd('CVE-2026-20001', v31(V.critico), undefined, ateEm(CHROME, '130.0.6723.91', WINDOWS_OS)),
+    cveNvd('CVE-2026-20002', v31(V.alto), undefined, ate(CHROME, '130.0.6723.91')),
+  ],
 };
 
 type Modo = 'normal' | 'erro' | 'mudo';
@@ -129,7 +147,11 @@ function tratar(req: IncomingMessage, res: ServerResponse) {
       const cve = url.searchParams.get('cveId');
       if (cpe) {
         const lista = cpe in NVD_CPE ? NVD_CPE[cpe] : [];
-        return lista === null ? json(res, 404) : json(res, 200, { totalResults: lista.length, vulnerabilities: lista });
+        if (lista === null) return json(res, 404);
+        // Paginacao como a da API real: startIndex + resultsPerPage, com o total de tudo.
+        const inicio = Number(url.searchParams.get('startIndex') ?? 0);
+        const tamanho = Number(url.searchParams.get('resultsPerPage') ?? 2000);
+        return json(res, 200, { totalResults: lista.length, startIndex: inicio, resultsPerPage: tamanho, vulnerabilities: lista.slice(inicio, inicio + tamanho) });
       }
       const item = cve ? NVD_CVE[cve] : undefined;
       return json(res, 200, { totalResults: item ? 1 : 0, vulnerabilities: item ? [item] : [] });
@@ -176,6 +198,7 @@ afterEach(async () => {
   process.env.VULN_TIMEOUT_MS = '2000';
   delete process.env.NVD_API_KEY;
   delete process.env.CRUZAMENTO_AUTOMATICO;
+  delete process.env.NVD_RESULTADOS_POR_PAGINA;
 });
 
 // ---- Estacoes simuladas (protocolo do osquery) ---------------------------------------
@@ -397,7 +420,7 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.ok(pedidos.filter((p) => p.base === 'NVD').every((p) => p.apiKey === 'chave-falsa-nvd-b14'));
     assert.equal(conta('OSV'), 0, 'Windows não vai ao OSV');
     const cache404 = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'NVD', chave: 'cpe:cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*' } } });
-    assert.deepEqual(cache404.dados, { cves: [] }, 'CPE fora do dicionário (404) é "nenhum CVE", não falha');
+    assert.deepEqual(cache404.dados, { cves: [], formato: 2 }, 'CPE fora do dicionário (404) é "nenhum CVE", não falha');
   });
 
   it('DT17: cache do NVD gravado antes das versões corrigidas é consultado de novo (não some o CVE)', async () => {
@@ -416,6 +439,62 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.equal(conta('NVD'), 1, 'consultou o NVD de novo');
     const renovado = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'NVD', chave: `cpe:${cpe}` } } });
     assert.ok((renovado.dados as { cves: { correcoes?: unknown }[] }).cves.every((c) => Array.isArray(c.correcoes)), 'regravado com as versões corrigidas');
+  });
+
+  it('DT21: CVE "no Android" (configuração AND com plataforma) não vira achado no Windows; "no Windows" e sem plataforma viram', async () => {
+    const e = await estacao(WINDOWS);
+    await e.enviar('baluarte_programas_windows', [{ name: 'Google Chrome', version: '130.0.6723.58', fornecedor: 'Google LLC' }]);
+    const r = await verificar(e.id);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const d = r.body.dados;
+    assert.equal(d.completa, true);
+    assert.equal(d.vulnerabilidadesEncontradas, 3);
+    assert.equal(d.outraPlataforma, 1, 'o de Android é de outra plataforma');
+    assert.equal(d.semCorrecao, 0);
+    assert.equal(d.achadosNovos, 2);
+    const cves = (await prisma.finding.findMany({ where: { workstationId: e.id } })).map((f) => f.cve).sort();
+    assert.deepEqual(cves, ['CVE-2026-20001', 'CVE-2026-20002']);
+  });
+
+  it('NVD paginado: lê todas as páginas pelo startIndex (nada some depois da primeira)', async () => {
+    await prisma.vulnerabilityCache.deleteMany({ where: { base: 'NVD' } });
+    process.env.NVD_RESULTADOS_POR_PAGINA = '2';
+    const e = await estacao(WINDOWS);
+    await e.enviar('baluarte_programas_windows', [{ name: 'Google Chrome', version: '129.0.6668.58', fornecedor: 'Google LLC' }]);
+    const r = await verificar(e.id);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.dados.completa, true);
+    assert.equal(r.body.dados.vulnerabilidadesEncontradas, 3, 'os 3 CVEs do Chrome, em 2 páginas');
+    assert.equal(r.body.dados.achadosNovos, 1);
+    const paginas = pedidos.filter((p) => p.base === 'NVD' && p.caminho.includes('cpeName=')).map((p) => new URL(p.caminho, 'http://x').searchParams.get('startIndex'));
+    assert.deepEqual(paginas, ['0', '2']);
+    const cache = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'NVD', chave: 'cpe:cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*' } } });
+    assert.equal((cache.dados as { cves: unknown[] }).cves.length, 3, 'o cache guarda a lista inteira');
+  });
+
+  it('NVD paginado: orçamento acaba no meio das páginas → pendente, incompleta e nada parcial no cache', async () => {
+    await prisma.vulnerabilityCache.deleteMany({ where: { base: 'NVD' } });
+    process.env.NVD_RESULTADOS_POR_PAGINA = '1';
+    const e = await estacao(WINDOWS);
+    // A estação lista os programas em ordem alfabética: 3 antes do Chrome, de uma página cada (sem
+    // CVE; versões que nenhum outro teste usa, para não vir do cache), e o Chrome com 3 páginas.
+    // Orçamento de 5: 3 + 2 páginas do Chrome, e a terceira fica pendente.
+    await e.enviar('baluarte_programas_windows', [
+      { name: '7-Zip 8.0 (x64)', version: '8.0.1', fornecedor: 'X' },
+      { name: 'Adobe Acrobat Reader DC', version: '8.1.1', fornecedor: 'X' },
+      { name: 'AnyDesk', version: '8.2.1', fornecedor: 'X' },
+      { name: 'Google Chrome', version: '129.0.6668.58', fornecedor: 'Google LLC' },
+    ]);
+    const r = await verificar(e.id);
+    assert.equal(r.body.dados.completa, false);
+    assert.equal(r.body.dados.pendentes, 1);
+    assert.equal(conta('NVD'), 5);
+    assert.equal(await prisma.finding.count({ where: { workstationId: e.id } }), 0);
+    assert.equal(
+      await prisma.vulnerabilityCache.count({ where: { base: 'NVD', chave: 'cpe:cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*' } }),
+      0,
+      'página parcial não vira "lista completa" no cache',
+    );
   });
 
   it('sem chave do NVD, no máximo 5 consultas por verificação; o resto fica pendente', async () => {

@@ -3,6 +3,7 @@ import {
   dadosAchadoEstacao,
   ecossistemaOsv,
   pacoteDeConsulta,
+  correcaoValeNaPlataforma,
   produtoDoCpe,
   vetorBase31,
   type AchadoEstacao,
@@ -156,7 +157,15 @@ async function cruzarLinux(estacao: Estacao, s: SessaoConsulta, achados: Map<str
 }
 
 /** Cruza os programas Windows da tabela de CPE com o NVD. */
-async function cruzarWindows(estacao: Estacao, s: SessaoConsulta, achados: Map<string, AchadoEstacao>, encontradas: Set<string>, semCvss: Set<string>, semCorrecao: Set<string>) {
+async function cruzarWindows(
+  estacao: Estacao,
+  s: SessaoConsulta,
+  achados: Map<string, AchadoEstacao>,
+  encontradas: Set<string>,
+  semCvss: Set<string>,
+  semCorrecao: Set<string>,
+  outraPlataforma: Set<string>,
+) {
   const porCpe = new Map<string, { programa: string; versao: string; nomes: Set<string> }>();
   let consultados = 0, semCobertura = 0;
   for (const p of estacao.programas) {
@@ -180,9 +189,13 @@ async function cruzarWindows(estacao: Estacao, s: SessaoConsulta, achados: Map<s
       encontradas.add(kk);
       if (achados.has(kk)) continue;
       // DT17: so com versao corrigida publicada para este produto (versionEndExcluding no NVD).
-      const corrigida = c.correcoes?.find((x) => x.produto === produto)?.versao ?? null;
+      // DT21: e numa configuracao que vale na plataforma da estacao ("Chrome no Android" nao
+      // afeta o Chrome do Windows).
+      const doProduto = (c.correcoes ?? []).filter((x) => x.produto === produto);
+      const corrigida = doProduto.find((x) => correcaoValeNaPlataforma(x.plataformas ?? [], estacao.soPlataforma))?.versao ?? null;
       if (!corrigida) {
-        semCorrecao.add(kk);
+        if (doProduto.length) outraPlataforma.add(kk);
+        else semCorrecao.add(kk);
         continue;
       }
       if (!vetorBase31(c.vetor)) {
@@ -212,7 +225,8 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
   const encontradas = new Set<string>();
   const semCvss = new Set<string>();
   const semCorrecao = new Set<string>();
-  const win = await cruzarWindows(estacao, s, achados, encontradas, semCvss, semCorrecao);
+  const outraPlataforma = new Set<string>();
+  const win = await cruzarWindows(estacao, s, achados, encontradas, semCvss, semCorrecao, outraPlataforma);
   const linux = await cruzarLinux(estacao, s, achados, encontradas, semCvss, semCorrecao);
   const macos = estacao.programas.filter((p) => p.fonte === 'apps').length;
 
@@ -227,6 +241,7 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
     vulnerabilidadesEncontradas: encontradas.size,
     semCvss: semCvss.size,
     semCorrecao: semCorrecao.size,
+    outraPlataforma: outraPlataforma.size,
     pendentes: s.pendentes,
     falhas: [...s.falhas].sort(porCodigo),
   };

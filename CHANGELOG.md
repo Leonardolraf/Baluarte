@@ -636,6 +636,13 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Alcance:** os deploys antigos do projeto `baluarte` ficam atrás do login da Vercel (`ssoProtection: all_except_custom_domains`, URL própria responde 302), então o endereço sai do ar no primeiro deploy de produção depois disto.
 - **Testes:** frontend 637/637 (domínios só, endereço ignorado) e Playwright mock de campanhas 4/4 (a recusa de destinatário externo vem da API).
 
+## 2026-10-11 — Cruzamento pelo NVD: paginação e plataforma (DT21)
+
+- **Paginação (achado da sessão de banco):** a consulta por CPE pedia só a primeira página (2.000) e não conferia `totalResults`; o Chrome do servidor já estava em 1.950, e o excedente sumiria sem aviso. Agora pagina pelo `startIndex` até o total, com cada página contando no orçamento do NVD; orçamento esgotado no meio deixa a consulta pendente (verificação incompleta) e nada parcial vai para o cache; página vazia antes do fim conta como falha da base.
+- **Plataforma (DT21):** o NVD descreve "Chrome on Android" como configuração AND (o produto vulnerável + o sistema não vulnerável), e o cruzamento olhava só o produto. Agora a correção só vale se a plataforma exigida for a da estação (`correcaoValeNaPlataforma`; na dúvida, não registra) e o resto conta em `outraPlataforma`. A entrada de cache por CPE ganhou `formato: 2`; entrada de outro formato é consultada de novo.
+- **Medição com o NVD real** (Chrome 149.0.7827.197 do Windows Server): 1.950 CVEs; regra antiga 1.947 achados; regra nova 1.482; **465 eram de outra plataforma** (Android 234, iOS 113, macOS 90, Linux 20, Chrome OS 8).
+- **Testes:** backend 717/717 (178 unidade + 10 banco + 403 integração + 126 pentest): paginação em 2 páginas, orçamento acabando no meio das páginas, e CVE de Android / de Windows / sem plataforma.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -643,7 +650,7 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração) e retenção de 12 meses; trava no banco na branch `feat/b29-trava`, para depois da apresentação) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 714 no backend (178 unidade + 10 banco + 400 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 637 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 717 no backend (178 unidade + 10 banco + 403 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 637 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |

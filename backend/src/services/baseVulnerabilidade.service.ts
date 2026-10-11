@@ -7,6 +7,7 @@ import {
   LIMITE_NVD_COM_CHAVE,
   LIMITE_NVD_SEM_CHAVE,
   LOTE_OSV,
+  contagemNvd,
   lerCvesNvd,
   lerLoteOsv,
   lerVulnOsv,
@@ -118,25 +119,49 @@ function reservarNvd(s: SessaoConsulta): boolean {
   return true;
 }
 
+/** Versao do formato da entrada de cache por CPE (2 = correcoes com plataformas, DT21). */
+const FORMATO_CACHE_CPE = 2;
+
 /** CVEs do NVD para um CPE; undefined = nao consultado (falha ou orcamento). */
 export async function cvesPorCpe(cpe: string, s: SessaoConsulta): Promise<CveNvd[] | undefined> {
   const chave = `cpe:${cpe}`;
   const emCache = (await cache.lerValidas('NVD', [chave])).get(chave);
-  const cacheadas = (emCache as { cves?: CveNvd[] } | undefined)?.cves ?? [];
-  // Entrada gravada antes das versoes corrigidas (DT17) nao serve: sem `correcoes`, todo CVE
-  // pareceria sem correcao e sumiria ate o cache vencer. Consulta de novo e regrava.
-  if (emCache && cacheadas.every((c) => Array.isArray(c.correcoes))) return cacheadas;
-  if (!reservarNvd(s)) return undefined;
+  const entrada = emCache as { cves?: CveNvd[]; formato?: number } | undefined;
+  // Entrada gravada antes do formato atual nao serve: sem `correcoes` (DT17) todo CVE pareceria
+  // sem correcao, e sem `plataformas` (DT21) o "Chrome no Android" contaria no Windows. Consulta
+  // de novo e regrava.
+  if (entrada && entrada.formato === FORMATO_CACHE_CPE) return entrada.cves ?? [];
+  // Pagina pelo startIndex ate receber os totalResults (antes so vinha a primeira pagina, e o que
+  // passava de 2000 sumia sem aviso). Cada pagina conta no orcamento; se ele acabar no meio, a
+  // consulta fica pendente e nada parcial vai para o cache: a proxima verificacao recomeca.
+  const cves: CveNvd[] = [];
+  let inicio = 0;
+  for (;;) {
+    if (!reservarNvd(s)) return undefined;
+    try {
+      const json = await nvd.cvesPorCpe(cpe, inicio);
+      if (json === null) break; // 404: CPE fora do dicionario, nenhum CVE
+      const pagina = lerCvesNvd(json);
+      const contagem = contagemNvd(json);
+      if (!pagina || !contagem) throw new BaseIndisponivel('NVD', 'resposta fora do formato');
+      cves.push(...pagina);
+      inicio += contagem.naPagina;
+      if (contagem.naPagina === 0 || inicio >= contagem.total) {
+        if (inicio < contagem.total) throw new BaseIndisponivel('NVD', `página vazia antes do fim (${inicio} de ${contagem.total})`);
+        break;
+      }
+    } catch (e) {
+      s.falhou('NVD', e);
+      return undefined;
+    }
+  }
   try {
-    const json = await nvd.cvesPorCpe(cpe);
-    const cves = json === null ? [] : lerCvesNvd(json);
-    if (!cves) throw new BaseIndisponivel('NVD', 'resposta fora do formato');
-    await cache.gravar('NVD', [{ chave, dados: { cves } }], validadeMs());
-    return cves;
+    await cache.gravar('NVD', [{ chave, dados: { cves, formato: FORMATO_CACHE_CPE } }], validadeMs());
   } catch (e) {
     s.falhou('NVD', e);
     return undefined;
   }
+  return cves;
 }
 
 /** Um CVE do NVD; null = o NVD nao o tem; undefined = nao consultado (falha ou orcamento). */
