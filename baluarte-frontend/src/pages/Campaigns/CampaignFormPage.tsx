@@ -21,7 +21,7 @@ import { errorMessage, isHttpError } from '@/lib/errors';
 import { toDateTimeLocalValue } from '@/lib/format';
 import { notify, trackOperation } from '@/store/uiStore';
 import { cn } from '@/lib/cn';
-import { internalRecipientsLabel, isInternalRecipient } from '@/lib/domain';
+import { INTERNAL_DOMAINS } from '@/lib/domain';
 
 interface CampaignFormValues {
   name: string;
@@ -62,8 +62,9 @@ const ONE_DAY_MS = 86_400_000;
 const NAME_MIN = 3;
 const NAME_MAX = 80;
 
-const INTERNAL_LABEL = internalRecipientsLabel();
-const RECIPIENTS_HINT = `Um e-mail por linha ou separados por vírgula/ponto e vírgula. Somente ${INTERNAL_LABEL}.`;
+// DT20: a tela só mostra os domínios; quem recusa destinatário de fora é a API (DESTINATARIO_EXTERNO).
+const INTERNAL_LABEL = INTERNAL_DOMAINS.join(', ');
+const RECIPIENTS_HINT = `Um e-mail por linha ou separados por vírgula/ponto e vírgula. Somente internos (${INTERNAL_LABEL}) ou liberados no servidor.`;
 const SCHEDULE_HINT = 'A campanha dispara automaticamente na data e hora informadas.';
 const TEMPLATE_ERROR_ID = 'template-error';
 /** A API real atual aceita um destinatário por campanha (ver `FEATURES.multiRecipientCampaigns`). */
@@ -77,16 +78,11 @@ interface RecipientAnalysis {
   /** Lista normalizada (sem espaços, minúsculas, sem duplicatas). */
   all: string[];
   invalid: string[];
-  external: string[];
   valid: string[];
 }
 
 function isCampaignTemplate(value: string): value is CampaignTemplate {
   return (CAMPAIGN_TEMPLATES as readonly string[]).includes(value);
-}
-
-function isInternalEmail(email: string): boolean {
-  return EMAIL_RE.test(email) && isInternalRecipient(email);
 }
 
 function analyzeRecipients(raw: string): RecipientAnalysis {
@@ -99,9 +95,8 @@ function analyzeRecipients(raw: string): RecipientAnalysis {
     ),
   );
   const invalid = all.filter((email) => !EMAIL_RE.test(email));
-  const external = all.filter((email) => EMAIL_RE.test(email) && !isInternalRecipient(email));
-  const valid = all.filter(isInternalEmail);
-  return { all, invalid, external, valid };
+  const valid = all.filter((email) => EMAIL_RE.test(email));
+  return { all, invalid, valid };
 }
 
 function listSample(items: string[], max = 3): string {
@@ -111,15 +106,12 @@ function listSample(items: string[], max = 3): string {
 }
 
 function validateRecipients(raw: string): string | true {
-  const { all, invalid, external } = analyzeRecipients(raw);
+  const { all, invalid } = analyzeRecipients(raw);
   if (all.length === 0) return 'Informe ao menos um destinatário.';
   if (invalid.length > 0) {
     return invalid.length === 1
       ? `E-mail inválido: ${invalid[0]}`
       : `E-mails inválidos: ${listSample(invalid)}`;
-  }
-  if (external.length > 0) {
-    return `Somente destinatários internos (${INTERNAL_LABEL}) são permitidos: ${listSample(external)}`;
   }
   if (!FEATURES.multiRecipientCampaigns && all.length > 1) return SINGLE_RECIPIENT_ERROR;
   return true;
@@ -208,10 +200,10 @@ export default function CampaignFormPage() {
             aria-hidden="true"
           />
           <p>
-            Somente destinatários internos (<span className="font-mono text-xs">{INTERNAL_LABEL}</span>). Esta
-            é uma simulação controlada: cada destinatário recebe um e-mail identificado como simulação, sem
-            anexos e sem pedido de senha, com o link do treinamento (oferecido logo após o clique) e um link
-            para reportar o e-mail suspeito.
+            Somente destinatários internos (<span className="font-mono text-xs">{INTERNAL_LABEL}</span>) ou
+            liberados no servidor. Esta é uma simulação controlada: cada destinatário recebe um e-mail
+            identificado como simulação, sem anexos e sem pedido de senha, com o link do treinamento
+            (oferecido logo após o clique) e um link para reportar o e-mail suspeito.
           </p>
         </div>
 
