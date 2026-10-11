@@ -643,6 +643,12 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Medição com o NVD real** (Chrome 149.0.7827.197 do Windows Server): 1.950 CVEs; regra antiga 1.947 achados; regra nova 1.482; **465 eram de outra plataforma** (Android 234, iOS 113, macOS 90, Linux 20, Chrome OS 8).
 - **Testes:** backend 717/717 (178 unidade + 10 banco + 403 integração + 126 pentest): paginação em 2 páginas, orçamento acabando no meio das páginas, e CVE de Android / de Windows / sem plataforma.
 
+## 2026-10-11 — DT22: 404 do NVD é falha da base, nunca "estação limpa"
+
+- **Defeito:** o cliente do NVD tratava 404 como "CPE fora do dicionário, nenhum CVE". Conferido na API pública: produto inexistente e CVE inexistente respondem **200 com lista vazia**; o 7-Zip 23.01, que o teste simulava como 404, tem 15 CVEs; 404 só vem de requisição recusada (chave inválida, parâmetro malformado). Com uma chave revogada ou inválida, toda estação Windows apareceria limpa, e o cache guardaria isso por 24 h. Quase aconteceu em 11/10: a primeira chave do NVD posta na VM ainda não estava ativada e era recusada com 404; ela foi neutralizada no override antes de qualquer rodada usá-la.
+- **Correção:** `config/nvd.ts` transforma 404 em `BaseIndisponivel` (falha da base). Pela regra do DT17, a verificação fica incompleta e nada é gravado. O OSV não muda: lá o 404 significa mesmo "registro não encontrado".
+- **Testes:** backend 718/718 (178 unidade + 10 banco + 404 integração + 126 pentest). O fixture do 7-Zip passou a 200 com lista vazia, como o NVD real, e um teste novo fixa que 404 deixa a verificação incompleta, sem achado, sem cache e sem data de verificação.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -650,7 +656,7 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração) e retenção de 12 meses; trava no banco na branch `feat/b29-trava`, para depois da apresentação) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 717 no backend (178 unidade + 10 banco + 403 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 637 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 718 no backend (178 unidade + 10 banco + 404 integração + 126 pentest) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 637 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |
