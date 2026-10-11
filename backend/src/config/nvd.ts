@@ -1,4 +1,4 @@
-import { obterJson } from './baseExterna.js';
+import { BaseIndisponivel, obterJson } from './baseExterna.js';
 
 // Cliente da API 2.0 de CVEs do NVD (https://nvd.nist.gov/developers/vulnerabilities).
 //  - ?cpeName=<cpe>: CVEs que afetam aquele produto naquela versao (programas Windows, pela
@@ -24,9 +24,17 @@ function cabecalhos(): Record<string, string> {
   return { accept: 'application/json', ...(chave ? { apiKey: chave } : {}) };
 }
 
-function consultar(parametros: Record<string, string>): Promise<unknown | null> {
+/**
+ * Faz a consulta. No NVD, "nenhum resultado" e sempre 200 com lista vazia (produto ou CVE
+ * inexistente inclusive); 404 so vem de requisicao recusada (chave invalida ou parametro
+ * malformado). Por isso 404 e FALHA da base, nunca "nenhuma vulnerabilidade": senao uma chave
+ * revogada faria toda estacao Windows parecer limpa (DT22, conferido na API publica em 11/10/2026).
+ */
+async function consultar(parametros: Record<string, string>): Promise<unknown> {
   const qs = new URLSearchParams(parametros).toString();
-  return obterJson('NVD', `${urlBase()}/rest/json/cves/2.0?${qs}`, { headers: cabecalhos() });
+  const json = await obterJson('NVD', `${urlBase()}/rest/json/cves/2.0?${qs}`, { headers: cabecalhos() });
+  if (json === null) throw new BaseIndisponivel('NVD', 'respondeu 404: requisição recusada (chave ou parâmetro inválido)', 404);
+  return json;
 }
 
 /** Tamanho da pagina; NVD_RESULTADOS_POR_PAGINA so existe para os testes paginarem com pouco dado. */
@@ -36,14 +44,14 @@ export function resultadosPorPagina(): number {
 }
 
 /**
- * Uma pagina dos CVEs que afetam o CPE, a partir de `inicio` (startIndex); null se o NVD
- * responde 404. Quem pagina e o service (cada pagina conta no orcamento do NVD).
+ * Uma pagina dos CVEs que afetam o CPE, a partir de `inicio` (startIndex). Quem pagina e o
+ * service (cada pagina conta no orcamento do NVD).
  */
-export function cvesPorCpe(cpe: string, inicio = 0): Promise<unknown | null> {
+export function cvesPorCpe(cpe: string, inicio = 0): Promise<unknown> {
   return consultar({ cpeName: cpe, resultsPerPage: String(resultadosPorPagina()), startIndex: String(inicio) });
 }
 
-/** Um CVE pelo identificador; null se o NVD responde 404. */
-export function cvePorId(cve: string): Promise<unknown | null> {
+/** Um CVE pelo identificador (CVE inexistente: 200 com lista vazia). */
+export function cvePorId(cve: string): Promise<unknown> {
   return consultar({ cveId: cve });
 }

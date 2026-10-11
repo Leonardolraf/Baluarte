@@ -140,7 +140,6 @@ export async function cvesPorCpe(cpe: string, s: SessaoConsulta): Promise<CveNvd
     if (!reservarNvd(s)) return undefined;
     try {
       const json = await nvd.cvesPorCpe(cpe, inicio);
-      if (json === null) break; // 404: CPE fora do dicionario, nenhum CVE
       const pagina = lerCvesNvd(json);
       const contagem = contagemNvd(json);
       if (!pagina || !contagem) throw new BaseIndisponivel('NVD', 'resposta fora do formato');
@@ -172,7 +171,7 @@ export async function cvePorId(cve: string, s: SessaoConsulta): Promise<CveNvd |
   if (!reservarNvd(s)) return undefined;
   try {
     const json = await nvd.cvePorId(cve);
-    const lista = json === null ? [] : lerCvesNvd(json);
+    const lista = lerCvesNvd(json);
     if (!lista) throw new BaseIndisponivel('NVD', 'resposta fora do formato');
     const achado = lista.find((c) => c.cve === cve) ?? null;
     await cache.gravar('NVD', [{ chave, dados: { cve: achado } }], validadeMs());

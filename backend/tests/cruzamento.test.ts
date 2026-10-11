@@ -115,7 +115,10 @@ const NVD_CPE: Record<string, unknown[] | null> = {
     // DT17: so a versao exata na configuracao, sem versionEndExcluding: nenhuma correcao conhecida.
     cveNvd('CVE-2024-9604', v31(V.critico), undefined, ate('cpe:2.3:a:google:chrome:129.0.6668.58:*:*:*:*:*:*:*')),
   ],
-  'cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*': null, // 404: CPE fora do dicionario
+  // CPE sem CVE (ou fora do dicionario): o NVD real responde 200 com lista vazia, nunca 404.
+  'cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*': [],
+  // DT22: 404 so vem de requisicao recusada (chave invalida, parametro malformado).
+  'cpe:2.3:a:google:chrome:131.0.6778.1:*:*:*:*:*:*:*': null,
   // DT21: o mesmo Chrome com um CVE so de Android, um so de Windows e um sem plataforma.
   'cpe:2.3:a:google:chrome:130.0.6723.58:*:*:*:*:*:*:*': [
     cveNvd('CVE-2026-13887', v31(V.altoUI), undefined, ateEm(CHROME, '130.0.6723.91', ANDROID)),
@@ -419,8 +422,8 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.equal(conta('NVD'), 2);
     assert.ok(pedidos.filter((p) => p.base === 'NVD').every((p) => p.apiKey === 'chave-falsa-nvd-b14'));
     assert.equal(conta('OSV'), 0, 'Windows não vai ao OSV');
-    const cache404 = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'NVD', chave: 'cpe:cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*' } } });
-    assert.deepEqual(cache404.dados, { cves: [], formato: 2 }, 'CPE fora do dicionário (404) é "nenhum CVE", não falha');
+    const semCve = await prisma.vulnerabilityCache.findUniqueOrThrow({ where: { base_chave: { base: 'NVD', chave: 'cpe:cpe:2.3:a:7-zip:7-zip:23.01:*:*:*:*:*:*:*' } } });
+    assert.deepEqual(semCve.dados, { cves: [], formato: 2 }, 'CPE sem CVE no NVD (200, lista vazia) é "nenhum CVE"');
   });
 
   it('DT17: cache do NVD gravado antes das versões corrigidas é consultado de novo (não some o CVE)', async () => {
@@ -454,6 +457,23 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
     assert.equal(d.achadosNovos, 2);
     const cves = (await prisma.finding.findMany({ where: { workstationId: e.id } })).map((f) => f.cve).sort();
     assert.deepEqual(cves, ['CVE-2026-20001', 'CVE-2026-20002']);
+  });
+
+  it('DT22: NVD respondendo 404 (chave inválida, requisição recusada) é FALHA da base, nunca "estação limpa"', async () => {
+    const e = await estacao(WINDOWS);
+    await e.enviar('baluarte_programas_windows', [{ name: 'Google Chrome', version: '131.0.6778.1', fornecedor: 'Google LLC' }]);
+    const r = await verificar(e.id);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.dados.completa, false);
+    assert.deepEqual(r.body.dados.falhas, ['NVD']);
+    assert.equal(r.body.mensagem, 'Verificação incompleta, sem resposta de: NVD. Nada foi registrado');
+    assert.equal(await prisma.finding.count({ where: { workstationId: e.id } }), 0);
+    assert.equal((await prisma.workstation.findUniqueOrThrow({ where: { id: e.id } })).verificadaEm, null, 'não conta como verificada');
+    assert.equal(
+      await prisma.vulnerabilityCache.count({ where: { base: 'NVD', chave: 'cpe:cpe:2.3:a:google:chrome:131.0.6778.1:*:*:*:*:*:*:*' } }),
+      0,
+      'a recusa não vira "nenhum CVE" no cache',
+    );
   });
 
   it('NVD paginado: lê todas as páginas pelo startIndex (nada some depois da primeira)', async () => {
