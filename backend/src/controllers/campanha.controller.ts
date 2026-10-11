@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
 import { CADASTRO_NOME, CADASTRO_TEMPLATE } from '../models/campanha.model.js';
-import { dominioInterno } from '../models/dominio.model.js';
+import { destinatarioInterno } from '../models/dominio.model.js';
 import * as campanhaService from '../services/campanha.service.js';
 import { enviar, erro } from '../utils/resposta.js';
 import { email as emailValido, validar } from '../utils/esquemas.js';
@@ -19,11 +19,10 @@ export async function cadastrar(req: Request, res: Response) {
 
   const brutos: unknown[] = Array.isArray(destinatarios) && destinatarios.length > 0 ? destinatarios : [destinatario];
   const emails: string[] = [];
-  const dominio = dominioInterno();
   for (const item of brutos) {
     if (!emailValido.safeParse(item).success) return erro(res, 400, 'Formato de e-mail inválido', 'EMAIL_INVALIDO');
     const email = String(item).trim();
-    if (!email.toLowerCase().endsWith(dominio))
+    if (!destinatarioInterno(email))
       return erro(res, 422, 'Destinatário não autorizado: apenas e-mails internos', 'DESTINATARIO_EXTERNO');
     if (!emails.some((e) => e.toLowerCase() === email.toLowerCase())) emails.push(email);
   }

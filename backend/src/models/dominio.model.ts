@@ -16,9 +16,33 @@ export const DOMINIO_INTERNO_PADRAO = '@empresa.com';
  * '@empresa.com' como padrao. Lido a cada chamada, sempre em minusculas e com '@'.
  */
 export function dominioInterno(): string {
-  const valor = (process.env.DOMINIO_INTERNO ?? '').trim().toLowerCase();
-  if (!valor) return DOMINIO_INTERNO_PADRAO;
-  return valor.startsWith('@') ? valor : `@${valor}`;
+  return destinatariosInternos().dominios[0] ?? DOMINIO_INTERNO_PADRAO;
+}
+
+/**
+ * DT19: DOMINIO_INTERNO aceita uma lista (virgula, ponto e virgula ou espaco) de dominios
+ * (`@baluarte.test` ou `baluarte.test`) e de enderecos liberados um a um
+ * (`pessoa@gmail.com`), para a demonstracao mandar campanha a uma caixa real sem liberar o
+ * dominio inteiro de um provedor. Sem entrada valida: so o dominio padrao.
+ */
+export function destinatariosInternos(): { dominios: string[]; enderecos: string[] } {
+  const dominios: string[] = [];
+  const enderecos: string[] = [];
+  for (const bruto of (process.env.DOMINIO_INTERNO ?? '').toLowerCase().split(/[\s,;]+/)) {
+    if (!bruto) continue;
+    const arroba = bruto.indexOf('@');
+    if (arroba > 0) enderecos.push(bruto);
+    else dominios.push(arroba === 0 ? bruto : `@${bruto}`);
+  }
+  if (!dominios.length && !enderecos.length) dominios.push(DOMINIO_INTERNO_PADRAO);
+  return { dominios, enderecos };
+}
+
+/** O e-mail pode receber campanha: termina num dominio interno ou esta liberado na lista. */
+export function destinatarioInterno(email: string): boolean {
+  const e = email.trim().toLowerCase();
+  const { dominios, enderecos } = destinatariosInternos();
+  return enderecos.includes(e) || dominios.some((d) => e.endsWith(d));
 }
 
 // Constantes de dominio das rotas adicionais (fora do contrato da N2 AT1)
