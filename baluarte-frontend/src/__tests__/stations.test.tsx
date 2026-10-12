@@ -366,6 +366,7 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
     complete: true,
     verifiedAt: '2026-10-08T12:00:00.000Z',
     noFix: 0,
+    resolvedFindings: 0,
     checkedPrograms: 7,
     uncoveredPrograms: 0,
     vulnerabilitiesFound: 3,
@@ -398,6 +399,18 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
     const link = await screen.findByRole('link', { name: /3 de 3/ });
     expect(link).toHaveAttribute('href', '/vulnerabilities?q=fin-nb-07.empresa.local');
     expect(screen.queryByText('Nunca verificada')).not.toBeInTheDocument();
+  });
+
+  it('B36: mostra quantos achados foram resolvidos porque o programa foi atualizado ou removido', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(mockApi, 'verifyStation').mockResolvedValue(
+      resultado({ newFindings: 0, existingFindings: 1, resolvedFindings: 2 }),
+    );
+    renderAt('/stations/ws-002');
+    await screen.findByRole('heading', { name: 'dev-ws-02' });
+    await user.click(screen.getByRole('button', { name: 'Verificar vulnerabilidades' }));
+    const status = await screen.findByTestId('verification-result');
+    expect(status).toHaveTextContent('2 resolvidos (programa atualizado ou removido)');
   });
 
   it('o Administrador também vê o botão', async () => {
@@ -495,6 +508,7 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
     ).toEqual({
       complete: true,
       noFix: 0,
+      resolvedFindings: 0,
       verifiedAt: '2026-10-08T12:00:00.000Z',
       checkedPrograms: 4,
       uncoveredPrograms: 1,

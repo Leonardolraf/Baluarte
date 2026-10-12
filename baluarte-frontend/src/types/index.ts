@@ -832,6 +832,8 @@ export interface StationVerification {
   vulnerabilitiesFound: number;
   newFindings: number;
   existingFindings: number;
+  /** B36: achados que as bases não devolvem mais (programa atualizado ou removido), fechados como Resolvida. */
+  resolvedFindings: number;
   /** CVEs sem nota CVSS 3.x em nenhuma base: não viram achado. */
   noCvss: number;
   /** DT17: CVEs sem versão corrigida publicada: não viram achado. */

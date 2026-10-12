@@ -182,6 +182,11 @@ function VerificationResult({ result }: { result: StationVerification }) {
     `${plural(result.newFindings, 'achado novo', 'achados novos')}`,
     `${plural(result.existingFindings, 'já registrado', 'já registrados')}`,
   ];
+  if (result.resolvedFindings > 0) {
+    parts.push(
+      `${plural(result.resolvedFindings, 'resolvido (programa atualizado ou removido)', 'resolvidos (programa atualizado ou removido)')}`,
+    );
+  }
   return (
     <div
       role="status"
