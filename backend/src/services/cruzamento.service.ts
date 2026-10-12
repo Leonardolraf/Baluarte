@@ -251,7 +251,7 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
   // consultado fica no cache e a proxima verificacao continua de onde esta parou.
   if (s.pendentes > 0 || s.falhas.size > 0) {
     await limparCache();
-    return { ...base, completa: false, verificadaEm: estacao.verificadaEm?.toISOString() ?? null, achadosNovos: 0, achadosExistentes: 0, varreduraId: null };
+    return { ...base, completa: false, verificadaEm: estacao.verificadaEm?.toISOString() ?? null, achadosNovos: 0, achadosExistentes: 0, achadosResolvidos: 0, varreduraId: null };
   }
 
   const { scanId, criados } = await repo.registrarAchados(estacao.assetId, estacao.id, novos.map(dadosAchadoEstacao));
@@ -263,6 +263,22 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
       `${criados} achado(s) novo(s) em ${estacao.asset.host} (varredura ${scanId}): ${cves.slice(0, 20).join(', ')}${cves.length > 20 ? ', …' : ''}`,
     );
   }
+  // B36: numa verificacao COMPLETA, achado aberto cujo CVE + programa nao foi mais encontrado em
+  // nenhuma base (programa atualizado para fora da faixa afetada, ou desinstalado) passa para
+  // "Resolvida", com evento sem usuario e registro na auditoria. Usa `encontradas` (tudo o que
+  // as bases devolveram), e nao `achados`: o que so saiu por regra (sem correcao publicada,
+  // outra plataforma) continua vulneravel e nao e fechado. "Risco aceito" nao e tocado e nada e
+  // reaberto sozinho (o analista que marcou "Resolvida" nao ve o achado voltar na rodada seguinte).
+  const ausentes = (await repo.achadosAbertos(estacao.id)).filter((a) => !encontradas.has(chave(a.cve ?? '', a.programa ?? '')));
+  const resolvidos = await repo.resolverAchados(ausentes.map((a) => a.id));
+  if (resolvidos.length) {
+    const itens = resolvidos.map((a) => `${a.cve} (${a.programa})`);
+    await registrarAuditoria(
+      atorId,
+      'RESOLVER_ACHADOS_ESTACAO',
+      `${resolvidos.length} achado(s) resolvido(s) em ${estacao.asset.host}: não encontrados mais nas bases (programa atualizado ou removido): ${itens.slice(0, 20).join(', ')}${itens.length > 20 ? ', …' : ''}`,
+    );
+  }
   const verificadaEm = new Date();
   await repo.marcarVerificada(estacao.id, verificadaEm);
   await limparCache();
@@ -272,6 +288,7 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
     verificadaEm: verificadaEm.toISOString(),
     achadosNovos: criados,
     achadosExistentes: achados.size - novos.length + (novos.length - criados),
+    achadosResolvidos: resolvidos.length,
     varreduraId: scanId,
   };
 }

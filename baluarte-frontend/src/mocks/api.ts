@@ -1928,6 +1928,7 @@ export const mockApi: BaluarteApi = {
         vulnerabilitiesFound: found,
         newFindings: created,
         existingFindings: found - created,
+        resolvedFindings: 0,
         noCvss: 0,
         pending: 0,
         failures: [],

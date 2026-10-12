@@ -431,6 +431,8 @@ export interface ResultadoVerificacao {
   vulnerabilidadesEncontradas: number;
   achadosNovos: number;
   achadosExistentes: number;
+  /** B36: achados abertos que as bases nao devolvem mais (programa atualizado ou removido), fechados como "Resolvida". */
+  achadosResolvidos: number;
   /** CVEs sem vetor CVSS 3.x em nenhuma base: nao viram achado (a nota nao e inventada). */
   semCvss: number;
   /**

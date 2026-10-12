@@ -96,3 +96,36 @@ export async function registrarAchados(
 export function marcarVerificada(id: string, verificadaEm: Date) {
   return prisma.workstation.update({ where: { id }, data: { verificadaEm } });
 }
+
+// ---- B36: fechar o que nao aparece mais -------------------------------------------
+
+/** Achados da estacao ainda em aberto (fora de "Resolvida" e "Risco aceito"), com o par CVE + programa. */
+export function achadosAbertos(workstationId: string) {
+  return prisma.finding.findMany({
+    where: { workstationId, status: { notIn: [...STATUS_FINDING_ENCERRADO] } },
+    select: { id: true, cve: true, programa: true },
+  });
+}
+
+/**
+ * B36: passa para "Resolvida" os achados indicados, numa instrucao so, com o evento do historico
+ * (B25b) sem usuario e o instante lido ja com as linhas travadas (como alterarStatus). Achado que
+ * mudou para "Resolvida" ou "Risco aceito" no meio do caminho fica como esta. Devolve os fechados.
+ */
+export async function resolverAchados(ids: string[]): Promise<{ id: string; cve: string | null; programa: string | null }[]> {
+  if (!ids.length) return [];
+  return prisma.$queryRaw<{ id: string; cve: string | null; programa: string | null }[]>`
+    WITH alvo AS (
+      SELECT "id", "status" FROM "Finding"
+       WHERE "id" = ANY(${ids}::text[]) AND "status" NOT IN ('Resolvida', 'Risco aceito')
+       FOR UPDATE
+    ), mudou AS (
+      UPDATE "Finding" AS f SET "status" = 'Resolvida'
+        FROM alvo WHERE f."id" = alvo."id"
+      RETURNING f."id", f."cve", f."programa", alvo."status" AS anterior
+    ), evento AS (
+      INSERT INTO "FindingStatusChange" ("findingId", "de", "para", "usuarioId", "registradaEm")
+      SELECT "id", anterior, 'Resolvida', NULL, (clock_timestamp() AT TIME ZONE 'UTC')::timestamp(3) FROM mudou
+    )
+    SELECT "id", "cve", "programa" FROM mudou`;
+}

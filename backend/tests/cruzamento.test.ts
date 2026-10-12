@@ -565,6 +565,62 @@ describe('verificação sob demanda (POST /estacoes/:id/verificar)', () => {
   });
 });
 
+describe('B36: achado fecha sozinho quando o programa é atualizado ou removido', () => {
+  const statusDe = async (id: string, cve: string) =>
+    (await prisma.finding.findFirstOrThrow({ where: { workstationId: id, cve } })).status;
+
+  it('atualizado/removido → "Resolvida" com evento sem usuário e auditoria; "Risco aceito" e o que continua aparecendo não mudam', async () => {
+    const e = await estacaoUbuntu();
+    assert.equal((await verificar(e.id)).body.dados.achadosNovos, 3);
+    const curl = await prisma.finding.findFirstOrThrow({ where: { workstationId: e.id, cve: 'CVE-2023-38545' } });
+    assert.equal((await chamar('PATCH', `/vulnerabilidades/${curl.id}`, { token: analista, body: { status: 'Risco aceito' } })).status, 200);
+
+    // Nova coleta: openssl atualizado para 1.11 (o CVE-2023-3817 sai da faixa) e curl desinstalado.
+    await e.enviar('baluarte_programas_deb', [deb('libssl3', '3.0.2-0ubuntu1.11', 'openssl'), deb('openssl', '3.0.2-0ubuntu1.11'), deb('bash', '5.1-6ubuntu1')]);
+    const r = await verificar(e.id);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.dados.completa, true);
+    assert.equal(r.body.dados.achadosResolvidos, 1);
+    assert.equal(await statusDe(e.id, 'CVE-2023-3817'), 'Resolvida', 'saiu da faixa afetada');
+    assert.equal(await statusDe(e.id, 'CVE-2023-5678'), 'Aberta', 'continua afetando a versão nova');
+    assert.equal(await statusDe(e.id, 'CVE-2023-38545'), 'Risco aceito', 'risco aceito não é tocado, mesmo com o programa removido');
+
+    const resolvido = await prisma.finding.findFirstOrThrow({ where: { workstationId: e.id, cve: 'CVE-2023-3817' } });
+    const ultimo = await prisma.findingStatusChange.findFirstOrThrow({ where: { findingId: resolvido.id }, orderBy: { id: 'desc' } });
+    assert.deepEqual([ultimo.de, ultimo.para, ultimo.usuarioId], ['Aberta', 'Resolvida', null]);
+    const aud = await prisma.auditLog.findFirstOrThrow({ where: { acao: 'RESOLVER_ACHADOS_ESTACAO', detalhe: { contains: e.host } } });
+    assert.ok(aud.detalhe!.startsWith('1 achado(s) resolvido(s)') && aud.detalhe!.includes('CVE-2023-3817 (openssl)'), aud.detalhe!);
+
+    // Rodar de novo não refaz nada.
+    assert.equal((await verificar(e.id)).body.dados.achadosResolvidos, 0);
+  });
+
+  it('verificação incompleta não fecha nada', async () => {
+    const e = await estacaoUbuntu('7.81.0-1ubuntu1.13', '3.0.2-0ubuntu1.10');
+    await verificar(e.id);
+    await prisma.vulnerabilityCache.deleteMany({ where: { base: 'OSV', chave: { contains: '3.0.2-0ubuntu1.11' } } });
+    await e.enviar('baluarte_programas_deb', [deb('libssl3', '3.0.2-0ubuntu1.11', 'openssl'), deb('openssl', '3.0.2-0ubuntu1.11')]);
+    modo.OSV = 'erro';
+    const r = await verificar(e.id);
+    assert.equal(r.body.dados.completa, false);
+    assert.equal(r.body.dados.achadosResolvidos, 0);
+    assert.equal(await statusDe(e.id, 'CVE-2023-3817'), 'Aberta');
+    assert.equal(await statusDe(e.id, 'CVE-2023-38545'), 'Aberta');
+  });
+
+  it('achado que só deixaria de existir por REGRA (sem correção publicada) não é fechado: o programa continua vulnerável', async () => {
+    const e = await estacaoUbuntu();
+    const r1 = await verificar(e.id);
+    // Como se a regra antiga tivesse gravado o CVE sem correção: ele continua sendo devolvido pelo OSV.
+    const base = await prisma.finding.findFirstOrThrow({ where: { workstationId: e.id, cve: 'CVE-2023-38545' } });
+    const { id: _id, criadoEm: _c, remediacao, ...copia } = base;
+    await prisma.finding.create({ data: { ...copia, remediacao: remediacao as never, cve: 'CVE-2024-11111', scanId: r1.body.dados.varreduraId } });
+    const r2 = await verificar(e.id);
+    assert.equal(r2.body.dados.achadosResolvidos, 0);
+    assert.equal(await statusDe(e.id, 'CVE-2024-11111'), 'Aberta');
+  });
+});
+
 describe('relatório em PDF (B24) com os achados da estação', () => {
   it('o ativo é a estação; CVE, CVSS, severidade e programa aparecem; a busca pelo CVE também filtra', async () => {
     const e = await estacaoUbuntu();
