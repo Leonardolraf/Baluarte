@@ -154,6 +154,8 @@ export interface BackendFindingHistory {
         de: string;
         para: string;
         autor: { id: string; nome: string } | null;
+        /** Mudança do próprio sistema (sem usuário), como o fechamento automático do B36. */
+        automatico?: boolean;
       }
   >;
   statusAtual: string;
@@ -567,7 +569,8 @@ function toHistory(raw: BackendFinding): VulnerabilityHistoryEntry[] {
       action: 'status_changed',
       from: vulnStatusFromLabel(e.de),
       to: vulnStatusFromLabel(e.para),
-      actor: e.autor?.nome ?? 'Usuário removido',
+      // Sem usuário: do sistema ("pelo Baluarte") ou de conta excluída. Quem diz é o servidor.
+      actor: e.automatico ? 'Baluarte (automático)' : (e.autor?.nome ?? 'Usuário removido'),
     });
   });
   return entries;

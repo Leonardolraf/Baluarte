@@ -663,6 +663,12 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Plano B:** o código não depende da trava (`travaAtiva()` só lê os triggers); o Supabase recebe a trava na restauração semanal (17/10).
 - **Testes:** backend 727/727 (178 unidade + 10 banco + 413 integração + 126 pentest): UPDATE, DELETE e TRUNCATE recusados, a variável da retenção não libera registro recente, a política publica a trava, a retenção continua funcionando com a trava ligada e as funções novas não ficam executáveis por PUBLIC. Frontend 638/638 (mock com a trava ativa).
 
+## 2026-10-12 — Histórico: fechamento automático aparece "por Baluarte", não "Usuário removido"
+
+- **Defeito:** o evento do B36 é gravado sem usuário, e a API mandava `autor: null`, o mesmo de quando o autor é uma conta excluída. A aba de histórico mostrava "por Usuário removido" justamente no achado fechado pelo sistema.
+- **Correção:** cada mudança do histórico (`GET /vulnerabilidades/:id`) ganha `automatico` (evento sem usuário). A tela mostra "por Baluarte (automático)", e "Usuário removido" fica só para autor que não existe mais. Sem migration. Limite: evento antigo, preenchido pela migration do B25b a partir de auditoria sem autor, também sairia como automático (conferido em 12/10 no banco da VM: nenhum evento de mudança antigo, então nada é afetado hoje).
+- **Testes:** o B36 confere `automatico: true` no histórico; o de conta excluída e o de mudança feita por alguém conferem `false`; no frontend, o adapter distingue os dois casos. Contagens inalteradas sobre a main com o B29 (backend 727, frontend 638).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |

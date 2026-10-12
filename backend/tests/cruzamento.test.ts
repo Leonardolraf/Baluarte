@@ -588,6 +588,10 @@ describe('B36: achado fecha sozinho quando o programa é atualizado ou removido'
     const resolvido = await prisma.finding.findFirstOrThrow({ where: { workstationId: e.id, cve: 'CVE-2023-3817' } });
     const ultimo = await prisma.findingStatusChange.findFirstOrThrow({ where: { findingId: resolvido.id }, orderBy: { id: 'desc' } });
     assert.deepEqual([ultimo.de, ultimo.para, ultimo.usuarioId], ['Aberta', 'Resolvida', null]);
+    // Na aba de histórico, o fechamento sai como do sistema, não como "autor excluído".
+    const detalhe = await chamar('GET', `/vulnerabilidades/${resolvido.id}`, { token: analista });
+    const mudanca = (detalhe.body.dados.historico.eventos as { tipo: string; autor: unknown; automatico?: boolean }[]).find((ev) => ev.tipo === 'STATUS_ALTERADO');
+    assert.deepEqual([mudanca?.autor, mudanca?.automatico], [null, true]);
     const aud = await prisma.auditLog.findFirstOrThrow({ where: { acao: 'RESOLVER_ACHADOS_ESTACAO', detalhe: { contains: e.host } } });
     assert.ok(aud.detalhe!.startsWith('1 achado(s) resolvido(s)') && aud.detalhe!.includes('CVE-2023-3817 (openssl)'), aud.detalhe!);
 
