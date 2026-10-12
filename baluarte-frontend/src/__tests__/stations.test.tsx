@@ -367,6 +367,8 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
     verifiedAt: '2026-10-08T12:00:00.000Z',
     noFix: 0,
     resolvedFindings: 0,
+    resolvedByVersion: 0,
+    resolvedMissing: 0,
     checkedPrograms: 7,
     uncoveredPrograms: 0,
     vulnerabilitiesFound: 3,
@@ -401,16 +403,18 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
     expect(screen.queryByText('Nunca verificada')).not.toBeInTheDocument();
   });
 
-  it('B36: mostra quantos achados foram resolvidos porque o programa foi atualizado ou removido', async () => {
+  it('B36/DT23: separa os resolvidos por versão dos que sumiram do inventário', async () => {
     const user = userEvent.setup();
     vi.spyOn(mockApi, 'verifyStation').mockResolvedValue(
-      resultado({ newFindings: 0, existingFindings: 1, resolvedFindings: 2 }),
+      resultado({ newFindings: 0, existingFindings: 1, resolvedFindings: 3, resolvedByVersion: 2, resolvedMissing: 1 }),
     );
     renderAt('/stations/ws-002');
     await screen.findByRole('heading', { name: 'dev-ws-02' });
     await user.click(screen.getByRole('button', { name: 'Verificar vulnerabilidades' }));
     const status = await screen.findByTestId('verification-result');
-    expect(status).toHaveTextContent('2 resolvidos (programa atualizado ou removido)');
+    expect(status).toHaveTextContent('2 resolvidos (versão instalada fora da faixa)');
+    expect(status).toHaveTextContent('1 resolvido (programa não consta mais no inventário)');
+    expect(status).not.toHaveTextContent('atualizado ou removido');
   });
 
   it('o Administrador também vê o botão', async () => {
@@ -509,6 +513,8 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
       complete: true,
       noFix: 0,
       resolvedFindings: 0,
+      resolvedByVersion: 0,
+      resolvedMissing: 0,
       verifiedAt: '2026-10-08T12:00:00.000Z',
       checkedPrograms: 4,
       uncoveredPrograms: 1,

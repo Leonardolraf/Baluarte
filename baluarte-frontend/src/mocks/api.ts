@@ -1929,6 +1929,8 @@ export const mockApi: BaluarteApi = {
         newFindings: created,
         existingFindings: found - created,
         resolvedFindings: 0,
+        resolvedByVersion: 0,
+        resolvedMissing: 0,
         noCvss: 0,
         pending: 0,
         failures: [],
