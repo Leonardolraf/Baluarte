@@ -182,11 +182,19 @@ function VerificationResult({ result }: { result: StationVerification }) {
     `${plural(result.newFindings, 'achado novo', 'achados novos')}`,
     `${plural(result.existingFindings, 'já registrado', 'já registrados')}`,
   ];
-  if (result.resolvedFindings > 0) {
+  // DT23: versão fora da faixa é verificado; programa fora do inventário não confirma a remoção.
+  const semMotivo = result.resolvedFindings - result.resolvedByVersion - result.resolvedMissing;
+  if (result.resolvedByVersion > 0) {
     parts.push(
-      `${plural(result.resolvedFindings, 'resolvido (programa atualizado ou removido)', 'resolvidos (programa atualizado ou removido)')}`,
+      `${plural(result.resolvedByVersion, 'resolvido (versão instalada fora da faixa)', 'resolvidos (versão instalada fora da faixa)')}`,
     );
   }
+  if (result.resolvedMissing > 0) {
+    parts.push(
+      `${plural(result.resolvedMissing, 'resolvido (programa não consta mais no inventário)', 'resolvidos (programa não consta mais no inventário)')}`,
+    );
+  }
+  if (semMotivo > 0) parts.push(`${plural(semMotivo, 'resolvido', 'resolvidos')}`);
   return (
     <div
       role="status"

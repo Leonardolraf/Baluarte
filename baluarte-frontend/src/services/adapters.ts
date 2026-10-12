@@ -1487,6 +1487,9 @@ export interface BackendStationVerification {
   achadosExistentes: number;
   /** B36; ausente em backend anterior. */
   achadosResolvidos?: number;
+  /** DT23; ausentes em backend anterior. */
+  resolvidosPorVersao?: number;
+  resolvidosForaDoInventario?: number;
   semCvss: number;
   semCorrecao?: number;
   pendentes: number;
@@ -1504,6 +1507,8 @@ export function toStationVerification(raw: BackendStationVerification): StationV
     newFindings: Number(raw.achadosNovos) || 0,
     existingFindings: Number(raw.achadosExistentes) || 0,
     resolvedFindings: Number(raw.achadosResolvidos) || 0,
+    resolvedByVersion: Number(raw.resolvidosPorVersao) || 0,
+    resolvedMissing: Number(raw.resolvidosForaDoInventario) || 0,
     noCvss: Number(raw.semCvss) || 0,
     pending: Number(raw.pendentes) || 0,
     failures: (raw.falhas ?? []).filter((f): f is VulnerabilitySource => f === 'OSV' || f === 'NVD'),

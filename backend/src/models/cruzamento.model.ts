@@ -433,6 +433,10 @@ export interface ResultadoVerificacao {
   achadosExistentes: number;
   /** B36: achados abertos que as bases nao devolvem mais (programa atualizado ou removido), fechados como "Resolvida". */
   achadosResolvidos: number;
+  /** DT23: dos resolvidos, os de programa que continua no inventario (versao fora da faixa). */
+  resolvidosPorVersao: number;
+  /** DT23: dos resolvidos, os de programa que nao consta mais no inventario (remocao nao confirmada). */
+  resolvidosForaDoInventario: number;
   /** CVEs sem vetor CVSS 3.x em nenhuma base: nao viram achado (a nota nao e inventada). */
   semCvss: number;
   /**

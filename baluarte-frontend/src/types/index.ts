@@ -834,6 +834,10 @@ export interface StationVerification {
   existingFindings: number;
   /** B36: achados que as bases não devolvem mais (programa atualizado ou removido), fechados como Resolvida. */
   resolvedFindings: number;
+  /** DT23: dos resolvidos, os de programa que continua instalado (versão fora da faixa). */
+  resolvedByVersion: number;
+  /** DT23: dos resolvidos, os de programa que não consta mais no inventário (remoção não confirmada). */
+  resolvedMissing: number;
   /** CVEs sem nota CVSS 3.x em nenhuma base: não viram achado. */
   noCvss: number;
   /** DT17: CVEs sem versão corrigida publicada: não viram achado. */

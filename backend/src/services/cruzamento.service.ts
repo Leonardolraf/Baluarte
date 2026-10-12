@@ -219,6 +219,27 @@ async function cruzarWindows(
   return { consultados, semCobertura };
 }
 
+/**
+ * DT23: nomes de programa (como ficam no achado) que o inventario atual ainda tem e que entram no
+ * cruzamento: o nome da tabela de CPE (Windows) e o pacote consultado no OSV (Linux). Achado
+ * ausente das bases com o programa aqui = versao fora da faixa; fora daqui = sumiu do inventario.
+ */
+function programasNoInventario(estacao: Estacao): Set<string> {
+  const nomes = new Set<string>();
+  for (const p of estacao.programas) {
+    if (p.fonte !== 'programs') continue;
+    const c = cpeDoPrograma(p.nome, p.versao);
+    if (c) nomes.add(c.programa);
+  }
+  for (const g of gruposOsv(estacao).grupos.values()) nomes.add(g.pacote);
+  return nomes;
+}
+
+const listaAuditoria = (itens: { cve: string | null; programa: string | null }[]) => {
+  const t = itens.map((a) => `${a.cve} (${a.programa})`);
+  return `${t.slice(0, 20).join(', ')}${t.length > 20 ? ', …' : ''}`;
+};
+
 async function cruzar(estacao: Estacao, atorId: string | null): Promise<ResultadoVerificacao> {
   const s = new SessaoConsulta();
   const achados = new Map<string, AchadoEstacao>();
@@ -251,7 +272,7 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
   // consultado fica no cache e a proxima verificacao continua de onde esta parou.
   if (s.pendentes > 0 || s.falhas.size > 0) {
     await limparCache();
-    return { ...base, completa: false, verificadaEm: estacao.verificadaEm?.toISOString() ?? null, achadosNovos: 0, achadosExistentes: 0, achadosResolvidos: 0, varreduraId: null };
+    return { ...base, completa: false, verificadaEm: estacao.verificadaEm?.toISOString() ?? null, achadosNovos: 0, achadosExistentes: 0, achadosResolvidos: 0, resolvidosPorVersao: 0, resolvidosForaDoInventario: 0, varreduraId: null };
   }
 
   const { scanId, criados } = await repo.registrarAchados(estacao.assetId, estacao.id, novos.map(dadosAchadoEstacao));
@@ -269,14 +290,27 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
   // as bases devolveram), e nao `achados`: o que so saiu por regra (sem correcao publicada,
   // outra plataforma) continua vulneravel e nao e fechado. "Risco aceito" nao e tocado e nada e
   // reaberto sozinho (o analista que marcou "Resolvida" nao ve o achado voltar na rodada seguinte).
+  // DT23: o motivo fica separado. Programa ainda no inventario = as bases nao apontam mais o CVE
+  // para a versao instalada (verificado). Programa fora do inventario = so se sabe que a coleta nao
+  // o ve mais: pode ter sido desinstalado ou ser um executavel solto, que nao se registra na lista
+  // de programas. O fechamento continua automatico, mas a auditoria nao afirma a remocao.
   const ausentes = (await repo.achadosAbertos(estacao.id)).filter((a) => !encontradas.has(chave(a.cve ?? '', a.programa ?? '')));
   const resolvidos = await repo.resolverAchados(ausentes.map((a) => a.id));
-  if (resolvidos.length) {
-    const itens = resolvidos.map((a) => `${a.cve} (${a.programa})`);
+  const presentes = programasNoInventario(estacao);
+  const porVersao = resolvidos.filter((a) => presentes.has(a.programa ?? ''));
+  const foraDoInventario = resolvidos.filter((a) => !presentes.has(a.programa ?? ''));
+  if (porVersao.length) {
     await registrarAuditoria(
       atorId,
       'RESOLVER_ACHADOS_ESTACAO',
-      `${resolvidos.length} achado(s) resolvido(s) em ${estacao.asset.host}: não encontrados mais nas bases (programa atualizado ou removido): ${itens.slice(0, 20).join(', ')}${itens.length > 20 ? ', …' : ''}`,
+      `${porVersao.length} achado(s) resolvido(s) em ${estacao.asset.host}: o programa continua no inventário e as bases não apontam mais o CVE para a versão instalada: ${listaAuditoria(porVersao)}`,
+    );
+  }
+  if (foraDoInventario.length) {
+    await registrarAuditoria(
+      atorId,
+      'RESOLVER_ACHADOS_FORA_DO_INVENTARIO',
+      `${foraDoInventario.length} achado(s) resolvido(s) em ${estacao.asset.host}: o programa não consta mais no inventário da estação (remoção não confirmada: pode ter sido desinstalado ou estar fora da coleta, como executável portátil): ${listaAuditoria(foraDoInventario)}`,
     );
   }
   const verificadaEm = new Date();
@@ -289,6 +323,8 @@ async function cruzar(estacao: Estacao, atorId: string | null): Promise<Resultad
     achadosNovos: criados,
     achadosExistentes: achados.size - novos.length + (novos.length - criados),
     achadosResolvidos: resolvidos.length,
+    resolvidosPorVersao: porVersao.length,
+    resolvidosForaDoInventario: foraDoInventario.length,
     varreduraId: scanId,
   };
 }

@@ -594,9 +594,42 @@ describe('B36: achado fecha sozinho quando o programa é atualizado ou removido'
     assert.deepEqual([mudanca?.autor, mudanca?.automatico], [null, true]);
     const aud = await prisma.auditLog.findFirstOrThrow({ where: { acao: 'RESOLVER_ACHADOS_ESTACAO', detalhe: { contains: e.host } } });
     assert.ok(aud.detalhe!.startsWith('1 achado(s) resolvido(s)') && aud.detalhe!.includes('CVE-2023-3817 (openssl)'), aud.detalhe!);
+    // DT23: o openssl continua no inventario, entao o motivo e a versao, nao a remocao.
+    assert.deepEqual([r.body.dados.resolvidosPorVersao, r.body.dados.resolvidosForaDoInventario], [1, 0]);
+    assert.ok(aud.detalhe!.includes('continua no inventário'), aud.detalhe!);
 
     // Rodar de novo não refaz nada.
     assert.equal((await verificar(e.id)).body.dados.achadosResolvidos, 0);
+  });
+
+  it('DT23: programa que sumiu do inventário fecha com motivo próprio, sem afirmar a remoção', async () => {
+    const e = await estacaoUbuntu();
+    assert.equal((await verificar(e.id)).body.dados.achadosNovos, 3);
+    // Nova coleta sem o curl (desinstalado ou executavel solto: a coleta nao sabe qual), openssl igual.
+    await e.enviar('baluarte_programas_deb', [deb('libssl3', '3.0.2-0ubuntu1.10', 'openssl'), deb('openssl', '3.0.2-0ubuntu1.10'), deb('bash', '5.1-6ubuntu1')]);
+    const r = await verificar(e.id);
+    assert.equal(r.body.dados.completa, true);
+    assert.deepEqual([r.body.dados.achadosResolvidos, r.body.dados.resolvidosPorVersao, r.body.dados.resolvidosForaDoInventario], [1, 0, 1]);
+    assert.equal(await statusDe(e.id, 'CVE-2023-38545'), 'Resolvida', 'o fechamento continua automático');
+    assert.equal(await statusDe(e.id, 'CVE-2023-3817'), 'Aberta');
+
+    const aud = await prisma.auditLog.findFirstOrThrow({ where: { acao: 'RESOLVER_ACHADOS_FORA_DO_INVENTARIO', detalhe: { contains: e.host } } });
+    assert.ok(aud.detalhe!.includes('não consta mais no inventário') && aud.detalhe!.includes('remoção não confirmada'), aud.detalhe!);
+    assert.ok(aud.detalhe!.includes('CVE-2023-38545 (curl)'), aud.detalhe!);
+    assert.ok(!aud.detalhe!.includes('atualizado ou removido'), 'não junta os dois motivos');
+    assert.equal(await prisma.auditLog.count({ where: { acao: 'RESOLVER_ACHADOS_ESTACAO', detalhe: { contains: e.host } } }), 0);
+  });
+
+  it('DT23 no Windows: programa desinstalado (sai de "programs") fecha como fora do inventário', async () => {
+    const e = await estacao(WINDOWS);
+    await e.enviar('baluarte_programas_windows', [{ name: 'Google Chrome', version: '129.0.6668.58', fornecedor: 'Google LLC' }]);
+    assert.ok((await verificar(e.id)).body.dados.achadosNovos >= 1);
+    await e.enviar('baluarte_programas_windows', [{ name: 'Programa Sem CPE', version: '1.0', fornecedor: 'X' }]);
+    const r = await verificar(e.id);
+    assert.equal(r.body.dados.completa, true);
+    assert.ok(r.body.dados.resolvidosForaDoInventario >= 1);
+    assert.equal(r.body.dados.resolvidosPorVersao, 0);
+    assert.equal(await prisma.auditLog.count({ where: { acao: 'RESOLVER_ACHADOS_FORA_DO_INVENTARIO', detalhe: { contains: e.host } } }), 1);
   });
 
   it('verificação incompleta não fecha nada', async () => {
