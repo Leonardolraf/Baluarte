@@ -129,7 +129,7 @@ describe('B29: adapter da verificação da cadeia', () => {
 });
 
 describe('B29: mockApi.verifyAuditIntegrity', () => {
-  it('só Administrador verifica; o mock responde cadeia íntegra, sem a trava do banco (como a main)', async () => {
+  it('só Administrador verifica; o mock responde cadeia íntegra, com a trava do banco', async () => {
     await loginAs('analista@empresa.com');
     await expectHttp(mockApi.verifyAuditIntegrity(), 403, 'PERFIL_SEM_PERMISSAO');
     await loginAs('admin@empresa.com');
@@ -137,7 +137,7 @@ describe('B29: mockApi.verifyAuditIntegrity', () => {
     expect(result).toEqual({
       intact: true,
       verifiedCount: MOCK_AUDIT_LOG.length + 2,
-      databaseLock: false,
+      databaseLock: true,
       firstBreak: null,
     });
   });
@@ -373,13 +373,13 @@ describe('AuditLogPage', () => {
     await waitFor(() => expect(within(table).getByText('Sem usuário')).toBeInTheDocument());
   });
 
-  it('B29: mostra o selo "Cadeia íntegra" com a contagem e a trava do banco desligada', async () => {
+  it('B29: mostra o selo "Cadeia íntegra" com a contagem e a trava do banco ativa', async () => {
     await loginAs('admin@empresa.com');
     renderPage();
     const panel = await screen.findByTestId('audit-integrity');
     await waitFor(() => expect(panel).toHaveAttribute('data-state', 'intact'));
     expect(within(panel).getByText('Cadeia íntegra')).toBeInTheDocument();
-    expect(within(panel).getByText(/registros verificados/)).toHaveTextContent(/Trava do banco desligada/);
+    expect(within(panel).getByText(/registros verificados/)).toHaveTextContent(/Trava do banco ativa/);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -388,7 +388,7 @@ describe('AuditLogPage', () => {
     const spy = vi.spyOn(mockApi, 'verifyAuditIntegrity').mockResolvedValue({
       intact: false,
       verifiedCount: 42,
-      databaseLock: true,
+      databaseLock: false,
       firstBreak: { id: 'reg-adulterado', at: '2026-10-08T12:00:00.000Z', reason: 'content_altered' },
     });
     try {
@@ -399,7 +399,7 @@ describe('AuditLogPage', () => {
       expect(alert).toHaveTextContent('reg-adulterado');
       expect(alert).toHaveTextContent('registro alterado');
       expect(alert).toHaveTextContent('42 registros verificados até a quebra');
-      expect(alert).toHaveTextContent('Trava do banco ativa');
+      expect(alert).toHaveTextContent('Trava do banco desligada');
       // A trilha continua visível embaixo do alerta.
       const table = await screen.findByTestId('audit-table');
       await waitFor(() => expect(within(table).getAllByTestId('audit-row').length).toBeGreaterThan(0));
