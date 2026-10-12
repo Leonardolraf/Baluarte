@@ -43,8 +43,8 @@ export interface ResultadoIntegridade {
   integra: boolean;
   registrosVerificados: number;
   /**
-   * Triggers da migration 20261008176000_auditoria_imutavel ativos (UPDATE/DELETE/TRUNCATE
-   * recusados). Essa migration fica na branch feat/b29-trava; sem ela, `false`.
+   * Triggers da migration 20261012120000_auditoria_imutavel ativos (UPDATE/DELETE/TRUNCATE
+   * recusados). Sem ela (ou com os triggers desligados), `false`.
    */
   travaNoBanco: boolean;
   primeiraQuebra?: { id: string; timestamp: Date; motivo: MotivoQuebra };

@@ -1835,8 +1835,8 @@ export const MOCK_TIMELINE: TimelineEvent[] = [
 // -----------------------------------------------------------------------------
 
 // Espelha o que a API publica em /configuracoes/seguranca: so o que existe de fato.
-// B29: retencao de 12 meses. A trava do banco (feat/b29-trava) ainda nao esta na main, entao
-// o log nao e imutavel no banco; a API real so publica `logImutavel` com a trava de fato ativa.
+// B29: retencao de 12 meses e trava do banco aplicada (migration auditoria_imutavel). A API
+// real so publica `logImutavel` com a trava de fato ativa.
 export const MOCK_SECURITY_POLICY: SecurityPolicy = {
   passwordMinLength: 8,
   requireMixedCase: true,
@@ -1847,7 +1847,7 @@ export const MOCK_SECURITY_POLICY: SecurityPolicy = {
   loginAttemptLimit: 5,
   twoFactorEnabled: false,
   auditRegistersActions: true,
-  auditLogImmutable: false,
+  auditLogImmutable: true,
   auditRetentionMonths: 12,
 };
 
