@@ -147,6 +147,7 @@ export async function historico(f: FindingComOrigem): Promise<HistoricoVulnerabi
     de: m.de,
     para: m.para,
     autor: (m.usuarioId ? autores.get(m.usuarioId) : undefined) ?? null,
+    automatico: m.usuarioId === null,
   }));
   return {
     eventos: [

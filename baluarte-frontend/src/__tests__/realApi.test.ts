@@ -603,6 +603,14 @@ describe('realApi — vulnerabilidades', () => {
               para: 'Em remediação',
               autor: null,
             },
+            {
+              tipo: 'STATUS_ALTERADO',
+              quando: '2026-10-03T10:00:00.000Z',
+              de: 'Em remediação',
+              para: 'Resolvida',
+              autor: null,
+              automatico: true,
+            },
           ],
           statusAtual: 'Em remediação',
           completo: false,
@@ -625,10 +633,19 @@ describe('realApi — vulnerabilidades', () => {
         to: 'remediating',
         actor: 'Usuário removido',
       },
+      {
+        // Fechamento automático (B36): do sistema, não de uma conta excluída.
+        id: 'f-1-status-2',
+        at: '2026-10-03T10:00:00.000Z',
+        action: 'status_changed',
+        from: 'remediating',
+        to: 'resolved',
+        actor: 'Baluarte (automático)',
+      },
     ]);
     expect(vuln.historyComplete).toBe(false);
     expect(vuln.origin).toEqual({ scanId: 's-1', scanStartedAt: '2026-10-01T09:59:40.000Z', assetId: 'a-1' });
-    expect(vuln.updatedAt).toBe('2026-10-02T10:00:00.000Z');
+    expect(vuln.updatedAt).toBe('2026-10-03T10:00:00.000Z');
   });
 
   it('busca o detalhe e atualiza o status com o rótulo em português', async () => {

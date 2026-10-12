@@ -105,6 +105,11 @@ export interface AlteracaoStatus {
   de: string;
   para: string;
   autor: { id: string; nome: string } | null;
+  /**
+   * Mudança feita pelo próprio sistema (evento gravado sem usuário, como o fechamento automático
+   * do B36). Separa "pelo Baluarte" de autor `null` por conta excluída, que a tela mostra diferente.
+   */
+  automatico: boolean;
 }
 
 /**

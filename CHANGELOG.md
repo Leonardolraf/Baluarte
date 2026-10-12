@@ -655,6 +655,12 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Agora:** numa verificação **completa** (regra do DT17), achado aberto cujo par CVE + programa as bases não devolvem mais passa para "Resolvida", numa instrução só (`estacao.repository.ts#resolverAchados`, linhas travadas, instante lido depois da trava), com evento de histórico sem usuário e `RESOLVER_ACHADOS_ESTACAO` na auditoria. A comparação é com tudo o que as bases devolveram, não com o que virou achado: o que só sai por regra (sem correção publicada, outra plataforma) continua vulnerável e não fecha. "Risco aceito" não é tocado e nada é reaberto sozinho, para o analista que marcou "Resolvida" não ver o achado voltar na rodada seguinte. A tela da estação mostra quantos foram resolvidos.
 - **Testes:** backend 721/721 (178 unidade + 10 banco + 407 integração + 126 pentest): programa atualizado e removido, risco aceito intocado, segunda rodada sem refazer, verificação incompleta sem fechar nada, achado que só sairia por regra não fechado. Frontend 638/638.
 
+## 2026-10-12 — Histórico: fechamento automático aparece "por Baluarte", não "Usuário removido"
+
+- **Defeito:** o evento do B36 é gravado sem usuário, e a API mandava `autor: null`, o mesmo de quando o autor é uma conta excluída. A aba de histórico mostrava "por Usuário removido" justamente no achado fechado pelo sistema.
+- **Correção:** cada mudança do histórico (`GET /vulnerabilidades/:id`) ganha `automatico` (evento sem usuário). A tela mostra "por Baluarte (automático)", e "Usuário removido" fica só para autor que não existe mais. Sem migration. Limite: evento antigo, preenchido pela migration do B25b a partir de auditoria sem autor, também sairia como automático (não conferido se há algum no banco da demo).
+- **Testes:** o B36 confere `automatico: true` no histórico; o de conta excluída e o de mudança feita por alguém conferem `false`; no frontend, o adapter distingue os dois casos. Contagens inalteradas (backend 721, frontend 638).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |

@@ -24,7 +24,7 @@ let adminId: string;
 let scanId: string;
 const achado: Record<string, string> = {};
 
-type Evento = { tipo: string; quando: string; de?: string; para?: string; autor?: { id: string; nome: string } | null };
+type Evento = { tipo: string; quando: string; de?: string; para?: string; autor?: { id: string; nome: string } | null; automatico?: boolean };
 type Detalhe = { status: string; historico: { eventos: Evento[]; statusAtual: string; completo: boolean } };
 
 before(async () => {
@@ -170,6 +170,7 @@ describe('aba de histórico lendo a tabela', () => {
     const criacao = (await eventosDe(achado.idor))[0];
     assert.equal(new Date(deteccao.quando).getTime(), criacao.registradaEm.getTime());
     assert.deepEqual([mudanca.de, mudanca.para, mudanca.autor], ['Aberta', 'Em remediação', { id: analistaId, nome: 'Analista de Segurança' }]);
+    assert.equal(mudanca.automatico, false, 'mudança feita por alguém não é do sistema');
     assert.equal(d.historico.statusAtual, 'Em remediação');
     assert.equal(d.historico.completo, true);
   });
@@ -185,6 +186,7 @@ describe('aba de histórico lendo a tabela', () => {
     d = await detalhe(achado.idor);
     assert.equal(d.historico.completo, true);
     assert.equal(d.historico.eventos.at(-1)!.autor, null, 'autor que não existe mais sai como null');
+    assert.equal(d.historico.eventos.at(-1)!.automatico, false, 'conta excluída não vira "pelo Baluarte"');
   });
 
   it('o banco recusa evento fora das regras (CHECK): status desconhecido, de = para, criação que não é "Aberta"', async () => {
