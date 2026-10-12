@@ -36,7 +36,7 @@ const ponto = (k: number) => pontos[pontos.length - 1 - k];
 
 /** A formula do frontend ate o B25b, com os pesos trocados para 10/7/4/1 (o que o backend deve dar). */
 function indiceEsperado(c: number, a: number, m: number, b: number, ativos: number) {
-  return Math.max(0, Math.min(100, Math.round(((c * 10 + a * 7 + m * 4 + b) / (Math.max(1, ativos) * 20)) * 100)));
+  return Math.max(0, Math.min(100, Math.round((1 - Math.exp(-(c * 10 + a * 7 + m * 4 + b) / (Math.max(1, ativos) * 20))) * 100)));
 }
 
 /** Achado criado como a API cria (status inicial + evento de criacao) e as mudancas datadas. */
@@ -158,8 +158,8 @@ describe('evolução do risco (30 dias)', () => {
 
   it('o índice de cada dia é a fórmula do KPI com os pesos 10/7/4/1', () => {
     for (const p of pontos) assert.equal(p.indice, indiceEsperado(p.critico + p.arquivosMaliciosos, p.alto, p.medio, p.baixo, p.ativos), p.data);
-    // Há 4 dias: 1 crítico + 1 arquivo, 2 altos, 1 médio em 2 ativos = (20 + 14 + 4) / 40.
-    assert.equal(ponto(4).indice, 95);
+    // Há 4 dias: 1 crítico + 1 arquivo, 2 altos, 1 médio em 2 ativos: carga (20 + 14 + 4) / 40, curva 100 × (1 − e^(−0,95)).
+    assert.equal(ponto(4).indice, 61);
   });
 
   it('o último ponto (hoje) é exatamente o estado dos KPIs', () => {
@@ -187,14 +187,14 @@ describe('evolução do risco (30 dias)', () => {
 });
 
 describe('índice de risco técnico global no backend', () => {
-  it('kpis.indiceRiscoTecnico = cálculo antigo do frontend com os pesos 10/7/4/1 sobre a distribuição', () => {
+  it('kpis.indiceRiscoTecnico = a curva com os pesos 10/7/4/1 sobre a distribuição', () => {
     const d = dashboard.distribuicaoSeveridade;
     assert.equal(
       dashboard.kpis.indiceRiscoTecnico,
       indiceEsperado(d['Crítico'], d['Alto'], d['Médio'], d['Baixo'], dashboard.kpis.ativosMonitorados as number),
     );
-    // 1 arquivo (crítico) + 1 alto + 1 médio + 1 baixo em 4 ativos: 22 / 80.
-    assert.equal(dashboard.kpis.indiceRiscoTecnico, 28);
+    // 1 arquivo (crítico) + 1 alto + 1 médio + 1 baixo em 4 ativos: carga 22 / 80, curva 100 × (1 − e^(−0,275)).
+    assert.equal(dashboard.kpis.indiceRiscoTecnico, 24);
   });
 });
 

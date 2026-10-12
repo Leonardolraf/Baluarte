@@ -4,8 +4,11 @@ import { FUSO_RELATORIO } from './vulnerabilidade.model.js';
 // risco em 30 dias (B25b). Os pesos por severidade sao PESO_SEVERIDADE (models/dominio.model.ts).
 
 /**
- * Pontos que "lotam" um ativo no indice global: indice = pontos / (ativos x 20) x 100, com
- * teto 100. Dois criticos abertos por ativo (ou combinacao de mesmo peso) ja dao 100.
+ * Escala do indice global: carga = pontos / (ativos x 20) e indice = 100 x (1 - e^(-carga)).
+ * Com carga 1 (dois criticos abertos por ativo, ou combinacao de mesmo peso) o indice e 63;
+ * ele so chega a 100 com carga perto de 5,3. Curva aprovada pelo Leo em 12/10/2026: a regua
+ * linear antiga travava em 100 com dois criticos por ativo e nao mostrava melhora (1.515 -> 32
+ * achados abertos e o indice parado em 100).
  */
 export const PONTOS_POR_ATIVO = 20;
 

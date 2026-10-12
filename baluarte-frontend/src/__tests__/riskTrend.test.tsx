@@ -174,7 +174,7 @@ describe('mock como servidor: índice e evolução', () => {
     const assets = (await mockApi.listAssets()).length;
     const points = mockRiskScore({ ...dist, info: 0 });
     // mockRiskScore tem teto 100 nos pontos; com o seed os pontos ficam abaixo do teto.
-    expect(d.technicalRisk).toBe(Math.min(100, Math.round((points / (Math.max(1, assets) * 20)) * 100)));
+    expect(d.technicalRisk).toBe(Math.round((1 - Math.exp(-points / (Math.max(1, assets) * 20))) * 100));
   });
 
   it('resolver hoje muda só o ponto de hoje', async () => {
