@@ -11,7 +11,7 @@ import { dataNoFuso, diasDaJanela, inicioDoDia, montarEvolucao } from '../../src
 const contagem = (c: number, a: number, m: number, b: number) => ({ 'Crítico': c, 'Alto': a, 'Médio': m, 'Baixo': b });
 
 /**
- * A formula que o frontend usava ate o B25b (adapters.ts#toDashboard), com os pesos como
+ * A regua linear (a do frontend ate o B25b e a do backend ate 12/10/2026) (adapters.ts#toDashboard), com os pesos como
  * parametro: round(ponderado / (max(1, ativos) x 20) x 100), entre 0 e 100.
  */
 function indiceAntigo(pesos: [number, number, number, number], c: number, a: number, m: number, b: number, ativos: number) {
@@ -27,22 +27,44 @@ describe('pesos únicos e índice global', () => {
     assert.equal(PONTOS_POR_ATIVO, 20);
   });
 
-  it('o índice do backend é o cálculo antigo do frontend com os pesos trocados para 10/7/4/1', () => {
-    for (const ativos of [0, 1, 3, 7])
-      for (const [c, a, m, b] of [[0, 0, 0, 0], [1, 0, 0, 0], [1, 2, 3, 4], [0, 5, 1, 9], [2, 0, 7, 0], [30, 0, 0, 0]])
-        assert.equal(indiceRiscoTecnico(contagem(c, a, m, b), ativos), indiceAntigo([10, 7, 4, 1], c, a, m, b, ativos), `${c}/${a}/${m}/${b} em ${ativos} ativos`);
+  it('curva de saturação (12/10/2026): os números da decisão do Leo, com os pesos 10/7/4/1', () => {
+    // [críticos, altos, médios, baixos, ativos, índice]: a tabela que embasou a troca.
+    const casos: [number, number, number, number, number, number][] = [
+      [195, 490, 750, 80, 7, 100], // 11/10, antes do B36: 1.515 abertos
+      [3, 14, 12, 3, 7, 72], // 12/10, depois do B36: 32 abertos (a régua linear dava 100)
+      [2, 2, 3, 0, 7, 28], // só os achados simulados (a régua linear dava 33)
+      [1, 0, 0, 0, 7, 7], // pouca carga: igual à régua linear
+      [14, 0, 0, 0, 7, 63], // dois críticos por ativo: alto, não mais o teto
+      [35, 0, 0, 0, 7, 92], // cinco críticos por ativo
+    ];
+    for (const [c, a, m, b, ativos, esperado] of casos)
+      assert.equal(indiceRiscoTecnico(contagem(c, a, m, b), ativos), esperado, `${c}/${a}/${m}/${b} em ${ativos} ativos`);
   });
 
-  it('a troca de pesos muda o número (exemplo documentado no CHANGELOG)', () => {
-    // 1 crítico, 2 altos, 3 médios, 4 baixos em 3 ativos: 35/60 = 58 antes, 40/60 = 67 agora.
+  it('com pouca carga é a régua linear antiga; com muita, fica abaixo dela e nunca trava antes de corrigir tudo', () => {
+    assert.equal(indiceRiscoTecnico(contagem(1, 0, 0, 0), 7), indiceAntigo([10, 7, 4, 1], 1, 0, 0, 0, 7));
+    for (const [c, a, m, b] of [[1, 2, 3, 4], [3, 14, 12, 3], [14, 0, 0, 0]])
+      assert.ok(indiceRiscoTecnico(contagem(c, a, m, b), 7) <= indiceAntigo([10, 7, 4, 1], c, a, m, b, 7));
+    // Cada achado corrigido baixa (ou mantém) o número: nada de patamar em 100 com 32 abertos.
+    let anterior = indiceRiscoTecnico(contagem(3, 14, 12, 3), 7);
+    for (let altos = 13; altos >= 0; altos--) {
+      const atual = indiceRiscoTecnico(contagem(3, altos, 12, 3), 7);
+      assert.ok(atual <= anterior, `${altos} altos`);
+      anterior = atual;
+    }
+    assert.ok(anterior < 72);
+  });
+
+  it('a troca de pesos do DT07 continua valendo (exemplo do CHANGELOG, agora pela curva)', () => {
+    // 1 crítico, 2 altos, 3 médios, 4 baixos em 3 ativos: 35/60 com 10/6/3/1, 40/60 com 10/7/4/1.
     assert.equal(indiceAntigo([10, 6, 3, 1], 1, 2, 3, 4, 3), 58);
-    assert.equal(indiceRiscoTecnico(contagem(1, 2, 3, 4), 3), 67);
+    assert.equal(indiceRiscoTecnico(contagem(1, 2, 3, 4), 3), 49, '100 × (1 − e^(−40/60))');
   });
 
-  it('teto 100, piso 0 e pelo menos 1 ativo na capacidade', () => {
+  it('piso 0, teto 100 e pelo menos 1 ativo na capacidade', () => {
     assert.equal(indiceRiscoTecnico(contagem(30, 0, 0, 0), 1), 100);
     assert.equal(indiceRiscoTecnico({}, 5), 0);
-    assert.equal(indiceRiscoTecnico(contagem(1, 0, 0, 0), 0), 50, 'sem ativo, a capacidade é a de 1 ativo');
+    assert.equal(indiceRiscoTecnico(contagem(1, 0, 0, 0), 0), 39, 'sem ativo, a capacidade é a de 1 ativo: 100 × (1 − e^(−10/20))');
   });
 });
 
@@ -96,7 +118,7 @@ describe('montagem dos pontos', () => {
       [2, 2, 3],
     );
     assert.deepEqual(pontos[0], { data: '2026-10-06', critico: 0, alto: 0, medio: 0, baixo: 0, arquivosMaliciosos: 0, ativos: 2, indice: 0 });
-    assert.deepEqual(pontos[1], { data: '2026-10-07', critico: 1, alto: 0, medio: 0, baixo: 4, arquivosMaliciosos: 0, ativos: 2, indice: 35 });
+    assert.deepEqual(pontos[1], { data: '2026-10-07', critico: 1, alto: 0, medio: 0, baixo: 4, arquivosMaliciosos: 0, ativos: 2, indice: 30 }); // 14/40 pela curva
     assert.equal(pontos[2].indice, indiceRiscoTecnico(contagem(0, 2, 3, 0), 3));
   });
 
@@ -104,6 +126,6 @@ describe('montagem dos pontos', () => {
     const [ponto] = montarEvolucao(dias.slice(0, 1), [], [2], [1]);
     assert.equal(ponto.critico, 0);
     assert.equal(ponto.arquivosMaliciosos, 2);
-    assert.equal(ponto.indice, 100);
+    assert.equal(ponto.indice, 63, 'dois arquivos = dois críticos em 1 ativo: 100 × (1 − e^(−1))');
   });
 });

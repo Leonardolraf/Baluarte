@@ -510,9 +510,9 @@ function advanceScans(now = Date.now()): void {
   }
 }
 
-/** Índice global (espelha backend/src/services/indiceRisco.service.ts): pontos / (ativos × 20) × 100, teto 100. */
+/** Índice global (espelha backend/src/services/indiceRisco.service.ts): 100 × (1 − e^(−pontos ÷ (ativos × 20))). */
 function technicalRiskIndex(open: Record<Severity, number>, assets: number): number {
-  return clampPct((riskPoints(open) / (Math.max(1, assets) * 20)) * 100);
+  return clampPct((1 - Math.exp(-riskPoints(open) / (Math.max(1, assets) * 20))) * 100);
 }
 
 /** Status do achado ao fim de `end` pelo histórico (sem mudança registrada até ali: o de antes da primeira). */
