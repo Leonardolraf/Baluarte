@@ -185,7 +185,9 @@ function VerificationResult({ result }: { result: StationVerification }) {
   // DT23: versão fora da faixa é verificado; programa fora do inventário não confirma a remoção.
   const semMotivo = result.resolvedFindings - result.resolvedByVersion - result.resolvedMissing;
   if (result.resolvedByVersion > 0) {
-    parts.push(`${plural(result.resolvedByVersion, 'resolvido (versão instalada fora da faixa)', 'resolvidos (versão instalada fora da faixa)')}`);
+    parts.push(
+      `${plural(result.resolvedByVersion, 'resolvido (versão instalada fora da faixa)', 'resolvidos (versão instalada fora da faixa)')}`,
+    );
   }
   if (result.resolvedMissing > 0) {
     parts.push(

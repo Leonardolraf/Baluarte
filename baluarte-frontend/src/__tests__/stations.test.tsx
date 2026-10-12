@@ -406,7 +406,13 @@ describe('B14 — verificar vulnerabilidades no detalhe da estação', () => {
   it('B36/DT23: separa os resolvidos por versão dos que sumiram do inventário', async () => {
     const user = userEvent.setup();
     vi.spyOn(mockApi, 'verifyStation').mockResolvedValue(
-      resultado({ newFindings: 0, existingFindings: 1, resolvedFindings: 3, resolvedByVersion: 2, resolvedMissing: 1 }),
+      resultado({
+        newFindings: 0,
+        existingFindings: 1,
+        resolvedFindings: 3,
+        resolvedByVersion: 2,
+        resolvedMissing: 1,
+      }),
     );
     renderAt('/stations/ws-002');
     await screen.findByRole('heading', { name: 'dev-ws-02' });
