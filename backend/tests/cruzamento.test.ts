@@ -589,7 +589,7 @@ describe('B36: achado fecha sozinho quando o programa é atualizado ou removido'
     const ultimo = await prisma.findingStatusChange.findFirstOrThrow({ where: { findingId: resolvido.id }, orderBy: { id: 'desc' } });
     assert.deepEqual([ultimo.de, ultimo.para, ultimo.usuarioId], ['Aberta', 'Resolvida', null]);
     const aud = await prisma.auditLog.findFirstOrThrow({ where: { acao: 'RESOLVER_ACHADOS_ESTACAO', detalhe: { contains: e.host } } });
-    assert.match(aud.detalhe!, /1 achado(s) resolvido(s).*CVE-2023-3817 (openssl)/);
+    assert.ok(aud.detalhe!.startsWith('1 achado(s) resolvido(s)') && aud.detalhe!.includes('CVE-2023-3817 (openssl)'), aud.detalhe!);
 
     // Rodar de novo não refaz nada.
     assert.equal((await verificar(e.id)).body.dados.achadosResolvidos, 0);
