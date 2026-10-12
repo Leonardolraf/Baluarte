@@ -684,6 +684,10 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 - **Fica para depois da entrega:** confirmar a ausência em dois ciclos antes de fechar.
 - **Testes:** backend 730 (+2: Linux e Windows, programa que sai do inventário); frontend 638 (o teste do B36 passa a conferir os dois motivos).
 
+## 2026-10-12 — O compose do servidor próprio vai para o repositório
+
+- `docker-compose.servidor.yml` existia só na VM, com uma cópia `.bak` ao lado. É ele que monta o servidor inteiro (Postgres 17, porta só local para o Funnel, ClamAV, seeds desligados, verificação automática), então a receita se perdia junto com a VM. Agora é versionado, sem segredo: a senha do banco, o segredo do osquery e o `DOMINIO_INTERNO` vêm do `.env` da VM. O `DOMINIO_INTERNO` estava escrito no arquivo com o endereço liberado de uma pessoa; no repositório público ele vira `${DOMINIO_INTERNO:-@baluarte.test}` (mesma lição do DT20). Sem mudança de código nem de teste.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
