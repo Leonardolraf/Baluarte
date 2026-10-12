@@ -1,0 +1,27 @@
+# Servidor próprio (VM Ubuntu no IMSI-PC, publicada pelo Tailscale Funnel): API + ClamAV + Postgres 17.
+# Desde 11/10/2026 o banco roda aqui; o Supabase é só o plano B (restauração semanal, planob.sh).
+# Uso, na VM:
+#   docker compose -f docker-compose.yml -f docker-compose.servidor.yml --profile antivirus up -d --build backend clamav
+# Nenhum segredo neste arquivo: tudo vem do .env da raiz (fora do git). Variáveis lidas aqui:
+#   POSTGRES_PASSWORD (obrigatória), OSQUERY_ENROLL_SECRET, DOMINIO_INTERNO.
+# DOMINIO_INTERNO pode liberar endereços de pessoas (DT19); por isso fica só no .env, nunca aqui (DT20).
+services:
+  backend:
+    restart: unless-stopped
+    depends_on: !override   # só o Postgres local; o Mailpit não sobe aqui
+      db:
+        condition: service_healthy
+    ports: !override ["127.0.0.1:8080:8080"]  # só o Tailscale Funnel publica; !override, não !reset (que remove a porta)
+    environment:
+      - DATABASE_URL=postgresql://baluarte:${POSTGRES_PASSWORD}@db:5432/baluarte?schema=public   # plano B: ${SUPABASE_DATABASE_URL}
+      - DIRECT_URL=postgresql://baluarte:${POSTGRES_PASSWORD}@db:5432/baluarte?schema=public     # plano B: ${SUPABASE_DIRECT_URL}
+      - SEED_DEMO=0       # o seed-demo faz deleteMany e recria as contas com a senha pública do README
+      - SEED_CONTRATO=0   # criaria contas com as senhas públicas do README
+      - OSQUERY_ENROLL_SECRET=${OSQUERY_ENROLL_SECRET:-}
+      - CRUZAMENTO_AUTOMATICO=1   # B14/DT17: verifica a estação depois de cada inventário de programas
+      - DOMINIO_INTERNO=${DOMINIO_INTERNO:-@baluarte.test}   # DT19: domínio reservado (RFC 2606) + endereços liberados, no .env
+  db:
+    image: postgres:17-alpine   # mesmo major do Supabase de onde veio o dump (restaurar um 17 num 16 falha)
+    restart: unless-stopped
+  clamav:
+    restart: unless-stopped

@@ -298,6 +298,7 @@ docker compose down                        # -v tambem apaga o banco (volume db-
 - **Sem segredo no repositorio:** se `JWT_SECRET` nao vier do `.env`, o entrypoint gera um aleatorio e o guarda no volume (`/data/jwt.secret`), entao as sessoes sobrevivem a reinicios sem nenhum valor fixo versionado. Com `NODE_ENV=production` a API se recusa a subir sem um segredo forte.
 - `app` faz o build de producao de `baluarte-frontend/` e o serve com Nginx, encaminhando `/api` para o servico `backend` (`baluarte-frontend/nginx/`); so sobe depois do healthcheck da API. A API roda como usuario `node`, nao como root.
 - Para as suites Newman/Robot contra o Docker, suba com um banco limpo: `docker compose down -v && SEED_DEMO=0 docker compose up --build -d`.
+- **Servidor próprio da demonstração** (VM Ubuntu no IMSI-PC, publicada pelo Tailscale Funnel): `docker-compose.servidor.yml` é o override que monta a produção (Postgres 17 na VM, API só em `127.0.0.1:8080`, ClamAV, `SEED_DEMO=0`/`SEED_CONTRATO=0`, verificação automática das estações). Sobe com `docker compose -f docker-compose.yml -f docker-compose.servidor.yml --profile antivirus up -d --build backend clamav`. O arquivo não tem segredo: senha do banco, segredo do osquery e `DOMINIO_INTERNO` (que pode liberar endereço de pessoa, DT19/DT20) vêm do `.env` da VM.
 
 ### HTTPS local (B06)
 
