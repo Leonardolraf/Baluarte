@@ -570,10 +570,12 @@ describe('campanhas: destinatarios[] e exclusão', () => {
     const admin = await login(ADMIN.email, ADMIN.senha);
     const conta = await criarUsuario(admin, 'Colaborador', 'campanha');
     colaborador = await login(conta.email, SENHA_CONTA);
-    // Campanha so aceita destinatario cadastrado.
+    // Campanha so aceita destinatario cadastrado e Ativo (a conta nasce Pendente; o Administrador ativa).
     for (const [nome, email] of [['Ana', 'ana@empresa.com'], ['Bruno', 'bruno@empresa.com']]) {
       const r = await chamar('POST', '/users', { token: admin, body: { nome, email, perfil: 'Colaborador' } });
       assert.equal(r.status, 201);
+      const ativa = await chamar('PATCH', `/users/${r.body.dados.idUsuario}`, { token: admin, body: { status: 'Ativo' } });
+      assert.equal(ativa.status, 200);
     }
   });
 

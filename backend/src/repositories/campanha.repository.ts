@@ -5,6 +5,19 @@ export function usuariosPorEmail(emails: string[]) {
   return prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true, nome: true, email: true, status: true } });
 }
 
+/**
+ * Contas candidatas a destinatario de campanha: as dos departamentos dados ou, com `null`,
+ * todas. Traz o status e o e-mail para o service aplicar a elegibilidade
+ * (`elegivelParaCampanha`, models/campanha.model.ts), que nao fica repetida aqui.
+ */
+export function candidatosDestinatario(departamentos: string[] | null) {
+  return prisma.user.findMany({
+    where: departamentos ? { departmentId: { in: departamentos } } : {},
+    select: { id: true, nome: true, email: true, status: true, department: { select: { name: true } } },
+    orderBy: [{ nome: 'asc' }, { email: 'asc' }],
+  });
+}
+
 export function criar(dados: { nome: string; template: string }, eventos: { userId: string; destinatario: string; tokenHash: string }[]) {
   return prisma.campaign.create({ data: { ...dados, status: 'AGENDADA', eventos: { create: eventos } } });
 }

@@ -218,6 +218,9 @@ describe('departamentos', () => {
     const b = await chamar('POST', '/users', { token: admin, body: { nome: 'B', email: 'grupo.b@empresa.com', perfil: 'Colaborador', departamento: 'Comercial' } });
     assert.equal(a.status, 201);
     assert.equal(b.status, 201);
+    // Campanha so vai para conta Ativa (a conta nasce Pendente; o Administrador ativa).
+    for (const u of [a, b])
+      assert.equal((await chamar('PATCH', `/users/${u.body.dados.idUsuario}`, { token: admin, body: { status: 'Ativo' } })).status, 200);
     const c = await chamar('POST', '/campaigns', {
       token: analista,
       body: { nome: 'Por departamento', destinatarios: ['grupo.a@empresa.com', 'grupo.b@empresa.com', 'colaborador@empresa.com'], template: 'urgencia' },

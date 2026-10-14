@@ -1,4 +1,4 @@
-import type { CadastroCampanha } from '../models/campanha.model.js';
+import { cobreTodosOsElegiveis, elegivelParaCampanha, exigeConfirmacao, statusRecebeCampanha, type CadastroCampanha, type DestinatarioElegivel } from '../models/campanha.model.js';
 import { falhar } from '../utils/resposta.js';
 import { gerarTokenLink, hashToken } from '../utils/tokens.js';
 import { SEM_DEPARTAMENTO } from '../models/dominio.model.js';
@@ -6,6 +6,7 @@ import { registrarAuditoria } from './auditoria.service.js';
 import { enviarEmailsCampanha } from './campanhaEmail.service.js';
 import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
 import * as repo from '../repositories/campanha.repository.js';
+import { idsExistentes } from '../repositories/departamento.repository.js';
 import { anexosDaCampanha } from './analiseArquivo.service.js';
 import { VALIDADE_RESERVA_ANALISE_MS } from '../models/analiseArquivo.model.js';
 import { possivelRepasse } from '../models/treinamento.model.js';
@@ -15,7 +16,8 @@ import { possivelRepasse } from '../models/treinamento.model.js';
 
 /**
  * Cria a campanha para destinatarios ja validados no formato e no dominio. So recebe
- * campanha quem esta cadastrado e nao esta Inativo.
+ * campanha conta cadastrada e Ativa (`statusRecebeCampanha`): inexistente ou Inativo mantem a
+ * mensagem de sempre (contrato N2 AT1); Pendente tem codigo proprio.
  */
 export async function criar(atorId: string, entrada: CadastroCampanha) {
   const usuarios = await repo.usuariosPorEmail(entrada.emails.map((e) => e.toLowerCase()));
@@ -24,7 +26,21 @@ export async function criar(atorId: string, entrada: CadastroCampanha) {
     const u = usuarios.find((x) => x.email.toLowerCase() === email.toLowerCase());
     if (!u || u.status === 'Inativo')
       falhar(422, `Destinatário não cadastrado ou inativo: ${email}`, 'DESTINATARIO_NAO_CADASTRADO');
+    if (!statusRecebeCampanha(u.status))
+      falhar(422, `Destinatário com convite pendente: ${email}`, 'DESTINATARIO_PENDENTE');
     destinos.push({ userId: u.id, nome: u.nome, email: u.email });
+  }
+  // Trava de envio em massa, depois da elegibilidade de cada um (o numero ja e o que sairia).
+  if (!entrada.confirmado) {
+    const totalElegiveis = (await repo.candidatosDestinatario(null)).filter(elegivelParaCampanha).length;
+    if (exigeConfirmacao(destinos.length, totalElegiveis)) {
+      const todos = cobreTodosOsElegiveis(destinos.length, totalElegiveis) ? ', todos os elegíveis da empresa' : '';
+      falhar(
+        422,
+        `Envio em massa: a campanha atingiria ${destinos.length} destinatário(s)${todos}. Confirme com confirmarEnvioTotal: true`,
+        'CONFIRMACAO_ENVIO_EM_MASSA',
+      );
+    }
   }
 
   // Cada destinatario recebe um token proprio para o link do e-mail; no banco fica so o hash.
@@ -51,6 +67,31 @@ export async function criar(atorId: string, entrada: CadastroCampanha) {
     status: campanha.status,
     // Extensao compativel: quantos e-mails simulados sairam (0 em producao sem SMTP).
     emailsEnviados,
+  };
+}
+
+/**
+ * Destinatarios elegiveis dos departamentos dados (ou de todos, com `null`), para o formulario
+ * de campanha preencher a lista; o envio continua por `destinatarios[]` em POST /campaigns, que
+ * confere tudo de novo. Elegivel = a regra da criacao (`elegivelParaCampanha`). O resumo conta
+ * quem ficou de fora e por que, para a tela nao esconder a exclusao.
+ */
+export async function destinatariosElegiveis(departamentos: string[] | null) {
+  if (departamentos) {
+    const existentes = new Set(await idsExistentes(departamentos));
+    if (departamentos.some((id) => !existentes.has(id)))
+      falhar(404, 'Departamento não encontrado', 'DEPARTAMENTO_NAO_ENCONTRADO');
+  }
+  const candidatos = await repo.candidatosDestinatario(departamentos);
+  const lista: DestinatarioElegivel[] = candidatos
+    .filter(elegivelParaCampanha)
+    .map((u) => ({ id: u.id, nome: u.nome, email: u.email, departamento: u.department?.name ?? null }));
+  // Cada excluido conta uma vez, pelo primeiro motivo: status (inativo, pendente) e depois dominio.
+  const inativos = candidatos.filter((u) => u.status === 'Inativo').length;
+  const pendentes = candidatos.filter((u) => u.status !== 'Inativo' && !statusRecebeCampanha(u.status)).length;
+  return {
+    lista,
+    resumo: { total: lista.length, inativos, pendentes, foraDoDominio: candidatos.length - lista.length - inativos - pendentes },
   };
 }
 
