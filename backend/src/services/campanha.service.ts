@@ -8,6 +8,7 @@ import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
 import * as repo from '../repositories/campanha.repository.js';
 import { anexosDaCampanha } from './analiseArquivo.service.js';
 import { VALIDADE_RESERVA_ANALISE_MS } from '../models/analiseArquivo.model.js';
+import { possivelRepasse } from '../models/treinamento.model.js';
 
 // Campanhas de phishing SIMULADO: criacao com e-mail por destinatario, lista com metricas,
 // relatorio (funil, treinamentos, reportes, por departamento) e exclusao.
@@ -85,7 +86,16 @@ export async function relatorio(id: string) {
     id: c.id, nome: c.nome, template: c.template, status: c.status, criadoEm: c.criadoEm,
     destinatarios: c.eventos.length,
     funil: funilDe(c.eventos),
-    treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({ token: e.id, destinatario: e.destinatario, departamento: depDe(e), concluido: e.treinou, concluidoEm: e.treinouEm, reportouEm: e.reportouEm })),
+    // Resumo das aberturas do link do e-mail (Melhorias #6): o total conta toda abertura, nao pessoas.
+    resumo: {
+      aberturas: c.eventos.reduce((a, e) => a + e._count.aberturas, 0),
+      possiveisRepasses: c.eventos.filter((e) => possivelRepasse(e._count.aberturas)).length,
+    },
+    // Quem clicou (abriu o link). `aberturas` conta cada abertura; mais de uma = possivel repasse.
+    treinamentos: c.eventos.filter((e) => e.clicadoEm).map((e) => ({
+      token: e.id, destinatario: e.destinatario, departamento: depDe(e), concluido: e.treinou, concluidoEm: e.treinouEm, reportouEm: e.reportouEm,
+      aberturas: e._count.aberturas, possivelRepasse: possivelRepasse(e._count.aberturas),
+    })),
     // Quem reportou o e-mail simulado (pelo rodape do e-mail), clicando ou nao.
     reportes: c.eventos
       .filter((e) => e.reportouEm)
