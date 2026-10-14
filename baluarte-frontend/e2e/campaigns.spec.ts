@@ -34,7 +34,13 @@ test.describe('Campanhas de phishing', () => {
     await page.goto('/campaigns/new');
     await page.locator('#nome').fill('Simulação E2E – TI');
     await page.getByRole('radio', { name: /Autoridade/ }).check();
-    await page.locator('#grupo').selectOption({ label: 'TI' });
+    // Melhorias #1 e #2: o grupo-alvo virou seleção de departamentos reais, e marcar um
+    // preenche os destinatários (que seguem editáveis).
+    await page
+      .getByRole('group', { name: /Grupo-alvo/ })
+      .getByLabel('TI', { exact: false })
+      .check();
+    await expect(page.getByTestId('resumo-elegiveis')).toContainText('podem receber');
     await page.locator('#destinatarios').fill('fulano@gmail.com');
     await page.getByRole('button', { name: 'Agendar campanha' }).click();
     await expect(page.getByText(/@empresa\.com|internos|não autorizado/i).first()).toBeVisible();
