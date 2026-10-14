@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUiStore } from '@/store/uiStore';
 import { ROLE_LABEL } from '@/lib/roles';
@@ -71,18 +71,24 @@ export function Topbar() {
       </Button>
 
       {user && (
-        <div className="hidden items-center gap-2 sm:flex" data-testid="topbar-user">
+        // Atalho para a conta: /settings e aberta a qualquer perfil (ver routes.tsx).
+        <Link
+          to="/settings"
+          className="hidden items-center gap-2 rounded-md px-1.5 py-1 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 dark:hover:bg-slate-800 dark:focus-visible:ring-white dark:focus-visible:ring-offset-slate-900 sm:flex"
+          data-testid="topbar-user"
+          aria-label={`${user.name} (${ROLE_LABEL[user.role]}) — abrir configurações da conta`}
+        >
           <span
             className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-ink dark:bg-slate-700 dark:text-white"
             aria-hidden="true"
           >
             {initials(user.name)}
           </span>
-          <div className="leading-tight">
+          <div className="leading-tight" aria-hidden="true">
             <div className="text-xs font-semibold text-ink dark:text-white">{user.name}</div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400">{ROLE_LABEL[user.role]}</div>
           </div>
-        </div>
+        </Link>
       )}
     </header>
   );

@@ -27,6 +27,24 @@ test.describe('Configurações e treinamento', () => {
     await expect(toast(page, 'Senha alterada com sucesso')).toBeVisible();
   });
 
+  // #24: o bloco do usuário na topbar é o atalho para a conta (antes era um div sem ação).
+  test('o usuário da topbar leva para /settings, por clique e pelo teclado', async ({ page }) => {
+    await login(page, 'collaborator');
+    const atalho = page.getByTestId('topbar-user');
+    await expect(atalho).toHaveAttribute('href', '/settings');
+    await expect(atalho).toContainText('João Pereira');
+    await atalho.click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByRole('heading', { name: 'Configurações' })).toBeVisible();
+
+    // Acessível pelo teclado: recebe foco e abre com Enter.
+    await page.goto('/dashboard');
+    await atalho.focus();
+    await expect(atalho).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/settings$/);
+  });
+
   test('salva preferências de notificação e alterna o tema', async ({ page }) => {
     await login(page, 'analyst');
     await page.goto('/settings');
