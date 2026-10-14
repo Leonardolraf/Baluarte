@@ -476,7 +476,7 @@ function LinkOpensCell({ recipient }: { recipient: CampaignRecipient }) {
         <span
           className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
           data-testid="possivel-repasse"
-          title="Mais de uma abertura do mesmo link. Abertura automática do cliente de e-mail (proxy de imagem, pré-busca, antivírus) também conta."
+          title="Aberturas em janelas de 30 minutos diferentes. Aberturas seguidas na mesma janela contam uma vez, mas abertura automática do cliente de e-mail (proxy de imagem, pré-busca, antivírus) em outra janela também conta: por isso 'possível', não confirmado."
         >
           possível repasse
         </span>
