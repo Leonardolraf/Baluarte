@@ -736,6 +736,30 @@ describe('realApi — campanhas e treinamento', () => {
     expect(created.metrics.recipients).toBe(2);
   });
 
+  it('envio em massa: confirmarEnvioTotal só vai quando a tela confirmou; a recusa do servidor chega intacta', async () => {
+    const input = {
+      name: 'Todos',
+      template: 'urgency' as const,
+      targetGroup: 'Todos',
+      scheduledAt: '2026-11-01T09:00',
+      recipients: ['a@empresa.com'],
+    };
+    on(
+      'POST /campaigns',
+      fail(422, 'CONFIRMACAO_ENVIO_EM_MASSA', 'Envio em massa: a campanha atingiria 1 destinatário(s)'),
+    );
+    const err = await rejection(realApi.createCampaign(input));
+    expect([err.status, err.code]).toEqual([422, 'CONFIRMACAO_ENVIO_EM_MASSA']);
+    expect(body()).not.toHaveProperty('confirmarEnvioTotal');
+
+    on(
+      'POST /campaigns',
+      ok({ idCampanha: 'c-10', nome: 'Todos', template: 'urgencia', status: 'Agendada' }),
+    );
+    await realApi.createCampaign({ ...input, confirmMassSend: true });
+    expect(body()).toMatchObject({ destinatarios: ['a@empresa.com'], confirmarEnvioTotal: true });
+  });
+
   it('treinamento interno: lê e conclui pelo id do evento', async () => {
     on('GET /treinamentos/ev-1', ok(training));
     on('POST /treinamentos/ev-1/concluir', ok({}));
@@ -899,6 +923,51 @@ describe('realApi — usuários', () => {
       ]),
     );
     await expect(realApi.listDepartments()).resolves.toEqual(['TI', 'RH']);
+  });
+
+  it('lista os departamentos com id e número de usuários', async () => {
+    on('GET /departamentos', ok([{ id: 'd-1', nome: 'TI', usuarios: 3 }]));
+    await expect(realApi.listDepartmentOptions()).resolves.toEqual([{ id: 'd-1', name: 'TI', users: 3 }]);
+  });
+});
+
+describe('realApi — destinatários elegíveis da campanha', () => {
+  const dados = [
+    { id: 'u-1', nome: 'Ana', email: 'ana@empresa.com', departamento: 'TI' },
+    { id: 'u-2', nome: 'Bruno', email: 'bruno@empresa.com', departamento: null },
+  ];
+
+  it('um departamento=<id> por departamento, com o resumo de quem ficou de fora', async () => {
+    on('GET /campanhas/destinatarios', {
+      status: 200,
+      data: { status: 'sucesso', dados, resumo: { total: 2, inativos: 1, pendentes: 4, foraDoDominio: 3 } },
+    });
+    await expect(realApi.listEligibleRecipients({ departmentIds: ['d-1', 'd-2'] })).resolves.toEqual({
+      items: [
+        { id: 'u-1', name: 'Ana', email: 'ana@empresa.com', department: 'TI' },
+        { id: 'u-2', name: 'Bruno', email: 'bruno@empresa.com', department: null },
+      ],
+      summary: { total: 2, inactive: 1, pending: 4, outsideDomain: 3 },
+    });
+    expect(httpClient.getUri(calls[0])).toMatch(
+      /\/campanhas\/destinatarios\?departamento=d-1&departamento=d-2$/,
+    );
+  });
+
+  it('todos=1 para todos os usuários; sem resumo, o total é o tamanho da lista', async () => {
+    on('GET /campanhas/destinatarios', ok(dados));
+    const r = await realApi.listEligibleRecipients({ all: true });
+    expect(r.summary).toEqual({ total: 2, inactive: 0, pending: 0, outsideDomain: 0 });
+    expect(httpClient.getUri(calls[0])).toMatch(/\/campanhas\/destinatarios\?todos=1$/);
+  });
+
+  it('propaga o erro do servidor (departamento inexistente)', async () => {
+    on(
+      'GET /campanhas/destinatarios',
+      fail(404, 'DEPARTAMENTO_NAO_ENCONTRADO', 'Departamento não encontrado'),
+    );
+    const err = await rejection(realApi.listEligibleRecipients({ departmentIds: ['x'] }));
+    expect([err.status, err.code]).toEqual([404, 'DEPARTAMENTO_NAO_ENCONTRADO']);
   });
 });
 

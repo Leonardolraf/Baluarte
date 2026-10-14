@@ -138,6 +138,19 @@ export const MOCK_CREDENTIALS: Array<{ email: string; password: string; userId: 
 ];
 
 // -----------------------------------------------------------------------------
+// Departamentos: a mesma lista do seed do backend, com ids estáveis para os filtros.
+// -----------------------------------------------------------------------------
+
+export const MOCK_DEPARTMENTS: ReadonlyArray<{ id: string; name: string }> = [
+  { id: 'dep-comercial', name: 'Comercial' },
+  { id: 'dep-diretoria', name: 'Diretoria' },
+  { id: 'dep-financeiro', name: 'Financeiro' },
+  { id: 'dep-operacoes', name: 'Operações' },
+  { id: 'dep-rh', name: 'RH' },
+  { id: 'dep-ti', name: 'TI' },
+];
+
+// -----------------------------------------------------------------------------
 // Usuários (RBAC): 3 credenciais + 5 adicionais. Departamentos institucionais.
 // -----------------------------------------------------------------------------
 

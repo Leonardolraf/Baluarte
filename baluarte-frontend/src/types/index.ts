@@ -334,6 +334,41 @@ export interface CampaignInput {
   scheduledAt: string;
   /** Destinatários internos (somente domínio corporativo). */
   recipients: string[];
+  /**
+   * Confirmação explícita de envio em massa (`confirmarEnvioTotal: true`). O servidor recusa com
+   * 422 CONFIRMACAO_ENVIO_EM_MASSA a campanha acima do limite (padrão 50) ou que cubra todos os
+   * elegíveis da empresa sem ela. Ausente/false = campo omitido no corpo.
+   */
+  confirmMassSend?: boolean;
+}
+
+/** Departamento como opção de seleção (id para os filtros, nome para exibir). */
+export interface DepartmentOption {
+  id: string;
+  name: string;
+  /** Usuários no departamento (todos os status). */
+  users: number;
+}
+
+/**
+ * De onde puxar os destinatários do formulário de campanha: um ou mais departamentos
+ * (pelo id de `DepartmentOption`) ou todos os usuários.
+ */
+export type EligibleRecipientsFilter = { departmentIds: string[] } | { all: true };
+
+/** Pessoa que pode receber a campanha (conta Ativa e do domínio interno). */
+export interface EligibleRecipient {
+  id: string;
+  name: string;
+  email: string;
+  /** Nome do departamento atual; `null` = sem departamento. */
+  department: string | null;
+}
+
+export interface EligibleRecipientsResponse {
+  items: EligibleRecipient[];
+  /** Quem ficou de fora do filtro e por quê (a tela não deve esconder a exclusão). */
+  summary: { total: number; inactive: number; pending: number; outsideDomain: number };
 }
 
 export type RecipientStage = 'sent' | 'opened' | 'clicked' | 'submitted' | 'reported';

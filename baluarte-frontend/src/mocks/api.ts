@@ -25,6 +25,9 @@ import type {
   ChangePasswordInput,
   CreatedUser,
   DashboardMetrics,
+  DepartmentOption,
+  EligibleRecipientsFilter,
+  EligibleRecipientsResponse,
   FileScan,
   FileScanFilters,
   FileScanListResponse,
@@ -79,6 +82,7 @@ import {
   MOCK_AUDIT_LOG,
   MOCK_CAMPAIGNS,
   MOCK_CREDENTIALS,
+  MOCK_DEPARTMENTS,
   MOCK_FILE_SCANS,
   MOCK_MONITORING_ACKS,
   MOCK_MONITORING_NOTICE,
@@ -332,6 +336,15 @@ function isValidIpv4(value: string): boolean {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INTERNAL_DOMAIN = '@empresa.com';
+/** Espelha o padrão de CAMPANHA_LIMITE_SEM_CONFIRMACAO do servidor. */
+const MASS_SEND_LIMIT = 50;
+/** Espelha MINIMO_ELEGIVEIS_REGRA_TODOS: "cobre todos os elegíveis" só trava a partir de 10 elegíveis. */
+const MIN_ELIGIBLE_FOR_ALL_RULE = 10;
+
+/** Espelha `elegivelParaCampanha` do servidor: conta Ativa e do domínio interno. */
+function isCampaignEligible(u: User): boolean {
+  return u.status === 'active' && u.email.toLowerCase().endsWith(INTERNAL_DOMAIN);
+}
 const HOST_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
 const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
@@ -1439,6 +1452,32 @@ export const mockApi: BaluarteApi = {
           'Destinatário não autorizado: apenas e-mails internos',
         );
     }
+    // Como o servidor: conta inativa ou com convite pendente não recebe campanha.
+    const uniqueRecipients = [...new Set(recipients)];
+    for (const r of uniqueRecipients) {
+      const target = state.users.find((u) => u.email.toLowerCase() === r);
+      if (target?.status === 'inactive')
+        throw new HttpError(
+          422,
+          'DESTINATARIO_NAO_CADASTRADO',
+          `Destinatário não cadastrado ou inativo: ${r}`,
+        );
+      if (target?.status === 'pending')
+        throw new HttpError(422, 'DESTINATARIO_PENDENTE', `Destinatário com convite pendente: ${r}`);
+    }
+    // Trava de envio em massa: acima do limite ou cobrindo todos os elegíveis exige confirmação.
+    if (!input.confirmMassSend) {
+      const eligible = state.users.filter(isCampaignEligible);
+      const coversAll =
+        eligible.length >= MIN_ELIGIBLE_FOR_ALL_RULE &&
+        eligible.every((u) => uniqueRecipients.includes(u.email.toLowerCase()));
+      if (uniqueRecipients.length > MASS_SEND_LIMIT || coversAll)
+        throw new HttpError(
+          422,
+          'CONFIRMACAO_ENVIO_EM_MASSA',
+          `Envio em massa: a campanha atingiria ${uniqueRecipients.length} destinatário(s)${coversAll ? ', todos os elegíveis da empresa' : ''}. Confirme com confirmarEnvioTotal: true`,
+        );
+    }
 
     const campaign: Campaign = {
       id: nextId('camp'),
@@ -1626,7 +1665,52 @@ export const mockApi: BaluarteApi = {
   async listDepartments(): Promise<string[]> {
     return simulate(() => {
       requireRole(requireUser(), ['admin', 'analyst']);
-      return ['Comercial', 'Diretoria', 'Financeiro', 'Operações', 'RH', 'TI'];
+      return MOCK_DEPARTMENTS.map((d) => d.name);
+    });
+  },
+
+  async listDepartmentOptions(): Promise<DepartmentOption[]> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin', 'analyst']);
+      return MOCK_DEPARTMENTS.map((d) => ({
+        id: d.id,
+        name: d.name,
+        users: state.users.filter((u) => u.department === d.name).length,
+      }));
+    });
+  },
+
+  // Espelha GET /campanhas/destinatarios: elegível = cadastrado, não inativo e do domínio interno.
+  async listEligibleRecipients(filter: EligibleRecipientsFilter): Promise<EligibleRecipientsResponse> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin', 'analyst']);
+      let names: Set<string> | null = null;
+      if (!('all' in filter)) {
+        const ids = [...new Set(filter.departmentIds)];
+        if (ids.length === 0)
+          throw new HttpError(400, 'FILTRO_OBRIGATORIO', 'Informe ao menos um departamento ou todos=1');
+        const found = MOCK_DEPARTMENTS.filter((d) => ids.includes(d.id));
+        if (found.length !== ids.length)
+          throw new HttpError(404, 'DEPARTAMENTO_NAO_ENCONTRADO', 'Departamento não encontrado');
+        names = new Set(found.map((d) => d.name));
+      }
+      const candidates = state.users
+        .filter((u) => !names || (u.department !== undefined && names.has(u.department)))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR') || a.email.localeCompare(b.email));
+      const inactive = candidates.filter((u) => u.status === 'inactive').length;
+      const pending = candidates.filter((u) => u.status === 'pending').length;
+      const items = candidates
+        .filter(isCampaignEligible)
+        .map((u) => ({ id: u.id, name: u.name, email: u.email, department: u.department ?? null }));
+      return {
+        items,
+        summary: {
+          total: items.length,
+          inactive,
+          pending,
+          outsideDomain: candidates.length - items.length - inactive - pending,
+        },
+      };
     });
   },
 

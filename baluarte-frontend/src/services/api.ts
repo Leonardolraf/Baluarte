@@ -21,6 +21,9 @@ import type {
   ChangePasswordInput,
   CreatedUser,
   DashboardMetrics,
+  DepartmentOption,
+  EligibleRecipientsFilter,
+  EligibleRecipientsResponse,
   FileScanFilters,
   FileScanListResponse,
   FileScanOutcome,
@@ -73,6 +76,8 @@ import {
   toCampaign,
   toCampaignReport,
   toDashboard,
+  toDepartmentOption,
+  toEligibleRecipients,
   toFileScan,
   toFileScanList,
   toMonitoringAcknowledgementList,
@@ -100,6 +105,9 @@ import {
   type BackendCampaign,
   type BackendCampaignReport,
   type BackendDashboard,
+  type BackendDepartment,
+  type BackendEligibleRecipient,
+  type BackendEligibleRecipientsSummary,
   type BackendFileScan,
   type BackendFileScanSummary,
   type BackendReceivedCampaign,
@@ -607,6 +615,20 @@ export const realApi: BaluarteApi = {
     };
   },
 
+  async listEligibleRecipients(filter: EligibleRecipientsFilter): Promise<EligibleRecipientsResponse> {
+    // Um `departamento=<id>` por departamento (URLSearchParams evita o `departamento[]=` do axios).
+    const params =
+      'all' in filter
+        ? new URLSearchParams({ todos: '1' })
+        : new URLSearchParams(filter.departmentIds.map((id) => ['departamento', id]));
+    const { dados, resumo } = await requestWithSummary<BackendEligibleRecipient[]>({
+      method: 'GET',
+      url: '/campanhas/destinatarios',
+      params,
+    });
+    return toEligibleRecipients(dados, resumo as BackendEligibleRecipientsSummary | undefined);
+  },
+
   async getTraining(id: string): Promise<Training> {
     const raw = await request<BackendTraining>({
       method: 'GET',
@@ -757,6 +779,11 @@ export const realApi: BaluarteApi = {
   async listDepartments(): Promise<string[]> {
     const raw = await request<Array<{ id: string; nome: string }>>({ method: 'GET', url: '/departamentos' });
     return raw.map((d) => d.nome);
+  },
+
+  async listDepartmentOptions(): Promise<DepartmentOption[]> {
+    const raw = await request<BackendDepartment[]>({ method: 'GET', url: '/departamentos' });
+    return raw.map(toDepartmentOption);
   },
 
   // Análise de arquivos (B04). Multipart pelo mesmo cliente HTTP (o interceptor põe o token).
