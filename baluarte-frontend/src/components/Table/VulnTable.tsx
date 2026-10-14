@@ -9,6 +9,8 @@ import {
   type VulnerabilityFilters,
   type VulnerabilitySortKey,
 } from '@/types';
+import { api } from '@/services/api';
+import { useAsync } from '@/hooks/useAsync';
 import { useSort, type SortAccessor } from '@/hooks/useSort';
 import { usePagination } from '@/hooks/usePagination';
 import { SEVERITY_LABEL, SEVERITY_RANK, VULN_STATUS_CLASS, VULN_STATUS_LABEL } from '@/lib/severity';
@@ -79,7 +81,12 @@ function nextSort(current: SortState<SortKey> | null, key: SortKey): SortState<S
 const COLUMN_COUNT = 7;
 const SKELETON_ROWS = 5;
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50];
-const EMPTY_FILTERS: VulnerabilityFilters = { severity: 'all', status: 'all', query: '' };
+const EMPTY_FILTERS: VulnerabilityFilters = {
+  severity: 'all',
+  status: 'all',
+  query: '',
+  assetId: undefined,
+};
 
 function toTime(value: string): number | null {
   const time = new Date(value).getTime();
@@ -98,7 +105,8 @@ function hasActiveFilters(filters: VulnerabilityFilters): boolean {
   return (
     (filters.severity ?? 'all') !== 'all' ||
     (filters.status ?? 'all') !== 'all' ||
-    (filters.query ?? '').trim() !== ''
+    (filters.query ?? '').trim() !== '' ||
+    Boolean(filters.assetId)
   );
 }
 
@@ -112,12 +120,19 @@ function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   const queryId = `${baseId}-query`;
   const severityId = `${baseId}-severity`;
   const statusId = `${baseId}-status`;
+  const assetId = `${baseId}-asset`;
   const active = hasActiveFilters(filters);
+
+  // Melhoria 16: a lista de ativos vem da API (a mesma de /assets). Se a consulta falhar,
+  // o campo fica desabilitado com o motivo visível em vez de oferecer uma lista vazia que
+  // pareceria "nenhum ativo cadastrado".
+  const { data: assets, error: assetsError } = useAsync(() => api.listAssets(), []);
+  const assetOptions = assets ?? [];
 
   return (
     // Ritmo (DESIGN.md): inset de 20 px como o cabeçalho do cartão e a primeira célula; campos a 20 px.
     <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem_11rem_auto] lg:items-end">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem_11rem_11rem_auto] lg:items-end">
         <FormField label="Buscar" htmlFor={queryId} className="sm:col-span-2 lg:col-span-1">
           <div className="relative">
             <SearchIcon
@@ -171,6 +186,29 @@ function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
             {VULNERABILITY_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {VULN_STATUS_LABEL[status]}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <FormField
+          label="Ativo"
+          htmlFor={assetId}
+          hint={assetsError ? 'Não foi possível carregar os ativos' : undefined}
+        >
+          <Select
+            id={assetId}
+            value={filters.assetId ?? 'all'}
+            disabled={Boolean(assetsError)}
+            onChange={(event) => {
+              const value = event.target.value;
+              onFiltersChange({ ...filters, assetId: value === 'all' ? undefined : value });
+            }}
+          >
+            <option value="all">Todos</option>
+            {assetOptions.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.name}
               </option>
             ))}
           </Select>
