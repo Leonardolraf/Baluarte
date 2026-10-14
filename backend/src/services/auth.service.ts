@@ -7,7 +7,7 @@ import { localizarPorEmail } from '../repositories/usuario.repository.js';
 import { normalizarEmail } from '../utils/validacao.js';
 import { falhar } from '../utils/resposta.js';
 import { politicaAuditoria, registrarAuditoria } from './auditoria.service.js';
-import { emitirLinkConta, localizarLinkValido } from './linkConta.service.js';
+import { avisarSenhaAlterada, emitirLinkConta, localizarLinkValido } from './linkConta.service.js';
 import { gerarToken, SESSAO_MAXIMA_MS } from './token.service.js';
 
 // Regras de autenticacao: login com limite de tentativas, troca e redefinicao de senha,
@@ -85,6 +85,8 @@ export async function trocarSenha(usuario: UsuarioAtual, sessao: TokenPayload, s
 
   await repo.trocarSenha(usuario.id, await bcrypt.hash(novaSenha, 10));
   await registrarAuditoria(usuario.id, 'ALTERAR_SENHA');
+  // #4: aviso ao dono da conta, sem link. Falha no envio nao desfaz a troca (nunca lanca).
+  await avisarSenhaAlterada(usuario);
   // A sessao atual continua: devolve um token emitido depois da troca.
   return gerarToken({ idUsuario: usuario.id, email: usuario.email, perfil: usuario.perfil, inicioSessao: sessao.inicioSessao });
 }
@@ -122,6 +124,8 @@ export async function confirmarRedefinicao(token: string, novaSenha: string): Pr
 
   await repo.concluirRedefinicao(registro, await bcrypt.hash(novaSenha, 10));
   await registrarAuditoria(registro.userId, convite ? 'ACEITAR_CONVITE' : 'REDEFINIR_SENHA');
+  // #4: so a redefinicao avisa. No convite a pessoa cria a primeira senha (nada foi alterado).
+  if (!convite) await avisarSenhaAlterada(registro.user);
   return convite ? 'Senha cadastrada com sucesso' : 'Senha redefinida com sucesso';
 }
 

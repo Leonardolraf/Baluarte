@@ -74,9 +74,9 @@ O RBAC é do servidor, não só da interface: em modo real o colaborador recebe 
 
 ### Convite e redefinição de senha
 
-A conta nasce por convite: o administrador cadastra o usuário e a API envia um link `/definir-senha?token=…` (válido por 72 horas, uso único) para a pessoa criar a primeira senha. Se o e-mail falhar, o cadastro vale mesmo assim e a tela avisa para reenviar o convite pela lista.
+A conta nasce por convite: o administrador cadastra o usuário e a API envia um link `/definir-senha?token=…` (válido por 24 horas, uso único) para a pessoa criar a primeira senha. Se o e-mail falhar, o cadastro vale mesmo assim e a tela avisa para reenviar o convite pela lista.
 
-A redefinição usa a mesma tela em duas etapas: `/reset-password` pede o e-mail (resposta genérica, sem revelar se ele existe) e `/reset-password?token=…` define a nova senha (link válido por 30 minutos, uso único). Com token, a página confere o link na API (`/auth/link/verificar`) **antes** de mostrar o formulário: link vencido ou inexistente vai direto para "Link inválido ou expirado", com o botão para pedir um novo.
+A redefinição usa a mesma tela em duas etapas: `/reset-password` pede o e-mail (resposta genérica, sem revelar se ele existe) e `/reset-password?token=…` define a nova senha (link válido por 10 minutos, uso único). Com token, a página confere o link na API (`/auth/link/verificar`) **antes** de mostrar o formulário: link vencido ou inexistente vai direto para "Link inválido ou expirado", com o botão para pedir um novo.
 
 No backend real os e-mails (convite e redefinição) chegam no **Mailpit** em http://localhost:8025, que guarda tudo e não entrega nada para fora; sem `SMTP_HOST`, fora de produção, o e-mail inteiro sai no log da API. Na camada mock o token volta na própria resposta (`demoToken`) e a tela oferece o link "Continuar para a redefinição".
 

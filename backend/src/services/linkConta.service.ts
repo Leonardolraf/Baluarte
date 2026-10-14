@@ -4,18 +4,33 @@ import { enviarEmail, urlFrontend } from '../config/email.js';
 import type { TipoLink } from '../models/auth.model.js';
 import { buscarLinkPorHash, gravarLinkConta } from '../repositories/auth.repository.js';
 import { gerarTokenLink, hashToken } from '../utils/tokens.js';
+import { dataHora } from './relatorioVulnerabilidade.service.js';
 
 // Links de conta entregues por e-mail. CONVITE: quem o administrador cadastra nasce
 // Pendente, sem senha utilizavel, e cria a propria senha pelo link (nao existe senha
 // provisoria). RESET: "esqueci minha senha". Os dois sao de uso unico e terminam no
 // mesmo endpoint (POST /auth/reset-password/confirm).
+// Aqui tambem fica o aviso "sua senha foi alterada" (#4), que sai pelo mesmo envio
+// (config/email.ts) mas nao leva link nem credencial.
 
 export type { TipoLink };
 
+// Validades (Melhorias #20 e #21, 13/10/2026): convite 24 h (antes 72 h), redefinicao
+// 10 min (antes 30 min). O texto do e-mail sai destas constantes, nunca de numero repetido.
 export const VALIDADE_LINK_MS: Record<TipoLink, number> = {
-  RESET: 30 * 60 * 1000,
-  CONVITE: 72 * 60 * 60 * 1000,
+  RESET: 10 * 60 * 1000,
+  CONVITE: 24 * 60 * 60 * 1000,
 };
+
+/** Validade em texto para o e-mail: "24 horas", "10 minutos". */
+export function validadeEmTexto(ms: number): string {
+  const minutos = Math.round(ms / 60000);
+  if (minutos % 60 === 0) {
+    const horas = minutos / 60;
+    return `${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+  }
+  return `${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`;
+}
 
 /**
  * Hash para a coluna senhaHash de quem ainda nao criou a senha: bcrypt de 32 bytes
@@ -38,7 +53,7 @@ function mensagem(tipo: TipoLink, nome: string, link: string) {
       texto:
         `Olá, ${nome}.\n\n` +
         'Uma conta foi criada para você na plataforma Baluarte. Para ativá-la, crie sua senha ' +
-        `pelo link abaixo (válido por 72 horas e de uso único):\n\n${link}\n\n` +
+        `pelo link abaixo (válido por ${validadeEmTexto(VALIDADE_LINK_MS.CONVITE)} e de uso único):\n\n${link}\n\n` +
         'Se você não esperava este convite, ignore este e-mail.',
     };
   }
@@ -47,7 +62,7 @@ function mensagem(tipo: TipoLink, nome: string, link: string) {
     texto:
       `Olá, ${nome}.\n\n` +
       'Recebemos um pedido para redefinir a sua senha. Para criar uma nova, use o link abaixo ' +
-      `(válido por 30 minutos e de uso único):\n\n${link}\n\n` +
+      `(válido por ${validadeEmTexto(VALIDADE_LINK_MS.RESET)} e de uso único):\n\n${link}\n\n` +
       'Se não foi você que pediu, ignore este e-mail: a sua senha atual continua valendo.',
   };
 }
@@ -75,4 +90,32 @@ export async function localizarLinkValido(token: string) {
   if (!registro || registro.usadoEm || registro.expiraEm.getTime() < Date.now()) return null;
   if (registro.user.status === 'Inativo') return null;
   return registro;
+}
+
+/** Texto do aviso de senha alterada: quando foi e o que fazer se nao foi a pessoa. Sem link. */
+export function mensagemSenhaAlterada(nome: string, quando: Date) {
+  return {
+    assunto: 'Baluarte: sua senha foi alterada',
+    texto:
+      `Olá, ${nome}.\n\n` +
+      `A senha da sua conta na plataforma Baluarte foi alterada em ${dataHora(quando)} (horário de Brasília).\n\n` +
+      'Se foi você, nenhuma ação é necessária.\n\n' +
+      'Se não foi você, procure o administrador da plataforma imediatamente: alguém pode ter ' +
+      'acesso à sua conta.',
+  };
+}
+
+/**
+ * Avisa o dono da conta que a senha mudou (troca logada ou redefinicao pelo link). Nunca lanca:
+ * a senha ja foi trocada, e uma falha no envio nao pode desfazer nem derrubar a troca.
+ * Devolve se o e-mail saiu.
+ */
+export async function avisarSenhaAlterada(usuario: Destinatario, quando: Date = new Date()): Promise<boolean> {
+  try {
+    const { assunto, texto } = mensagemSenhaAlterada(usuario.nome, quando);
+    return await enviarEmail({ para: usuario.email, assunto, texto });
+  } catch (e) {
+    console.error('[e-mail] falha ao avisar a troca de senha', e instanceof Error ? e.message : e);
+    return false;
+  }
 }

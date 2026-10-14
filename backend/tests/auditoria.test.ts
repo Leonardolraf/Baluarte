@@ -25,7 +25,14 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-type Registro = { id: string; acao: string; detalhe: string | null; quando: string; usuario: { id: string; nome: string; email: string } | null };
+type Registro = {
+  id: string;
+  acao: string;
+  detalhe: string | null;
+  quando: string;
+  usuario: { id: string; nome: string; email: string } | null;
+  origem: 'usuario' | 'automatico' | 'removido';
+};
 
 async function consultar(query: string, token = admin) {
   const r = await chamar('GET', `/auditoria${query}`, { token });
@@ -137,7 +144,8 @@ describe('GET /auditoria: consulta', () => {
     const comAutor = r.dados.find((d) => d.usuario);
     assert.ok(comAutor);
     assert.deepEqual(Object.keys(comAutor.usuario!).sort(), ['email', 'id', 'nome']);
-    assert.deepEqual(Object.keys(comAutor).sort(), ['acao', 'detalhe', 'id', 'quando', 'usuario']);
+    assert.deepEqual(Object.keys(comAutor).sort(), ['acao', 'detalhe', 'id', 'origem', 'quando', 'usuario']);
+    assert.equal(comAutor.origem, 'usuario');
   });
 
   it('resumo.acoes lista as ações distintas, incluindo ações novas sem mudança de código', async () => {
@@ -149,6 +157,7 @@ describe('GET /auditoria: consulta', () => {
     assert.equal(new Set(r.resumo.acoes).size, r.resumo.acoes.length);
     assert.equal(r.resumo.total, 1);
     assert.equal(r.dados[0].usuario, null, 'registro sem autor sai com usuario null');
+    assert.equal(r.dados[0].origem, 'automatico');
   });
 
   it('autor excluído sai com usuario null (o AuditLog não tem FK)', async () => {
@@ -156,6 +165,33 @@ describe('GET /auditoria: consulta', () => {
     const r = await consultar('?acao=ACAO_ORFA');
     assert.equal(r.dados.length, 1);
     assert.equal(r.dados[0].usuario, null);
+    assert.equal(r.dados[0].origem, 'removido');
+  });
+
+  it('#22: origem separa autor atual, ação automática e autor excluído (na mesma página)', async () => {
+    // Conta de verdade, que age e depois é excluída pela API: o registro dela fica com o id.
+    const email = `origem.${Date.now()}@empresa.com`;
+    const criada = await chamar('POST', '/users', { token: admin, body: { nome: 'Pessoa Excluída', email, perfil: 'Colaborador' } });
+    assert.equal(criada.status, 201, JSON.stringify(criada.body));
+    const idExcluida: string = criada.body.dados.idUsuario;
+    await prisma.auditLog.create({ data: { usuarioId: idExcluida, acao: 'ORIGEM_22', detalhe: 'excluido' } });
+    await prisma.auditLog.create({ data: { usuarioId: null, acao: 'ORIGEM_22', detalhe: 'automatico' } });
+    await prisma.auditLog.create({ data: { usuarioId: 'u-001', acao: 'ORIGEM_22', detalhe: 'usuario' } });
+    assert.equal((await chamar('DELETE', `/users/${idExcluida}`, { token: admin })).status, 200);
+
+    const r = await consultar('?acao=ORIGEM_22');
+    assert.equal(r.dados.length, 3);
+    const por = Object.fromEntries(r.dados.map((d) => [d.detalhe, d]));
+    assert.equal(por.usuario.origem, 'usuario');
+    assert.equal(por.usuario.usuario?.id, 'u-001');
+    assert.equal(por.automatico.origem, 'automatico');
+    assert.equal(por.automatico.usuario, null);
+    assert.equal(por.excluido.origem, 'removido');
+    assert.equal(por.excluido.usuario, null, 'conta excluída continua sem nome nem e-mail');
+    // Toda linha da consulta traz a origem.
+    const todas = await consultar('?tamanho=100');
+    assert.ok(todas.dados.every((d) => ['usuario', 'automatico', 'removido'].includes(d.origem)));
+    assert.ok(todas.dados.every((d) => (d.origem === 'usuario') === (d.usuario !== null)));
   });
 
   it('filtro por ação', async () => {

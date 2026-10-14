@@ -681,7 +681,16 @@ export interface AuditEntry {
   at: string;
   /** Autor; `null` quando a conta foi excluída ou a ação não tem autor. */
   user: { id: string; name: string; email: string } | null;
+  /**
+   * Origem do registro (#22, `origem` da API): `user` (autor com conta), `automatic` (ação do
+   * próprio Baluarte, sem usuário) ou `removed` (o autor teve a conta excluída). `null` só quando
+   * a API não mandou o campo e não há autor: aí não dá para saber qual dos dois casos é.
+   */
+  origin: AuditOrigin | null;
 }
+
+/** Origem de um registro da auditoria (mesma regra do histórico do achado, DT24). */
+export type AuditOrigin = 'user' | 'automatic' | 'removed';
 
 export interface AuditFilters {
   /** Código da ação; vazio ou ausente = todas. */

@@ -287,6 +287,7 @@ function pushAudit(
     detail,
     at: nowIso(),
     user: user ? { id: user.id, name: user.name, email: user.email } : null,
+    origin: user ? 'user' : 'automatic',
   });
 }
 
@@ -988,7 +989,8 @@ export const mockApi: BaluarteApi = {
       kind: user.status === 'pending' ? 'invite' : 'reset',
       name: user.name,
       email: user.email,
-      expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+      // Como a API (linkConta.service.ts): convite 24 h, redefinição 10 min.
+      expiresAt: new Date(Date.now() + (user.status === 'pending' ? 24 * 60 : 10) * 60 * 1000).toISOString(),
     };
   },
 

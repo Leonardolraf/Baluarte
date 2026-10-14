@@ -1,6 +1,7 @@
 import type {
   AuditChainBreakReason,
   AuditEntry,
+  AuditOrigin,
   AuditIntegrity,
   AuditListResponse,
   AccountLink,
@@ -1252,7 +1253,15 @@ export interface BackendAuditEntry {
   detalhe: string | null;
   quando: string;
   usuario: { id: string; nome: string; email: string } | null;
+  /** #22: `automatico` = sem usuário; `removido` = autor com a conta excluída. */
+  origem?: 'usuario' | 'automatico' | 'removido';
 }
+
+const ORIGEM_AUDITORIA: Record<string, AuditOrigin> = {
+  usuario: 'user',
+  automatico: 'automatic',
+  removido: 'removed',
+};
 
 export interface BackendAuditSummary {
   total?: number;
@@ -1268,6 +1277,9 @@ export function toAuditEntry(raw: BackendAuditEntry): AuditEntry {
     detail: raw.detalhe ?? null,
     at: raw.quando,
     user: raw.usuario ? { id: raw.usuario.id, name: raw.usuario.nome, email: raw.usuario.email } : null,
+    // Sem o campo (API anterior ao #22): com autor é `user`; sem autor fica `null`, porque
+    // não dá para saber se foi o sistema ou uma conta excluída (nunca chutar "sistema").
+    origin: (raw.origem && ORIGEM_AUDITORIA[raw.origem]) || (raw.usuario ? 'user' : null),
   };
 }
 

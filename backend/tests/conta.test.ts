@@ -1,7 +1,7 @@
 // Testes do ciclo de conta: cadastro por convite (sem senha provisoria), reenvio do
 // convite, verificacao do link, logout no servidor, renovacao da sessao, bloqueio de
 // login guardado no banco e auditoria do login. Banco isolado (ver helpers.ts).
-import { after, before, describe, it } from 'node:test';
+import { after, before, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as sleep } from 'node:timers/promises';
 import jwt from 'jsonwebtoken';
@@ -56,7 +56,7 @@ describe('cadastro por convite', () => {
     assert.ok(enviado, 'esperava o e-mail de convite');
     assert.match(enviado.assunto, /crie sua senha/i);
     assert.match(enviado.texto, /Olá, Pessoa Convidada/);
-    assert.match(enviado.texto, /72 horas/);
+    assert.match(enviado.texto, /válido por 24 horas/);
     assert.doesNotMatch(enviado.texto, /Mudar@123/);
 
     const token = await tokenDoEmail(email, 'definir-senha');
@@ -65,7 +65,7 @@ describe('cadastro por convite', () => {
     assert.equal(registro?.tipo, 'CONVITE');
     assert.notEqual(registro?.tokenHash, token, 'no banco fica só o hash');
     const validade = registro!.expiraEm.getTime() - registro!.criadoEm.getTime();
-    assert.ok(Math.abs(validade - 72 * 3600 * 1000) < 5000, `validade de 72 h, veio ${validade} ms`);
+    assert.ok(Math.abs(validade - 24 * 3600 * 1000) < 5000, `validade de 24 h, veio ${validade} ms`);
 
     const auditoria = await prisma.auditLog.findMany({ where: { acao: { in: ['CRIAR_USUARIO', 'ENVIAR_CONVITE'] }, detalhe: { contains: email.toLowerCase() } } });
     assert.equal(auditoria.length, 2);
@@ -327,5 +327,104 @@ describe('POST /users/:id/redefinir-senha (administrador dispara o link)', () =>
     esperaErro(await chamar('POST', `/users/${conta.id}/redefinir-senha`, { token: analista }), 403, 'PERFIL_SEM_PERMISSAO');
     esperaErro(await chamar('POST', `/users/${conta.id}/redefinir-senha`, { token: tokenColab }), 403, 'PERFIL_SEM_PERMISSAO');
     esperaErro(await chamar('POST', `/users/${conta.id}/redefinir-senha`), 401, 'TOKEN_AUSENTE');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// #4: aviso "sua senha foi alterada" ao dono da conta, sem link nem credencial.
+
+describe('aviso de senha alterada (#4)', () => {
+  const ASSUNTO = 'Baluarte: sua senha foi alterada';
+  const avisosPara = (email: string, desde: number) =>
+    caixaDeSaida.slice(desde).filter((e) => e.para === email.toLowerCase() && e.assunto === ASSUNTO);
+
+  function semCredencial(texto: string) {
+    assert.doesNotMatch(texto, /https?:\/\//, 'o aviso não leva link');
+    assert.doesNotMatch(texto, /token/i);
+    assert.doesNotMatch(texto, /[0-9a-f]{32,}/, 'nenhum token no texto');
+  }
+
+  it('troca logada: o dono recebe o aviso com data e hora, a orientação e nenhum link ou senha', async () => {
+    const conta = await criarUsuario(admin, 'Colaborador', 'aviso-troca');
+    const token = await login(conta.email, SENHA_CONTA);
+    const desde = caixaDeSaida.length;
+    const r = await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_CONTA, novaSenha: 'Avisada@12' } });
+    assert.equal(r.status, 200);
+    const avisos = avisosPara(conta.email, desde);
+    assert.equal(avisos.length, 1, 'um aviso, só para o dono da conta');
+    assert.equal(caixaDeSaida.slice(desde).length, 1, 'nenhum outro e-mail sai');
+    const texto = avisos[0].texto;
+    assert.match(texto, /Olá, Usuário aviso-troca\./);
+    assert.match(texto, /foi alterada em \d{2}\/\d{2}\/\d{4} \d{2}:\d{2} \(horário de Brasília\)/);
+    assert.match(texto, /procure o administrador/);
+    assert.ok(!texto.includes('Avisada@12') && !texto.includes(SENHA_CONTA), 'nenhuma senha no texto');
+    semCredencial(texto);
+  });
+
+  it('redefinição pelo link: o dono recebe o aviso', async () => {
+    await limparLimiteReset();
+    const conta = await criarUsuario(admin, 'Colaborador', 'aviso-reset');
+    await chamar('POST', '/auth/reset-password', { body: { email: conta.email } });
+    const link = await tokenDoEmail(conta.email, 'reset-password');
+    assert.ok(link);
+    const desde = caixaDeSaida.length;
+    assert.equal((await chamar('POST', '/auth/reset-password/confirm', { body: { token: link, novaSenha: 'PeloLink@12' } })).status, 200);
+    const avisos = avisosPara(conta.email, desde);
+    assert.equal(avisos.length, 1);
+    semCredencial(avisos[0].texto);
+    // O tokenDoEmail continua achando só links de verdade: o aviso não tem um.
+    assert.equal(await tokenDoEmail(conta.email, 'reset-password'), link);
+  });
+
+  it('aceitar o convite não manda aviso (é a primeira senha, nada foi alterado)', async () => {
+    const conta = await criarUsuarioPendente(admin, 'Colaborador', 'aviso-convite');
+    const desde = caixaDeSaida.length;
+    assert.equal((await chamar('POST', '/auth/reset-password/confirm', { body: { token: conta.convite, novaSenha: 'Primeira@12' } })).status, 200);
+    assert.equal(avisosPara(conta.email, desde).length, 0);
+  });
+
+  it('troca recusada (senha atual errada) não manda aviso', async () => {
+    const conta = await criarUsuario(admin, 'Colaborador', 'aviso-recusa');
+    const token = await login(conta.email, SENHA_CONTA);
+    const desde = caixaDeSaida.length;
+    esperaErro(await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: 'Errada@123', novaSenha: 'Nova@12345' } }), 400, 'SENHA_ATUAL_INCORRETA');
+    assert.equal(avisosPara(conta.email, desde).length, 0);
+  });
+
+  it('falha no envio do aviso não derruba a troca nem a redefinição', async () => {
+    const conta = await criarUsuario(admin, 'Colaborador', 'aviso-falha');
+    const token = await login(conta.email, SENHA_CONTA);
+    // O transporte em memória passa a falhar só para o aviso (os links seguem saindo).
+    // (mock.method nao aceita array: troca o push da instancia e devolve no finally.)
+    const original = caixaDeSaida.push;
+    let avisosTentados = 0;
+    caixaDeSaida.push = function (this: typeof caixaDeSaida, ...itens: typeof caixaDeSaida) {
+      if (itens.some((e) => e.assunto === ASSUNTO)) {
+        avisosTentados += 1;
+        throw new Error('SMTP fora do ar (simulado)');
+      }
+      return original.apply(this, itens);
+    };
+    const erros = mock.method(console, 'error', () => {});
+    try {
+      const r = await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_CONTA, novaSenha: 'SemAviso@12' } });
+      assert.equal(r.status, 200);
+      assert.ok(r.body.dados.token, 'a troca devolve o token novo mesmo sem o aviso');
+      await login(conta.email, 'SemAviso@12');
+
+      await limparLimiteReset();
+      await chamar('POST', '/auth/reset-password', { body: { email: conta.email } });
+      const link = await tokenDoEmail(conta.email, 'reset-password');
+      assert.ok(link);
+      const conf = await chamar('POST', '/auth/reset-password/confirm', { body: { token: link, novaSenha: 'SemAviso@34' } });
+      assert.equal(conf.status, 200);
+      assert.equal(conf.body.mensagem, 'Senha redefinida com sucesso');
+      await login(conta.email, 'SemAviso@34');
+      assert.equal(avisosTentados, 2, 'o aviso foi tentado nas duas trocas');
+      assert.ok(erros.mock.calls.length >= 2, 'a falha vai para o log');
+    } finally {
+      caixaDeSaida.push = original;
+      erros.mock.restore();
+    }
   });
 });

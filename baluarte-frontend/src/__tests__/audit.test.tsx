@@ -60,6 +60,7 @@ describe('adapters de auditoria', () => {
       detalhe: null,
       quando: '2026-10-08T12:00:00.000Z',
       usuario: { id: 'u-1', nome: 'Ana', email: 'ana@empresa.com' },
+      origem: 'usuario',
     });
     expect(entry).toEqual({
       id: 'a1',
@@ -67,6 +68,7 @@ describe('adapters de auditoria', () => {
       detail: null,
       at: '2026-10-08T12:00:00.000Z',
       user: { id: 'u-1', name: 'Ana', email: 'ana@empresa.com' },
+      origin: 'user',
     });
     const list = toAuditList(
       [{ id: 'a2', acao: 'X', detalhe: 'd', quando: '2026-10-08T12:00:00.000Z', usuario: null }],
@@ -75,6 +77,17 @@ describe('adapters de auditoria', () => {
     );
     expect(list).toMatchObject({ total: 41, page: 3, pageSize: 20, actions: ['LOGIN', 'X'] });
     expect(list.items[0]!.user).toBeNull();
+  });
+
+  it('#22: passa a origem adiante e separa ação automática de autor excluído', () => {
+    const base = { id: 'a3', acao: 'X', detalhe: null, quando: '2026-10-13T12:00:00.000Z', usuario: null };
+    expect(toAuditEntry({ ...base, origem: 'automatico' }).origin).toBe('automatic');
+    expect(toAuditEntry({ ...base, origem: 'removido' }).origin).toBe('removed');
+    // API anterior ao #22 (sem o campo): com autor é `user`; sem autor não dá para saber.
+    expect(toAuditEntry(base).origin).toBeNull();
+    expect(
+      toAuditEntry({ ...base, usuario: { id: 'u-1', nome: 'Ana', email: 'ana@empresa.com' } }).origin,
+    ).toBe('user');
   });
 
   it('sem resumo usa os valores pedidos', () => {

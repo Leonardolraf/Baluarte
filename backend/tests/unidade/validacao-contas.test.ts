@@ -7,7 +7,7 @@ import { emailFormatoValido, hostValido, queryString, textoPreenchido, validarSe
 import { gerarTokenLink, hashToken } from '../../src/utils/tokens.js';
 import { mapUsuario } from '../../src/repositories/usuario.repository.js';
 import { normalizarEmail } from '../../src/utils/validacao.js';
-import { hashSemSenha, VALIDADE_LINK_MS } from '../../src/services/linkConta.service.js';
+import { hashSemSenha, mensagemSenhaAlterada, validadeEmTexto, VALIDADE_LINK_MS } from '../../src/services/linkConta.service.js';
 
 before(() => {
   process.env.NODE_ENV = 'test';
@@ -91,8 +91,26 @@ describe('helpers de conta', () => {
     }
   });
 
-  it('validade dos links: convite 72 h, redefinição 30 min', () => {
-    assert.equal(VALIDADE_LINK_MS.CONVITE, 72 * 3600 * 1000);
-    assert.equal(VALIDADE_LINK_MS.RESET, 30 * 60 * 1000);
+  it('validade dos links: convite 24 h, redefinição 10 min (#20, #21)', () => {
+    assert.equal(VALIDADE_LINK_MS.CONVITE, 24 * 3600 * 1000);
+    assert.equal(VALIDADE_LINK_MS.RESET, 10 * 60 * 1000);
+  });
+
+  it('validadeEmTexto: o e-mail diz a validade das constantes', () => {
+    assert.equal(validadeEmTexto(VALIDADE_LINK_MS.CONVITE), '24 horas');
+    assert.equal(validadeEmTexto(VALIDADE_LINK_MS.RESET), '10 minutos');
+    assert.equal(validadeEmTexto(3600 * 1000), '1 hora');
+    assert.equal(validadeEmTexto(60 * 1000), '1 minuto');
+    assert.equal(validadeEmTexto(90 * 60 * 1000), '90 minutos');
+  });
+
+  it('mensagemSenhaAlterada: data e hora de Brasília, orientação e nenhum link (#4)', () => {
+    // 13/10/2026 17:05 UTC = 14:05 em Brasília.
+    const { assunto, texto } = mensagemSenhaAlterada('Ana', new Date('2026-10-13T17:05:00Z'));
+    assert.equal(assunto, 'Baluarte: sua senha foi alterada');
+    assert.match(texto, /^Olá, Ana\./);
+    assert.match(texto, /alterada em 13\/10\/2026 14:05 \(horário de Brasília\)/);
+    assert.match(texto, /Se não foi você, procure o administrador/);
+    assert.doesNotMatch(texto, /https?:|token|senha:/i);
   });
 });

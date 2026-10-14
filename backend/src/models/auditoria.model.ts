@@ -74,12 +74,28 @@ export interface FiltrosAuditoria {
 }
 
 /** Registro como a API devolve. */
+/**
+ * Autoria de um registro gravado com `usuarioId` sem FK (AuditLog e historico do achado),
+ * #22 e DT24: `usuario` = autor com conta atual; `automatico` = registro sem usuario, feito
+ * pelo proprio Baluarte (fechamento automatico do B36, inscricao do agente, retencao por
+ * script); `removido` = havia autor, mas a conta foi excluida. Nos dois ultimos o autor sai
+ * `null`, e e esta origem que separa um do outro.
+ */
+export type OrigemAutoria = 'usuario' | 'automatico' | 'removido';
+
+/** Regra unica da autoria: `autorEncontrado` = o id ainda existe no cadastro de usuarios. */
+export function origemDaAutoria(usuarioId: string | null, autorEncontrado: boolean): OrigemAutoria {
+  if (usuarioId === null) return 'automatico';
+  return autorEncontrado ? 'usuario' : 'removido';
+}
+
 export interface RegistroAuditoriaDto {
   id: string;
   acao: string;
   detalhe: string | null;
   quando: Date;
   usuario: { id: string; nome: string; email: string } | null;
+  origem: OrigemAutoria;
 }
 
 // ---- Schemas dos parametros (a query chega como string; objeto/array e recusado) ------
