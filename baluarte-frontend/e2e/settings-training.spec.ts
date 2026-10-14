@@ -61,4 +61,13 @@ test.describe('Configurações e treinamento', () => {
     await expect(page.getByText('Varredura de vulnerabilidades').first()).toBeVisible();
     await expect(page.getByText('Phishing simulado').first()).toBeVisible();
   });
+
+  // Melhoria 15: a equipe tem três integrantes; a página é pública, então o nome aparece
+  // para quem abrir o link.
+  test('página Sobre lista os três integrantes da equipe', async ({ page }) => {
+    await page.goto('/about');
+    for (const nome of ['Leonardo Rodrigues', 'Edson Marcelino', 'Rafael Chagas Pontes']) {
+      await expect(page.getByText(nome).first()).toBeVisible();
+    }
+  });
 });

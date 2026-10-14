@@ -75,6 +75,10 @@ const TEAM: readonly TeamMember[] = [
     name: 'Edson Marcelino',
     responsibilities: ['Arquitetura', 'Modelagem de dados', 'Módulo de phishing'],
   },
+  {
+    name: 'Rafael Chagas Pontes',
+    responsibilities: ['Frontend', 'Aplicativo móvel (Expo)'],
+  },
 ];
 
 const STACK: ReadonlyArray<{ label: string; value: string }> = [
