@@ -4,8 +4,8 @@ import { AntivirusIndisponivel, analisar as analisarNoAntivirus, antivirusConfig
 import type { UsuarioAtual } from '../models/usuario.model.js';
 import { OPERADORES } from '../models/dominio.model.js';
 import {
-  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES, MENSAGEM_ARQUIVO_GRANDE,
-  VALIDADE_RESERVA_ANALISE_MS, ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
+  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANALISES_SIMULTANEAS, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES,
+  MENSAGEM_ARQUIVO_GRANDE, intervaloRenovacaoReservaMs, validadeReservaAnaliseMs, ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
   type CampanhaRecebidaDto, type FiltrosHistorico, type ResultadoAnalise,
 } from '../models/analiseArquivo.model.js';
 import { segundaOpiniaoDto } from '../models/segundaOpiniao.model.js';
@@ -56,7 +56,7 @@ function limiteDaHora(): never {
 export async function verificarAntesDeReceber(userId: string, eventoCampanha?: string): Promise<VagaAnalise> {
   if (!antivirusConfigurado()) falhar(503, MSG_INDISPONIVEL, 'ANTIVIRUS_INDISPONIVEL');
   const desde = new Date(Date.now() - UMA_HORA_MS);
-  const validaDesde = new Date(Date.now() - VALIDADE_RESERVA_ANALISE_MS);
+  const validaDesde = new Date(Date.now() - validadeReservaAnaliseMs());
   let origem: OrigemCampanha | null = null;
   if (eventoCampanha) {
     const evento = await repo.eventoDoUsuario(eventoCampanha, userId);
@@ -74,10 +74,13 @@ export async function verificarAntesDeReceber(userId: string, eventoCampanha?: s
     desde,
     validaDesde,
     maximoHora: LIMITE_ANALISES_POR_HORA,
+    maximoSimultaneas: LIMITE_ANALISES_SIMULTANEAS,
     maximoEvento: LIMITE_ANEXOS_POR_CAMPANHA,
   });
   if (!reserva.id) {
     if (reserva.naHora >= LIMITE_ANALISES_POR_HORA) limiteDaHora();
+    if (reserva.emCurso >= LIMITE_ANALISES_SIMULTANEAS)
+      falhar(429, `Já há ${LIMITE_ANALISES_SIMULTANEAS} análises suas em andamento. Aguarde uma terminar.`, 'ANALISES_SIMULTANEAS');
     falhar(429, `Limite de ${LIMITE_ANEXOS_POR_CAMPANHA} anexos por campanha atingido`, 'LIMITE_ANEXOS_CAMPANHA');
   }
   return { reservaId: reserva.id, origem };
@@ -86,6 +89,38 @@ export async function verificarAntesDeReceber(userId: string, eventoCampanha?: s
 /** Devolve a vaga de uma analise que nao terminou (antivirus fora, 413, corpo sem arquivo...). */
 export async function devolverVaga(vaga: VagaAnalise): Promise<void> {
   await repo.liberarReserva(vaga.reservaId);
+}
+
+/** Heartbeat em curso de uma vaga (`manterVagaViva`). */
+export interface RenovacaoDaVaga {
+  /** Para o heartbeat e espera a renovacao que estiver no meio: depois disto, nenhum UPDATE. */
+  parar(): Promise<void>;
+}
+
+/**
+ * Renova a reserva a cada `intervaloRenovacaoReservaMs()` enquanto o envio ou a varredura estao
+ * em curso (Melhorias #18), para ela nunca vencer no meio de uma analise longa e uma orfa
+ * vencer sozinha. Falha numa renovacao so vai para o log: o envio segue, e ha folga de
+ * RENOVACOES_PERDIDAS_TOLERADAS renovacoes antes de a reserva vencer. Quem chama tem de chamar
+ * `parar` em TODO desfecho (sucesso, 408, 413, 503, veredito antecipado, conexao caida).
+ */
+export function manterVagaViva(vaga: VagaAnalise): RenovacaoDaVaga {
+  let parado = false;
+  let emAndamento: Promise<unknown> = Promise.resolve();
+  const temporizador = setInterval(() => {
+    if (parado) return;
+    emAndamento = repo.renovarReserva(vaga.reservaId, new Date()).catch((e) => {
+      console.error('[analise] reserva não renovada (o envio segue):', e instanceof Error ? e.message : e);
+    });
+  }, intervaloRenovacaoReservaMs());
+  temporizador.unref();
+  return {
+    async parar() {
+      parado = true;
+      clearInterval(temporizador);
+      await emAndamento;
+    },
+  };
 }
 
 /** Fluxo do arquivo como recebido do multipart (busboy marca `truncated` ao passar do limite). */

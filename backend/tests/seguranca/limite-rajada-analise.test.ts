@@ -19,7 +19,7 @@ import { enviarArquivoEmFluxo, lerInstream } from '../envioEmFluxo.js';
 prepararBanco(import.meta.url);
 const { app } = await import('../../src/app.js');
 const { prisma } = await import('../../src/config/db.js');
-const { LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES } = await import('../../src/models/analiseArquivo.model.js');
+const { LIMITE_ANALISES_POR_HORA, LIMITE_ANALISES_SIMULTANEAS, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES } = await import('../../src/models/analiseArquivo.model.js');
 
 const RAJADA_HORA = 25;
 const RAJADA_ANEXOS = 8;
@@ -95,6 +95,24 @@ function conferirRecusas(respostas: Envio[], codigo: string, mensagem: string) {
   }
 }
 
+/**
+ * Analises ja feitas (FileScan), gravadas direto: com no maximo 2 analises simultaneas por
+ * usuario (Melhorias #18), uma rajada nao chega mais sozinha ao limite por hora nem ao do evento;
+ * para exercitar a corrida desses limites, o usuario ja comeca a um passo deles.
+ */
+async function jaAnalisadas(userId: string, n: number, campaignEventId: string | null = null) {
+  await prisma.fileScan.createMany({
+    data: Array.from({ length: n }, (_, i) => ({
+      userId,
+      nome: `anterior-${i}.txt`,
+      tamanho: 1,
+      sha256: i.toString(16).padStart(64, '0'),
+      resultado: 'LIMPO',
+      campaignEventId,
+    })),
+  });
+}
+
 async function novoColaborador(prefixo: string) {
   const c = await criarUsuario(admin, 'Colaborador', prefixo);
   return { ...c, token: await login(c.email, SENHA_CONTA) };
@@ -112,24 +130,43 @@ async function comAntivirusFora<T>(fn: () => Promise<T>): Promise<T> {
 
 // =============================================================================
 describe('DT09: limite de análises por hora sob rajada paralela', () => {
-  it(`${RAJADA_HORA} envios simultâneos do mesmo usuário: no máximo ${LIMITE_ANALISES_POR_HORA} chegam ao antivírus, o resto é 429 MUITAS_ANALISES`, async (t) => {
+  it(`a um passo do limite (${LIMITE_ANALISES_POR_HORA - 1} já feitas), ${RAJADA_HORA} envios simultâneos: só 1 chega ao antivírus, o resto é 429 MUITAS_ANALISES`, async (t) => {
     const c = await novoColaborador('rajada.arquivo');
+    await jaAnalisadas(c.id, LIMITE_ANALISES_POR_HORA - 1);
     const antes = pedidosAoClamd;
     const respostas = await rajada(RAJADA_HORA, (i) => enviar(c.token, `arquivo ${i}`));
     conferirRecusas(respostas, 'MUITAS_ANALISES', MSG_HORA);
     const { s201, s429 } = separar(respostas);
-    assert.ok(s201.length <= LIMITE_ANALISES_POR_HORA, `${s201.length} análises aceitas (limite ${LIMITE_ANALISES_POR_HORA})`);
+    assert.equal(s201.length, 1, `${s201.length} análises aceitas (restava 1 vaga na hora)`);
     assert.equal(s201.length + s429.length, RAJADA_HORA);
     const gravadas = await prisma.fileScan.count({ where: { userId: c.id } });
-    assert.equal(gravadas, s201.length, 'um registro por análise aceita, nenhum a mais');
-    assert.ok(pedidosAoClamd - antes <= LIMITE_ANALISES_POR_HORA, `${pedidosAoClamd - antes} arquivos chegaram ao antivírus`);
+    assert.equal(gravadas, LIMITE_ANALISES_POR_HORA, 'um registro por análise aceita, nenhum a mais');
+    assert.equal(pedidosAoClamd - antes, 1, `${pedidosAoClamd - antes} arquivos chegaram ao antivírus`);
     t.diagnostic(`hora: ${s201.length} x 201, ${s429.length} x 429, ${pedidosAoClamd - antes} pedidos ao clamd`);
   });
 });
 
 // =============================================================================
+describe('Melhorias #18: no máximo 2 análises simultâneas por usuário (contra o slowloris autenticado)', () => {
+  it(`${RAJADA_HORA} envios simultâneos de um usuário novo: só ${LIMITE_ANALISES_SIMULTANEAS} chegam ao antivírus, o resto é 429 ANALISES_SIMULTANEAS`, async (t) => {
+    const c = await novoColaborador('rajada.simultanea');
+    const antes = pedidosAoClamd;
+    const respostas = await rajada(RAJADA_HORA, (i) => enviar(c.token, `simultanea ${i}`));
+    conferirRecusas(respostas, 'ANALISES_SIMULTANEAS', `Já há ${LIMITE_ANALISES_SIMULTANEAS} análises suas em andamento. Aguarde uma terminar.`);
+    const { s201, s429 } = separar(respostas);
+    assert.equal(s201.length, LIMITE_ANALISES_SIMULTANEAS);
+    assert.equal(s429.length, RAJADA_HORA - LIMITE_ANALISES_SIMULTANEAS);
+    assert.equal(pedidosAoClamd - antes, LIMITE_ANALISES_SIMULTANEAS, 'o resto nem chega ao antivírus');
+    // O limite é por usuário: outro usuário na mesma hora segue livre.
+    const outro = await novoColaborador('rajada.simultanea.outro');
+    assert.equal((await enviar(outro.token, 'de outra pessoa')).status, 201);
+    t.diagnostic(`simultâneas: ${s201.length} x 201, ${s429.length} x 429`);
+  });
+});
+
+// =============================================================================
 describe('DT09: limite de anexos por destinatário na campanha sob rajada paralela', () => {
-  it(`${RAJADA_ANEXOS} anexos simultâneos para o mesmo evento: no máximo ${LIMITE_ANEXOS_POR_CAMPANHA} passam, o resto é 429 LIMITE_ANEXOS_CAMPANHA`, async (t) => {
+  it(`a um passo do limite do evento, ${RAJADA_ANEXOS} anexos simultâneos: só 1 passa, o resto é 429 LIMITE_ANEXOS_CAMPANHA`, async (t) => {
     const c = await novoColaborador('rajada.anexo');
     const camp = await chamar('POST', '/campaigns', {
       token: analista,
@@ -138,13 +175,14 @@ describe('DT09: limite de anexos por destinatário na campanha sob rajada parale
     assert.equal(camp.status, 201, JSON.stringify(camp.body));
     const evento = await prisma.campaignEvent.findFirstOrThrow({ where: { campaignId: camp.body.dados.idCampanha } });
     assert.ok(evento.enviadoEm, 'o e-mail da campanha saiu');
+    await jaAnalisadas(c.id, LIMITE_ANEXOS_POR_CAMPANHA - 1, evento.id);
 
     const respostas = await rajada(RAJADA_ANEXOS, (i) => enviar(c.token, `anexo ${i}`, `?eventoCampanha=${evento.id}`));
     conferirRecusas(respostas, 'LIMITE_ANEXOS_CAMPANHA', MSG_ANEXOS);
     const { s201, s429 } = separar(respostas);
-    assert.ok(s201.length <= LIMITE_ANEXOS_POR_CAMPANHA, `${s201.length} anexos aceitos (limite ${LIMITE_ANEXOS_POR_CAMPANHA})`);
+    assert.equal(s201.length, 1, `${s201.length} anexos aceitos (restava 1 vaga no evento)`);
     assert.equal(s201.length + s429.length, RAJADA_ANEXOS);
-    assert.equal(await prisma.fileScan.count({ where: { campaignEventId: evento.id } }), s201.length);
+    assert.equal(await prisma.fileScan.count({ where: { campaignEventId: evento.id } }), LIMITE_ANEXOS_POR_CAMPANHA);
     // O limite e do evento, nao do usuario: o envio avulso segue.
     assert.equal((await enviar(c.token, 'avulso')).status, 201);
     t.diagnostic(`anexos: ${s201.length} x 201, ${s429.length} x 429`);
@@ -153,23 +191,29 @@ describe('DT09: limite de anexos por destinatário na campanha sob rajada parale
 
 // =============================================================================
 describe('DT09: análise que falha devolve a vaga', () => {
-  it('antivírus fora do ar (503) numa rajada: nenhuma vaga fica presa, e a rajada seguinte usa o limite inteiro', async () => {
+  it('antivírus fora do ar (503) numa rajada: nenhuma vaga fica presa, e os envios seguintes usam o limite inteiro', async () => {
     const c = await novoColaborador('rajada.falha');
     const falhas = await comAntivirusFora(() => rajada(RAJADA_HORA, (i) => enviar(c.token, `falha ${i}`)));
-    // Com as vagas reservadas em curso, parte da rajada pode dar 429; nenhuma passa.
+    // Com as vagas reservadas em curso, parte da rajada dá 429 (simultâneas); nenhuma passa.
     for (const r of falhas) {
-      if (r.status === 429) assert.equal(r.body.codigoErro, 'MUITAS_ANALISES');
+      if (r.status === 429) assert.equal(r.body.codigoErro, 'ANALISES_SIMULTANEAS');
       else {
         assert.equal(r.status, 503, JSON.stringify(r.body));
         assert.equal(r.body.codigoErro, 'ANTIVIRUS_INDISPONIVEL');
       }
     }
     assert.equal(await prisma.fileScan.count({ where: { userId: c.id } }), 0);
+    const [{ n }] = await prisma.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM "FileScanReserva" WHERE "userId" = ${c.id}`;
+    assert.equal(n, 0, 'nenhuma reserva presa');
 
-    // As vagas voltaram: a rajada seguinte, com o antivirus no ar, passa exatamente o limite.
-    const respostas = await rajada(RAJADA_HORA, (i) => enviar(c.token, `depois ${i}`));
-    conferirRecusas(respostas, 'MUITAS_ANALISES', MSG_HORA);
-    assert.equal(separar(respostas).s201.length, LIMITE_ANALISES_POR_HORA);
+    // As vagas voltaram: em pares (no máximo 2 simultâneas), passa exatamente o limite da hora.
+    let aceitas = 0;
+    for (let i = 0; i < RAJADA_HORA; i += LIMITE_ANALISES_SIMULTANEAS) {
+      const par = await rajada(Math.min(LIMITE_ANALISES_SIMULTANEAS, RAJADA_HORA - i), (j) => enviar(c.token, `depois ${i + j}`));
+      for (const r of par) if (r.status === 201) aceitas += 1;
+      else assert.equal(r.body.codigoErro, 'MUITAS_ANALISES', JSON.stringify(r.body));
+    }
+    assert.equal(aceitas, LIMITE_ANALISES_POR_HORA);
     assert.equal(await prisma.fileScan.count({ where: { userId: c.id } }), LIMITE_ANALISES_POR_HORA);
   });
 

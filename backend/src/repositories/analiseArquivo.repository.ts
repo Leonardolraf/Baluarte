@@ -17,14 +17,16 @@ import type { SegundaOpiniaoGravada } from '../models/segundaOpiniao.model.js';
 // passa pela mesma trava. O lote tem tres instrucoes curtas, sem codigo da aplicacao no meio
 // (nunca o antivirus): a conexao fica presa so o tempo delas.
 
-export type ReservaAnalise = { id: string | null; naHora: number; noEvento: number };
+export type ReservaAnalise = { id: string | null; naHora: number; emCurso: number; noEvento: number };
 
 /**
  * Reserva a vaga de uma analise: grava a linha so se o usuario tem menos de `maximoHora`
- * analises (FileScan desde `desde` + reservas validas) e, com `eventoId`, o evento tem menos de
- * `maximoEvento` anexos (FileScan + reservas validas). Devolve o id da reserva (null quando
- * algum limite ja estava cheio) e as contagens que havia antes. Reservas anteriores a
- * `validaDesde` nao contam e sao podadas.
+ * analises (FileScan desde `desde` + reservas validas), menos de `maximoSimultaneas` analises
+ * em andamento (reservas validas) e, com `eventoId`, o evento tem menos de `maximoEvento` anexos
+ * (FileScan + reservas validas). Devolve o id da reserva (null quando algum limite ja estava
+ * cheio) e as contagens que havia antes. Reservas anteriores a `validaDesde` (sem heartbeat em
+ * dia) nao contam e sao podadas. Cada reserva e uma linha so: renovada ou nao, conta uma vez, e
+ * deixa de contar na mesma transacao que grava o FileScan (`criar`).
  */
 export async function reservarVaga(p: {
   userId: string;
@@ -32,6 +34,7 @@ export async function reservarVaga(p: {
   desde: Date;
   validaDesde: Date;
   maximoHora: number;
+  maximoSimultaneas: number;
   maximoEvento: number;
 }): Promise<ReservaAnalise> {
   const id = randomUUID();
@@ -45,8 +48,11 @@ export async function reservarVaga(p: {
     prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('baluarte.FileScanReserva'), hashtext(${p.userId}))`,
     prisma.$executeRaw`DELETE FROM "FileScanReserva" WHERE "userId" = ${p.userId} AND "criadoEm" < ${validaDesde}::timestamp(3)`,
     // Instrucao separada da trava: em READ COMMITTED ela le o que foi gravado ate a trava sair.
-    prisma.$queryRaw<Array<{ naHora: number; noEvento: number; id: string | null }>>`
-      WITH hora AS (
+    prisma.$queryRaw<Array<{ naHora: number; emCurso: number; noEvento: number; id: string | null }>>`
+      WITH emcurso AS (
+        SELECT count(*) AS n FROM "FileScanReserva"
+         WHERE "userId" = ${p.userId} AND "criadoEm" >= ${validaDesde}::timestamp(3)
+      ), hora AS (
         SELECT (SELECT count(*) FROM "FileScan"
                  WHERE "userId" = ${p.userId} AND "criadoEm" >= ${desde}::timestamp(3))
              + (SELECT count(*) FROM "FileScanReserva"
@@ -59,13 +65,27 @@ export async function reservarVaga(p: {
                END AS n
       ), nova AS (
         INSERT INTO "FileScanReserva" ("id", "userId", "campaignEventId", "criadoEm")
-        SELECT ${id}, ${p.userId}, ${p.eventoId}::text, ${agora}::timestamp(3) FROM hora, evento
-         WHERE hora.n < ${p.maximoHora} AND evento.n < ${p.maximoEvento}
+        SELECT ${id}, ${p.userId}, ${p.eventoId}::text, ${agora}::timestamp(3) FROM hora, emcurso, evento
+         WHERE hora.n < ${p.maximoHora} AND emcurso.n < ${p.maximoSimultaneas} AND evento.n < ${p.maximoEvento}
         RETURNING "id"
       )
-      SELECT hora.n::int AS "naHora", evento.n::int AS "noEvento", (SELECT "id" FROM nova) AS id FROM hora, evento`,
+      SELECT hora.n::int AS "naHora", emcurso.n::int AS "emCurso", evento.n::int AS "noEvento",
+             (SELECT "id" FROM nova) AS id
+        FROM hora, emcurso, evento`,
   ]);
-  return { id: linhas[0].id, naHora: linhas[0].naHora, noEvento: linhas[0].noEvento };
+  const [l] = linhas;
+  return { id: l.id, naHora: l.naHora, emCurso: l.emCurso, noEvento: l.noEvento };
+}
+
+/**
+ * Heartbeat da reserva: poe o `criadoEm` em `agora`. Mesma origem de tempo da reserva e das
+ * comparacoes de `reservarVaga` (a data da aplicacao, em texto UTC, como timestamp(3)); nunca
+ * now()/CURRENT_TIMESTAMP do banco, que com fuso ou relogio diferente deslocaria a validade
+ * (mesma familia do DT10). So a propria linha; se ela ja virou FileScan ou foi devolvida, nao
+ * acha nada e nao faz nada.
+ */
+export function renovarReserva(id: string, agora: Date) {
+  return prisma.$executeRaw`UPDATE "FileScanReserva" SET "criadoEm" = ${agora.toISOString()}::timestamp(3) WHERE "id" = ${id}`;
 }
 
 /** Devolve a vaga de uma analise que nao chegou ao fim (antivirus fora, arquivo grande, sem arquivo). */

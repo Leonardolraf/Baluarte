@@ -7,7 +7,7 @@ import {
 } from '../models/analiseArquivo.model.js';
 import * as analiseService from '../services/analiseArquivo.service.js';
 import type { FluxoArquivo } from '../services/analiseArquivo.service.js';
-import { ociosidadeEnvioMs, trocarPorOciosidade } from '../middlewares/tempoRequisicao.middleware.js';
+import { ociosidadeEnvioMs, tetoEnvioMs, trocarPorOciosidade } from '../middlewares/tempoRequisicao.middleware.js';
 import { textoDeQuery, validar } from '../utils/esquemas.js';
 import { ErroNegocio, enviar } from '../utils/resposta.js';
 
@@ -19,6 +19,11 @@ const SEM_ARQUIVO = () => new ErroNegocio(400, `Nenhum arquivo enviado (campo "$
 const ENVIO_PARADO = () =>
   new ErroNegocio(408, `O envio ficou parado por mais de ${Math.round(ociosidadeEnvioMs() / 1000)} s sem receber dados`, 'ENVIO_PARADO');
 const ENVIO_INTERROMPIDO = () => new ErroNegocio(400, 'A conexão caiu antes do fim do envio', 'ENVIO_INTERROMPIDO');
+// Codigo proprio (e nao ENVIO_PARADO): o envio nao parou, so passou do teto; a tela pode dizer isso.
+const ENVIO_TEMPO_MAXIMO = () =>
+  new ErroNegocio(408, `O envio passou do tempo máximo de ${Math.round(tetoEnvioMs() / 60_000)} min`, 'ENVIO_TEMPO_MAXIMO');
+/** Desfechos em que o cliente ainda esta no meio do corpo: responde e fecha a conexao. */
+const FECHA_CONEXAO = new Set(['ENVIO_PARADO', 'ENVIO_TEMPO_MAXIMO']);
 
 /**
  * Le o multipart e entrega o primeiro arquivo do campo `arquivo` ao processamento dado.
@@ -52,7 +57,11 @@ function receberArquivo<T>(req: Request, processar: (nome: string | undefined, f
         rejeitar(e);
       }
     };
-    const pararOciosidade = trocarPorOciosidade(req, () => interromper(ENVIO_PARADO()));
+    const pararOciosidade = trocarPorOciosidade(
+      req,
+      () => interromper(ENVIO_PARADO()),
+      () => interromper(ENVIO_TEMPO_MAXIMO()),
+    );
     req.once('close', () => {
       if (!req.complete) interromper(ENVIO_INTERROMPIDO());
     });
@@ -95,13 +104,20 @@ export async function analisar(req: Request, res: Response) {
   // A vaga nos limites de envio fica reservada daqui em diante (DT09); se a analise nao chegar
   // ao fim (corpo sem arquivo, 413, antivirus fora, qualquer erro), ela e devolvida.
   const vaga = await analiseService.verificarAntesDeReceber(usuario.id, daQuery(req, 'eventoCampanha'));
+  // Heartbeat da reserva enquanto o envio ou a varredura estao em curso; para no `finally`, em
+  // todo desfecho, ANTES de qualquer resposta (depois dela, nenhum UPDATE na reserva).
+  const renovacao = analiseService.manterVagaViva(vaga);
   let resultado;
   try {
-    if (!/^multipart\/form-data/i.test(req.headers['content-type'] ?? '')) throw SEM_ARQUIVO();
-    resultado = await receberArquivo(req, (nome, fluxo) => analiseService.analisar(usuario, nome, fluxo, vaga));
+    try {
+      if (!/^multipart\/form-data/i.test(req.headers['content-type'] ?? '')) throw SEM_ARQUIVO();
+      resultado = await receberArquivo(req, (nome, fluxo) => analiseService.analisar(usuario, nome, fluxo, vaga));
+    } finally {
+      await renovacao.parar();
+    }
   } catch (e) {
     await analiseService.devolverVaga(vaga).catch((falha) => console.error('[analise] vaga não devolvida:', falha));
-    if (e instanceof ErroNegocio && e.codigo === 'ENVIO_PARADO') {
+    if (e instanceof ErroNegocio && FECHA_CONEXAO.has(e.codigo)) {
       // Cliente parado no meio do corpo: responde e fecha a conexao (nao ha resto a esperar).
       res.setHeader('Connection', 'close');
       res.once('finish', () => setImmediate(() => req.socket.destroy()));

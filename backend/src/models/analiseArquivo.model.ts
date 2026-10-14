@@ -1,5 +1,6 @@
 import type { FileScan } from '@prisma/client';
 import { z } from 'zod';
+import { msDoAmbiente } from '../utils/ambiente.js';
 import { idRecurso, regra, regrasDePaginacao, seVeio, umDe } from '../utils/esquemas.js';
 import type { SegundaOpiniaoDto } from './segundaOpiniao.model.js';
 
@@ -24,13 +25,33 @@ export const MENSAGEM_ARQUIVO_GRANDE = `Arquivo maior que o limite de ${LIMITE_A
 export const LIMITE_ANALISES_POR_HORA = 20;
 
 /**
- * Validade da vaga reservada antes do antivirus (DT09, tabela FileScanReserva). Uma analise
- * leva de segundos a poucos minutos (ate 250 MB: o Node exige o corpo inteiro em 5 min, o
- * `requestTimeout` padrao, e o clamd tem 5 min sem resposta, CLAMAV_TIMEOUT_MS); a reserva so
- * fica para tras se o processo morrer no meio, e ai deixa de contar depois deste prazo, sem
- * prender a vaga pelo resto da hora.
+ * Analises EM ANDAMENTO ao mesmo tempo por usuario (Melhorias #18). Sem prazo total no envio
+ * (so ociosidade e o teto de 30 min), mandar 1 byte a cada 59 s seguraria ate 20 envios abertos
+ * por usuario, com os sockets e o INSTREAM do clamd: um slowloris autenticado. A terceira leva
+ * 429 ANALISES_SIMULTANEAS.
  */
-export const VALIDADE_RESERVA_ANALISE_MS = 15 * 60 * 1000;
+export const LIMITE_ANALISES_SIMULTANEAS = 2;
+
+/**
+ * Heartbeat da vaga reservada (DT09, tabela FileScanReserva; Melhorias #18). Enquanto o envio ou
+ * a varredura estao em curso, o `criadoEm` da reserva e renovado a cada intervalo. A reserva
+ * conta nos limites (20/h, 2 simultaneas, 5 por evento) e segura a exclusao da campanha so
+ * enquanto esta em dia; a que deixa de ser renovada (API reiniciada, deploy, processo que caiu)
+ * libera a vaga sozinha. Nao ha limpeza na subida: varias instancias podem usar o mesmo banco.
+ * `RESERVA_RENOVACAO_MS` sobrescreve o intervalo (os testes usam fracoes de segundo).
+ */
+export const INTERVALO_RENOVACAO_RESERVA_PADRAO_MS = 60_000;
+export const intervaloRenovacaoReservaMs = () => msDoAmbiente('RESERVA_RENOVACAO_MS', INTERVALO_RENOVACAO_RESERVA_PADRAO_MS);
+
+/** Renovacoes seguidas que podem falhar (banco lento, UPDATE perdido) sem a reserva vencer. */
+export const RENOVACOES_PERDIDAS_TOLERADAS = 4;
+
+/**
+ * Validade da reserva: o intervalo do heartbeat com a folga das renovacoes perdidas
+ * (60 s x (4 + 1) = 5 min). Orfa libera a vaga em ate 5 min; analise em curso nunca vence,
+ * porque e renovada bem antes.
+ */
+export const validadeReservaAnaliseMs = () => intervaloRenovacaoReservaMs() * (RENOVACOES_PERDIDAS_TOLERADAS + 1);
 
 /** Campo do formulario multipart que leva o arquivo. */
 export const CAMPO_ARQUIVO = 'arquivo';

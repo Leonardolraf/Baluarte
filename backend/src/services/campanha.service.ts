@@ -7,7 +7,7 @@ import { enviarEmailsCampanha } from './campanhaEmail.service.js';
 import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
 import * as repo from '../repositories/campanha.repository.js';
 import { anexosDaCampanha } from './analiseArquivo.service.js';
-import { VALIDADE_RESERVA_ANALISE_MS } from '../models/analiseArquivo.model.js';
+import { validadeReservaAnaliseMs } from '../models/analiseArquivo.model.js';
 
 // Campanhas de phishing SIMULADO: criacao com e-mail por destinatario, lista com metricas,
 // relatorio (funil, treinamentos, reportes, por departamento) e exclusao.
@@ -111,7 +111,8 @@ export async function excluir(atorId: string, id: string): Promise<void> {
   // Anexo suspeito analisado ou em analise (B23) guarda a campanha de origem: excluir a campanha apagaria os
   // eventos e a analise perderia a origem em silencio (FK SET NULL). Mesmo espirito do
   // USUARIO_COM_HISTORICO: a campanha com evidencia fica.
-  if ((await repo.contarAnalisesDaCampanha(campanha.id, new Date(Date.now() - VALIDADE_RESERVA_ANALISE_MS))) > 0)
+  // Reserva com heartbeat em dia = analise em curso (o envio pode durar ate o teto de 30 min).
+  if ((await repo.contarAnalisesDaCampanha(campanha.id, new Date(Date.now() - validadeReservaAnaliseMs()))) > 0)
     falhar(409, 'Campanha com anexos analisados não pode ser excluída', 'CAMPANHA_COM_ANALISES');
   await repo.excluir(campanha.id);
   await registrarAuditoria(atorId, 'EXCLUIR_CAMPANHA', `${campanha.id} (${campanha.nome})`);

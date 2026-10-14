@@ -15,10 +15,18 @@ export const TEMPO_TOTAL_PADRAO_MS = 5 * 60_000;
 /** Na analise de arquivos: sem nenhum byte por este tempo, o envio e interrompido. */
 export const OCIOSIDADE_ENVIO_PADRAO_MS = 60_000;
 
+/**
+ * Teto absoluto da duracao do envio na analise (Melhorias #18): a ociosidade sozinha deixava um
+ * envio de 1 byte a cada 59 s durar para sempre. 30 min cobrem 250 MB a ~1,2 Mbit/s.
+ */
+export const TETO_ENVIO_PADRAO_MS = 30 * 60_000;
+
 /** `REQUISICAO_TEMPO_TOTAL_MS` sobrescreve (os testes usam segundos, nao minutos). */
 export const tempoTotalMs = () => msDoAmbiente('REQUISICAO_TEMPO_TOTAL_MS', TEMPO_TOTAL_PADRAO_MS);
 /** `ENVIO_OCIOSIDADE_MS` sobrescreve. */
 export const ociosidadeEnvioMs = () => msDoAmbiente('ENVIO_OCIOSIDADE_MS', OCIOSIDADE_ENVIO_PADRAO_MS);
+/** `ENVIO_TETO_MS` sobrescreve. */
+export const tetoEnvioMs = () => msDoAmbiente('ENVIO_TETO_MS', TETO_ENVIO_PADRAO_MS);
 
 const temporizadores = new WeakMap<Request, NodeJS.Timeout>();
 
@@ -52,21 +60,25 @@ export function tempoTotalDaRequisicao(req: Request, res: Response, next: NextFu
 }
 
 /**
- * Troca o tempo total desta requisicao por um tempo de OCIOSIDADE: o envio pode durar o quanto
- * precisar, desde que nao fique `ociosidadeEnvioMs()` sem mandar nenhum byte. So a analise de
- * arquivos chama isto, depois de autenticar e reservar a vaga: requisicao anonima ou recusada
- * continua no total. Termina sozinho quando o corpo acaba (a varredura do clamd, depois do
- * ultimo byte, tem o tempo limite proprio, CLAMAV_TIMEOUT_MS). `aoEsgotar` decide o que fazer.
+ * Troca o tempo total desta requisicao por um tempo de OCIOSIDADE: o envio pode subir devagar,
+ * desde que nao fique `ociosidadeEnvioMs()` sem mandar nenhum byte e nao passe do teto absoluto
+ * `tetoEnvioMs()` (30 min). So a analise de arquivos chama isto, depois de autenticar e reservar
+ * a vaga: requisicao anonima ou recusada continua no total. Termina sozinho quando o corpo acaba
+ * (a varredura do clamd, depois do ultimo byte, tem o tempo limite proprio, CLAMAV_TIMEOUT_MS).
+ * `aoEsgotar` (ociosidade) e `aoPassarDoTeto` decidem o que fazer.
  */
-export function trocarPorOciosidade(req: Request, aoEsgotar: () => void): () => void {
+export function trocarPorOciosidade(req: Request, aoEsgotar: () => void, aoPassarDoTeto?: () => void): () => void {
   clearTimeout(temporizadores.get(req));
   temporizadores.delete(req);
   if (req.complete) return () => undefined;
   const temporizador = setTimeout(aoEsgotar, ociosidadeEnvioMs());
   temporizador.unref();
+  const teto = setTimeout(() => (aoPassarDoTeto ?? aoEsgotar)(), tetoEnvioMs());
+  teto.unref();
   const renovar = () => temporizador.refresh();
   const parar = () => {
     clearTimeout(temporizador);
+    clearTimeout(teto);
     req.off('data', renovar);
   };
   // Ouvir 'data' tambem enquanto o corpo segue para o busboy: o fluxo ja esta correndo (pipe).
