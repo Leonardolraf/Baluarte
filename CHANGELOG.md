@@ -688,6 +688,16 @@ Quatro decisões tomadas pelo Leo em 10/10/2026, aplicadas sem migration e sem m
 
 - `docker-compose.servidor.yml` existia só na VM, com uma cópia `.bak` ao lado. É ele que monta o servidor inteiro (Postgres 17, porta só local para o Funnel, ClamAV, seeds desligados, verificação automática), então a receita se perdia junto com a VM. Agora é versionado, sem segredo: a senha do banco, o segredo do osquery e o `DOMINIO_INTERNO` vêm do `.env` da VM. O `DOMINIO_INTERNO` estava escrito no arquivo com o endereço liberado de uma pessoa; no repositório público ele vira `${DOMINIO_INTERNO:-@baluarte.test}` (mesma lição do DT20). Sem mudança de código nem de teste.
 
+## 2026-10-13 — DT25: suíte Playwright real das estações acompanha o DT17
+
+- **Defeito (no teste, não na aplicação):** `npm run test:e2e:real` falhava em 2 dos 4 testes de `e2e/real/estacoes.spec.ts` desde o DT17 (11/10). O DT17 mudou a regra do cruzamento, mas a suíte real e as bases falsas (`scripts/e2e/bases-falsas.mjs`) ficaram na regra antiga:
+  - *"Verificar vulnerabilidades" ... registra os achados (B14):* esperava "2 achados novos" e recebia "0 achados novos, 0 já registrados ... 2 CVEs sem correção publicada". Os registros falsos do OSV não tinham intervalo com evento `fixed`, então, pela regra do DT17 (só vira achado o CVE com versão corrigida publicada), nenhum dos dois virava achado.
+  - *base fora do ar:* esperava "0 achados novos" e recebia "Verificação incompleta: nada foi registrado ... Sem resposta de OSV". Pelo DT17, base sem resposta deixa a verificação incompleta e nada é gravado.
+  - A regra da aplicação está certa e o backend já cobria os dois casos em `backend/tests/cruzamento.test.ts`; só a suíte real não acompanhou.
+- **Correção:** os registros falsos de `openssl` e `curl` ganham a versão corrigida (`3.0.2-0ubuntu1.12` e `7.81.0-1ubuntu1.14`, as mesmas do teste do backend) e o `curl` ganha um segundo CVE, fictício e sem correção (`CVE-2024-11111`). O teste do B14 confere os 2 achados, a contagem "1 CVE sem correção publicada (não vira achado)" e que o CVE sem correção não aparece na lista de vulnerabilidades. O teste da base fora do ar confere a verificação incompleta, o aviso "Sem resposta de OSV", a estação continuando "Nunca verificada" e nenhum achado em aberto. Nenhuma mudança na aplicação.
+- **Testes:** Playwright real 21: com ClamAV, 20 passaram + 1 *skipped* (o 503 sem antivírus) e a 2ª rodada `@sem-antivirus` 1/1; sem ClamAV, 16 passaram + 5 *skipped* (os que dependem do clamd). `estacoes.spec.ts` repetido 5 vezes: 20/20. Playwright mock 46 (+14 *skipped*, como na main). Frontend 638, lint, typecheck (app e e2e) e build limpos. `baluarte-frontend/README.md` corrigido: a suíte real tem 21 testes (dizia 19, sem `anexo-campanha` e `monitoramento`).
+- **Intermitente, fora deste cartão:** numa das rodadas com ClamAV, `arquivos.spec.ts` › "histórico filtra por resultado no servidor (B17)" falhou uma vez (1 em 7 execuções do teste): o `waitForResponse` de `/api/arquivos/analises?` pode pegar a recarga do histórico disparada pelo envio, que não tem `resultado`, e não a do filtro. Não foi mexido aqui.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |

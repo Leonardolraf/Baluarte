@@ -4,8 +4,12 @@
 //
 // Respostas (só o que o cruzamento lê; formato igual ao de backend/tests/cruzamento.test.ts):
 //  - querybatch do OSV: pacote `openssl` ou `curl` de ecossistema Ubuntu, em qualquer versão,
-//    tem uma vulnerabilidade conhecida (CVE com vetor CVSS 3.1); o resto, nenhuma. Qualquer
+//    tem vulnerabilidade conhecida (CVE com vetor CVSS 3.1); o resto, nenhuma. Qualquer
 //    versão vale para cada teste poder usar uma versão única e não cair no cache do banco.
+//  - DT17/DT25: só vira achado o CVE com versão corrigida publicada (evento `fixed` num
+//    intervalo ECOSYSTEM do pacote). openssl e curl têm um CVE corrigido cada (os 2 achados);
+//    o curl tem também um CVE fictício SEM correção, que conta em semCorrecao e não vira achado.
+//    Mesmas versões corrigidas de backend/tests/cruzamento.test.ts.
 //  - pacote `e2e-base-fora-do-ar` no lote: o OSV responde 503 (base fora do ar).
 //  - NVD: nenhuma vulnerabilidade (a suíte não usa estação Windows).
 //  - GET /__pedidos: quantas consultas cada base recebeu (o teste confere que passou por aqui).
@@ -17,18 +21,33 @@ const VULNS = {
     summary: 'Excessive time spent in DH check',
     upstream: ['CVE-2023-5678'],
     severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L' }],
-    affected: [{ package: { name: 'openssl', ecosystem: 'Ubuntu:22.04:LTS' } }],
+    affected: [{ package: { name: 'openssl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: corrigidaEm('3.0.2-0ubuntu1.12') }],
   },
   'UBUNTU-CVE-2023-38545': {
     id: 'UBUNTU-CVE-2023-38545',
     summary: 'SOCKS5 heap buffer overflow',
     upstream: ['CVE-2023-38545'],
     severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' }],
-    affected: [{ package: { name: 'curl', ecosystem: 'Ubuntu:22.04:LTS' } }],
+    affected: [{ package: { name: 'curl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: corrigidaEm('7.81.0-1ubuntu1.14') }],
+  },
+  // Fictício: CVE ainda sem correção publicada (intervalo sem evento `fixed`).
+  'UBUNTU-CVE-2024-11111': {
+    id: 'UBUNTU-CVE-2024-11111',
+    summary: 'Ainda sem correcao (registro ficticio da suite E2E)',
+    upstream: ['CVE-2024-11111'],
+    severity: [{ type: 'CVSS_V3', score: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' }],
+    affected: [{ package: { name: 'curl', ecosystem: 'Ubuntu:22.04:LTS' }, ranges: [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }] }] }],
   },
 };
-const POR_PACOTE = { openssl: 'UBUNTU-CVE-2023-5678', curl: 'UBUNTU-CVE-2023-38545' };
+const POR_PACOTE = {
+  openssl: ['UBUNTU-CVE-2023-5678'],
+  curl: ['UBUNTU-CVE-2023-38545', 'UBUNTU-CVE-2024-11111'],
+};
 export const PACOTE_FORA_DO_AR = 'e2e-base-fora-do-ar';
+
+function corrigidaEm(versao) {
+  return [{ type: 'ECOSYSTEM', events: [{ introduced: '0' }, { fixed: versao }] }];
+}
 
 function json(res, status, corpo) {
   res
@@ -62,10 +81,10 @@ export function iniciarBasesFalsas(porta) {
           return json(res, 503, { message: 'fora do ar' });
         return json(res, 200, {
           results: queries.map((q) => {
-            const id = String(q.package?.ecosystem ?? '').startsWith('Ubuntu')
+            const ids = String(q.package?.ecosystem ?? '').startsWith('Ubuntu')
               ? POR_PACOTE[q.package?.name]
               : undefined;
-            return id ? { vulns: [{ id, modified: '2024-01-01T00:00:00Z' }] } : {};
+            return ids ? { vulns: ids.map((id) => ({ id, modified: '2024-01-01T00:00:00Z' })) } : {};
           }),
         });
       }
