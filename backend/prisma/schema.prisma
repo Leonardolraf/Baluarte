@@ -34,6 +34,9 @@ model User {
   // Marca o ultimo logout: tokens JWT emitidos antes disso deixam de valer (sair encerra
   // as sessoes abertas em todos os dispositivos).
   sessaoEncerradaEm DateTime?
+  // Aceite dos termos de uso (#5): nulo = ainda nao aceitou. Quem bloqueia os recursos ate o
+  // aceite e a API; o banco so guarda o instante.
+  termosAceitosEm DateTime?
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   preferencias NotificationPreference?
@@ -255,9 +258,30 @@ model CampaignEvent {
   // Anexos suspeitos da campanha que o destinatario enviou para analise (B23).
   anexos       FileScan[]
   reservasAnexo FileScanReserva[]
+  // Cada abertura do link do e-mail (#6). O funil continua contando um clique por pessoa.
+  aberturas    CampaignLinkHit[]
 
   @@unique([campaignId, userId]) // a mesma pessoa nao entra duas vezes na mesma campanha
   @@index([userId])
+}
+
+// Cada abertura do link do e-mail da campanha (Melhorias #6), para mostrar "aberto N vezes
+// (possivel repasse)". O clique do funil continua sendo CampaignEvent.clicadoEm, um por pessoa.
+// `ip` e `userAgent` sao dado pessoal (LGPD): passados 90 dias da abertura, a API os anula
+// (UPDATE ... SET ip = NULL, "userAgent" = NULL WHERE "registradoEm" < now() - 90 dias), sem
+// apagar a linha, para a contagem de aberturas nao diminuir com o tempo. O indice em
+// registradoEm torna esse expurgo barato.
+// Cascade com o evento: sem o destinatario na campanha, a abertura nao significa nada.
+model CampaignLinkHit {
+  id              String        @id @default(cuid())
+  campaignEventId String
+  campaignEvent   CampaignEvent @relation(fields: [campaignEventId], references: [id], onDelete: Cascade)
+  registradoEm    DateTime      @default(now())
+  ip              String?       // CHECK: ate 45 caracteres (cabe IPv6)
+  userAgent       String?       // CHECK: ate 512 caracteres
+
+  @@index([campaignEventId])
+  @@index([registradoEm])
 }
 
 // Sem chave estrangeira para User de proposito: o registro de auditoria sobrevive a

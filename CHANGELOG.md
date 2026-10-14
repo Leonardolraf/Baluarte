@@ -717,6 +717,16 @@ Cartões #23, #13 e #8 da lista "Melhorias". Nada muda em `src/` nem no contrato
 - **Achado da medição:** o Playwright real tem 2 falhas em `e2e/real/estacoes.spec.ts` (14 aprovados, 2 falhas, 5 pulados sem ClamAV). O spec e as bases falsas não acompanharam o DT17 (só CVE com correção publicada vira achado; base fora do ar dá "verificação incompleta"). Fica como pendência, fora destes cartões.
 - **Testes:** backend 794 depois do rebase sobre o #20/#21/#4/#22 (190 unidade + 10 banco + 448 integração + 146 pentest; +20 no pentest: +4 da matriz, +6 de XSS, +10 de command injection e XXE). Frontend sem mudança nesta branch (647). Newman 35/70.
 
+## 2026-10-14 — Migrations das Melhorias #5 (aceite de termos) e #6 (aberturas do link)
+
+Só banco, da sessão Banco de Dados; a API que usa as duas estruturas vem em branches próprias.
+
+- **#5, `20261014120000_termos_aceite`:** `User.termosAceitosEm` (`TIMESTAMP(3)` anulável, sem default). Nenhuma conta existente fica marcada como tendo aceitado; o bloqueio até o aceite é da API.
+- **#6, `20261014120100_aberturas_link_campanha`:** tabela `CampaignLinkHit` (`campaignEventId` com FK em cascata, `registradoEm`, `ip` e `userAgent` opcionais), índices em `campaignEventId` e `registradoEm`, CHECK de tamanho (`ip` 1–45, `userAgent` 1–512) e RLS ligada sem políticas, fechada para `anon`/`authenticated` (DT13). O clique do funil continua sendo `CampaignEvent.clicadoEm`.
+- **LGPD:** retenção de 90 dias para `ip`/`userAgent`, feita pela API anulando os dois campos sem apagar a linha (a contagem de aberturas não diminui). Sem função no banco: o `planob.sh` só derruba funções `auditoria_%`.
+- **Verificação:** `prisma migrate diff --from-migrations … --exit-code` sem diferença; `prisma migrate deploy` num banco descartável com as 17 migrations da `main` aplicadas antes, e as duas novas entram sem erro, com RLS ligada na `CampaignLinkHit`.
+- **Testes:** backend 800 (190 unidade + 16 banco + 448 integração + 146 pentest; +6 em `tests/melhorias-banco.test.ts`: CHECK, cascata, expurgo e o fechamento DT13 com os papéis do Supabase simulados). Newman 35 requisições / 70 asserções numa instância isolada (porta 8123, banco `baluarte_contract_mrel`). Frontend sem mudança (647).
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
@@ -724,7 +734,7 @@ Cartões #23, #13 e #8 da lista "Melhorias". Nada muda em `src/` nem no contrato
 | Contrato N2 AT1 (6 rotas + `frontend/` legado) | Completo, intocado desde `e414d94` | 2026-06-18 |
 | Backend real (Express+Prisma+PostgreSQL com migrations e CHECK, RBAC server-side, AuditLog com consulta pelo Administrador, cadeia de hash com verificação de integridade (detecta adulteração), trilha somente inserção no banco (trava do B29, desde 12/10) e retenção de 12 meses) | Completo para o escopo atual (scanner e phishing simulados) | 2026-10-07 |
 | Frontend do produto (`baluarte-frontend/`) | Completo, com identidade visual própria, RBAC por tela e todos os indicadores do dashboard navegáveis | 2026-09-18 |
-| Testes | 794 no backend (190 unidade + 10 banco + 448 integração + 146 pentest, inclusive XSS, command injection e XXE) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 647 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
+| Testes | 800 no backend (190 unidade + 16 banco + 448 integração + 146 pentest, inclusive XSS, command injection e XXE) + validação do agente em contêiner (`scripts/validar-agente-docker.sh`) · 647 no frontend (Vitest+RTL+axe) + Playwright como suíte funcional oficial (46 em modo mock, 21 contra a API real, 126 em Firefox/WebKit/Edge pelo B30) · carga (`npm run carga`, RNF-004) e SonarQube (`scripts/sonarqube.mjs`, RNF-008) com relatórios em `testes/carga/` e `testes/qualidade/` · Newman 70 + Robot 29 (N2 AT1) | 2026-10-08 |
 | Deploy | Docker Compose local (4 serviços, com Postgres; HTTPS opcional na 8443 com CA local, B06) + demo pública na Vercel **com banco real**: frontend, API serverless e PostgreSQL no Supabase, com e-mail saindo por SMTP. API na mesma região do banco (`pdx1`, fixada no `vercel.json`). Migration no Supabase é passo manual, aplicado por ciclo de PR congelado. Preview do `baluarte-api` sem acesso a banco e e-mail. Deploy automático a cada push na `main` | 2026-10-08 |
 | Lint / formatação | `npm run lint` limpo em qualquer sistema (LF forçado no `.gitattributes`) | 2026-09-18 |
 | Plano de evolução | Postgres, e-mail e hardening **feitos**; backend em camadas desde 2026-10-08; faltam RS256 e execução real de varredura/phishing | `backend/PLANO.md` |
