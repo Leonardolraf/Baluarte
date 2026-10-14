@@ -179,6 +179,45 @@ describe('escalada vertical e horizontal → 403', () => {
 });
 
 // -----------------------------------------------------------------------------
+// Cartão #23 da lista "Melhorias": a matriz inteira do cadastro de ativo num lugar só, com a
+// prova de que a recusa não deixa rastro (nem ativo, nem registro de auditoria).
+describe('POST /assets — matriz de perfis (cartão #23)', () => {
+  const corpo = (host: string) => ({ nome: 'Ativo da matriz', tipo: 'Servidor', host });
+  const rastro = async (host: string) => ({
+    ativos: await prisma.asset.count({ where: { host } }),
+    auditoria: await prisma.auditLog.count({ where: { acao: 'CRIAR_ATIVO', detalhe: { contains: host } } }),
+  });
+
+  it('sem token → 401 TOKEN_AUSENTE, sem ativo nem auditoria', async () => {
+    const host = `matriz-sem-token-${Date.now()}.empresa.com`;
+    esperaErro(await chamar('POST', '/assets', { body: corpo(host) }), 401, 'TOKEN_AUSENTE');
+    assert.deepEqual(await rastro(host), { ativos: 0, auditoria: 0 });
+  });
+
+  it('Colaborador → 403 PERFIL_SEM_PERMISSAO, sem ativo nem auditoria (inclusive com corpo inválido)', async () => {
+    const host = `matriz-colab-${Date.now()}.empresa.com`;
+    esperaErro(await chamar('POST', '/assets', { token: colaborador, body: corpo(host) }), 403, 'PERFIL_SEM_PERMISSAO');
+    // A autorização vem antes da validação: corpo vazio não vira 400 e não revela as regras.
+    esperaErro(await chamar('POST', '/assets', { token: colaborador, body: {} }), 403, 'PERFIL_SEM_PERMISSAO');
+    assert.deepEqual(await rastro(host), { ativos: 0, auditoria: 0 });
+  });
+
+  it('Analista → 201, com o ativo gravado e a auditoria CRIAR_ATIVO', async () => {
+    const host = `matriz-analista-${Date.now()}.empresa.com`;
+    const r = await chamar('POST', '/assets', { token: analista, body: corpo(host) });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.dados.host, host);
+    assert.deepEqual(await rastro(host), { ativos: 1, auditoria: 1 });
+  });
+
+  it('Administrador → 201', async () => {
+    const host = `matriz-admin-${Date.now()}.empresa.com`;
+    assert.equal((await chamar('POST', '/assets', { token: admin, body: corpo(host) })).status, 201);
+    assert.deepEqual(await rastro(host), { ativos: 1, auditoria: 1 });
+  });
+});
+
+// -----------------------------------------------------------------------------
 describe('IDOR — treinamento pós-clique pertence ao destinatário', () => {
   it('Colaborador não conclui o treinamento de OUTRO destinatário (403), mas o dono conclui (200)', async () => {
     const dono = await criarUsuario(admin, 'Colaborador', 'idor-dono');
