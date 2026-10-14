@@ -67,8 +67,8 @@ model NotificationPreference {
   atualizadoEm       DateTime @updatedAt
 }
 
-// Token de link de conta, entregue por e-mail: RESET (redefinicao de senha, 30 min) ou
-// CONVITE (cadastro da primeira senha de quem o administrador criou, 72 h). Guarda-se
+// Token de link de conta, entregue por e-mail: RESET (redefinicao de senha, 10 min) ou
+// CONVITE (cadastro da primeira senha de quem o administrador criou, 24 h). Guarda-se
 // apenas o hash SHA-256; o token em claro so existe no e-mail.
 model PasswordResetToken {
   id        String    @id @default(cuid())

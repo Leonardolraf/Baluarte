@@ -3,7 +3,7 @@
 //  - limite de tentativas de login (5/15min -> 429), bloqueio persistente na janela,
 //    isolamento por conta e reset apos login valido;
 //  - nao-enumeracao de usuarios no login (mesmo status/mensagem/codigo);
-//  - redefinicao de senha: token de uso unico, expiracao 30min, limite 3/15min,
+//  - redefinicao de senha: token de uso unico, expiracao 10min, limite 3/15min,
 //    resposta generica, token so para conta existente e ativa, isolamento entre contas;
 //  - politica de senha em change-password e reset/confirm;
 //  - senha provisoria: Pendente -> Ativo ao trocar; hash nunca vaza.
@@ -184,14 +184,14 @@ describe('redefinicao de senha: token, expiracao, limite e enumeracao', () => {
     assert.equal(await prisma.passwordResetToken.count({ where: { userId: alvo.id, usadoEm: null } }), 0);
   });
 
-  it('token expira em ~30 min: token vencido -> TOKEN_RESET_INVALIDO', async () => {
+  it('token expira em ~10 min: token vencido -> TOKEN_RESET_INVALIDO', async () => {
     const alvo = await conta('reset.exp');
     const { token } = await solicitarReset(alvo.email);
     assert.ok(token);
     const registro = await prisma.passwordResetToken.findFirst({ where: { userId: alvo.id, usadoEm: null } });
     assert.ok(registro, 'esperava um token pendente');
     const janelaMin = (registro!.expiraEm.getTime() - Date.now()) / 60000;
-    assert.ok(janelaMin > 28 && janelaMin <= 31, `validade fora de ~30min: ${janelaMin.toFixed(2)}min`);
+    assert.ok(janelaMin > 8 && janelaMin <= 10.1, `validade fora de ~10min: ${janelaMin.toFixed(2)}min`);
     // Vence o token e confirma a rejeicao.
     await prisma.passwordResetToken.updateMany({ where: { userId: alvo.id, usadoEm: null }, data: { expiraEm: new Date(Date.now() - 1000) } });
     esperaErro(await chamar('POST', '/auth/reset-password/confirm', { body: { token, novaSenha: 'Expirou@123' } }), 400, 'TOKEN_RESET_INVALIDO');

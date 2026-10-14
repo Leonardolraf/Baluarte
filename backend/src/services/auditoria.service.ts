@@ -3,6 +3,7 @@ import { localizarPorEmail } from '../repositories/usuario.repository.js';
 import * as repo from '../repositories/auditoria.repository.js';
 import {
   LOTE_VERIFICACAO,
+  origemDaAutoria,
   RETENCAO_MESES,
   type FiltrosAuditoria,
   type MotivoQuebra,
@@ -28,7 +29,9 @@ export async function registrarAuditoria(
 /**
  * Consulta da trilha (GET /auditoria, so Administrador): filtros por acao, autor (id ou
  * e-mail) e periodo, paginada no servidor, mais recente primeiro. O autor vem do cadastro
- * atual pelos ids; conta excluida (ou registro sem autor) sai com `usuario: null`.
+ * atual pelos ids; conta excluida (ou registro sem autor) sai com `usuario: null`, e a
+ * `origem` separa os dois casos (`removido` x `automatico`, #22; mesma regra do historico do
+ * achado, `origemDaAutoria`).
  */
 export async function consultar(f: FiltrosAuditoria) {
   if (f.de && f.ate && f.de > f.ate) falhar(400, 'Período inválido: a data inicial é posterior à final', 'PERIODO_INVALIDO');
@@ -46,13 +49,10 @@ export async function consultar(f: FiltrosAuditoria) {
   const { registros, total } = await repo.consultar({ acao: f.acao, usuarioId, de: f.de, ate: f.ate }, f.pagina, f.tamanho);
   const ids = [...new Set(registros.map((r) => r.usuarioId).filter((id): id is string => id !== null))];
   const autores = new Map((ids.length ? await repo.usuariosPorIds(ids) : []).map((u) => [u.id, u]));
-  const lista: RegistroAuditoriaDto[] = registros.map((r) => ({
-    id: r.id,
-    acao: r.acao,
-    detalhe: r.detalhe,
-    quando: r.timestamp,
-    usuario: (r.usuarioId ? autores.get(r.usuarioId) : undefined) ?? null,
-  }));
+  const lista: RegistroAuditoriaDto[] = registros.map((r) => {
+    const usuario = (r.usuarioId ? autores.get(r.usuarioId) : undefined) ?? null;
+    return { id: r.id, acao: r.acao, detalhe: r.detalhe, quando: r.timestamp, usuario, origem: origemDaAutoria(r.usuarioId, usuario !== null) };
+  });
   return { lista, resumo: resumo(total) };
 }
 

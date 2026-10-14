@@ -10,6 +10,7 @@ import { descreverFiltros, montarRelatorio, nomeDoArquivo } from './relatorioVul
 import * as repo from '../repositories/vulnerabilidade.repository.js';
 import { buscarPorId as buscarAtivo } from '../repositories/ativo.repository.js';
 import { usuariosPorIds } from '../repositories/auditoria.repository.js';
+import { origemDaAutoria } from '../models/auditoria.model.js';
 import {
   TIPO_ARQUIVO,
   type AlteracaoStatus,
@@ -174,13 +175,11 @@ export async function historico(f: FindingComOrigem): Promise<HistoricoVulnerabi
   const mudancas = registros.flatMap((r) => (r.de === null ? [] : [{ ...r, de: r.de }]));
   const ids = [...new Set(mudancas.map((m) => m.usuarioId).filter((id): id is string => id !== null))];
   const autores = new Map((ids.length ? await usuariosPorIds(ids) : []).map((u) => [u.id, { id: u.id, nome: u.nome }]));
-  const alteracoes: AlteracaoStatus[] = mudancas.map((m) => ({
-    quando: m.registradaEm,
-    de: m.de,
-    para: m.para,
-    autor: (m.usuarioId ? autores.get(m.usuarioId) : undefined) ?? null,
-    automatico: m.usuarioId === null,
-  }));
+  const alteracoes: AlteracaoStatus[] = mudancas.map((m) => {
+    const autor = (m.usuarioId ? autores.get(m.usuarioId) : undefined) ?? null;
+    // Mesma regra de autoria da consulta da auditoria (#22): sem usuario = automatico.
+    return { quando: m.registradaEm, de: m.de, para: m.para, autor, automatico: origemDaAutoria(m.usuarioId, autor !== null) === 'automatico' };
+  });
   return {
     eventos: [
       {
