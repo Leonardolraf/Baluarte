@@ -11,6 +11,7 @@ import { ROUTE_ROLES } from '@/lib/roles';
 const LoginPage = lazy(() => import('@/pages/Auth/LoginPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/Auth/ResetPasswordPage'));
 const AboutPage = lazy(() => import('@/pages/About/AboutPage'));
+const HomePage = lazy(() => import('@/pages/Home/HomePage'));
 const DashboardPage = lazy(() => import('@/pages/Dashboard/DashboardPage'));
 const VulnListPage = lazy(() => import('@/pages/Vulnerabilities/VulnListPage'));
 const VulnDetailPage = lazy(() => import('@/pages/Vulnerabilities/VulnDetailPage'));
@@ -64,6 +65,9 @@ export const routes: RouteObject[] = [
       { path: '/reset-password', element: page(<ResetPasswordPage />) },
       // Link do convite por e-mail: mesma tela, com o texto de primeira senha.
       { path: '/definir-senha', element: page(<ResetPasswordPage />) },
+      // Melhoria 11: apresentação pública em /home. A raiz segue como era (login, ou
+      // dashboard para quem tem sessão) — decisão do Leo em 14/10.
+      { path: '/home', element: page(<HomePage />) },
       { path: '/about', element: page(<AboutPage />) },
       // Links do e-mail simulado da campanha (token aleatório por destinatário, sem login):
       // abrir o treinamento (registra o clique) e reportar o e-mail suspeito.
