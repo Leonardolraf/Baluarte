@@ -13,11 +13,12 @@ export function listarComEventos() {
   return prisma.campaign.findMany({ include: { eventos: true }, orderBy: { criadoEm: 'desc' } });
 }
 
-/** Campanha com os eventos e o departamento ATUAL de cada destinatario. */
+/** Campanha com os eventos, o departamento ATUAL de cada destinatario e quantas vezes abriu o link. */
 export function relatorio(id: string) {
   return prisma.campaign.findUnique({
     where: { id },
-    include: { eventos: { include: { user: { select: { department: { select: { name: true } } } } } } },
+    // `_count.aberturas`: so a quantidade de aberturas do link (Melhorias #6); IP e user-agent nao saem daqui.
+    include: { eventos: { include: { user: { select: { department: { select: { name: true } } } }, _count: { select: { aberturas: true } } } } },
   });
 }
 

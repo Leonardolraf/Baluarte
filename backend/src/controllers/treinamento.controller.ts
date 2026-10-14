@@ -22,9 +22,13 @@ export async function concluir(req: Request, res: Response) {
   return enviar(res, 200, { status: 'sucesso', mensagem: 'Treinamento concluído', dados });
 }
 
-/** GET /treinamentos/link/:token (publico). */
+/**
+ * GET /treinamentos/link/:token (publico). IP e user-agent so alimentam a contagem de aberturas
+ * (Melhorias #6) e nunca voltam na resposta. `req.ip` segue o `trust proxy` do app.
+ */
 export async function abrirPeloLink(req: Request, res: Response) {
-  return enviar(res, 200, { status: 'sucesso', dados: await treinamentoService.abrirPeloLink(req.params.token) });
+  const origem = { ip: req.ip, userAgent: req.get('user-agent') };
+  return enviar(res, 200, { status: 'sucesso', dados: await treinamentoService.abrirPeloLink(req.params.token, origem) });
 }
 
 /** POST /treinamentos/link/:token/concluir (publico). */

@@ -1,7 +1,15 @@
 import { falhar } from '../utils/resposta.js';
 import { SEM_DEPARTAMENTO } from '../models/dominio.model.js';
 import { registrarAuditoria } from './auditoria.service.js';
-import { dadosTreinamento, podeVerTreinamento } from '../models/treinamento.model.js';
+import {
+  dadosDaAbertura,
+  dadosTreinamento,
+  JANELA_ABERTURA_MS,
+  podeVerTreinamento,
+  RETENCAO_DADOS_ABERTURA_DIAS,
+  TETO_ABERTURAS_POR_EVENTO,
+  type OrigemAbertura,
+} from '../models/treinamento.model.js';
 import * as repo from '../repositories/treinamento.repository.js';
 
 // Treinamento pos-clique. Dois acessos: dentro do sistema (id do evento, com login) e pelo
@@ -65,10 +73,10 @@ export async function concluir(leitor: Leitor, id: string) {
 }
 
 /**
- * Abertura pelo link do e-mail: registra a abertura e o clique (uma vez) e entrega o
- * treinamento contextual, sem expor ids nem o nome da campanha.
+ * Abertura pelo link do e-mail: registra o clique do funil (uma vez), conta a abertura
+ * (Melhorias #6: uma por janela de 30 min, ate 50 por evento) e entrega o treinamento contextual, sem expor ids nem o nome da campanha.
  */
-export async function abrirPeloLink(token: string) {
+export async function abrirPeloLink(token: string, origem: OrigemAbertura = {}) {
   const evento = await repo.eventoPeloLink(token);
   if (!evento) falhar(404, 'Treinamento não encontrado', 'TREINAMENTO_NAO_ENCONTRADO');
   if (!evento.clicadoEm) {
@@ -76,8 +84,29 @@ export async function abrirPeloLink(token: string) {
     await repo.marcarClique(evento.id, agora, evento.abertoEm ?? agora);
     await registrarAuditoria(evento.userId, 'CLIQUE_LINK_PHISHING', `${evento.campaign.nome} / ${evento.destinatario}`);
   }
+  await contarAbertura(evento.id, origem);
   return dadosTreinamento(evento);
 }
+
+/**
+ * Grava a abertura e aplica a retencao LGPD (sem cron: a cada abertura, anula IP e user-agent
+ * das aberturas com mais de RETENCAO_DADOS_ABERTURA_DIAS). Dedup pela janela e teto sao
+ * silenciosos: abertura nao gravada nao e erro para quem clicou. E metrica secundaria: falha
+ * aqui so vai para o log, nunca derruba o treinamento de quem abriu o link.
+ */
+async function contarAbertura(eventoId: string, origem: OrigemAbertura) {
+  // Datas da aplicacao (UTC), nunca now() do banco (licao do DT10).
+  const agora = new Date();
+  const limite = new Date(agora.getTime() - JANELA_ABERTURA_MS);
+  const [gravada, expurgo] = await Promise.allSettled([
+    repo.registrarAbertura(eventoId, dadosDaAbertura(origem), agora, limite, TETO_ABERTURAS_POR_EVENTO),
+    repo.anularDadosDeAberturasAntigas(RETENCAO_DADOS_ABERTURA_DIAS),
+  ]);
+  if (gravada.status === 'rejected') console.error('[treinamento] contagem de aberturas do link: abertura não registrada:', motivo(gravada.reason));
+  if (expurgo.status === 'rejected') console.error('[treinamento] contagem de aberturas do link: retenção de IP/user-agent falhou:', motivo(expurgo.reason));
+}
+
+const motivo = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Conclusao pelo link do e-mail; o clique (abertura do link) e pre-requisito. */
 export async function concluirPeloLink(token: string) {
