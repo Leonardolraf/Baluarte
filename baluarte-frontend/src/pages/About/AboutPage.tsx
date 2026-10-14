@@ -81,7 +81,7 @@ const STACK: ReadonlyArray<{ label: string; value: string }> = [
   { label: 'Frontend', value: 'React 18 · TypeScript · TailwindCSS' },
   { label: 'Backend', value: 'Node.js · Express · TypeScript (API REST)' },
   { label: 'Banco de dados', value: 'PostgreSQL · Prisma' },
-  { label: 'Autenticação', value: 'JWT RS256 · bcrypt · RBAC por middleware' },
+  { label: 'Autenticação', value: 'JWT HS256 · bcrypt · RBAC por middleware' },
   { label: 'Infraestrutura', value: 'Docker Compose · Nginx' },
 ];
 

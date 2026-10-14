@@ -46,7 +46,7 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
-/** Claims do JWT emitido pela API (RS256 em produção; o mock gera o mesmo formato). */
+/** Claims do JWT emitido pela API (HS256; o mock gera o mesmo formato). */
 export interface JwtPayload {
   sub: string;
   email: string;
