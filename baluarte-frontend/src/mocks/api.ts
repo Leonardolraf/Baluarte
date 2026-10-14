@@ -409,8 +409,22 @@ function topRiskAssets(): AssetRisk[] {
 
 // ---- Lista de vulnerabilidades (filtro, ordem e página, como o servidor) ----
 
+/** Ativo do filtro `assetId`: de rede (MOCK_ASSETS) ou o ativo de uma estação monitorada. */
+function findFilterAsset(assetId: string): { id: string; name: string; host: string } | undefined {
+  const asset = state.assets.find((a) => a.id === assetId);
+  if (asset) return { id: asset.id, name: asset.name, host: asset.host };
+  const station = state.stations.find((s) => s.assetId === assetId);
+  return station ? { id: station.assetId, name: station.name, host: station.host } : undefined;
+}
+
 function filterVulnerabilities(filters: VulnerabilityFilters): Vulnerability[] {
   let items = [...state.vulnerabilities];
+  // Como o servidor: ativo que não existe é 404, nunca uma lista vazia ("ativo sem achados").
+  const assetId = filters.assetId?.trim();
+  if (assetId) {
+    if (!findFilterAsset(assetId)) throw new HttpError(404, 'ATIVO_NAO_ENCONTRADO', 'Ativo não encontrado');
+    items = items.filter((v) => v.assetId === assetId);
+  }
   if (filters.severity && filters.severity !== 'all')
     items = items.filter((v) => v.severity === filters.severity);
   if (filters.status && filters.status !== 'all') items = items.filter((v) => v.status === filters.status);
@@ -1255,7 +1269,11 @@ export const mockApi: BaluarteApi = {
       filters.severity && filters.severity !== 'all' ? SEVERITY_LABEL[filters.severity] : 'todas';
     const status = filters.status && filters.status !== 'all' ? VULN_STATUS_LABEL[filters.status] : 'todos';
     const query = filters.query?.trim();
-    const filtersText = `severidade: ${severity}; status: ${status}; busca: ${query ? `"${query}"` : 'nenhuma'}`;
+    // O ativo (filtro `assetId`) sai pelo nome e host; o id só na auditoria, como no servidor.
+    const asset = filters.assetId?.trim() ? findFilterAsset(filters.assetId.trim()) : undefined;
+    const filtersText =
+      `severidade: ${severity}; status: ${status}; busca: ${query ? `"${query}"` : 'nenhuma'}` +
+      (asset ? `; ativo: ${asset.name} (${asset.host})` : '');
     const scores = sorted.map((v) => v.cvss.base);
     const lines = [
       'Baluarte — Relatório de vulnerabilidades (modo demonstração)',
@@ -1276,9 +1294,19 @@ export const mockApi: BaluarteApi = {
     pushAudit(
       user,
       'EXPORTAR_RELATORIO_VULNERABILIDADES',
-      `${summary.total} ${summary.total === 1 ? 'achado' : 'achados'}; ${filtersText}`,
+      `${summary.total} ${summary.total === 1 ? 'achado' : 'achados'}; ${filtersText}${asset ? ` [${asset.id}]` : ''}; formato: PDF`,
     );
     return { blob: simplePdf(lines, 'Baluarte (demonstração)'), filename: vulnerabilityReportFilename() };
+  },
+
+  // Sem backend não há gerador de .xlsx (o exceljs vive só no servidor): o modo mock recusa
+  // com 501 em vez de entregar um arquivo que não abre. Nada entra na auditoria.
+  async exportVulnerabilityReportExcel(): Promise<VulnerabilityReportFile> {
+    return simulate(() => {
+      const user = requireUser();
+      requireRole(user, ['admin', 'analyst']);
+      throw new HttpError(501, 'NAO_IMPLEMENTADO', 'A exportação em Excel precisa da API real.');
+    });
   },
 
   async getVulnerability(id: string): Promise<Vulnerability> {

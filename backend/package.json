@@ -20,7 +20,7 @@
     "test:seguranca": "node --import tsx --test \"tests/seguranca/**/*.test.ts\"",
     "vercel-build": "prisma generate",
     "test:unidade": "node --import tsx --test \"tests/unidade/**/*.test.ts\"",
-    "cobertura:unidade": "c8 --reports-dir=coverage-unidade --reporter=text --reporter=html --reporter=json-summary --all --include=\"src/config/**/*.ts\" --include=\"src/utils/**/*.ts\" --include=\"src/models/dominio.model.ts\" --include=\"src/middlewares/auth.middleware.ts\" --include=\"src/services/cvss.service.ts\" --include=\"src/models/catalogoAchado.model.ts\" --include=\"src/services/cicloVarredura.service.ts\" --include=\"src/services/campanhaEmail.service.ts\" --include=\"src/services/token.service.ts\" --include=\"src/services/linkConta.service.ts\" --include=\"src/repositories/usuario.repository.ts\" --include=\"src/services/campanhaMetricas.service.ts\" --include=\"src/models/treinamento.model.ts\" --include=\"src/models/segundaOpiniao.model.ts\" --include=\"src/services/relatorioVulnerabilidade.service.ts\" --include=\"src/services/relatorioPdf.service.ts\" --check-coverage --lines 75 --branches 85 --functions 70 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage-unidade/junit.xml \"tests/unidade/**/*.test.ts\"",
+    "cobertura:unidade": "c8 --reports-dir=coverage-unidade --reporter=text --reporter=html --reporter=json-summary --all --include=\"src/config/**/*.ts\" --include=\"src/utils/**/*.ts\" --include=\"src/models/dominio.model.ts\" --include=\"src/middlewares/auth.middleware.ts\" --include=\"src/services/cvss.service.ts\" --include=\"src/models/catalogoAchado.model.ts\" --include=\"src/services/cicloVarredura.service.ts\" --include=\"src/services/campanhaEmail.service.ts\" --include=\"src/services/token.service.ts\" --include=\"src/services/linkConta.service.ts\" --include=\"src/repositories/usuario.repository.ts\" --include=\"src/services/campanhaMetricas.service.ts\" --include=\"src/models/treinamento.model.ts\" --include=\"src/models/segundaOpiniao.model.ts\" --include=\"src/services/relatorioVulnerabilidade.service.ts\" --include=\"src/services/relatorioPdf.service.ts\" --include=\"src/services/relatorioExcel.service.ts\" --check-coverage --lines 75 --branches 85 --functions 70 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage-unidade/junit.xml \"tests/unidade/**/*.test.ts\"",
     "cobertura": "c8 --reports-dir=coverage --reporter=text-summary --reporter=html --reporter=json-summary --reporter=lcov --all --include=\"src/**/*.ts\" --exclude=src/server.ts --check-coverage --lines 90 --branches 85 --functions 90 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage/junit.xml \"tests/**/*.test.ts\"",
     "test:relatorio": "npm run cobertura:unidade && npm run cobertura && node scripts/relatorio-testes.mjs",
     "carga": "node scripts/carga.mjs"
@@ -31,6 +31,7 @@
     "busboy": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "exceljs": "4.4.0",
     "express": "^4.21.2",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
@@ -54,6 +55,9 @@
   },
   "overrides": {
     "hyperid": {
+      "uuid": "11.1.1"
+    },
+    "exceljs": {
       "uuid": "11.1.1"
     }
   }

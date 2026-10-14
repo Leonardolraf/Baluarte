@@ -4,18 +4,23 @@ import { lerRemediacao } from '../models/catalogoAchado.model.js';
 import { avancarVarreduras } from './cicloVarredura.service.js';
 import { faixaCvss } from './cvss.service.js';
 import { registrarAuditoria } from './auditoria.service.js';
+import { desenharRelatorioExcel } from './relatorioExcel.service.js';
 import { desenharRelatorioPdf } from './relatorioPdf.service.js';
 import { descreverFiltros, montarRelatorio, nomeDoArquivo } from './relatorioVulnerabilidade.service.js';
 import * as repo from '../repositories/vulnerabilidade.repository.js';
+import { buscarPorId as buscarAtivo } from '../repositories/ativo.repository.js';
 import { usuariosPorIds } from '../repositories/auditoria.repository.js';
-import type {
-  AlteracaoStatus,
-  AutorRelatorio,
-  ConsultaVulnerabilidades,
-  FiltrosVulnerabilidade,
-  FindingComOrigem,
-  FindingComScan,
-  HistoricoVulnerabilidade,
+import {
+  TIPO_ARQUIVO,
+  type AlteracaoStatus,
+  type AtivoFiltrado,
+  type AutorRelatorio,
+  type ConsultaVulnerabilidades,
+  type FiltrosVulnerabilidade,
+  type FindingComOrigem,
+  type FindingComScan,
+  type FormatoRelatorio,
+  type HistoricoVulnerabilidade,
 } from '../models/vulnerabilidade.model.js';
 
 // Vulnerabilidades (achados das varreduras): lista com filtros, detalhe, mudanca de status
@@ -69,11 +74,24 @@ function contagemCompleta(lista: readonly string[], grupos: Array<{ rotulo: stri
 }
 
 /**
+ * Ativo do filtro `ativoId` (Melhorias #16), ou null sem o filtro. Ativo que nao existe e 404:
+ * uma lista ou um relatorio vazio para um id errado (ou de ativo removido) diria "este ativo nao
+ * tem achados", o que e falso: ausencia de dado nao e ausencia de risco.
+ */
+async function ativoDoFiltro(filtros: FiltrosVulnerabilidade): Promise<AtivoFiltrado | null> {
+  if (!filtros.ativoId) return null;
+  const ativo = await buscarAtivo(filtros.ativoId);
+  if (!ativo) falhar(404, 'Ativo não encontrado', 'ATIVO_NAO_ENCONTRADO');
+  return { id: ativo.id, nome: ativo.nome, host: ativo.host };
+}
+
+/**
  * Lista paginada no banco (B25): filtros e ordem viram `where`/`orderBy`, a pagina vira
  * skip/take. O `resumo` descreve o filtro inteiro (nao so a pagina): total, ativos
  * distintos e contagem por severidade e por status, mais a pagina e o tamanho usados.
  */
 export async function listar(c: ConsultaVulnerabilidades) {
+  await ativoDoFiltro(c.filtros);
   await avancarVarreduras();
   const r = await repo.listarPagina(c.filtros, c.ordem, c.pagina, c.tamanho);
   return {
@@ -89,22 +107,36 @@ export async function listar(c: ConsultaVulnerabilidades) {
   };
 }
 
+/** Desenho de cada formato a partir do mesmo modelo de relatorio. */
+const DESENHAR = { PDF: desenharRelatorioPdf, XLSX: desenharRelatorioExcel } as const;
+
 /**
- * Relatorio em PDF (B24, US-011): TODOS os achados que a lista mostra com esses filtros (o
- * relatorio nao pagina), resumidos e ordenados por CVSS. A exportacao vai para a auditoria
- * (com filtros e quantidade) depois que o PDF ficou pronto.
+ * Relatorio em PDF (B24, US-011) ou Excel (Melhorias #17): TODOS os achados que a lista mostra
+ * com esses filtros (o relatorio nao pagina), resumidos e ordenados por CVSS, montados uma vez
+ * (`montarRelatorio`) e desenhados no formato pedido. A exportacao vai para a auditoria (com
+ * quantidade, filtros e formato) depois que o arquivo ficou pronto.
  */
-export async function exportarRelatorio(autor: AutorRelatorio & { id: string }, filtros: FiltrosVulnerabilidade) {
+export async function exportarRelatorio(
+  autor: AutorRelatorio & { id: string },
+  filtros: FiltrosVulnerabilidade,
+  formato: FormatoRelatorio = 'PDF',
+) {
+  const ativo = await ativoDoFiltro(filtros);
   await avancarVarreduras();
-  const relatorio = montarRelatorio(await repo.listarFiltrados(filtros), filtros, autor);
-  const pdf = await desenharRelatorioPdf(relatorio);
+  const relatorio = montarRelatorio(await repo.listarFiltrados(filtros), filtros, autor, new Date(), ativo);
+  const arquivo = await DESENHAR[formato](relatorio);
   const total = relatorio.resumo.total;
   await registrarAuditoria(
     autor.id,
     'EXPORTAR_RELATORIO_VULNERABILIDADES',
-    `${total} ${total === 1 ? 'achado' : 'achados'}; ${descreverFiltros(filtros)}`,
+    `${total} ${total === 1 ? 'achado' : 'achados'}; ${descreverFiltros(filtros, ativo, true)}; formato: ${formato}`,
   );
-  return { pdf, nomeArquivo: nomeDoArquivo(relatorio.geradoEm), total };
+  return {
+    arquivo,
+    tipo: TIPO_ARQUIVO[formato],
+    nomeArquivo: nomeDoArquivo(relatorio.geradoEm, formato === 'XLSX' ? 'xlsx' : 'pdf'),
+    total,
+  };
 }
 
 // ---- Historico do achado (B25b, tabela FindingStatusChange) ---------------------------

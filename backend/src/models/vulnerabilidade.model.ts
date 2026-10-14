@@ -1,6 +1,6 @@
 import type { Finding } from '@prisma/client';
 import { z } from 'zod';
-import { notaCvss, regra, regrasDePaginacao, seVeio, umDe, umDeSemCaixa } from '../utils/esquemas.js';
+import { idRecurso, notaCvss, regra, regrasDePaginacao, seVeio, umDe, umDeSemCaixa } from '../utils/esquemas.js';
 import { SEVERIDADES, STATUS_FINDING } from './dominio.model.js';
 
 // Model de vulnerabilidade (achado de varredura): tipos do dominio, DTOs e regras de entrada (zod).
@@ -24,12 +24,21 @@ export type FindingComOrigem = FindingComScan & {
 
 /**
  * Filtros da lista e do relatorio, ja validados e no rotulo oficial (`alto` -> `Alto`):
- * severidade e status sao comparados por igualdade; `q` busca no host, na categoria, no CVE ou no programa (B14).
+ * severidade e status sao comparados por igualdade; `q` busca no host, na categoria, no CVE ou no programa (B14);
+ * `ativoId` restringe aos achados das varreduras de um ativo (Melhorias #16).
  */
 export interface FiltrosVulnerabilidade {
   severidade?: string;
   status?: string;
   q?: string;
+  ativoId?: string;
+}
+
+/** Ativo do filtro `ativoId`, como sai no cabecalho do relatorio e no detalhe da auditoria. */
+export interface AtivoFiltrado {
+  id: string;
+  nome: string;
+  host: string;
 }
 
 /** Campos pelos quais a lista pode ser ordenada (GET /vulnerabilidades?ordenar=). */
@@ -60,7 +69,17 @@ export interface ConsultaVulnerabilidades {
 export const CLASSIFICACAO = [regra('cvss', notaCvss, 'CVSS deve estar entre 0.0 e 10.0', 'CVSS_INVALIDO')];
 export const ALTERACAO_STATUS = [regra('status', umDe(STATUS_FINDING), 'Status inválido', 'STATUS_INVALIDO')];
 
-// ---- Relatorio em PDF (B24, US-011) ---------------------------------------------
+// ---- Relatorio em PDF (B24, US-011) e em Excel (Melhorias #17) --------------------
+
+/** Formatos de exportacao do relatorio (o mesmo modelo, dois desenhos). */
+export const FORMATOS_RELATORIO = ['PDF', 'XLSX'] as const;
+export type FormatoRelatorio = (typeof FORMATOS_RELATORIO)[number];
+
+/** Tipo MIME de cada formato (vai no Content-Type do download). */
+export const TIPO_ARQUIVO: Record<FormatoRelatorio, string> = {
+  PDF: 'application/pdf',
+  XLSX: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
 
 /** Fuso das datas do relatorio (data/hora de geracao, nome do arquivo e data dos achados). */
 export const FUSO_RELATORIO = 'America/Sao_Paulo';
@@ -69,14 +88,17 @@ export const FUSO_RELATORIO = 'America/Sao_Paulo';
 export const BUSCA_MAXIMA = 100;
 
 /**
- * Regras da query de GET /vulnerabilidades/relatorio.pdf: os mesmos filtros da lista, mas
- * validados (a lista ignora valor desconhecido; o relatorio recusa com 400, para nunca
- * entregar um PDF que parece filtrado sem estar). Maiusculas nao importam, como na lista.
+ * Regras da query de GET /vulnerabilidades/relatorio.pdf e .xlsx (e da lista): os filtros
+ * validados (valor desconhecido, repetido ou objeto/array dá 400, para nunca entregar um
+ * relatorio que parece filtrado sem estar). Maiusculas nao importam na severidade e no status.
+ * `ativoId` (Melhorias #16) segue o formato de id de recurso (cuid ou id do seed); ativo que
+ * nao existe e 404 no service, nunca uma lista vazia que pareceria "ativo sem achados".
  */
 export const FILTROS_RELATORIO = [
   regra('severidade', seVeio(umDeSemCaixa(SEVERIDADES)), `Severidade inválida: use ${SEVERIDADES.join(', ')}`, 'SEVERIDADE_INVALIDA'),
   regra('status', seVeio(umDeSemCaixa(STATUS_FINDING)), `Status inválido: use ${STATUS_FINDING.join(', ')}`, 'STATUS_INVALIDO'),
   regra('q', seVeio(z.string().max(BUSCA_MAXIMA)), `Busca inválida: use um texto de até ${BUSCA_MAXIMA} caracteres`, 'BUSCA_INVALIDA'),
+  regra('ativoId', seVeio(idRecurso), 'Identificador de ativo inválido', 'ATIVO_ID_INVALIDO'),
 ];
 
 /**
@@ -162,6 +184,8 @@ export interface RelatorioVulnerabilidades {
   geradoEm: Date;
   autor: AutorRelatorio;
   filtros: FiltrosVulnerabilidade;
+  /** Ativo do filtro `ativoId` (nome e host para o cabecalho); null sem esse filtro. */
+  ativo: AtivoFiltrado | null;
   resumo: {
     total: number;
     ativos: number;

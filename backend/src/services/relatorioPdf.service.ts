@@ -126,7 +126,7 @@ function cabecalho(doc: Doc, r: RelatorioVulnerabilidades) {
   escrever(doc, 'Relatório de vulnerabilidades');
   doc.moveDown(0.3).fontSize(9).fillColor(COR.suave);
   escrever(doc, `Gerado em ${dataHora(r.geradoEm)} (horário de Brasília) por ${r.autor.nome} (${r.autor.email}) — ${r.autor.perfil}`);
-  escrever(doc, `Filtros — ${descreverFiltros(r.filtros)}`);
+  escrever(doc, `Filtros — ${descreverFiltros(r.filtros, r.ativo)}`);
   doc.moveDown(0.6);
   const y = doc.y;
   doc.moveTo(MARGEM, y).lineTo(MARGEM + larguraUtil(doc), y).lineWidth(0.8).strokeColor(COR.linha).stroke();

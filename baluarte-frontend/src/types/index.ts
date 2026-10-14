@@ -212,6 +212,8 @@ export interface VulnerabilityFilters {
   severity?: Severity | 'all';
   status?: VulnerabilityStatus | 'all';
   query?: string;
+  /** Só os achados das varreduras deste ativo (`ativoId` no servidor; ativo inexistente → 404). */
+  assetId?: string;
 }
 
 export interface VulnerabilitySummary {
