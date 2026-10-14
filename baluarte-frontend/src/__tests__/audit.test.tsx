@@ -378,12 +378,15 @@ describe('AuditLogPage', () => {
     expect(screen.getByRole('button', { name: 'Limpar' })).toBeDisabled();
   });
 
-  it('registro sem autor aparece como "Sem usuário"', async () => {
+  // Melhoria 22: o registro do clique de um ex-colaborador tem origem 'removed' e deixa de
+  // ser o genérico "Sem usuário" — o texto agora diz por que não há nome.
+  it('registro de conta excluída aparece como "Usuário removido"', async () => {
     await loginAs('admin@empresa.com');
     renderPage();
     const table = await screen.findByTestId('audit-table');
     fireEvent.change(await screen.findByLabelText('Ação'), { target: { value: 'CLIQUE_LINK_PHISHING' } });
-    await waitFor(() => expect(within(table).getByText('Sem usuário')).toBeInTheDocument());
+    await waitFor(() => expect(within(table).getByText('Usuário removido')).toBeInTheDocument());
+    expect(within(table).queryByText('Sem usuário')).not.toBeInTheDocument();
   });
 
   it('B29: mostra o selo "Cadeia íntegra" com a contagem e a trava do banco ativa', async () => {
