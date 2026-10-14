@@ -1,3 +1,6 @@
+// Primeiro import de propósito: desliga o gancho do React DevTools antes de o React carregar
+// (melhoria 14; imports ES executam na ordem em que aparecem).
+import '@/lib/devtools';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
