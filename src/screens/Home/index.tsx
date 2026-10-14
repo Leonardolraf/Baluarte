@@ -22,7 +22,7 @@ import { greetingBlockHeight, styles } from './styles';
 
 export function HomeScreen({ navigation }: AppScreenProps<'Home'>) {
   const { user, signOut } = useAuth();
-  const { campaigns } = useCampaigns();
+  const { campaigns, loading, error, reload } = useCampaigns();
   const insets = useSafeAreaInsets();
   // Estado da seleção de modelo: `null` = sem filtro (todas as campanhas).
   const [template, setTemplate] = useState<TemplateId | null>(null);
@@ -86,7 +86,25 @@ export function HomeScreen({ navigation }: AppScreenProps<'Home'>) {
           />
         )}
         ListHeaderComponent={header}
-        ListEmptyComponent={<Text style={styles.empty}>Nenhuma campanha com este modelo.</Text>}
+        ListEmptyComponent={
+          loading ? (
+            <Text style={styles.empty}>Carregando campanhas…</Text>
+          ) : error ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>{error}</Text>
+              <Pressable
+                onPress={reload}
+                accessibilityRole="button"
+                hitSlop={8}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Text style={styles.retry}>Tentar de novo</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={styles.empty}>Nenhuma campanha com este modelo.</Text>
+          )
+        }
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xxl }]}
         showsVerticalScrollIndicator={false}
       />

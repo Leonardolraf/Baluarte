@@ -1,4 +1,5 @@
-import { ScrollView, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import {
   Button,
   ButtonIcon,
@@ -11,14 +12,51 @@ import {
 } from '../../components';
 import { useCampaigns } from '../../contexts';
 import { getTemplate } from '../../data/templates';
+import { IS_API_MODE } from '../../lib/config';
 import { formatNumber } from '../../lib/format';
-import { icons } from '../../theme';
+import { colors, icons } from '../../theme';
+import type { Campaign } from '../../types';
 import type { AppScreenProps } from '../../types/navigation';
 import { styles } from './styles';
 
 export function CampaignDetailsScreen({ navigation, route }: AppScreenProps<'CampaignDetails'>) {
-  const { getCampaign } = useCampaigns();
-  const campaign = getCampaign(route.params.campaignId);
+  const { campaignId } = route.params;
+  const { getCampaign, loadCampaignDetail } = useCampaigns();
+  const base = getCampaign(campaignId);
+  // No modo API, o detalhe (funil, destinatários) vem de GET /campanhas/:id.
+  const [detail, setDetail] = useState<Campaign | undefined>(base);
+  const [loadingDetail, setLoadingDetail] = useState(IS_API_MODE && !base);
+
+  useEffect(() => {
+    if (!IS_API_MODE) return;
+    let active = true;
+    setLoadingDetail(!base);
+    loadCampaignDetail(campaignId)
+      .then((full) => {
+        if (active && full) setDetail(full);
+      })
+      .finally(() => {
+        if (active) setLoadingDetail(false);
+      });
+    return () => {
+      active = false;
+    };
+    // Busca uma vez por campanha; loadCampaignDetail muda de identidade com a lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
+
+  const campaign = detail ?? base;
+
+  if (loadingDetail && !campaign) {
+    return (
+      <Screen edges={['bottom']}>
+        <Header title="Detalhes" onBack={() => navigation.goBack()} />
+        <View style={styles.notFound}>
+          <ActivityIndicator color={colors.text.secondary} />
+        </View>
+      </Screen>
+    );
+  }
 
   if (!campaign) {
     return (

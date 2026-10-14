@@ -1,11 +1,26 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { authenticate, type AuthResult } from '../lib/auth';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { authRepository } from '../data/repository';
+import { IS_API_MODE } from '../lib/config';
+import type { AuthResult } from '../lib/auth';
 import type { User } from '../types';
 
 interface AuthContextValue {
   user: User | null;
-  /** Autenticação simulada; em caso de sucesso as rotas trocam sozinhas para o app. */
-  signIn: (email: string, password: string) => AuthResult;
+  /** `true` enquanto o app verifica, na abertura, se há sessão salva (modo API). */
+  restoring: boolean;
+  /**
+   * Autentica. No modo demo é imediato; no modo API chama `POST /login` e guarda
+   * o token. Em caso de sucesso, as rotas trocam sozinhas para o app.
+   */
+  signIn: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => void;
 }
 
@@ -19,16 +34,43 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children, initialUser = null }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(initialUser);
+  // Só há o que restaurar no modo API e quando não começamos já logados (testes).
+  const [restoring, setRestoring] = useState(IS_API_MODE && initialUser === null);
 
-  const signIn = useCallback((email: string, password: string) => {
-    const result = authenticate(email, password);
+  useEffect(() => {
+    if (!restoring) return;
+    let active = true;
+    authRepository
+      .restoreSession()
+      .then((restored) => {
+        if (active && restored) setUser(restored);
+      })
+      .finally(() => {
+        if (active) setRestoring(false);
+      });
+    return () => {
+      active = false;
+    };
+    // Só na montagem: a restauração de sessão é feita uma vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const result = await authRepository.signIn(email, password);
     if (result.ok) setUser(result.user);
     return result;
   }, []);
 
-  const signOut = useCallback(() => setUser(null), []);
+  const signOut = useCallback(() => {
+    setUser(null);
+    // Encerra no servidor/limpa o token em segundo plano (não trava a UI).
+    void authRepository.signOut();
+  }, []);
 
-  const value = useMemo(() => ({ user, signIn, signOut }), [user, signIn, signOut]);
+  const value = useMemo(
+    () => ({ user, restoring, signIn, signOut }),
+    [user, restoring, signIn, signOut],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

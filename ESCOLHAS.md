@@ -76,7 +76,7 @@ Todas em `lib/validation.ts`, puras e com as mensagens do produto web:
 
 ## 8. Testes (jest-expo + Testing Library)
 
-82 testes em 14 suítes (`src/__tests__/`):
+106 testes em 16 suítes (`src/__tests__/`):
 
 - **lib/** — `format` (datas pt-BR, taxa de clique 24/28/31/17% e "—", iniciais, nome a partir do e-mail), `validation` (todas as mensagens, datas inexistentes, passado, próxima ocorrência do mês e virada do ano), `auth` (contas, senha curta, RBAC), `campaigns` (ordem, filtro, KPIs, campanha nova).
 - **routes/** — `linking` (caminho de cada tela na web, a tela de base embaixo de quem é aberto pela URL e o e-mail fora da URL).
@@ -92,3 +92,37 @@ Todas em `lib/validation.ts`, puras e com as mensagens do produto web:
 - **Erro de login** aparece num aviso vermelho acima do botão "Entrar" (a captura só mostra o estado inicial).
 - **Web:** no navegador o app vira uma coluna de celular (até 480 px) centralizada; no aparelho ocupa a tela toda.
 - **Telas estreitas (menos de ~355 px, ex.: 320):** no banner dos Detalhes, "Agendada para…" desce para baixo da pílula em vez de ser cortado (as capturas são de 375 px; em 360 e 375 tudo cabe numa linha).
+
+## 10. Dois modos de dados: demo (padrão) e API real
+
+O app roda contra **mocks em memória** (modo demo, padrão) ou contra a **API do
+produto** (modo API), escolhidos só pela variável `EXPO_PUBLIC_API_BASE_URL`.
+Por quê e como:
+
+- **Camada de repositório** (`src/data/repository.ts`): a UI (contexts) só conhece
+  duas interfaces — `AuthRepository` e `CampaignRepository`. A implementação
+  concreta é escolhida uma vez, por ambiente: `mockRepository` (tudo em memória)
+  ou `apiRepository` (fetch real). As telas são as mesmas nos dois modos.
+- **Demo-safe por padrão:** sem a variável, cai no mock. A demonstração nunca
+  depende de rede e os testes rodam no modo demo. O módulo da API (e o
+  `expo-secure-store`) só é carregado quando há API configurada (require tardio).
+- **Sem segredo no código:** a base URL vem só do `.env` (`EXPO_PUBLIC_…`, fora do
+  git). Não é segredo — é o endereço público da API —, mas também não fica
+  escrito no repositório. Ver `.env.example`.
+- **Token em armazenamento seguro:** no modo API o JWT (HS256, `Authorization:
+  Bearer`) vai para o Keychain/Keystore via `expo-secure-store` no celular e para
+  o `localStorage` na web (como o frontend web). Nunca para o código.
+- **Fidelidade ao backend atual:** o `apiRepository` espelha o `adapters.ts` do
+  frontend web — `POST /login` + `GET /me`, `GET /campanhas` (lista) e
+  `/campanhas/:id` (detalhe: funil, quem clicou/reportou), templates
+  `urgencia/autoridade/curiosidade`, grupo-alvo fixo "Colaboradores internos",
+  `scheduledAt` = `criadoEm`. Limites herdados do backend (status sempre
+  `AGENDADA`, sem rastreio de abertura/submissão, lista sem destinatários) são
+  reproduzidos, não "consertados" no app.
+- **Autenticação assíncrona:** `signIn`/`scheduleCampaign` passaram a ser
+  assíncronos para suportar a rede; no modo demo resolvem na hora. A Home mostra
+  carregando/erro-com-"tentar de novo" e os Detalhes buscam o detalhe rico só no
+  modo API (progressivo: primeiro o item da lista, depois o detalhe).
+- **Testes da camada nova:** `lib/mappers` (16) cobrem as conversões puras;
+  `lib/apiRepository` (8) exercitam login/RBAC/erro de rede/lista/detalhe/criar
+  com `fetch` e `expo-secure-store` mockados — nenhuma rede real é tocada.

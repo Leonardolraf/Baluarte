@@ -78,7 +78,10 @@ export function NewCampaignScreen({ navigation }: AppScreenProps<'NewCampaign'>)
     );
   }
 
-  function handleSubmit() {
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    if (submitting) return;
     const result = validateNewCampaign(
       { name, template, targetGroup, schedule, recipients },
       new Date(),
@@ -88,10 +91,16 @@ export function NewCampaignScreen({ navigation }: AppScreenProps<'NewCampaign'>)
       return;
     }
 
-    const campaign = scheduleCampaign(result.value);
-    showToast('Campanha agendada com sucesso');
-    // Substitui a Nova campanha: o "voltar" dos Detalhes leva direto à Home.
-    navigation.replace('CampaignDetails', { campaignId: campaign.id });
+    setSubmitting(true);
+    try {
+      const campaign = await scheduleCampaign(result.value);
+      showToast('Campanha agendada com sucesso');
+      // Substitui a Nova campanha: o "voltar" dos Detalhes leva direto à Home.
+      navigation.replace('CampaignDetails', { campaignId: campaign.id });
+    } catch {
+      setSubmitting(false);
+      showToast('Não foi possível agendar a campanha.');
+    }
   }
 
   const templateHint = template ? getTemplate(template).description : MESSAGES.templateRequired;
@@ -221,7 +230,12 @@ export function NewCampaignScreen({ navigation }: AppScreenProps<'NewCampaign'>)
             />
           </FormField>
 
-          <Button title="Agendar campanha" icon={icons.Calendar} onPress={handleSubmit} />
+          <Button
+            title="Agendar campanha"
+            icon={icons.Calendar}
+            onPress={handleSubmit}
+            disabled={submitting}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 

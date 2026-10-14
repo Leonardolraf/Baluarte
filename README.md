@@ -51,11 +51,35 @@ Como no produto web, campanhas são só de Administrador e Analista; o Colaborad
 
 Os dados são os do produto (arquivo `baluarte-frontend/src/mocks/data.ts` do repositório [Leonardolraf/Baluarte](https://github.com/Leonardolraf/Baluarte)), guardados em memória: as datas das campanhas são relativas a **hoje às 09:00**, então a lista sempre parece atual. Nada é enviado de verdade (nem e-mail de campanha, nem link de redefinição de senha).
 
+## Modo API (backend real) — opcional
+
+Por padrão o app roda em **modo demo** (tudo em memória, login simulado). Para
+rodar contra a **API real do produto** ([Leonardolraf/Baluarte](https://github.com/Leonardolraf/Baluarte)),
+defina a base da API em `EXPO_PUBLIC_API_BASE_URL` (veja `.env.example`):
+
+```bash
+cp .env.example .env
+# edite .env:  EXPO_PUBLIC_API_BASE_URL=http://localhost:8080/api
+npm start
+```
+
+Nesse modo o app faz `POST /api/login`, guarda o token JWT em **armazenamento
+seguro** (Keychain/Keystore no celular via `expo-secure-store`; `localStorage` na
+web) e lê as campanhas de `GET /api/campanhas`. A base URL **não é segredo** e
+nunca fica no código — só no `.env` (fora do git). A troca é transparente: as
+mesmas telas rodam nos dois modos, escolhidos só por essa variável, e caem no
+modo demo quando ela está ausente. O que o app consome da API segue o backend
+atual (campanhas sempre `AGENDADA`, sem rastreio de abertura/submissão, lista
+sem destinatários — o detalhe traz quem clicou/reportou).
+
+> Contas: o modo demo aceita as contas `@empresa.com` abaixo; o modo API exige
+> uma conta real cadastrada no backend (domínio interno, ex.: `@baluarte.test`).
+
 ## Scripts
 
 | Comando | O que faz |
 |---|---|
-| `npm test` | Jest (jest-expo + Testing Library) — 14 suítes, 82 testes |
+| `npm test` | Jest (jest-expo + Testing Library) — 16 suítes, 106 testes |
 | `npm run typecheck` | `tsc --noEmit` com TypeScript estrito |
 | `npm run export:web` | `expo export --platform web` (gera `dist/`) |
 | `npx expo-doctor` | confere dependências e configuração do SDK |

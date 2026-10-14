@@ -53,4 +53,19 @@ export const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: 'center',
   },
+  emptyBox: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  retry: {
+    ...typography.body,
+    fontFamily: typography.greetingStrong.fontFamily,
+    color: colors.text.primary,
+  },
 });

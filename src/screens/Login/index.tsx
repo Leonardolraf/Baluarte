@@ -28,9 +28,11 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<LoginErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextInput>(null);
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    if (submitting) return;
     const nextErrors: LoginErrors = {
       email: validateEmail(email),
       password: validatePassword(password),
@@ -40,8 +42,13 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
     if (nextErrors.email || nextErrors.password) return;
 
     // Sucesso: o AuthContext guarda o usuário e `routes/index.tsx` troca para a Home.
-    const result = signIn(email, password);
-    if (!result.ok) setFormError(result.error);
+    setSubmitting(true);
+    try {
+      const result = await signIn(email, password);
+      if (!result.ok) setFormError(result.error);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -117,7 +124,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
             </View>
           ) : null}
 
-          <Button title="Entrar" onPress={handleSubmit} style={styles.submit} />
+          <Button title="Entrar" onPress={handleSubmit} disabled={submitting} style={styles.submit} />
 
           <Pressable
             onPress={() => navigation.navigate('ResetPassword', { email: email.trim() })}

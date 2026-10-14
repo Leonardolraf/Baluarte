@@ -1,13 +1,31 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { buildInitialCampaigns } from '../data/campaigns';
-import { createScheduledCampaign, sortByScheduleDesc } from '../lib/campaigns';
+import { campaignRepository } from '../data/repository';
+import { IS_API_MODE } from '../lib/config';
+import { sortByScheduleDesc } from '../lib/campaigns';
 import type { Campaign, NewCampaignInput } from '../types';
 
 interface CampaignsContextValue {
   /** Sempre ordenadas pela data agendada, mais recente primeiro. */
   campaigns: Campaign[];
+  /** `true` enquanto a lista carrega da API (modo API); nunca no modo demo. */
+  loading: boolean;
+  /** Mensagem de erro do carregamento da lista, ou `null`. */
+  error: string | null;
   getCampaign: (id: string) => Campaign | undefined;
-  scheduleCampaign: (input: NewCampaignInput) => Campaign;
+  /** No modo API, busca o detalhe completo (funil, destinatários) da campanha. */
+  loadCampaignDetail: (id: string) => Promise<Campaign | undefined>;
+  scheduleCampaign: (input: NewCampaignInput) => Promise<Campaign>;
+  /** Recarrega a lista a partir da origem (usado depois de um erro). */
+  reload: () => void;
 }
 
 const CampaignsContext = createContext<CampaignsContextValue | null>(null);
@@ -18,29 +36,74 @@ interface CampaignsProviderProps {
   initialCampaigns?: Campaign[];
 }
 
-export function CampaignsProvider({ children, initialCampaigns }: CampaignsProviderProps) {
-  const [campaigns, setCampaigns] = useState<Campaign[]>(() =>
-    sortByScheduleDesc(initialCampaigns ?? buildInitialCampaigns(new Date())),
-  );
-  // Próximo número de id (camp-006, camp-007…): continua depois dos dados iniciais.
-  const nextNumber = useRef(campaigns.length + 1);
+const LOAD_ERROR = 'Não foi possível carregar as campanhas.';
 
-  const scheduleCampaign = useCallback((input: NewCampaignInput) => {
-    const id = `camp-${String(nextNumber.current).padStart(3, '0')}`;
-    nextNumber.current += 1;
-    const campaign = createScheduledCampaign(input, id);
-    setCampaigns((current) => sortByScheduleDesc([campaign, ...current]));
-    return campaign;
-  }, []);
+export function CampaignsProvider({ children, initialCampaigns }: CampaignsProviderProps) {
+  // No modo demo (e nos testes) a lista já nasce pronta, síncrona. No modo API,
+  // começa vazia e carrega no efeito abaixo.
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
+    if (initialCampaigns) return sortByScheduleDesc(initialCampaigns);
+    return IS_API_MODE ? [] : sortByScheduleDesc(buildInitialCampaigns(new Date()));
+  });
+  const shouldFetch = IS_API_MODE && !initialCampaigns;
+  const [loading, setLoading] = useState(shouldFetch);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!shouldFetch) return;
+    let active = true;
+    setLoading(true);
+    setError(null);
+    campaignRepository
+      .list()
+      .then((list) => {
+        if (active) setCampaigns(sortByScheduleDesc(list));
+      })
+      .catch(() => {
+        if (active) setError(LOAD_ERROR);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [shouldFetch, reloadKey]);
 
   const getCampaign = useCallback(
     (id: string) => campaigns.find((campaign) => campaign.id === id),
     [campaigns],
   );
 
+  const loadCampaignDetail = useCallback(
+    async (id: string) => {
+      if (!IS_API_MODE) return campaigns.find((campaign) => campaign.id === id);
+      const detail = await campaignRepository.get(id);
+      if (detail) {
+        // Atualiza a cópia na lista para refletir o detalhe mais fresco.
+        setCampaigns((current) =>
+          current.some((c) => c.id === id)
+            ? current.map((c) => (c.id === id ? detail : c))
+            : current,
+        );
+      }
+      return detail;
+    },
+    [campaigns],
+  );
+
+  const scheduleCampaign = useCallback(async (input: NewCampaignInput) => {
+    const campaign = await campaignRepository.create(input);
+    setCampaigns((current) => sortByScheduleDesc([campaign, ...current]));
+    return campaign;
+  }, []);
+
+  const reload = useCallback(() => setReloadKey((key) => key + 1), []);
+
   const value = useMemo(
-    () => ({ campaigns, getCampaign, scheduleCampaign }),
-    [campaigns, getCampaign, scheduleCampaign],
+    () => ({ campaigns, loading, error, getCampaign, loadCampaignDetail, scheduleCampaign, reload }),
+    [campaigns, loading, error, getCampaign, loadCampaignDetail, scheduleCampaign, reload],
   );
 
   return <CampaignsContext.Provider value={value}>{children}</CampaignsContext.Provider>;
