@@ -19,6 +19,33 @@ test.describe('RBAC', () => {
     await expect(page.getByRole('search')).toHaveCount(0);
   });
 
+  // #23: a RN é mantida — Colaborador não cadastra nem consulta ativos. O /assets/new já
+  // aparecia no teste acima; aqui a listagem entra junto, com a ausência do item de menu e
+  // a garantia de que o bloqueio vale também ao chegar pela URL com sessão já aberta.
+  test('colaborador não acessa a listagem nem o cadastro de ativos', async ({ page }) => {
+    await login(page, 'collaborator');
+    for (const path of ['/assets', '/assets/new']) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { name: 'Acesso negado' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Ativos monitorados' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Cadastrar ativo' })).toHaveCount(0);
+    }
+    const nav = page.getByRole('navigation', { name: 'Navegação principal' }).first();
+    await expect(nav.getByRole('link', { name: 'Ativos' })).toHaveCount(0);
+
+    // O mesmo bloqueio vale para o analista? Não: serve de contraprova de que o teste
+    // mede o perfil, e não uma rota quebrada para todo mundo.
+    await page.goto('/dashboard');
+  });
+
+  test('analista chega aos ativos que o colaborador não vê (contraprova do bloqueio)', async ({ page }) => {
+    await login(page, 'analyst');
+    await page.goto('/assets');
+    await expect(page.getByRole('heading', { name: 'Acesso negado' })).toHaveCount(0);
+    await page.goto('/assets/new');
+    await expect(page.getByRole('heading', { name: 'Acesso negado' })).toHaveCount(0);
+  });
+
   test('analista opera vulnerabilidades e campanhas, mas não gerencia usuários', async ({ page }) => {
     await login(page, 'analyst');
     await page.goto('/vulnerabilities');
