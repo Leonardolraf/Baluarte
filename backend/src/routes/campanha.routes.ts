@@ -8,6 +8,8 @@ import { wrap } from '../utils/resposta.js';
 export function rotasCampanhas(r: Router) {
   r.post('/campaigns', exigeToken, exigePerfil(...OPERADORES), wrap(campanhaController.cadastrar));
   r.get('/campanhas', exigeToken, exigePerfil(...OPERADORES), wrap(campanhaController.listar));
+  // Antes de /campanhas/:id, senao "destinatarios" viraria um id.
+  r.get('/campanhas/destinatarios', exigeToken, exigePerfil(...OPERADORES), wrap(campanhaController.destinatarios));
   r.get('/campanhas/:id', exigeToken, exigePerfil(...OPERADORES), wrap(campanhaController.relatorio));
   r.delete('/campanhas/:id', exigeToken, exigePerfil(...OPERADORES), wrap(campanhaController.excluir));
 }

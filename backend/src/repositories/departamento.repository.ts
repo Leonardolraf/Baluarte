@@ -18,6 +18,12 @@ export async function listar() {
   return deps.map((d) => ({ id: d.id, nome: d.name, usuarios: d._count.users }));
 }
 
+/** Quais dos ids dados existem. */
+export async function idsExistentes(ids: string[]): Promise<string[]> {
+  const deps = await prisma.department.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  return deps.map((d) => d.id);
+}
+
 export function buscarComUsuarios(id: string) {
   return prisma.department.findUnique({ where: { id }, include: { _count: { select: { users: true } } } });
 }

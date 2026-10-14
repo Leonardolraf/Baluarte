@@ -141,6 +141,8 @@ describe('POST /campaigns envia o e-mail simulado', () => {
       const email = `dest.${Date.now()}@filial.exemplo.com.br`;
       const criado = await chamar('POST', '/users', { token: admin, body: { nome: 'Destino Filial', email, perfil: 'Colaborador' } });
       assert.equal(criado.status, 201, JSON.stringify(criado.body));
+      // Campanha so vai para conta Ativa (a conta nasce Pendente; o Administrador ativa).
+      assert.equal((await chamar('PATCH', `/users/${criado.body.dados.idUsuario}`, { token: admin, body: { status: 'Ativo' } })).status, 200);
 
       const ok = await chamar('POST', '/campaigns', { token: analista, body: { nome: 'Filial', destinatario: email, template: 'urgencia' } });
       assert.equal(ok.status, 201, JSON.stringify(ok.body));
@@ -178,6 +180,7 @@ describe('POST /campaigns envia o e-mail simulado', () => {
       for (const email of [liberado, vizinho]) {
         const c = await chamar('POST', '/users', { token: admin, body: { nome: 'Destino Lista', email, perfil: 'Colaborador' } });
         assert.equal(c.status, 201, JSON.stringify(c.body));
+        assert.equal((await chamar('PATCH', `/users/${c.body.dados.idUsuario}`, { token: admin, body: { status: 'Ativo' } })).status, 200);
       }
       process.env.DOMINIO_INTERNO = ` @EMPRESA.com ; ${liberado.toUpperCase()} `;
 

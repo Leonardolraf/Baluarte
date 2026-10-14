@@ -7,6 +7,7 @@ import type { Request, Response } from 'express';
 import { ErroNegocio, falhar, wrap } from '../../src/utils/resposta.js';
 import { funilDe, mapCampaign, riscoHumano, totais } from '../../src/services/campanhaMetricas.service.js';
 import { dadosTreinamento, podeVerTreinamento } from '../../src/models/treinamento.model.js';
+import { MAX_DEPARTAMENTOS_FILTRO, MINIMO_ELEGIVEIS_REGRA_TODOS, elegivelParaCampanha, exigeConfirmacao, filtroDestinatarios, limiteSemConfirmacao, statusRecebeCampanha } from '../../src/models/campanha.model.js';
 import { OPERADORES, PERFIS, PESO_RISCO_HUMANO, STATUS_FINDING, STATUS_FINDING_ENCERRADO, destinatarioInterno, destinatariosInternos, dominioInterno } from '../../src/models/dominio.model.js';
 
 function resposta(jaEnviada = false) {
@@ -177,5 +178,72 @@ describe('constantes de domínio', () => {
       if (original === undefined) delete process.env.DOMINIO_INTERNO;
       else process.env.DOMINIO_INTERNO = original;
     }
+  });
+});
+
+describe('elegibilidade de destinatário de campanha (fonte única da criação e do filtro por departamento)', () => {
+  const erroDe = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      if (e instanceof ErroNegocio) return { status: e.status, codigo: e.codigo };
+      throw e;
+    }
+    return null;
+  };
+
+  it('só Ativo recebe (Pendente e Inativo não); e-mail precisa ser do domínio interno', () => {
+    const original = process.env.DOMINIO_INTERNO;
+    try {
+      delete process.env.DOMINIO_INTERNO;
+      assert.equal(statusRecebeCampanha('Ativo'), true);
+      assert.equal(statusRecebeCampanha('Pendente'), false, 'convite não aceito não é alvo (decisão de 13/10)');
+      assert.equal(statusRecebeCampanha('Inativo'), false);
+      assert.equal(elegivelParaCampanha({ email: 'ana@empresa.com', status: 'Ativo' }), true);
+      assert.equal(elegivelParaCampanha({ email: 'ana@empresa.com', status: 'Pendente' }), false);
+      assert.equal(elegivelParaCampanha({ email: 'ana@empresa.com', status: 'Inativo' }), false);
+      assert.equal(elegivelParaCampanha({ email: 'ana@gmail.com', status: 'Ativo' }), false);
+      process.env.DOMINIO_INTERNO = '@empresa.com,ana@gmail.com';
+      assert.equal(elegivelParaCampanha({ email: 'ana@gmail.com', status: 'Ativo' }), true, 'endereço liberado um a um (DT19)');
+    } finally {
+      if (original === undefined) delete process.env.DOMINIO_INTERNO;
+      else process.env.DOMINIO_INTERNO = original;
+    }
+  });
+
+  it('filtroDestinatarios: ids sem repetição, todos=1 vira null, e os erros de entrada', () => {
+    assert.deepEqual(filtroDestinatarios({ departamento: 'dep-1' }), ['dep-1']);
+    assert.deepEqual(filtroDestinatarios({ departamento: ['dep-1', 'dep-2', 'dep-1'] }), ['dep-1', 'dep-2']);
+    assert.equal(filtroDestinatarios({ todos: '1' }), null);
+    assert.deepEqual(erroDe(() => filtroDestinatarios({})), { status: 400, codigo: 'FILTRO_OBRIGATORIO' });
+    assert.deepEqual(erroDe(() => filtroDestinatarios({ departamento: '', todos: '' })), { status: 400, codigo: 'FILTRO_OBRIGATORIO' });
+    assert.deepEqual(erroDe(() => filtroDestinatarios({ departamento: 'dep-1', todos: '1' })), { status: 400, codigo: 'FILTRO_CONFLITANTE' });
+    assert.deepEqual(erroDe(() => filtroDestinatarios({ todos: 'true' })), { status: 400, codigo: 'TODOS_INVALIDO' });
+    for (const ruim of ['a b', "x'--", { $ne: 'x' }, [], ['ok', 'não ok'], Array(MAX_DEPARTAMENTOS_FILTRO + 1).fill('d')])
+      assert.deepEqual(erroDe(() => filtroDestinatarios({ departamento: ruim })), { status: 400, codigo: 'DEPARTAMENTO_ID_INVALIDO' }, JSON.stringify(ruim));
+  });
+
+  it('trava de envio em massa: limite configurável (padrão 50) ou todos os elegíveis', () => {
+    const original = process.env.CAMPANHA_LIMITE_SEM_CONFIRMACAO;
+    try {
+      delete process.env.CAMPANHA_LIMITE_SEM_CONFIRMACAO;
+      assert.equal(limiteSemConfirmacao(), 50);
+      for (const ruim of ['0', '-5', 'abc', '2.5', ' '])
+        (process.env.CAMPANHA_LIMITE_SEM_CONFIRMACAO = ruim), assert.equal(limiteSemConfirmacao(), 50, `inválido: ${ruim}`);
+      process.env.CAMPANHA_LIMITE_SEM_CONFIRMACAO = ' 120 ';
+      assert.equal(limiteSemConfirmacao(), 120);
+    } finally {
+      if (original === undefined) delete process.env.CAMPANHA_LIMITE_SEM_CONFIRMACAO;
+      else process.env.CAMPANHA_LIMITE_SEM_CONFIRMACAO = original;
+    }
+    assert.equal(exigeConfirmacao(50, 200, 50), false);
+    assert.equal(exigeConfirmacao(51, 200, 50), true);
+    assert.equal(MINIMO_ELEGIVEIS_REGRA_TODOS, 10, 'decisão do Leo em 13/10/2026');
+    assert.equal(exigeConfirmacao(10, 10, 50), true, 'cobre todos os elegíveis, com 10 elegíveis');
+    assert.equal(exigeConfirmacao(9, 10, 50), false);
+    assert.equal(exigeConfirmacao(9, 9, 50), false, 'menos de 10 elegíveis: cobrir todos não trava');
+    assert.equal(exigeConfirmacao(1, 1, 50), false);
+    assert.equal(exigeConfirmacao(1, 0, 50), false, 'sem elegíveis contados, só o limite vale');
+    assert.equal(exigeConfirmacao(6, 5, 5), true, 'o limite vale sempre, mesmo com poucos elegíveis');
   });
 });

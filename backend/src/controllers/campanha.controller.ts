@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { usuarioDe } from '../middlewares/auth.middleware.js';
-import { CADASTRO_NOME, CADASTRO_TEMPLATE } from '../models/campanha.model.js';
+import { CADASTRO_CONFIRMACAO, CADASTRO_NOME, CADASTRO_TEMPLATE, filtroDestinatarios } from '../models/campanha.model.js';
 import { destinatarioInterno } from '../models/dominio.model.js';
 import * as campanhaService from '../services/campanha.service.js';
 import { enviar, erro } from '../utils/resposta.js';
@@ -12,7 +12,8 @@ import { email as emailValido, validar } from '../utils/esquemas.js';
  * POST /campaigns (contrato N2 AT1; Administrador/Analista). Contrato original: um
  * `destinatario`. Extensao compativel: `destinatarios[]` (o frontend novo envia os dois;
  * o Postman/Robot continuam enviando so o primeiro). Ordem: nome -> destinatarios
- * (formato e dominio interno) -> template.
+ * (formato e dominio interno) -> template -> confirmarEnvioTotal (aditivo e opcional; a trava
+ * de envio em massa fica no service, depois da elegibilidade de cada destinatario).
  */
 export async function cadastrar(req: Request, res: Response) {
   const { nome, destinatario, destinatarios, template } = validar(req.body, CADASTRO_NOME);
@@ -27,14 +28,29 @@ export async function cadastrar(req: Request, res: Response) {
     if (!emails.some((e) => e.toLowerCase() === email.toLowerCase())) emails.push(email);
   }
   validar(req.body, CADASTRO_TEMPLATE);
+  const { confirmarEnvioTotal } = validar(req.body, CADASTRO_CONFIRMACAO);
 
-  const dados = await campanhaService.criar(usuarioDe(req).id, { nome: nome as string, template: template as string, emails });
+  const dados = await campanhaService.criar(usuarioDe(req).id, {
+    nome: nome as string,
+    template: template as string,
+    emails,
+    confirmado: confirmarEnvioTotal === true,
+  });
   return enviar(res, 201, { status: 'sucesso', mensagem: 'Campanha criada com sucesso', dados });
 }
 
 /** GET /campanhas (lista com metricas). */
 export async function listar(_req: Request, res: Response) {
   const { lista, resumo } = await campanhaService.listar();
+  enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
+}
+
+/**
+ * GET /campanhas/destinatarios?departamento=<id>[&departamento=<id>...] ou ?todos=1
+ * (Administrador/Analista): destinatarios elegiveis para o formulario de campanha.
+ */
+export async function destinatarios(req: Request, res: Response) {
+  const { lista, resumo } = await campanhaService.destinatariosElegiveis(filtroDestinatarios(req.query));
   enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
 }
 
