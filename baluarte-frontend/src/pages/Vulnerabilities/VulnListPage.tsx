@@ -139,8 +139,10 @@ export default function VulnListPage() {
       severity: filters.severity ?? 'all',
       status: filters.status ?? 'all',
       query: debouncedQuery.trim(),
+      // Melhoria 16: o ativo escolhido vai para a lista e, abaixo, para o PDF e o Excel.
+      assetId: filters.assetId,
     }),
-    [filters.severity, filters.status, debouncedQuery],
+    [filters.severity, filters.status, debouncedQuery, filters.assetId],
   );
   const filtersKey = JSON.stringify(effectiveFilters);
 
@@ -175,6 +177,7 @@ export default function VulnListPage() {
     severity: filters.severity ?? 'all',
     status: filters.status ?? 'all',
     query: query.trim(),
+    assetId: filters.assetId,
   });
   const nothingToExport = !data || data.summary.total === 0;
 

@@ -81,4 +81,27 @@ test.describe('Vulnerabilidades', () => {
     await expect(toast(page, 'Ativo cadastrado com sucesso')).toBeVisible();
     await expect(page).toHaveURL(/\/vulnerabilities$/);
   });
+
+  // Melhoria 16: filtro por ativo na barra de filtros, com a lista vinda da API.
+  test('filtra a lista por ativo e o botão Limpar desfaz', async ({ page }) => {
+    // O beforeEach já entra como analista: chamar login() de novo acharia /login já logado.
+    await page.goto('/vulnerabilities');
+    await expect(page.getByRole('heading', { name: 'Vulnerabilidades' })).toBeVisible();
+
+    const seletor = page.getByRole('combobox', { name: 'Ativo' });
+    await expect(seletor).toBeEnabled();
+    // A lista vem da API: espera a primeira opção de ativo chegar.
+    await expect
+      .poll(async () => await seletor.locator('option').count(), { timeout: 10_000 })
+      .toBeGreaterThan(1);
+    const antes = await page.getByTestId('vuln-row').count();
+    await seletor.selectOption({ index: 1 });
+    // A lista é recarregada pelo servidor; o filtro fica aplicado no seletor.
+    await expect(seletor).not.toHaveValue('all');
+    await expect(page.getByRole('button', { name: 'Limpar' })).toBeEnabled();
+
+    await page.getByRole('button', { name: 'Limpar' }).click();
+    await expect(seletor).toHaveValue('all');
+    await expect(page.getByTestId('vuln-row')).toHaveCount(antes);
+  });
 });
