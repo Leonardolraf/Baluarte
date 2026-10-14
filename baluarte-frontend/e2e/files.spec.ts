@@ -1,4 +1,3 @@
-import { open, rm } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { clearSession, login } from './helpers';
 
@@ -68,23 +67,16 @@ test.describe('Análise de arquivos', () => {
     await expect(rows.and(page.locator('[data-result="clean"]')).first()).toBeVisible();
   });
 
-  test('arquivo acima de 250 MB é barrado antes do envio', async ({ page }, testInfo) => {
-    // O Playwright não aceita buffer acima de 50 MB no setInputFiles: o arquivo vai por caminho.
-    // `truncate` só estende o tamanho (nada é escrito byte a byte) e o arquivo some no fim.
-    const caminho = testInfo.outputPath('grande.bin');
-    const arquivo = await open(caminho, 'w');
-    try {
-      await arquivo.truncate(250 * 1024 * 1024 + 1);
-      await arquivo.close();
-      await login(page, 'analyst');
-      await page.goto('/files');
-      await page.getByTestId('file-input').setInputFiles(caminho);
-      await expect(page.getByTestId('form-error')).toContainText('O arquivo passa do limite de 250 MB');
-      await expect(page.getByTestId('file-verdict')).toHaveCount(0);
-    } finally {
-      await arquivo.close().catch(() => undefined);
-      await rm(caminho, { force: true });
-    }
+  test('arquivo acima de 10 MB é barrado antes do envio', async ({ page }) => {
+    await login(page, 'analyst');
+    await page.goto('/files');
+    await page.getByTestId('file-input').setInputFiles({
+      name: 'grande.bin',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.alloc(10 * 1024 * 1024 + 1),
+    });
+    await expect(page.getByTestId('form-error')).toContainText('O arquivo passa do limite de 10 MB');
+    await expect(page.getByTestId('file-verdict')).toHaveCount(0);
   });
 
   test('colaborador vê só as próprias análises, sem a coluna de quem enviou', async ({ page }) => {
