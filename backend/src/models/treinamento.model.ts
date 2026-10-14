@@ -49,3 +49,47 @@ export function dadosTreinamento(evento: { treinou: boolean; treinouEm: Date | n
     concluidoEm: evento.treinouEm,
   };
 }
+
+// ---- Aberturas do link do e-mail (Melhorias #6) ---------------------------------
+// Cada abertura do link vira uma linha em CampaignLinkHit, deduplicada por JANELA_ABERTURA_MS e
+// limitada a TETO_ABERTURAS_POR_EVENTO (o clique do funil continua um por pessoa). IP e user-agent sao dado pessoal: guardados so para a equipe investigar repasse e
+// anulados depois de RETENCAO_DADOS_ABERTURA_DIAS. Nunca saem pela API.
+
+/** LGPD: dias que o IP e o user-agent de uma abertura ficam guardados (decisao de 14/10/2026). */
+export const RETENCAO_DADOS_ABERTURA_DIAS = 90;
+/**
+ * No maximo uma abertura contada por evento a cada 30 min. O link e publico: sem janela, F5,
+ * reabrir a aba e o prefetch de clientes de e-mail (o Gmail busca o link ao exibir a mensagem)
+ * viram "aberturas" e inflam o possivel repasse. 30 min separa esse ruido da mesma pessoa de
+ * uma segunda abertura de verdade (outro aparelho, e-mail repassado).
+ */
+export const JANELA_ABERTURA_MS = 30 * 60 * 1000;
+/**
+ * Teto de linhas por evento. O endpoint e publico: sem teto, um loop no link (mesmo com a
+ * janela, ao longo de dias) enche a tabela e o disco. Acima de 50 a contagem para em 50; o
+ * rotulo de possivel repasse ja aparece com 2.
+ */
+export const TETO_ABERTURAS_POR_EVENTO = 50;
+/** Limites das CHECKs da tabela CampaignLinkHit (migration 20261014120100). */
+export const IP_ABERTURA_MAX = 45;
+export const USER_AGENT_ABERTURA_MAX = 512;
+
+/** Origem da requisicao que abriu o link (os dois opcionais). */
+export type OrigemAbertura = { ip?: string | null; userAgent?: string | null };
+
+/** Corta no limite da CHECK; vazio (ou so espaco/controle) vira null, que a CHECK aceita. */
+function limitar(valor: string | null | undefined, max: number): string | null {
+  // eslint-disable-next-line no-control-regex
+  const limpo = (valor ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return limpo ? limpo.slice(0, max) : null;
+}
+
+/** IP e user-agent prontos para gravar, dentro das CHECKs da tabela. */
+export function dadosDaAbertura(origem: OrigemAbertura = {}) {
+  return { ip: limitar(origem.ip, IP_ABERTURA_MAX), userAgent: limitar(origem.userAgent, USER_AGENT_ABERTURA_MAX) };
+}
+
+/** Mais de uma abertura do mesmo link sugere que o e-mail foi repassado (ou aberto em outro aparelho). */
+export function possivelRepasse(aberturas: number): boolean {
+  return aberturas > 1;
+}
