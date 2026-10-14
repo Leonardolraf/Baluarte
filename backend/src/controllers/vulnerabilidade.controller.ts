@@ -12,6 +12,7 @@ import {
   type CampoOrdenacao,
   type Direcao,
   type FiltrosVulnerabilidade,
+  type FormatoRelatorio,
 } from '../models/vulnerabilidade.model.js';
 import * as vulnerabilidadeService from '../services/vulnerabilidade.service.js';
 import { enviar, enviarArquivo } from '../utils/resposta.js';
@@ -36,13 +37,14 @@ function filtrosDe(req: Request): FiltrosVulnerabilidade {
     severidade: rotuloDaLista(SEVERIDADES, parametro(req, 'severidade')),
     status: rotuloDaLista(STATUS_FINDING, parametro(req, 'status')),
     q: parametro(req, 'q'),
+    ativoId: parametro(req, 'ativoId'),
   };
 }
 
 /**
- * GET /vulnerabilidades?severidade=&status=&q=&pagina=&tamanho=&ordenar=&direcao=
+ * GET /vulnerabilidades?severidade=&status=&q=&ativoId=&pagina=&tamanho=&ordenar=&direcao=
  * (Administrador/Analista). Paginada no servidor (padrao 20, maximo 100); sem `ordenar`, a
- * mais recente primeiro. Parametro invalido: 400 com codigo proprio.
+ * mais recente primeiro. Parametro invalido: 400 com codigo proprio; ativo inexistente: 404.
  */
 export async function listar(req: Request, res: Response) {
   validar(req.query, CONSULTA_LISTA);
@@ -59,11 +61,21 @@ export async function listar(req: Request, res: Response) {
   enviar(res, 200, { status: 'sucesso', dados: lista, resumo });
 }
 
-/** GET /vulnerabilidades/relatorio.pdf?severidade=&status=&q= (Administrador/Analista; B24). Exporta o filtro inteiro, sem paginar. */
-export async function exportarRelatorio(req: Request, res: Response) {
+/** Exporta o filtro inteiro, sem paginar, no formato pedido (os mesmos filtros validados da lista). */
+async function exportar(req: Request, res: Response, formato: FormatoRelatorio) {
   validar(req.query, FILTROS_RELATORIO);
-  const { pdf, nomeArquivo } = await vulnerabilidadeService.exportarRelatorio(usuarioDe(req), filtrosDe(req));
-  enviarArquivo(res, pdf, 'application/pdf', nomeArquivo);
+  const { arquivo, tipo, nomeArquivo } = await vulnerabilidadeService.exportarRelatorio(usuarioDe(req), filtrosDe(req), formato);
+  enviarArquivo(res, arquivo, tipo, nomeArquivo);
+}
+
+/** GET /vulnerabilidades/relatorio.pdf?severidade=&status=&q=&ativoId= (Administrador/Analista; B24). */
+export async function exportarRelatorio(req: Request, res: Response) {
+  return exportar(req, res, 'PDF');
+}
+
+/** GET /vulnerabilidades/relatorio.xlsx?severidade=&status=&q=&ativoId= (Administrador/Analista; Melhorias #17). */
+export async function exportarRelatorioExcel(req: Request, res: Response) {
+  return exportar(req, res, 'XLSX');
 }
 
 /** GET /vulnerabilidades/:id (com a origem e o historico). */

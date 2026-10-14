@@ -108,6 +108,8 @@ export interface BaluarteApi {
   updateVulnerabilityStatus(id: string, status: VulnerabilityStatus, note?: string): Promise<Vulnerability>;
   /** Relatório em PDF com os mesmos filtros da lista (B24; registra a exportação na auditoria). */
   exportVulnerabilityReport(filters?: VulnerabilityFilters): Promise<VulnerabilityReportFile>;
+  /** O mesmo relatório em Excel (.xlsx), com os mesmos filtros e a mesma auditoria. */
+  exportVulnerabilityReportExcel(filters?: VulnerabilityFilters): Promise<VulnerabilityReportFile>;
 
   // Campanhas de phishing
   listCampaigns(filters?: CampaignFilters): Promise<Campaign[]>;

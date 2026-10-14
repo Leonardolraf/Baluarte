@@ -170,12 +170,12 @@ describe('filtros (os mesmos da lista)', () => {
 });
 
 describe('auditoria da exportação', () => {
-  it('grava EXPORTAR_RELATORIO_VULNERABILIDADES com autor, quantidade e filtros', async () => {
+  it('grava EXPORTAR_RELATORIO_VULNERABILIDADES com autor, quantidade, filtros e formato', async () => {
     await exportar('?severidade=Alto&status=Aberta', analista);
     const reg = await prisma.auditLog.findFirst({ where: { acao: ACAO }, orderBy: { timestamp: 'desc' } });
     assert.ok(reg, 'exportação registrada');
     assert.equal(reg.usuarioId, 'u-001');
-    assert.equal(reg.detalhe, '1 achado; severidade: Alto; status: Aberta; busca: nenhuma');
+    assert.equal(reg.detalhe, '1 achado; severidade: Alto; status: Aberta; busca: nenhuma; formato: PDF');
   });
 
   it('uma exportação = um registro; 403 não registra', async () => {
@@ -186,7 +186,7 @@ describe('auditoria da exportação', () => {
     assert.equal(await contarAuditoria(), antes + 1);
     const reg = await prisma.auditLog.findFirst({ where: { acao: ACAO }, orderBy: { timestamp: 'desc' } });
     assert.equal(reg?.usuarioId, 'u-000');
-    assert.equal(reg?.detalhe, '5 achados; severidade: todas; status: todos; busca: nenhuma');
+    assert.equal(reg?.detalhe, '5 achados; severidade: todas; status: todos; busca: nenhuma; formato: PDF');
   });
 
   it('a ação aparece na consulta da auditoria (Administrador)', async () => {

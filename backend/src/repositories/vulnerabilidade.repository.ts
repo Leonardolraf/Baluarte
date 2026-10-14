@@ -18,7 +18,8 @@ const COLUNA = { detectadoEm: 'criadoEm', cvss: 'cvss', descricao: 'descricao' }
 /**
  * Filtros da lista e do relatorio como `where` do banco. Severidade e status chegam no
  * rotulo oficial (o controller ja normalizou maiusculas); a busca e por trecho, sem
- * diferenciar maiusculas, no host do ativo, na categoria OWASP, no CVE ou no programa (B14).
+ * diferenciar maiusculas, no host do ativo, na categoria OWASP, no CVE ou no programa (B14);
+ * `ativoId` restringe as varreduras daquele ativo (Melhorias #16) e se soma aos demais (E).
  */
 function filtro(f: FiltrosVulnerabilidade): Prisma.FindingWhereInput {
   // O `contains` do Prisma vira ILIKE '%termo%' sem escapar curingas: `%` e `_` do usuario
@@ -27,6 +28,7 @@ function filtro(f: FiltrosVulnerabilidade): Prisma.FindingWhereInput {
   return {
     ...(f.severidade ? { severidade: f.severidade } : {}),
     ...(f.status ? { status: f.status } : {}),
+    ...(f.ativoId ? { scan: { assetId: f.ativoId } } : {}),
     ...(termo
       ? {
           OR: [
@@ -76,7 +78,7 @@ export async function listarPagina(f: FiltrosVulnerabilidade, o: OrdemVulnerabil
   };
 }
 
-/** Todos os achados do filtro, sem paginar (o relatorio em PDF exporta o filtro inteiro). */
+/** Todos os achados do filtro, sem paginar (o relatorio, em PDF ou Excel, exporta o filtro inteiro). */
 export async function listarFiltrados(f: FiltrosVulnerabilidade): Promise<FindingComScan[]> {
   return prisma.finding.findMany({ where: filtro(f), include: COM_ATIVO, orderBy: ordem({ campo: 'detectadoEm', direcao: 'desc' }) });
 }

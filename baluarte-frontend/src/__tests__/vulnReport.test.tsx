@@ -141,7 +141,7 @@ describe('mockApi.exportVulnerabilityReport', () => {
     login('admin');
     const audit = await mockApi.listAuditLog({ action: 'EXPORTAR_RELATORIO_VULNERABILIDADES' });
     expect(audit.items[0].detail).toBe(
-      `${summary.total} ${summary.total === 1 ? 'achado' : 'achados'}; severidade: Crítico; status: todos; busca: nenhuma`,
+      `${summary.total} ${summary.total === 1 ? 'achado' : 'achados'}; severidade: Crítico; status: todos; busca: nenhuma; formato: PDF`,
     );
     expect(audit.items[0].user?.email).toBe(MOCK_USERS.find((u) => u.role === 'analyst')!.email);
   });

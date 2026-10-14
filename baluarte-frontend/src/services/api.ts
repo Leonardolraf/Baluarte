@@ -285,7 +285,46 @@ function vulnerabilityFilterParams(filters: VulnerabilityFilters): Record<string
   if (filters.status && filters.status !== 'all') params.status = VULN_STATUS_TO_LABEL[filters.status];
   const query = filters.query?.trim();
   if (query) params.q = query;
+  const assetId = filters.assetId?.trim();
+  if (assetId) params.ativoId = assetId;
   return params;
+}
+
+/** Formatos do relatório de vulnerabilidades: rota, tipo aceito e extensão do nome padrão. */
+const VULN_REPORT_FORMATS = {
+  pdf: { url: '/vulnerabilidades/relatorio.pdf', accept: 'application/pdf' },
+  xlsx: {
+    url: '/vulnerabilidades/relatorio.xlsx',
+    accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  },
+} as const;
+
+/**
+ * Baixa o relatório no formato pedido: o servidor aplica os mesmos filtros da lista (sem
+ * paginar), gera o arquivo e registra a exportação na auditoria. Blob pelo mesmo cliente (o
+ * interceptor põe o token e lê o envelope de erro de dentro do Blob).
+ */
+async function downloadVulnerabilityReport(
+  format: keyof typeof VULN_REPORT_FORMATS,
+  filters: VulnerabilityFilters,
+): Promise<VulnerabilityReportFile> {
+  const { url, accept } = VULN_REPORT_FORMATS[format];
+  const response = await httpClient.request<Blob>({
+    method: 'GET',
+    url,
+    params: vulnerabilityFilterParams(filters),
+    responseType: 'blob',
+    headers: { Accept: accept },
+    // Gerar o arquivo leva mais que uma leitura comum.
+    timeout: 60_000,
+  });
+  const disposition = response.headers?.['content-disposition'];
+  return {
+    blob: response.data,
+    filename:
+      filenameFromDisposition(typeof disposition === 'string' ? disposition : null) ??
+      vulnerabilityReportFilename(new Date(), format),
+  };
 }
 
 /** Rota inexistente no backend atual vira 501 explícito (em vez de "Rota não encontrada"). */
@@ -485,26 +524,14 @@ export const realApi: BaluarteApi = {
     return toVulnerabilityList(dados, resumo as BackendVulnerabilitySummary | undefined, { page, pageSize });
   },
 
-  // Relatório em PDF (B24): o servidor aplica os mesmos filtros da lista, gera o arquivo e
-  // registra a exportação na auditoria. Blob pelo mesmo cliente (o interceptor põe o token).
+  // Relatório em PDF (B24).
   async exportVulnerabilityReport(filters: VulnerabilityFilters = {}): Promise<VulnerabilityReportFile> {
-    const params = vulnerabilityFilterParams(filters);
-    const response = await httpClient.request<Blob>({
-      method: 'GET',
-      url: '/vulnerabilidades/relatorio.pdf',
-      params,
-      responseType: 'blob',
-      headers: { Accept: 'application/pdf' },
-      // Gerar o PDF leva mais que uma leitura comum.
-      timeout: 60_000,
-    });
-    const disposition = response.headers?.['content-disposition'];
-    return {
-      blob: response.data,
-      filename:
-        filenameFromDisposition(typeof disposition === 'string' ? disposition : null) ??
-        vulnerabilityReportFilename(),
-    };
+    return downloadVulnerabilityReport('pdf', filters);
+  },
+
+  // O mesmo relatório em Excel (.xlsx): abas "Resumo" e "Achados", sem paginar.
+  async exportVulnerabilityReportExcel(filters: VulnerabilityFilters = {}): Promise<VulnerabilityReportFile> {
+    return downloadVulnerabilityReport('xlsx', filters);
   },
 
   async getVulnerability(id: string): Promise<Vulnerability> {

@@ -19,10 +19,13 @@ export function filenameFromDisposition(header: string | null | undefined): stri
   return base || null;
 }
 
-/** Nome padrão do relatório: `baluarte-vulnerabilidades-AAAA-MM-DD.pdf` (data local). */
-export function vulnerabilityReportFilename(date: Date = new Date()): string {
+/** Nome padrão do relatório: `baluarte-vulnerabilidades-AAAA-MM-DD.pdf` (ou `.xlsx`), data local. */
+export function vulnerabilityReportFilename(
+  date: Date = new Date(),
+  extension: 'pdf' | 'xlsx' = 'pdf',
+): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `baluarte-vulnerabilidades-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.pdf`;
+  return `baluarte-vulnerabilidades-${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}.${extension}`;
 }
 
 /** Entrega o Blob ao navegador como download com o nome dado. */
