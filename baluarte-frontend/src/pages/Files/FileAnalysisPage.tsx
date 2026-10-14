@@ -27,6 +27,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import {
   CLEAN_VERDICT,
   FILE_TOO_LARGE_MESSAGE,
+  MAX_FILE_SIZE_LABEL,
   fileScanErrorMessage,
   fileScanVerdict,
   unanalyzableLabel,
@@ -595,7 +596,7 @@ export default function FileAnalysisPage() {
         }
       />
 
-      <Card title="Enviar arquivo" subtitle="Um arquivo por vez, até 10 MB.">
+      <Card title="Enviar arquivo" subtitle={`Um arquivo por vez, até ${MAX_FILE_SIZE_LABEL}.`}>
         <div className="space-y-4">
           <p
             id="file-privacy"
@@ -683,7 +684,8 @@ export default function FileAnalysisPage() {
               Escolher arquivo
             </span>
             <p id="file-drop-hint" className="text-xs text-slate-500 dark:text-slate-400">
-              Qualquer tipo de arquivo, até 10 MB. A análise começa assim que o arquivo é escolhido.
+              Qualquer tipo de arquivo, até {MAX_FILE_SIZE_LABEL}. A análise começa assim que o arquivo é
+              escolhido.
             </p>
           </div>
           <input

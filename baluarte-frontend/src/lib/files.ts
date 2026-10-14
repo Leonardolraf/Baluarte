@@ -6,8 +6,62 @@ import type { FileScan, SecondOpinion, SecondOpinionReason } from '@/types';
 // mensagens que a tela mostra para cada erro do contrato do B04.
 // -----------------------------------------------------------------------------
 
-/** Limite do contrato (B04): 10 MB. A tela barra antes de enviar; a API responde 413 acima disso. */
-export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+/**
+ * Limite da API (B04, LIMITE_ARQUIVO_BYTES no backend): 250 MB de 1024 × 1024 bytes. A tela barra
+ * antes de enviar; a API responde 413 ARQUIVO_MUITO_GRANDE acima disso.
+ */
+export const MAX_FILE_SIZE_MB = 250;
+export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+export const MAX_FILE_SIZE_LABEL = `${MAX_FILE_SIZE_MB} MB`;
+
+/**
+ * Tempo do envio no navegador (decisão do Leo, Melhorias #18): como no servidor, o envio não tem
+ * prazo total, só de OCIOSIDADE. 250 MB numa conexão lenta porém estável podem levar o tempo que
+ * for; sem progresso por 90 s (o servidor desiste em 60 s, então normalmente quem responde é a
+ * API, com 408 ENVIO_PARADO) a tela desiste. Depois do último byte, espera a análise por até
+ * 6 min (o antivírus tem até 5 min na API, CLAMAV_TIMEOUT_MS).
+ */
+export const UPLOAD_IDLE_TIMEOUT_MS = 90_000;
+export const SCAN_RESPONSE_TIMEOUT_MS = 6 * 60_000;
+
+/** Motivo da desistência do vigia de envio. */
+export type UploadAbortReason = 'idle' | 'response';
+
+/**
+ * Vigia do envio: chama `onExpire` se o progresso parar por `idleMs` durante o envio ou se a
+ * resposta não vier em `responseMs` depois do último byte. `progress` recebe o `onUploadProgress`
+ * do axios; `stop` encerra o vigia (resposta chegou ou deu erro).
+ */
+export function watchUpload(
+  onExpire: (reason: UploadAbortReason) => void,
+  { idleMs = UPLOAD_IDLE_TIMEOUT_MS, responseMs = SCAN_RESPONSE_TIMEOUT_MS } = {},
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let sent = false;
+  const arm = (ms: number, reason: UploadAbortReason) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      onExpire(reason);
+    }, ms);
+  };
+  arm(idleMs, 'idle');
+  return {
+    progress(loaded: number, total: number | undefined) {
+      if (sent) return;
+      if (total !== undefined && loaded >= total) {
+        sent = true;
+        arm(responseMs, 'response');
+      } else {
+        arm(idleMs, 'idle');
+      }
+    },
+    stop() {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+    },
+  };
+}
 
 /** Veredito sem ameaça. Nunca "arquivo seguro": o antivírus só conhece assinaturas já catalogadas. */
 export const CLEAN_VERDICT = 'Nenhuma ameaça conhecida encontrada';
@@ -31,19 +85,41 @@ export function formatBytes(bytes: number): string {
   return `${value.toLocaleString('pt-BR', { maximumFractionDigits: digits, minimumFractionDigits: 0 })} ${units[unit]}`;
 }
 
-export const FILE_TOO_LARGE_MESSAGE = 'O arquivo passa do limite de 10 MB. Escolha um arquivo menor.';
+export const FILE_TOO_LARGE_MESSAGE = `O arquivo passa do limite de ${MAX_FILE_SIZE_LABEL}. Escolha um arquivo menor.`;
+
+/**
+ * 413 sem o código da API: quem recusou foi a hospedagem, antes de a API ler o arquivo (ex.: a
+ * função serverless da Vercel, que só aceita corpos de poucos MB). O limite de 250 MB não se
+ * aplica ali, então a mensagem não o repete.
+ */
+/** Espelha LIMITE_ANALISES_SIMULTANEAS do backend (2): só para a mensagem da tela. */
+export const MAX_CONCURRENT_ANALYSES = 2;
+
+export const HOST_TOO_LARGE_MESSAGE =
+  'Este ambiente recusou o envio pelo tamanho antes da análise (o limite da hospedagem é menor que o da plataforma). Tente um arquivo menor ou fale com a equipe de segurança.';
 
 /** Mensagem clara para cada erro do contrato de POST /arquivos/analise. */
 export function fileScanErrorMessage(error: unknown): string {
   if (isHttpError(error)) {
     if (error.code === 'ARQUIVO_OBRIGATORIO')
       return 'Nenhum arquivo chegou ao servidor. Escolha um arquivo e tente de novo.';
-    if (error.status === 413 || error.code === 'ARQUIVO_MUITO_GRANDE') return FILE_TOO_LARGE_MESSAGE;
+    if (error.code === 'ARQUIVO_MUITO_GRANDE') return FILE_TOO_LARGE_MESSAGE;
+    if (error.status === 413) return HOST_TOO_LARGE_MESSAGE;
+    if (error.code === 'ENVIO_PARADO' || error.code === 'ENVIO_SEM_PROGRESSO')
+      return 'O envio parou de avançar (conexão instável ou interrompida). Verifique a conexão e tente de novo.';
+    if (error.code === 'ANALISE_SEM_RESPOSTA')
+      return 'O arquivo chegou, mas a análise não respondeu a tempo. Tente de novo em alguns minutos.';
     // B23: anexo de campanha (antes do 429 genérico: o teto por campanha também é 429).
     if (error.code === 'CAMPANHA_NAO_RECEBIDA' || error.code === 'EVENTO_CAMPANHA_INVALIDO')
       return 'Essa campanha não está entre as que você recebeu. Escolha outra ou envie o arquivo sem campanha.';
     if (error.code === 'LIMITE_ANEXOS_CAMPANHA')
       return `Você já enviou ${MAX_ATTACHMENTS_PER_CAMPAIGN} anexos desta campanha. Se recebeu mais, fale com a equipe de segurança.`;
+    // Dois 429 diferentes, e a mensagem genérica mentia para o segundo: 'limite por hora'
+    // não descreve 'duas análises ao mesmo tempo' — quem esperasse uma hora esperaria em vão.
+    if (error.code === 'ANALISES_SIMULTANEAS')
+      return `Você já tem ${MAX_CONCURRENT_ANALYSES} análises em andamento. Espere uma terminar para enviar outra.`;
+    if (error.code === 'ENVIO_TEMPO_MAXIMO')
+      return 'O envio passou do tempo máximo permitido. Tente de novo com uma conexão mais estável ou um arquivo menor.';
     if (error.status === 429 || error.code === 'MUITAS_ANALISES')
       return 'Você atingiu o limite de análises por hora. Aguarde um pouco e tente de novo.';
     if (error.status === 503 || error.code === 'ANTIVIRUS_INDISPONIVEL')
@@ -82,7 +158,9 @@ export function fileScanVerdict(scan: Pick<FileScan, 'result' | 'threat'>): stri
   const motivo = unanalyzableLabel(scan.threat);
   if (motivo) return `Arquivo não analisável: ${motivo}`;
   const verdict = `Ameaça encontrada: ${scan.threat ?? 'não identificada'}`;
-  return isOwnRule(scan.threat) ? `${verdict} (${OWN_RULE_LABEL})` : verdict;
+  if (isOwnRule(scan.threat)) return `${verdict} (${OWN_RULE_LABEL})`;
+  if (isLimitExceeded(scan.threat)) return `${verdict} (${LIMIT_EXCEEDED_LABEL})`;
+  return verdict;
 }
 
 // ---- Regras YARA próprias e anexo de campanha (B23) --------------------------
@@ -97,6 +175,18 @@ export const OWN_RULE_LABEL = 'regra própria do Baluarte';
 export function isOwnRule(threat: string | null | undefined): boolean {
   return typeof threat === 'string' && /^YARA\.Baluarte[A-Za-z0-9_]*\.UNOFFICIAL$/.test(threat);
 }
+
+/**
+ * `Heuristics.Limits.Exceeded.<Limite>`: o antivírus não conseguiu analisar o arquivo inteiro
+ * (tamanho, compactado grande ou fundo demais) e, por precaução, isso conta como ameaça. Mesma
+ * regra do backend (`ehLimiteExcedido`).
+ */
+export function isLimitExceeded(threat: string | null | undefined): boolean {
+  return typeof threat === 'string' && /^Heuristics\.Limits\.Exceeded(\.[A-Za-z0-9_]+)?$/.test(threat);
+}
+
+export const LIMIT_EXCEEDED_LABEL =
+  'passa dos limites de análise do antivírus; tratado como ameaça por precaução';
 
 /** Anexos por destinatário em cada campanha (o mesmo teto do backend). */
 export const MAX_ATTACHMENTS_PER_CAMPAIGN = 5;
