@@ -36,7 +36,8 @@ function evento(nome: string, hostIdentifier: string, linhas: Linha[]) {
 const deb = (name: string, version: string): Linha => ({ name, version, fornecedor: 'Ubuntu Developers' });
 
 /**
- * Pacotes de uma estação Ubuntu. openssl e curl têm vulnerabilidade na base falsa; a versão
+ * Pacotes de uma estação Ubuntu. Na base falsa, openssl e curl têm um CVE com correção publicada
+ * cada (viram achado) e o curl tem mais um sem correção (DT17: só conta, não vira achado). A versão
  * leva um sufixo único para cada teste consultar a base (o cache do banco é por versão).
  */
 function pacotes(extra: Linha[] = []): Linha[] {
@@ -152,6 +153,8 @@ test.describe('Estações monitoradas (API real, agente osquery simulado)', () =
     await verificar.click();
     const resultado = page.getByTestId('verification-result');
     await expect(resultado).toContainText('Verificação concluída: 2 achados novos, 0 já registrados.');
+    // DT17: o CVE do curl sem versão corrigida publicada aparece na contagem, não como achado.
+    await expect(resultado).toContainText('1 CVE sem correção publicada (não vira achado)');
     await expect(resultado).not.toContainText('Sem resposta');
     expect((await pedidosAsBases(request)).OSV).toBeGreaterThan(antes.OSV);
 
@@ -171,9 +174,13 @@ test.describe('Estações monitoradas (API real, agente osquery simulado)', () =
     await expect(rows).toHaveCount(2);
     await expect(rows.filter({ hasText: 'CVE-2023-38545' })).toHaveCount(1);
     await expect(rows.filter({ hasText: 'CVE-2023-5678' })).toHaveCount(1);
+    await expect(rows.filter({ hasText: 'CVE-2024-11111' })).toHaveCount(0);
   });
 
-  test('base fora do ar: a verificação avisa e não inventa achado', async ({ page, request }) => {
+  test('base fora do ar: a verificação fica incompleta, avisa e não registra nada (DT17)', async ({
+    page,
+    request,
+  }) => {
     test.skip(!BASES_URL, 'defina E2E_BASES_URL (OSV/NVD falsos); nunca consultar as bases públicas');
     // O pacote marcador faz o OSV falso responder 503 para o lote inteiro.
     const estacao = await inscreverEstacao(request, pacotes([deb('e2e-base-fora-do-ar', '1.0')]));
@@ -182,9 +189,12 @@ test.describe('Estações monitoradas (API real, agente osquery simulado)', () =
     await page.goto('/stations');
     await page.getByTestId('station-row').filter({ hasText: estacao.nome }).getByRole('link').click();
     await page.getByRole('button', { name: 'Verificar vulnerabilidades' }).click();
+    // DT17: com base sem resposta a verificação não é inteira; nada é gravado e a data não muda.
     const resultado = page.getByTestId('verification-result');
-    await expect(resultado).toContainText('0 achados novos');
+    await expect(resultado).toContainText('Verificação incompleta: nada foi registrado.');
+    await expect(resultado).not.toContainText('Verificação concluída');
     await expect(resultado).toContainText('Sem resposta de OSV');
+    await expect(page.getByText('Nunca verificada')).toBeVisible();
     await expect(page.getByText('Achados em aberto').locator('..')).toContainText('0');
   });
 
