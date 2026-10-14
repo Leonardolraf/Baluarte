@@ -310,13 +310,16 @@ describe('mockApi — análise de arquivos', () => {
     expect(byContent.scan.result).toBe('threat');
   });
 
-  it('acima de 10 MB responde 413 ARQUIVO_MUITO_GRANDE (exatamente 10 MB passa)', async () => {
+  it('acima de 250 MB responde 413 ARQUIVO_MUITO_GRANDE (exatamente 250 MB passa)', async () => {
     loginAs('analyst');
     const big = new File(['x'], 'grande.bin');
     Object.defineProperty(big, 'size', { value: MAX_FILE_SIZE_BYTES + 1 });
     await expectHttp(mockApi.analyzeFile(big), 413, 'ARQUIVO_MUITO_GRANDE');
 
-    const limit = new File([new Uint8Array(MAX_FILE_SIZE_BYTES)], 'limite.bin');
+    // O tamanho declarado é o que o limite confere; o conteúdo fica pequeno para o teste não
+    // alocar 250 MB.
+    const limit = new File(['x'], 'limite.bin');
+    Object.defineProperty(limit, 'size', { value: MAX_FILE_SIZE_BYTES });
     expect((await mockApi.analyzeFile(limit)).scan.size).toBe(MAX_FILE_SIZE_BYTES);
   });
 
@@ -445,12 +448,13 @@ describe('mockApi — análise de arquivos', () => {
 });
 
 describe('lib/files', () => {
-  it('formatBytes em pt-BR e o limite de 10 MB', () => {
+  it('formatBytes em pt-BR e o limite de 250 MB', () => {
     expect(formatBytes(1)).toBe('1 byte');
     expect(formatBytes(68)).toBe('68 bytes');
     expect(formatBytes(1536)).toBe('1,5 KB');
     expect(formatBytes(245_812)).toBe('240 KB');
-    expect(formatBytes(MAX_FILE_SIZE_BYTES)).toBe('10 MB');
+    expect(MAX_FILE_SIZE_BYTES).toBe(250 * 1024 * 1024);
+    expect(formatBytes(MAX_FILE_SIZE_BYTES)).toBe('250 MB');
     expect(formatBytes(-1)).toBe('—');
     expect(isTooLarge(MAX_FILE_SIZE_BYTES)).toBe(false);
     expect(isTooLarge(MAX_FILE_SIZE_BYTES + 1)).toBe(true);
@@ -458,7 +462,11 @@ describe('lib/files', () => {
 
   it('mensagem clara para cada erro do contrato', () => {
     expect(fileScanErrorMessage(new HttpError(400, 'ARQUIVO_OBRIGATORIO', 'x'))).toMatch(/Nenhum arquivo/);
-    expect(fileScanErrorMessage(new HttpError(413, 'ARQUIVO_MUITO_GRANDE', 'x'))).toMatch(/10 MB/);
+    expect(fileScanErrorMessage(new HttpError(413, 'ARQUIVO_MUITO_GRANDE', 'x'))).toMatch(/limite de 250 MB/);
+    // 413 sem o código da API (hospedagem, ex.: Vercel): não promete os 250 MB.
+    const hospedagem = fileScanErrorMessage(new HttpError(413, 'HTTP_413', 'Erro 413'));
+    expect(hospedagem).toMatch(/recusou o envio pelo tamanho/);
+    expect(hospedagem).not.toMatch(/250 MB/);
     expect(fileScanErrorMessage(new HttpError(429, 'MUITAS_ANALISES', 'x'))).toMatch(/limite de análises/);
     expect(fileScanErrorMessage(new HttpError(503, 'ANTIVIRUS_INDISPONIVEL', 'x'))).toMatch(
       /não está disponível neste ambiente/,

@@ -107,9 +107,35 @@ services:
   # sai do repositório sai do volume (apaga baluarte_*.yar e copia de novo). O freshclam só
   # mexe nos bancos oficiais (main, daily, bytecode) e não apaga arquivos extras. Regra nova:
   # `docker compose --profile antivirus restart clamav` (ver README, "Regras YARA").
+  #
+  # Limites do clamd para o arquivo de até 250 MB da API (LIMITE_ARQUIVO_BYTES; 251M = folga de
+  # 1 MB). O /init da imagem oficial grava cada CLAMD_CONF_<Opção>=<valor> no clamd.conf.
+  # Padrões da imagem e o que eles faziam com um arquivo grande (medido em 13/10/2026):
+  #   StreamMaxLength 100M     -> o clamd corta o fluxo em ~100 MB e a API responde 503
+  #   MaxFileSize 100M         -> arquivo maior não é varrido
+  #   MaxScanSize 400M         -> HTML de 250 MB (original + normalizado) esgota a cota e sai "OK"
+  #   MaxHTMLNormalize 40M     -> HTML acima de 40 MB sai "OK" sem as regras de HTML (YARA do
+  #                               Baluarte para HTML smuggling não dispara)
+  #   MaxScriptNormalize 20M   -> o mesmo para scripts (não medido à parte; sobe pelo mesmo motivo)
+  #   PCREMaxFileSize 100M     -> regras com expressão regular (as de base64 do Baluarte) puladas
+  # Do MaxScanSize para baixo, o padrão falha para o lado tranquilizador ("OK" sem ter olhado o
+  # arquivo inteiro); por isso sobem todos juntos. Só com os seis o HTML smuggling de 250 MB foi
+  # detectado; sem qualquer um dos três de HTML/PCRE/cota, ele saiu "OK".
+  # Custo medido com 250 MB num desktop de 16 núcleos: varredura de 6 s (só os dois primeiros) a
+  # 30-65 s (todos), +0,3 a +0,8 GiB de RAM por varredura em curso e um temporário de 250 a
+  # 350 MB no /tmp do contêiner (o clamd junta o fluxo em arquivo e o apaga no fim). Os tempos
+  # de leitura padrão bastam: ReadTimeout 120 s entre blocos (eles fluem enquanto o arquivo
+  # chega) e CommandReadTimeout 30 s até o comando (a API manda na hora).
   clamav:
     image: clamav/clamav:1.5
     profiles: ["antivirus"]
+    environment:
+      - CLAMD_CONF_StreamMaxLength=251M
+      - CLAMD_CONF_MaxFileSize=251M
+      - CLAMD_CONF_MaxScanSize=1000M
+      - CLAMD_CONF_MaxHTMLNormalize=251M
+      - CLAMD_CONF_MaxScriptNormalize=251M
+      - CLAMD_CONF_PCREMaxFileSize=251M
     entrypoint:
       - /bin/sh
       - -c

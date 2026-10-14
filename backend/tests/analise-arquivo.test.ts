@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { ADMIN, ANALISTA, SENHA_CONTA, criarUsuario, encerrarServidor, esperaErro, iniciarServidor, login, prepararBanco, urlBase, chamar } from './helpers.js';
+import { enviarArquivoEmFluxo, lerInstream } from './envioEmFluxo.js';
 
 prepararBanco(import.meta.url);
 
@@ -14,26 +15,24 @@ const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$
 let clamd: Server;
 let recebidoPeloClamd = 0;
 
+/** clamd falso em fluxo (envioEmFluxo.ts): conta o total e olha so o comeco do arquivo. */
 function falsoClamd(socket: Socket) {
-  let bruto = Buffer.alloc(0);
-  socket.on('data', (d) => {
-    bruto = Buffer.concat([bruto, d]);
-    let pos = 'zINSTREAM\0'.length;
-    const partes: Buffer[] = [];
-    while (pos + 4 <= bruto.length) {
-      const n = bruto.readUInt32BE(pos);
-      if (n === 0) {
-        const conteudo = Buffer.concat(partes);
-        recebidoPeloClamd = conteudo.length;
-        socket.end(conteudo.includes(Buffer.from('EICAR-STANDARD-ANTIVIRUS-TEST-FILE')) ? 'stream: Eicar-Signature FOUND\0' : 'stream: OK\0');
-        return;
-      }
-      if (pos + 4 + n > bruto.length) return;
-      partes.push(bruto.subarray(pos + 4, pos + 4 + n));
-      pos += 4 + n;
-    }
+  lerInstream(socket, (amostra, total) => {
+    recebidoPeloClamd = total;
+    socket.end(amostra.includes(Buffer.from('EICAR-STANDARD-ANTIVIRUS-TEST-FILE')) ? 'stream: Eicar-Signature FOUND\0' : 'stream: OK\0');
   });
 }
+
+/** SHA-256 de `tamanho` bytes iguais a `byte`, calculado em blocos (sem montar o arquivo). */
+function sha256Repetido(byte: number, tamanho: number) {
+  const h = createHash('sha256');
+  const bloco = Buffer.alloc(1024 * 1024, byte);
+  for (let falta = tamanho; falta > 0; falta -= bloco.length) h.update(falta >= bloco.length ? bloco : bloco.subarray(0, falta));
+  return h.digest('hex');
+}
+
+/** Limite real da API (250 MB), sem copia do numero: o teste acompanha a constante. */
+const { LIMITE_ARQUIVO_BYTES } = await import('../src/models/analiseArquivo.model.js');
 
 const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/config/db.js');
@@ -107,18 +106,40 @@ describe('POST /arquivos/analise', () => {
     assert.doesNotMatch(JSON.stringify(r.body), /conteudo-secreto/);
   });
 
-  it('acima de 10 MB: 413 ARQUIVO_MUITO_GRANDE e nada é registrado', async () => {
+  // Os dois testes do limite geram o corpo em fluxo (envioEmFluxo.ts): 250 MB nunca ficam
+  // inteiros na memoria, nem do teste nem do clamd falso.
+  it('o limite é de 250 MB (MB de 1024 × 1024 bytes)', () => {
+    assert.equal(LIMITE_ARQUIVO_BYTES, 250 * 1024 * 1024);
+  });
+
+  it('acima de 250 MB: 413 ARQUIVO_MUITO_GRANDE com a mensagem do limite, e nada é registrado', async () => {
     const antes = await prisma.fileScan.count();
-    const r = await enviarArquivo(admin, Buffer.alloc(10 * 1024 * 1024 + 1, 65), 'grande.bin');
+    const r = await enviarArquivoEmFluxo({ token: admin, tamanho: LIMITE_ARQUIVO_BYTES + 1 });
     assert.equal(r.status, 413, JSON.stringify(r.body));
     assert.equal(r.body.codigoErro, 'ARQUIVO_MUITO_GRANDE');
+    assert.equal(r.body.mensagem, 'Arquivo maior que o limite de 250 MB');
     assert.equal(await prisma.fileScan.count(), antes);
   });
 
-  it('exatamente 10 MB passa', async () => {
-    const r = await enviarArquivo(admin, Buffer.alloc(10 * 1024 * 1024, 66), 'limite.bin');
-    assert.equal(r.status, 201, JSON.stringify(r.body));
-    assert.equal(r.body.dados.tamanho, 10 * 1024 * 1024);
+  it('exatamente 250 MB passa, o antivírus recebe o arquivo inteiro e a memória não cresce junto', async () => {
+    // Cliente, API e clamd falso estao no mesmo processo: se algum deles juntasse o arquivo, o
+    // RSS subiria pelo menos 250 MB. Em fluxo, o pico medido ficou bem abaixo do teto de 128 MB.
+    global.gc?.();
+    const base = process.memoryUsage().rss;
+    let pico = base;
+    const amostra = setInterval(() => { pico = Math.max(pico, process.memoryUsage().rss); }, 20);
+    try {
+      const r = await enviarArquivoEmFluxo({ token: admin, tamanho: LIMITE_ARQUIVO_BYTES, nome: 'limite.bin', byte: 66 });
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.dados.tamanho, LIMITE_ARQUIVO_BYTES);
+      assert.equal(recebidoPeloClamd, LIMITE_ARQUIVO_BYTES);
+      assert.equal(r.body.dados.sha256, sha256Repetido(66, LIMITE_ARQUIVO_BYTES), 'SHA-256 do arquivo inteiro');
+    } finally {
+      clearInterval(amostra);
+    }
+    const cresceuMb = (pico - base) / 1024 / 1024;
+    console.log(`[memoria] 250 MB em fluxo: RSS subiu ${cresceuMb.toFixed(1)} MB`);
+    assert.ok(cresceuMb < 128, `RSS subiu ${cresceuMb.toFixed(1)} MB durante o envio de 250 MB`);
   });
 
   it('sem arquivo, campo errado ou corpo JSON: 400 ARQUIVO_OBRIGATORIO', async () => {

@@ -1,17 +1,31 @@
 import { connect, type Socket } from 'node:net';
 
 // Cliente do clamd (ClamAV) pelo protocolo INSTREAM: o arquivo vai em blocos pela rede, com
-// cada bloco precedido do tamanho (4 bytes, big-endian) e um bloco de tamanho zero no fim. Nada
-// e gravado em disco, nem aqui nem no clamd. Resposta: "stream: OK", "stream: <ameaca> FOUND"
-// ou "... ERROR". Endereco em CLAMAV_HOST/CLAMAV_PORT (servico clamav do Compose, perfil
-// `antivirus`).
+// cada bloco precedido do tamanho (4 bytes, big-endian) e um bloco de tamanho zero no fim. Aqui
+// nada e gravado em disco nem guardado inteiro na memoria: cada bloco segue assim que chega. O
+// clamd, do lado dele, junta o fluxo num arquivo temporario no /tmp do conteiner (medido em
+// 13/10/2026: 250 MB viram um .tmp de 250 MB, mais a copia normalizada se for HTML) e o apaga
+// ao fim da varredura. Resposta: "stream: OK", "stream: <ameaca> FOUND" ou "... ERROR".
+// Endereco em CLAMAV_HOST/CLAMAV_PORT (servico clamav do Compose, perfil `antivirus`).
 
 export type Veredito = { resultado: 'LIMPO' | 'AMEACA'; ameaca: string | null };
 
 /** O clamd nao respondeu (fora do ar, sem rede, tempo esgotado ou erro dele). */
 export class AntivirusIndisponivel extends Error {}
 
-const TEMPO_LIMITE_MS = Number(process.env.CLAMAV_TIMEOUT_MS ?? 60_000);
+/**
+ * Tempo maximo SEM TROCA DE DADOS com o clamd (inatividade do socket, nao a duracao total).
+ * Enquanto o arquivo chega, os blocos fluem; o silencio longo e depois do ultimo bloco, quando
+ * o clamd varre. Com 250 MB essa varredura levou de 6 s a 65 s num desktop de 16 nucleos
+ * (13/10/2026; o tempo cresce com as regras de expressao regular e a normalizacao de HTML), e
+ * numa VM menor leva mais: 5 min de folga. Valor vazio, zero ou invalido no ambiente volta ao
+ * padrao (zero desligaria o tempo limite do socket).
+ */
+export const TEMPO_LIMITE_PADRAO_MS = 300_000;
+export function tempoLimiteMs(): number {
+  const configurado = Number(process.env.CLAMAV_TIMEOUT_MS);
+  return Number.isFinite(configurado) && configurado > 0 ? configurado : TEMPO_LIMITE_PADRAO_MS;
+}
 
 export function antivirusConfigurado(): boolean {
   return Boolean(process.env.CLAMAV_HOST);
@@ -56,7 +70,7 @@ export function lerVeredito(resposta: string): Veredito {
 export async function analisar(blocos: AsyncIterable<Buffer>): Promise<Veredito> {
   if (!antivirusConfigurado()) throw new AntivirusIndisponivel('CLAMAV_HOST não configurado');
   const socket = connect({ host: process.env.CLAMAV_HOST, port: Number(process.env.CLAMAV_PORT ?? 3310) });
-  socket.setTimeout(TEMPO_LIMITE_MS);
+  socket.setTimeout(tempoLimiteMs());
 
   const resposta = new Promise<string>((ok, falha) => {
     let texto = '';

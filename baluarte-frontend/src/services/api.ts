@@ -54,7 +54,7 @@ import type {
 import { VULN_PAGE_SIZE } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
-import { fileScanVerdict } from '@/lib/files';
+import { FILE_SCAN_TIMEOUT_MS, fileScanVerdict } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { filenameFromDisposition, vulnerabilityReportFilename } from '@/lib/download';
 import { userFromToken } from '@/lib/jwt';
@@ -746,8 +746,8 @@ export const realApi: BaluarteApi = {
         params: options.campaignEventId ? { eventoCampanha: options.campaignEventId } : undefined,
         data: form,
         headers: { 'Content-Type': 'multipart/form-data' },
-        // A varredura do ClamAV leva mais que uma requisição comum.
-        timeout: 60_000,
+        // Envio de até 250 MB + varredura do ClamAV: minutos, não segundos (lib/files.ts).
+        timeout: FILE_SCAN_TIMEOUT_MS,
         onUploadProgress: (event) => {
           if (options.onProgress && event.total) {
             options.onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));

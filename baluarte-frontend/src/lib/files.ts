@@ -6,8 +6,21 @@ import type { FileScan, SecondOpinion, SecondOpinionReason } from '@/types';
 // mensagens que a tela mostra para cada erro do contrato do B04.
 // -----------------------------------------------------------------------------
 
-/** Limite do contrato (B04): 10 MB. A tela barra antes de enviar; a API responde 413 acima disso. */
-export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+/**
+ * Limite da API (B04, LIMITE_ARQUIVO_BYTES no backend): 250 MB de 1024 × 1024 bytes. A tela barra
+ * antes de enviar; a API responde 413 ARQUIVO_MUITO_GRANDE acima disso.
+ */
+export const MAX_FILE_SIZE_MB = 250;
+export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+export const MAX_FILE_SIZE_LABEL = `${MAX_FILE_SIZE_MB} MB`;
+
+/**
+ * Tempo máximo do envio + análise no navegador. O axios conta o envio junto, e 250 MB numa
+ * conexão comum levam minutos: o servidor aceita até 5 min para receber o corpo (requestTimeout
+ * do Node) e até 5 min de silêncio do antivírus depois dele (CLAMAV_TIMEOUT_MS). 10 min cobre os
+ * dois sem deixar a tela esperando para sempre.
+ */
+export const FILE_SCAN_TIMEOUT_MS = 10 * 60_000;
 
 /** Veredito sem ameaça. Nunca "arquivo seguro": o antivírus só conhece assinaturas já catalogadas. */
 export const CLEAN_VERDICT = 'Nenhuma ameaça conhecida encontrada';
@@ -31,14 +44,23 @@ export function formatBytes(bytes: number): string {
   return `${value.toLocaleString('pt-BR', { maximumFractionDigits: digits, minimumFractionDigits: 0 })} ${units[unit]}`;
 }
 
-export const FILE_TOO_LARGE_MESSAGE = 'O arquivo passa do limite de 10 MB. Escolha um arquivo menor.';
+export const FILE_TOO_LARGE_MESSAGE = `O arquivo passa do limite de ${MAX_FILE_SIZE_LABEL}. Escolha um arquivo menor.`;
+
+/**
+ * 413 sem o código da API: quem recusou foi a hospedagem, antes de a API ler o arquivo (ex.: a
+ * função serverless da Vercel, que só aceita corpos de poucos MB). O limite de 250 MB não se
+ * aplica ali, então a mensagem não o repete.
+ */
+export const HOST_TOO_LARGE_MESSAGE =
+  'Este ambiente recusou o envio pelo tamanho antes da análise (o limite da hospedagem é menor que o da plataforma). Tente um arquivo menor ou fale com a equipe de segurança.';
 
 /** Mensagem clara para cada erro do contrato de POST /arquivos/analise. */
 export function fileScanErrorMessage(error: unknown): string {
   if (isHttpError(error)) {
     if (error.code === 'ARQUIVO_OBRIGATORIO')
       return 'Nenhum arquivo chegou ao servidor. Escolha um arquivo e tente de novo.';
-    if (error.status === 413 || error.code === 'ARQUIVO_MUITO_GRANDE') return FILE_TOO_LARGE_MESSAGE;
+    if (error.code === 'ARQUIVO_MUITO_GRANDE') return FILE_TOO_LARGE_MESSAGE;
+    if (error.status === 413) return HOST_TOO_LARGE_MESSAGE;
     // B23: anexo de campanha (antes do 429 genérico: o teto por campanha também é 429).
     if (error.code === 'CAMPANHA_NAO_RECEBIDA' || error.code === 'EVENTO_CAMPANHA_INVALIDO')
       return 'Essa campanha não está entre as que você recebeu. Escolha outra ou envie o arquivo sem campanha.';

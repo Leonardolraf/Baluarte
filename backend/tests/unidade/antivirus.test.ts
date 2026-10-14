@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { EventEmitter } from 'node:events';
-import { AntivirusIndisponivel, analisar, escrever, lerVeredito } from '../../src/config/antivirus.js';
+import { AntivirusIndisponivel, TEMPO_LIMITE_PADRAO_MS, analisar, escrever, lerVeredito, tempoLimiteMs } from '../../src/config/antivirus.js';
 
 const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
 
@@ -48,7 +48,9 @@ async function* blocosDe(...textos: string[]) {
 }
 
 before(async () => {
-  servidor = createServer(tratar);
+  // allowHalfOpen: como o clamd de verdade, o falso continua aberto depois que o cliente fecha o
+  // lado dele (fim do envio); sem isto o "mudo" fecharia a conexao e o tempo limite nunca correria.
+  servidor = createServer({ allowHalfOpen: true }, tratar);
   await new Promise<void>((ok) => servidor.listen(0, '127.0.0.1', ok));
   process.env.CLAMAV_HOST = '127.0.0.1';
   process.env.CLAMAV_PORT = String((servidor.address() as AddressInfo).port);
@@ -92,13 +94,30 @@ describe('analisar (INSTREAM)', () => {
     comportamento = 'mudo';
     process.env.CLAMAV_TIMEOUT_MS = '300';
     try {
-      // O tempo limite e lido no carregamento do modulo; aqui o socket so precisa nao responder.
+      // O tempo limite e lido a cada analise: com 300 ms, o proprio cliente desiste.
       await assert.rejects(Promise.race([
         analisar(blocosDe('x')),
-        new Promise((_, falha) => setTimeout(() => falha(new AntivirusIndisponivel('teste')), 1500)),
-      ]), AntivirusIndisponivel);
+        new Promise((_, falha) => setTimeout(() => falha(new Error('o tempo limite do cliente nao disparou')), 5000)),
+      ]), (e: Error) => e instanceof AntivirusIndisponivel && /tempo esgotado/.test(e.message));
     } finally {
       delete process.env.CLAMAV_TIMEOUT_MS;
+    }
+  });
+
+  it('tempo limite: 5 min por padrão; vazio, zero, negativo ou texto voltam ao padrão (zero desligaria o socket)', () => {
+    const antes = process.env.CLAMAV_TIMEOUT_MS;
+    try {
+      assert.equal(TEMPO_LIMITE_PADRAO_MS, 300_000);
+      for (const v of [undefined, '', '0', '-5', 'abc', 'Infinity']) {
+        if (v === undefined) delete process.env.CLAMAV_TIMEOUT_MS;
+        else process.env.CLAMAV_TIMEOUT_MS = v;
+        assert.equal(tempoLimiteMs(), TEMPO_LIMITE_PADRAO_MS, `CLAMAV_TIMEOUT_MS=${v}`);
+      }
+      process.env.CLAMAV_TIMEOUT_MS = '90000';
+      assert.equal(tempoLimiteMs(), 90_000);
+    } finally {
+      if (antes === undefined) delete process.env.CLAMAV_TIMEOUT_MS;
+      else process.env.CLAMAV_TIMEOUT_MS = antes;
     }
   });
 

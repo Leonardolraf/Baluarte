@@ -8,15 +8,25 @@ import type { SegundaOpiniaoDto } from './segundaOpiniao.model.js';
 
 export type AnaliseArquivo = FileScan;
 
-/** Tamanho maximo aceito por arquivo (o mesmo que a tela barra antes de enviar). */
-export const LIMITE_ARQUIVO_BYTES = 10 * 1024 * 1024;
+/**
+ * Tamanho maximo aceito por arquivo, em MB de 1024 x 1024 bytes (o mesmo que a tela barra antes
+ * de enviar). Toda a cadeia acompanha este numero: busboy (controller), Nginx do servico `app`
+ * (`client_max_body_size` da rota de analise) e clamd (`StreamMaxLength`, `MaxFileSize`,
+ * `MaxHTMLNormalize`, `MaxScriptNormalize` e `PCREMaxFileSize` no docker-compose.yml). Mudar
+ * aqui sem mudar la faz o clamd cortar o fluxo (503) ou, pior, pular parte da analise e
+ * responder "OK" sem ter lido o arquivo inteiro.
+ */
+export const LIMITE_ARQUIVO_MB = 250;
+export const LIMITE_ARQUIVO_BYTES = LIMITE_ARQUIVO_MB * 1024 * 1024;
+export const MENSAGEM_ARQUIVO_GRANDE = `Arquivo maior que o limite de ${LIMITE_ARQUIVO_MB} MB`;
 
 /** Analises por usuario por hora (o antivirus e caro: cada envio ocupa o clamd). */
 export const LIMITE_ANALISES_POR_HORA = 20;
 
 /**
  * Validade da vaga reservada antes do antivirus (DT09, tabela FileScanReserva). Uma analise
- * leva segundos (10 MB no maximo, clamd com tempo limite de 60 s sem resposta); a reserva so
+ * leva de segundos a poucos minutos (ate 250 MB: o Node exige o corpo inteiro em 5 min, o
+ * `requestTimeout` padrao, e o clamd tem 5 min sem resposta, CLAMAV_TIMEOUT_MS); a reserva so
  * fica para tras se o processo morrer no meio, e ai deixa de contar depois deste prazo, sem
  * prender a vaga pelo resto da hora.
  */

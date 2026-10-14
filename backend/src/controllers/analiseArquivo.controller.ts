@@ -21,7 +21,7 @@ function receberArquivo<T>(req: Request, processar: (nome: string | undefined, f
   return new Promise<T>((resolver, rejeitar) => {
     let leitor: busboy.Busboy;
     try {
-      // +1 byte: o arquivo de exatamente 10 MB passa; acima disso o busboy marca `truncated`.
+      // +1 byte: o arquivo de exatamente 250 MB passa; acima disso o busboy marca `truncated`.
       leitor = busboy({ headers: req.headers, limits: { files: 1, fileSize: LIMITE_ARQUIVO_BYTES + 1, fields: 5, fieldSize: 1024 } });
     } catch {
       return rejeitar(SEM_ARQUIVO()); // Content-Type ausente ou nao multipart

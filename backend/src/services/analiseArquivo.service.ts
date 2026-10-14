@@ -4,7 +4,7 @@ import { AntivirusIndisponivel, analisar as analisarNoAntivirus, antivirusConfig
 import type { UsuarioAtual } from '../models/usuario.model.js';
 import { OPERADORES } from '../models/dominio.model.js';
 import {
-  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES,
+  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES, MENSAGEM_ARQUIVO_GRANDE,
   VALIDADE_RESERVA_ANALISE_MS, ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
   type CampanhaRecebidaDto, type FiltrosHistorico, type ResultadoAnalise,
 } from '../models/analiseArquivo.model.js';
@@ -103,7 +103,7 @@ async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: Return
     yield bloco;
   }
   if (fluxo.truncated || medida.bytes > LIMITE_ARQUIVO_BYTES)
-    falhar(413, 'Arquivo maior que o limite de 10 MB', 'ARQUIVO_MUITO_GRANDE');
+    falhar(413, MENSAGEM_ARQUIVO_GRANDE, 'ARQUIVO_MUITO_GRANDE');
 }
 
 /** Analisa, registra (consumindo a vaga reservada) e audita. Devolve a mensagem e o registro no formato da API. */

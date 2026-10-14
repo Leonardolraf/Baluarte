@@ -14,11 +14,12 @@ import { createServer, type AddressInfo, type Server, type Socket } from 'node:n
 import {
   ADMIN, ANALISTA, SENHA_CONTA, chamar, criarUsuario, encerrarServidor, iniciarServidor, login, prepararBanco, urlBase,
 } from '../helpers.js';
+import { enviarArquivoEmFluxo, lerInstream } from '../envioEmFluxo.js';
 
 prepararBanco(import.meta.url);
 const { app } = await import('../../src/app.js');
 const { prisma } = await import('../../src/config/db.js');
-const { LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA } = await import('../../src/models/analiseArquivo.model.js');
+const { LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES } = await import('../../src/models/analiseArquivo.model.js');
 
 const RAJADA_HORA = 25;
 const RAJADA_ANEXOS = 8;
@@ -32,20 +33,9 @@ let pedidosAoClamd = 0;
 
 /** clamd falso (protocolo INSTREAM), lento de proposito; tudo e "stream: OK". */
 function falsoClamd(socket: Socket) {
-  let bruto = Buffer.alloc(0);
-  socket.on('data', (d) => {
-    bruto = Buffer.concat([bruto, d]);
-    let pos = 'zINSTREAM\0'.length;
-    while (pos + 4 <= bruto.length) {
-      const n = bruto.readUInt32BE(pos);
-      if (n === 0) {
-        pedidosAoClamd += 1;
-        setTimeout(() => socket.end('stream: OK\0'), DEMORA_CLAMD_MS);
-        return;
-      }
-      if (pos + 4 + n > bruto.length) return;
-      pos += 4 + n;
-    }
+  lerInstream(socket, () => {
+    pedidosAoClamd += 1;
+    setTimeout(() => socket.end('stream: OK\0'), DEMORA_CLAMD_MS);
   });
 }
 
@@ -193,7 +183,7 @@ describe('DT09: análise que falha devolve a vaga', () => {
     const q = `?eventoCampanha=${evento.id}`;
     for (let i = 0; i < LIMITE_ANEXOS_POR_CAMPANHA - 1; i++) assert.equal((await enviar(c.token, `ok ${i}`, q)).status, 201);
     // Resta uma vaga no evento. Nenhuma das falhas a consome.
-    const grande = await enviar(c.token, Buffer.alloc(10 * 1024 * 1024 + 1, 65), q);
+    const grande = await enviarArquivoEmFluxo({ token: c.token, tamanho: LIMITE_ARQUIVO_BYTES + 1, query: q });
     assert.equal(grande.status, 413, JSON.stringify(grande.body));
     assert.equal(grande.body.codigoErro, 'ARQUIVO_MUITO_GRANDE');
     const fora = await comAntivirusFora(() => enviar(c.token, 'fora', q));
