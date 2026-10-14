@@ -1389,7 +1389,9 @@ export const mockApi: BaluarteApi = {
       refreshCampaignMetrics(campaign);
       const recipients = state.recipients
         .filter((r) => r.campaignId === id)
-        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        // Espelha a API: aberturas do link e possível repasse (> 1), nunca IP nem user-agent.
+        .map((r) => ({ ...r, linkOpens: r.linkOpens ?? 0, possibleForwarding: (r.linkOpens ?? 0) > 1 }));
       const departments = new Map<string, { recipients: number; clicked: number }>();
       for (const r of recipients) {
         const d = departments.get(r.department) ?? { recipients: 0, clicked: 0 };
@@ -1411,6 +1413,10 @@ export const mockApi: BaluarteApi = {
           }))
           .sort((a, b) => b.clickRate - a.clickRate),
         attachments: campaignAttachments(id),
+        linkOpens: {
+          total: recipients.reduce((a, r) => a + r.linkOpens, 0),
+          possibleForwardings: recipients.filter((r) => r.possibleForwarding).length,
+        },
       };
     });
   },
@@ -1596,6 +1602,8 @@ export const mockApi: BaluarteApi = {
         recipient.openedAt = recipient.openedAt ?? now;
         recipient.sentAt = recipient.sentAt ?? now;
       }
+      // Melhorias #6: toda abertura do link conta (o clique, só a primeira).
+      recipient.linkOpens = (recipient.linkOpens ?? 0) + 1;
       return linkTraining(token, recipient);
     });
   },

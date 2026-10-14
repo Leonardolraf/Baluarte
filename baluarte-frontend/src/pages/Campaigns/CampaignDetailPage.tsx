@@ -438,6 +438,53 @@ function StagePill({ recipient }: { recipient: CampaignRecipient }) {
   return <StatusPill label={RECIPIENT_STAGE_LABEL[stage]} colorClass={RECIPIENT_STAGE_CLASS[stage]} />;
 }
 
+/**
+ * Aberturas do link (melhoria 6).
+ *
+ * Três estados, e a diferença entre o segundo e o terceiro é o que importa:
+ *  - não clicou → vazio;
+ *  - clicou mas tem 0 aberturas → "sem registro": são os cliques anteriores à contagem
+ *    existir. Zero aqui é AUSÊNCIA DE DADO, não prova de que não houve repasse;
+ *  - uma ou mais aberturas → o número, com o rótulo "possível repasse" quando a API o
+ *    declara (mais de uma abertura).
+ *
+ * O rótulo vem com a limitação ao lado de propósito: abertura automática do cliente de
+ * e-mail (proxy de imagem, pré-busca, antivírus de gateway) também conta, então "possível"
+ * é literal. Sem esse aviso, o relatório pareceria acusar o colaborador.
+ */
+function LinkOpensCell({ recipient }: { recipient: CampaignRecipient }) {
+  if (!recipient.clickedAt) return <span className="text-slate-500 dark:text-slate-400">{EMPTY}</span>;
+
+  const opens = recipient.linkOpens ?? 0;
+  if (opens === 0) {
+    return (
+      <span
+        className="text-slate-500 dark:text-slate-400"
+        title="Clique registrado antes da contagem de aberturas existir: não há dado, o que não significa que não houve repasse."
+      >
+        sem registro
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="tabular-nums text-ink dark:text-white">
+        {formatNumber(opens)} {opens === 1 ? 'abertura' : 'aberturas'}
+      </span>
+      {recipient.possibleForwarding && (
+        <span
+          className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+          data-testid="possivel-repasse"
+          title="Mais de uma abertura do mesmo link. Abertura automática do cliente de e-mail (proxy de imagem, pré-busca, antivírus) também conta."
+        >
+          possível repasse
+        </span>
+      )}
+    </div>
+  );
+}
+
 function TrainingCell({ recipient }: { recipient: CampaignRecipient }) {
   if (!recipient.clickedAt) return <span className="text-slate-500 dark:text-slate-400">{EMPTY}</span>;
   return recipient.trainingCompleted ? (
@@ -507,13 +554,14 @@ function RecipientsCard({
               <Th>E-mail</Th>
               <Th className="hidden xl:table-cell">Departamento</Th>
               <Th>Etapa</Th>
+              <Th className="hidden lg:table-cell">Aberturas</Th>
               <Th>Treinamento</Th>
               <Th align="right">Ações</Th>
             </tr>
           </THead>
           <TBody>
             {pageItems.length === 0 ? (
-              <TableEmptyRow colSpan={6}>{emptyMessage}</TableEmptyRow>
+              <TableEmptyRow colSpan={7}>{emptyMessage}</TableEmptyRow>
             ) : (
               pageItems.map((recipient) => {
                 // O treinamento do destinatário prevalece; sem ele, cai no módulo da campanha (se houver).
@@ -525,6 +573,9 @@ function RecipientsCard({
                     <Td className="hidden xl:table-cell">{recipient.department}</Td>
                     <Td>
                       <StagePill recipient={recipient} />
+                    </Td>
+                    <Td className="hidden lg:table-cell">
+                      <LinkOpensCell recipient={recipient} />
                     </Td>
                     <Td>
                       <TrainingCell recipient={recipient} />
