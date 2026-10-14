@@ -85,6 +85,17 @@ describe('abertura do link grava CampaignLinkHit', () => {
     assert.match(linhas[0].ip ?? '', /^(::1|::ffff:127\.0\.0\.1|127\.0\.0\.1)$/);
   });
 
+  it('sem TRUST_PROXY, um X-Forwarded-For forjado não muda o IP gravado', async () => {
+    const c = await campanhaCom(ana);
+    const r = await chamar('GET', `/treinamentos/link/${c.tokens[0]}`, {
+      headers: { 'User-Agent': UA, 'X-Forwarded-For': '203.0.113.7, 198.51.100.9' },
+    });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const linhas = await prisma.campaignLinkHit.findMany({ where: { campaignEventId: c.eventoDe(ana.email) } });
+    assert.equal(linhas.length, 1);
+    assert.match(linhas[0].ip ?? '', /^(::1|::ffff:127\.0\.0\.1|127\.0\.0\.1)$/);
+  });
+
   it('aberturas em janelas diferentes contam e marcam possível repasse; o clique do funil continua 1 por pessoa', async () => {
     const c = await campanhaCom(ana, bruno);
     assert.equal((await abrir(c.tokens[0])).status, 200);

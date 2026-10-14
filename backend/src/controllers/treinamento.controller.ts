@@ -24,7 +24,9 @@ export async function concluir(req: Request, res: Response) {
 
 /**
  * GET /treinamentos/link/:token (publico). IP e user-agent so alimentam a contagem de aberturas
- * (Melhorias #6) e nunca voltam na resposta. `req.ip` segue o `trust proxy` do app.
+ * (Melhorias #6) e nunca voltam na resposta. `req.ip` segue o `trust proxy` do app (TRUST_PROXY,
+ * config/trustProxy.ts): sem a variavel e o IP do proxy mais proximo; com n saltos, o endereco
+ * que o n-esimo proxy viu. E o unico uso de `req.ip` na API.
  */
 export async function abrirPeloLink(req: Request, res: Response) {
   const origem = { ip: req.ip, userAgent: req.get('user-agent') };

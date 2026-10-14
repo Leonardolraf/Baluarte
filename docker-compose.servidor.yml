@@ -20,6 +20,9 @@ services:
       - OSQUERY_ENROLL_SECRET=${OSQUERY_ENROLL_SECRET:-}
       - CRUZAMENTO_AUTOMATICO=1   # B14/DT17: verifica a estação depois de cada inventário de programas
       - DOMINIO_INTERNO=${DOMINIO_INTERNO:-@baluarte.test}   # DT19: domínio reservado (RFC 2606) + endereços liberados, no .env
+      # Número de proxies na frente da API (0 a 5; vazio = nenhum, o IP gravado é o do proxy). A VM
+      # define no .env dela depois de medir a cadeia (Funnel = 1; Funnel + Nginx = 2).
+      - TRUST_PROXY=${TRUST_PROXY:-}
   db:
     image: postgres:17-alpine   # mesmo major do Supabase de onde veio o dump (restaurar um 17 num 16 falha)
     restart: unless-stopped
