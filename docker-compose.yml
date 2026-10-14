@@ -144,9 +144,12 @@ services:
   # ~0,95 GiB), com o membro extraído no /tmp. A API espera até 300 s (CLAMAV_TIMEOUT_MS); passou
   # disso, 503. Os tempos de leitura padrão bastam: ReadTimeout 120 s entre blocos (eles fluem
   # enquanto o arquivo chega) e CommandReadTimeout 30 s até o comando (a API manda na hora).
-  # LIMITE CONHECIDO, fora do alcance da configuração: entrada de zip no formato Zip64 não é
-  # aberta pelo ClamAV 1.5.4 ("compressed data not available") e o zip sai "OK" (marcador dentro
-  # de uma entrada Zip64: "OK"; no zip comum: detectado). Registrado no relatório do #18.
+  # Zip64 (DT27), fora do alcance da configuração: entrada de zip no formato Zip64 não é aberta
+  # pelo ClamAV 1.5.4 (Cisco-Talos/clamav#1527) e o zip sai "OK" (marcador dentro de uma entrada
+  # Zip64: "OK"; no zip comum: detectado). Quem cobre é a API: ela procura Zip64 nos bytes a
+  # caminho do clamd (utils/detectorZip64.ts, inclusive em zip comprimido dentro de zip) e, se o
+  # clamd não achou nada, responde AMEACA Baluarte.Zip64.NaoAnalisavel. A busca descomprime até
+  # o MaxScanSize acima (LIMITE_DESCOMPRESSAO_ZIP64_BYTES; o teste config-clamd confere).
   clamav:
     image: clamav/clamav:1.5
     profiles: ["antivirus"]

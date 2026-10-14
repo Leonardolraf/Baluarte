@@ -158,11 +158,62 @@ export function ehLimiteExcedido(ameaca: string | null | undefined): boolean {
 /** Rotulo que traduz o nome tecnico do limite excedido na mensagem e na tela. */
 export const ROTULO_LIMITE_EXCEDIDO = 'passa dos limites de análise do antivírus; tratado como ameaça por precaução';
 
-/** Mensagem do resultado: regra propria e limite excedido dizem de onde veio. */
+// ---- Zip64 (DT27) -------------------------------------------------------------------
+
+/**
+ * O ClamAV 1.5.4 nao abre entrada de zip no formato Zip64 (Cisco-Talos/clamav#1527) e responde
+ * "OK" sem ter lido o conteudo; nenhuma opcao do clamd muda isso. A API procura Zip64 no proprio
+ * fluxo (`utils/detectorZip64.ts`), inclusive em zip comprimido dentro de zip, e, se o clamd nao
+ * achou nada, o veredito vira AMEACA por precaucao (decisao do Leo, a mesma do limite excedido).
+ *
+ * Nome proprio, no espaco `Baluarte.`, e nao `Heuristics.Limits.Exceeded.Zip64`: (1) quem le a
+ * auditoria saberia que a deteccao veio da API, nao do clamd (o `Heuristics.*` e do ClamAV, e um
+ * dia ele pode emitir esse nome com outro sentido); (2) nao e limite excedido: um zip de 200
+ * bytes cai aqui, e o rotulo "passa dos limites" mentiria.
+ */
+export const AMEACA_ZIP64 = 'Baluarte.Zip64.NaoAnalisavel';
+/** A busca por Zip64 nao chegou ao fim (teto de descompressao ou de aninhamento). */
+export const AMEACA_ZIP64_INCOMPLETA = 'Baluarte.Zip64.VerificacaoIncompleta';
+
+export const ROTULO_ZIP64 = 'formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução';
+export const ROTULO_ZIP64_INCOMPLETA =
+  'a busca por Zip64 passou do limite de descompressão ou de aninhamento; tratado como ameaça por precaução';
+
+/**
+ * Tetos da busca dentro de compactados (contra zip-bomba). O de bytes acompanha a cota do clamd
+ * (`MaxScanSize` 1000M no docker-compose.yml, conferido em tests/unidade/config-clamd.test.ts):
+ * o que passa dele o clamd tambem nao varre, e avisa. O de profundidade e o `MaxRecursion`
+ * padrao do ClamAV (17), que tambem avisa acima dele.
+ */
+export const LIMITE_DESCOMPRESSAO_ZIP64_BYTES = 1000 * 1024 * 1024;
+export const PROFUNDIDADE_MAXIMA_ZIP64 = 17;
+
+/** A "ameaca" e a API dizendo que achou Zip64 (ou nao conseguiu terminar de procurar)? */
+export function ehZip64(ameaca: string | null | undefined): boolean {
+  return ameaca === AMEACA_ZIP64 || ameaca === AMEACA_ZIP64_INCOMPLETA;
+}
+
+/**
+ * Junta o veredito do clamd com a busca por Zip64. Deteccao do clamd vale como veio (o nome dela
+ * diz mais); "limpo" so fica limpo se nao ha Zip64 e a busca foi ate o fim.
+ */
+export function vereditoComZip64<V extends { resultado: ResultadoAnalise; ameaca: string | null }>(
+  clamd: V,
+  busca: { zip64: boolean; incompleta: boolean },
+): { resultado: ResultadoAnalise; ameaca: string | null } {
+  if (clamd.resultado === 'AMEACA') return { resultado: clamd.resultado, ameaca: clamd.ameaca };
+  if (busca.zip64) return { resultado: 'AMEACA', ameaca: AMEACA_ZIP64 };
+  if (busca.incompleta) return { resultado: 'AMEACA', ameaca: AMEACA_ZIP64_INCOMPLETA };
+  return { resultado: clamd.resultado, ameaca: clamd.ameaca };
+}
+
+/** Mensagem do resultado: regra propria, limite excedido e Zip64 dizem de onde veio. */
 export function mensagemDoResultado(ameaca: string | null): string {
   if (!ameaca) return MENSAGEM_LIMPO;
   if (ehRegraPropria(ameaca)) return `${mensagemAmeaca(ameaca)} (${ROTULO_REGRA_PROPRIA})`;
   if (ehLimiteExcedido(ameaca)) return `${mensagemAmeaca(ameaca)} (${ROTULO_LIMITE_EXCEDIDO})`;
+  if (ameaca === AMEACA_ZIP64) return `${mensagemAmeaca(ameaca)} (${ROTULO_ZIP64})`;
+  if (ameaca === AMEACA_ZIP64_INCOMPLETA) return `${mensagemAmeaca(ameaca)} (${ROTULO_ZIP64_INCOMPLETA})`;
   return mensagemAmeaca(ameaca);
 }
 

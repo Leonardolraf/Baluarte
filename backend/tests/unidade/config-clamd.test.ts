@@ -5,12 +5,13 @@
 //   - so a cota corta, e ela avisa: AlertExceedsMax ligado, e os limites que cortam em silencio
 //     (MaxFileSize, MaxHTMLNormalize, MaxScriptNormalize, PCREMaxFileSize) acima do MaxScanSize;
 //   - quem responde no limite de tempo e o clamd, com o alerta: MaxScanTime abaixo do tempo
-//     limite do cliente na API (CLAMAV_TIMEOUT_MS).
+//     limite do cliente na API (CLAMAV_TIMEOUT_MS);
+//   - a busca por Zip64 da API (DT27) descomprime ate a mesma cota do clamd (MaxScanSize).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { LIMITE_ARQUIVO_BYTES } from '../../src/models/analiseArquivo.model.js';
+import { LIMITE_ARQUIVO_BYTES, LIMITE_DESCOMPRESSAO_ZIP64_BYTES } from '../../src/models/analiseArquivo.model.js';
 import { TEMPO_LIMITE_PADRAO_MS } from '../../src/config/antivirus.js';
 
 const COMPOSE = fileURLToPath(new URL('../../../docker-compose.yml', import.meta.url));
@@ -54,5 +55,9 @@ describe('configuração do clamd no docker-compose.yml', () => {
     const ms = Number(conf.MaxScanTime);
     assert.ok(ms > 0, 'MaxScanTime ligado (0 desliga o limite)');
     assert.ok(ms < TEMPO_LIMITE_PADRAO_MS, `MaxScanTime ${ms} ms < CLAMAV_TIMEOUT_MS padrão ${TEMPO_LIMITE_PADRAO_MS} ms`);
+  });
+
+  it('a busca por Zip64 da API (DT27) descomprime até a cota do clamd, nem mais nem menos', () => {
+    assert.equal(LIMITE_DESCOMPRESSAO_ZIP64_BYTES, bytes(conf.MaxScanSize));
   });
 });
