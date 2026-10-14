@@ -15,12 +15,53 @@ export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 export const MAX_FILE_SIZE_LABEL = `${MAX_FILE_SIZE_MB} MB`;
 
 /**
- * Tempo máximo do envio + análise no navegador. O axios conta o envio junto, e 250 MB numa
- * conexão comum levam minutos: o servidor aceita até 5 min para receber o corpo (requestTimeout
- * do Node) e até 5 min de silêncio do antivírus depois dele (CLAMAV_TIMEOUT_MS). 10 min cobre os
- * dois sem deixar a tela esperando para sempre.
+ * Tempo do envio no navegador (decisão do Leo, Melhorias #18): como no servidor, o envio não tem
+ * prazo total, só de OCIOSIDADE. 250 MB numa conexão lenta porém estável podem levar o tempo que
+ * for; sem progresso por 90 s (o servidor desiste em 60 s, então normalmente quem responde é a
+ * API, com 408 ENVIO_PARADO) a tela desiste. Depois do último byte, espera a análise por até
+ * 6 min (o antivírus tem até 5 min na API, CLAMAV_TIMEOUT_MS).
  */
-export const FILE_SCAN_TIMEOUT_MS = 10 * 60_000;
+export const UPLOAD_IDLE_TIMEOUT_MS = 90_000;
+export const SCAN_RESPONSE_TIMEOUT_MS = 6 * 60_000;
+
+/** Motivo da desistência do vigia de envio. */
+export type UploadAbortReason = 'idle' | 'response';
+
+/**
+ * Vigia do envio: chama `onExpire` se o progresso parar por `idleMs` durante o envio ou se a
+ * resposta não vier em `responseMs` depois do último byte. `progress` recebe o `onUploadProgress`
+ * do axios; `stop` encerra o vigia (resposta chegou ou deu erro).
+ */
+export function watchUpload(
+  onExpire: (reason: UploadAbortReason) => void,
+  { idleMs = UPLOAD_IDLE_TIMEOUT_MS, responseMs = SCAN_RESPONSE_TIMEOUT_MS } = {},
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let sent = false;
+  const arm = (ms: number, reason: UploadAbortReason) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      onExpire(reason);
+    }, ms);
+  };
+  arm(idleMs, 'idle');
+  return {
+    progress(loaded: number, total: number | undefined) {
+      if (sent) return;
+      if (total !== undefined && loaded >= total) {
+        sent = true;
+        arm(responseMs, 'response');
+      } else {
+        arm(idleMs, 'idle');
+      }
+    },
+    stop() {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+    },
+  };
+}
 
 /** Veredito sem ameaça. Nunca "arquivo seguro": o antivírus só conhece assinaturas já catalogadas. */
 export const CLEAN_VERDICT = 'Nenhuma ameaça conhecida encontrada';
@@ -61,6 +102,10 @@ export function fileScanErrorMessage(error: unknown): string {
       return 'Nenhum arquivo chegou ao servidor. Escolha um arquivo e tente de novo.';
     if (error.code === 'ARQUIVO_MUITO_GRANDE') return FILE_TOO_LARGE_MESSAGE;
     if (error.status === 413) return HOST_TOO_LARGE_MESSAGE;
+    if (error.code === 'ENVIO_PARADO' || error.code === 'ENVIO_SEM_PROGRESSO')
+      return 'O envio parou de avançar (conexão instável ou interrompida). Verifique a conexão e tente de novo.';
+    if (error.code === 'ANALISE_SEM_RESPOSTA')
+      return 'O arquivo chegou, mas a análise não respondeu a tempo. Tente de novo em alguns minutos.';
     // B23: anexo de campanha (antes do 429 genérico: o teto por campanha também é 429).
     if (error.code === 'CAMPANHA_NAO_RECEBIDA' || error.code === 'EVENTO_CAMPANHA_INVALIDO')
       return 'Essa campanha não está entre as que você recebeu. Escolha outra ou envie o arquivo sem campanha.';
@@ -78,7 +123,9 @@ export function fileScanErrorMessage(error: unknown): string {
 export function fileScanVerdict(scan: Pick<FileScan, 'result' | 'threat'>): string {
   if (scan.result !== 'threat') return CLEAN_VERDICT;
   const verdict = `Ameaça encontrada: ${scan.threat ?? 'não identificada'}`;
-  return isOwnRule(scan.threat) ? `${verdict} (${OWN_RULE_LABEL})` : verdict;
+  if (isOwnRule(scan.threat)) return `${verdict} (${OWN_RULE_LABEL})`;
+  if (isLimitExceeded(scan.threat)) return `${verdict} (${LIMIT_EXCEEDED_LABEL})`;
+  return verdict;
 }
 
 // ---- Regras YARA próprias e anexo de campanha (B23) --------------------------
@@ -93,6 +140,18 @@ export const OWN_RULE_LABEL = 'regra própria do Baluarte';
 export function isOwnRule(threat: string | null | undefined): boolean {
   return typeof threat === 'string' && /^YARA\.Baluarte[A-Za-z0-9_]*\.UNOFFICIAL$/.test(threat);
 }
+
+/**
+ * `Heuristics.Limits.Exceeded.<Limite>`: o antivírus não conseguiu analisar o arquivo inteiro
+ * (tamanho, compactado grande ou fundo demais) e, por precaução, isso conta como ameaça. Mesma
+ * regra do backend (`ehLimiteExcedido`).
+ */
+export function isLimitExceeded(threat: string | null | undefined): boolean {
+  return typeof threat === 'string' && /^Heuristics\.Limits\.Exceeded(\.[A-Za-z0-9_]+)?$/.test(threat);
+}
+
+export const LIMIT_EXCEEDED_LABEL =
+  'passa dos limites de análise do antivírus; tratado como ameaça por precaução';
 
 /** Anexos por destinatário em cada campanha (o mesmo teto do backend). */
 export const MAX_ATTACHMENTS_PER_CAMPAIGN = 5;

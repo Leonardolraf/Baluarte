@@ -1,5 +1,5 @@
 import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RBACRole } from '@/types';
 import { httpClient, realApi } from '@/services/api';
 import { toFileScan, toSecondOpinion, type BackendFileScan } from '@/services/adapters';
@@ -8,9 +8,14 @@ import {
   fileScanErrorMessage,
   fileScanVerdict,
   formatBytes,
+  isLimitExceeded,
   isTooLarge,
+  LIMIT_EXCEEDED_LABEL,
   MAX_FILE_SIZE_BYTES,
+  SCAN_RESPONSE_TIMEOUT_MS,
   secondOpinionText,
+  UPLOAD_IDLE_TIMEOUT_MS,
+  watchUpload,
 } from '@/lib/files';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
@@ -481,6 +486,89 @@ describe('lib/files', () => {
       'Ameaça encontrada: Eicar-Signature',
     );
     expect(fileScanVerdict({ result: 'threat', threat: null })).toBe('Ameaça encontrada: não identificada');
+  });
+
+  describe('vigia do envio: ociosidade, não prazo total (decisão do Leo)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('padrões: 90 s sem progresso no envio, 6 min pela resposta depois do último byte', () => {
+      expect(UPLOAD_IDLE_TIMEOUT_MS).toBe(90_000);
+      expect(SCAN_RESPONSE_TIMEOUT_MS).toBe(360_000);
+    });
+
+    it('envio lento porém estável nunca expira, por mais que dure', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      // 1 hora de envio, com progresso a cada 900 ms.
+      for (let t = 0; t < 4000; t++) {
+        vi.advanceTimersByTime(900);
+        vigia.progress(t + 1, 10_000);
+      }
+      expect(expirou).not.toHaveBeenCalled();
+      vigia.stop();
+    });
+
+    it('progresso parado além da ociosidade: expira por "idle"', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      vigia.progress(10, 100);
+      vi.advanceTimersByTime(999);
+      expect(expirou).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(expirou).toHaveBeenCalledWith('idle');
+    });
+
+    it('depois do último byte, espera a análise até o prazo da resposta e expira por "response"', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      vigia.progress(100, 100);
+      vi.advanceTimersByTime(4999);
+      expect(expirou).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(expirou).toHaveBeenCalledWith('response');
+    });
+
+    it('stop: a resposta chegou, nada expira depois', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      vigia.stop();
+      vi.advanceTimersByTime(60_000);
+      expect(expirou).not.toHaveBeenCalled();
+    });
+
+    it('mensagens claras para envio parado (API ou navegador) e análise sem resposta', () => {
+      for (const codigo of ['ENVIO_PARADO', 'ENVIO_SEM_PROGRESSO'])
+        expect(fileScanErrorMessage(new HttpError(codigo === 'ENVIO_PARADO' ? 408 : 0, codigo, 'x'))).toMatch(
+          /parou de avançar/,
+        );
+      expect(fileScanErrorMessage(new HttpError(0, 'ANALISE_SEM_RESPOSTA', 'x'))).toMatch(
+        /não respondeu a tempo/,
+      );
+    });
+  });
+
+  it('limite do antivírus excedido (AlertExceedsMax): o nome técnico ganha a explicação', () => {
+    expect(isLimitExceeded('Heuristics.Limits.Exceeded.MaxFileSize')).toBe(true);
+    expect(isLimitExceeded('Heuristics.Limits.Exceeded')).toBe(true);
+    for (const outro of [
+      'Heuristics.Encrypted.Zip',
+      'xHeuristics.Limits.Exceeded.MaxFiles',
+      'Eicar-Signature',
+      null,
+    ])
+      expect(isLimitExceeded(outro)).toBe(false);
+    expect(fileScanVerdict({ result: 'threat', threat: 'Heuristics.Limits.Exceeded.MaxScanSize' })).toBe(
+      `Ameaça encontrada: Heuristics.Limits.Exceeded.MaxScanSize (${LIMIT_EXCEEDED_LABEL})`,
+    );
+    expect(LIMIT_EXCEEDED_LABEL).toBe(
+      'passa dos limites de análise do antivírus; tratado como ameaça por precaução',
+    );
   });
 
   it('textos da segunda opinião: claros para desconhecido e indisponível, nunca "seguro"', () => {

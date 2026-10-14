@@ -8,8 +8,47 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lerVeredito } from '../../src/config/antivirus.js';
 import {
-  MENSAGEM_LIMPO, ROTULO_REGRA_PROPRIA, ehRegraPropria, mensagemDoResultado,
+  MENSAGEM_LIMPO, ROTULO_LIMITE_EXCEDIDO, ROTULO_REGRA_PROPRIA, ehLimiteExcedido, ehRegraPropria, mensagemDoResultado,
 } from '../../src/models/analiseArquivo.model.js';
+
+describe('limite do antivírus excedido -> ameaça por precaução (AlertExceedsMax, Melhorias #18)', () => {
+  it('o clamd devolve o limite excedido como ameaça, e ela vira AMEACA', () => {
+    assert.deepEqual(lerVeredito('stream: Heuristics.Limits.Exceeded.MaxFileSize FOUND' + String.fromCharCode(0)), {
+      resultado: 'AMEACA',
+      ameaca: 'Heuristics.Limits.Exceeded.MaxFileSize',
+    });
+  });
+
+  it('só os nomes Heuristics.Limits.Exceeded[.<Limite>] contam como limite excedido', () => {
+    for (const nome of [
+      'Heuristics.Limits.Exceeded.MaxFileSize',
+      'Heuristics.Limits.Exceeded.MaxScanSize',
+      'Heuristics.Limits.Exceeded.MaxRecursion',
+      'Heuristics.Limits.Exceeded.MaxFiles',
+      'Heuristics.Limits.Exceeded',
+    ]) assert.equal(ehLimiteExcedido(nome), true, nome);
+    for (const nome of [
+      'Heuristics.Encrypted.Zip',
+      'Heuristics.Limits.Exceeded.Max.File',
+      'xHeuristics.Limits.Exceeded.MaxFileSize',
+      'YARA.BaluarteMacroSuspeita.UNOFFICIAL',
+      'Eicar-Signature',
+      '',
+      null,
+      undefined,
+    ]) assert.equal(ehLimiteExcedido(nome), false, String(nome));
+  });
+
+  it('a mensagem explica o nome técnico e não diz "seguro"', () => {
+    assert.equal(ROTULO_LIMITE_EXCEDIDO, 'passa dos limites de análise do antivírus; tratado como ameaça por precaução');
+    const msg = mensagemDoResultado('Heuristics.Limits.Exceeded.MaxScanSize');
+    assert.equal(
+      msg,
+      'Ameaça encontrada: Heuristics.Limits.Exceeded.MaxScanSize (passa dos limites de análise do antivírus; tratado como ameaça por precaução)',
+    );
+    assert.doesNotMatch(msg, /seguro|regra própria/i);
+  });
+});
 
 describe('veredito com nome de regra YARA -> rótulo (B23)', () => {
   it('o clamd devolve o nome da regra YARA como ameaça', () => {

@@ -6,8 +6,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { erro, enviar } from './utils/resposta.js';
 import { apiRouter } from './routes/index.js';
+import { tempoTotalDaRequisicao } from './middlewares/tempoRequisicao.middleware.js';
 
 export const app = express();
+
+// Prazo para receber o corpo (5 min, o `requestTimeout` que o servidor desliga): antes de tudo,
+// para valer tambem nas respostas de erro e no corpo que ninguem le (middlewares/tempoRequisicao).
+app.use(tempoTotalDaRequisicao);
 
 // Não anunciar o servidor (o proprio catalogo de achados do scanner trata X-Powered-By como A05).
 app.disable('x-powered-by');

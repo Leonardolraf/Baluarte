@@ -54,7 +54,7 @@ import type {
 import { VULN_PAGE_SIZE } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
 import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
-import { FILE_SCAN_TIMEOUT_MS, fileScanVerdict } from '@/lib/files';
+import { fileScanVerdict, watchUpload, type UploadAbortReason } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { filenameFromDisposition, vulnerabilityReportFilename } from '@/lib/download';
 import { userFromToken } from '@/lib/jwt';
@@ -738,6 +738,13 @@ export const realApi: BaluarteApi = {
   async analyzeFile(file: File, options: AnalyzeFileOptions = {}): Promise<FileScanOutcome> {
     const form = new FormData();
     form.append('arquivo', file, file.name);
+    // Sem prazo total: o vigia aborta por ociosidade no envio ou pela demora da resposta.
+    const controller = new AbortController();
+    let expired: UploadAbortReason | null = null;
+    const watchdog = watchUpload((reason) => {
+      expired = reason;
+      controller.abort();
+    });
     try {
       const response = await httpClient.request<ApiEnvelope<BackendFileScan>>({
         method: 'POST',
@@ -746,9 +753,11 @@ export const realApi: BaluarteApi = {
         params: options.campaignEventId ? { eventoCampanha: options.campaignEventId } : undefined,
         data: form,
         headers: { 'Content-Type': 'multipart/form-data' },
-        // Envio de até 250 MB + varredura do ClamAV: minutos, não segundos (lib/files.ts).
-        timeout: FILE_SCAN_TIMEOUT_MS,
+        // Envio de até 250 MB numa conexão lenta pode levar o tempo que for (lib/files.ts).
+        timeout: 0,
+        signal: controller.signal,
         onUploadProgress: (event) => {
+          watchdog.progress(event.loaded, event.total);
           if (options.onProgress && event.total) {
             options.onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
           }
@@ -760,7 +769,12 @@ export const realApi: BaluarteApi = {
         message: response.data.mensagem || fileScanVerdict(scan),
       };
     } catch (error) {
+      if (expired === 'idle') throw new HttpError(0, 'ENVIO_SEM_PROGRESSO', 'O envio parou de avançar.');
+      if (expired === 'response')
+        throw new HttpError(0, 'ANALISE_SEM_RESPOSTA', 'A análise não respondeu a tempo.');
       rethrowAsNotImplemented(error);
+    } finally {
+      watchdog.stop();
     }
   },
 

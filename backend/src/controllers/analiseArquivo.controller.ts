@@ -7,6 +7,7 @@ import {
 } from '../models/analiseArquivo.model.js';
 import * as analiseService from '../services/analiseArquivo.service.js';
 import type { FluxoArquivo } from '../services/analiseArquivo.service.js';
+import { ociosidadeEnvioMs, trocarPorOciosidade } from '../middlewares/tempoRequisicao.middleware.js';
 import { textoDeQuery, validar } from '../utils/esquemas.js';
 import { ErroNegocio, enviar } from '../utils/resposta.js';
 
@@ -15,8 +16,20 @@ import { ErroNegocio, enviar } from '../utils/resposta.js';
 // do JSON, que so vale para application/json).
 
 const SEM_ARQUIVO = () => new ErroNegocio(400, `Nenhum arquivo enviado (campo "${CAMPO_ARQUIVO}")`, 'ARQUIVO_OBRIGATORIO');
+const ENVIO_PARADO = () =>
+  new ErroNegocio(408, `O envio ficou parado por mais de ${Math.round(ociosidadeEnvioMs() / 1000)} s sem receber dados`, 'ENVIO_PARADO');
+const ENVIO_INTERROMPIDO = () => new ErroNegocio(400, 'A conexão caiu antes do fim do envio', 'ENVIO_INTERROMPIDO');
 
-/** Le o multipart e entrega o primeiro arquivo do campo `arquivo` ao processamento dado. */
+/**
+ * Le o multipart e entrega o primeiro arquivo do campo `arquivo` ao processamento dado.
+ *
+ * Tempo de envio (decisao do Leo, Melhorias #18): aqui nao vale o total de 5 min das outras
+ * rotas, e sim a OCIOSIDADE (`trocarPorOciosidade`): o arquivo de 250 MB pode subir devagar pelo
+ * tempo que for, mas sem nenhum byte por 60 s o envio para com 408 ENVIO_PARADO. Conexao que cai
+ * no meio tambem interrompe o processamento (antes ele ficava esperando o resto do arquivo, e a
+ * vaga so voltava quando a reserva vencia). Nos dois casos o fluxo do arquivo e destruido com o
+ * erro, o antivirus e abandonado e o controller devolve a vaga.
+ */
 function receberArquivo<T>(req: Request, processar: (nome: string | undefined, fluxo: FluxoArquivo) => Promise<T>): Promise<T> {
   return new Promise<T>((resolver, rejeitar) => {
     let leitor: busboy.Busboy;
@@ -27,12 +40,30 @@ function receberArquivo<T>(req: Request, processar: (nome: string | undefined, f
       return rejeitar(SEM_ARQUIVO()); // Content-Type ausente ou nao multipart
     }
     let processamento: Promise<T> | null = null;
+    let fluxoDoArquivo: FluxoArquivo | null = null;
+    const interromper = (e: ErroNegocio) => {
+      req.unpipe(leitor);
+      if (fluxoDoArquivo && !fluxoDoArquivo.readableEnded) {
+        fluxoDoArquivo.destroy(e); // o processamento rejeita com `e`, e o catch abaixo repassa
+      } else if (processamento) {
+        // O arquivo ja chegou inteiro (faltava so o fim do multipart): deixa a analise terminar.
+        processamento.finally(() => rejeitar(e)).catch(() => undefined);
+      } else {
+        rejeitar(e);
+      }
+    };
+    const pararOciosidade = trocarPorOciosidade(req, () => interromper(ENVIO_PARADO()));
+    req.once('close', () => {
+      if (!req.complete) interromper(ENVIO_INTERROMPIDO());
+    });
     leitor.on('file', (campo, fluxo, info) => {
       if (campo !== CAMPO_ARQUIVO || processamento) {
         fluxo.resume(); // outros campos de arquivo sao descartados sem ler
         return;
       }
-      processamento = processar(info.filename, fluxo as FluxoArquivo);
+      fluxoDoArquivo = fluxo as FluxoArquivo;
+      processamento = processar(info.filename, fluxoDoArquivo);
+      processamento.finally(pararOciosidade).catch(() => undefined);
       // Se o processamento parar no meio (413, antivirus fora), o fluxo do arquivo ja foi
       // destruido e o busboy nao termina sozinho: responde ja e descarta o resto do corpo.
       processamento.catch((e) => {
@@ -70,6 +101,11 @@ export async function analisar(req: Request, res: Response) {
     resultado = await receberArquivo(req, (nome, fluxo) => analiseService.analisar(usuario, nome, fluxo, vaga));
   } catch (e) {
     await analiseService.devolverVaga(vaga).catch((falha) => console.error('[analise] vaga não devolvida:', falha));
+    if (e instanceof ErroNegocio && e.codigo === 'ENVIO_PARADO') {
+      // Cliente parado no meio do corpo: responde e fecha a conexao (nao ha resto a esperar).
+      res.setHeader('Connection', 'close');
+      res.once('finish', () => setImmediate(() => req.socket.destroy()));
+    }
     throw e;
   }
   return enviar(res, 201, { status: 'sucesso', mensagem: resultado.mensagem, dados: resultado.dados });

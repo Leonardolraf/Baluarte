@@ -11,10 +11,10 @@ export type AnaliseArquivo = FileScan;
 /**
  * Tamanho maximo aceito por arquivo, em MB de 1024 x 1024 bytes (o mesmo que a tela barra antes
  * de enviar). Toda a cadeia acompanha este numero: busboy (controller), Nginx do servico `app`
- * (`client_max_body_size` da rota de analise) e clamd (`StreamMaxLength`, `MaxFileSize`,
- * `MaxHTMLNormalize`, `MaxScriptNormalize` e `PCREMaxFileSize` no docker-compose.yml). Mudar
- * aqui sem mudar la faz o clamd cortar o fluxo (503) ou, pior, pular parte da analise e
- * responder "OK" sem ter lido o arquivo inteiro.
+ * (`client_max_body_size` da rota de analise) e clamd (`StreamMaxLength` no docker-compose.yml).
+ * Os limites do clamd que cortam em silencio (`MaxFileSize`, `MaxHTMLNormalize`,
+ * `MaxScriptNormalize`, `PCREMaxFileSize`) ficam acima da cota (`MaxScanSize`), que avisa com
+ * `AlertExceedsMax`; abaixo dela, o clamd responderia "OK" sem ter lido tudo (medido).
  */
 export const LIMITE_ARQUIVO_MB = 250;
 export const LIMITE_ARQUIVO_BYTES = LIMITE_ARQUIVO_MB * 1024 * 1024;
@@ -121,10 +121,28 @@ export function ehRegraPropria(ameaca: string | null | undefined): boolean {
 /** Rotulo que acompanha a deteccao de regra propria na mensagem e na tela. */
 export const ROTULO_REGRA_PROPRIA = 'regra própria do Baluarte';
 
-/** Mensagem do resultado: a deteccao de regra propria diz de onde veio. */
+/**
+ * Com `AlertExceedsMax yes` (docker-compose.yml), arquivo que passa de um limite do clamd
+ * (tamanho, cota de varredura, profundidade ou quantidade de arquivos dentro de um compactado)
+ * volta como `Heuristics.Limits.Exceeded.<Limite>` em vez de "OK": nao foi analisado por inteiro
+ * e conta como ameaca, por precaucao (decisao do Leo, Melhorias #18).
+ */
+const DETECCAO_LIMITE_EXCEDIDO = /^Heuristics\.Limits\.Exceeded(\.[A-Za-z0-9_]+)?$/;
+
+/** A "ameaca" e o clamd dizendo que nao conseguiu olhar o arquivo inteiro? */
+export function ehLimiteExcedido(ameaca: string | null | undefined): boolean {
+  return typeof ameaca === 'string' && DETECCAO_LIMITE_EXCEDIDO.test(ameaca);
+}
+
+/** Rotulo que traduz o nome tecnico do limite excedido na mensagem e na tela. */
+export const ROTULO_LIMITE_EXCEDIDO = 'passa dos limites de análise do antivírus; tratado como ameaça por precaução';
+
+/** Mensagem do resultado: regra propria e limite excedido dizem de onde veio. */
 export function mensagemDoResultado(ameaca: string | null): string {
   if (!ameaca) return MENSAGEM_LIMPO;
-  return ehRegraPropria(ameaca) ? `${mensagemAmeaca(ameaca)} (${ROTULO_REGRA_PROPRIA})` : mensagemAmeaca(ameaca);
+  if (ehRegraPropria(ameaca)) return `${mensagemAmeaca(ameaca)} (${ROTULO_REGRA_PROPRIA})`;
+  if (ehLimiteExcedido(ameaca)) return `${mensagemAmeaca(ameaca)} (${ROTULO_LIMITE_EXCEDIDO})`;
+  return mensagemAmeaca(ameaca);
 }
 
 // ---- Anexo suspeito de campanha (B23) -------------------------------------------------

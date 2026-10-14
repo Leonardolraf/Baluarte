@@ -121,6 +121,68 @@ describe('analisar (INSTREAM)', () => {
     }
   });
 
+  it('DT26: clamd que responde "OK" antes do fim do envio nunca vira "limpo"', async () => {
+    // Um clamd de verdade so responde depois do bloco de tamanho zero. Aqui o falso responde
+    // "stream: OK" assim que recebe o comando (e depois do primeiro bloco), mantendo a conexao
+    // aberta e lendo o resto: o veredito falaria de um arquivo que ele nao recebeu.
+    for (const quando of ['no comando', 'depois do primeiro bloco'] as const) {
+      const precoce = createServer({ allowHalfOpen: true }, (socket) => {
+        let recebidos = 0;
+        let respondeu = false;
+        socket.on('data', (d) => {
+          recebidos += d.length;
+          const limiar = quando === 'no comando' ? 1 : 'zINSTREAM\0'.length + 4 + 64 * 1024;
+          if (!respondeu && recebidos >= limiar) {
+            respondeu = true;
+            socket.write('stream: OK\0');
+          }
+        });
+        socket.on('end', () => socket.end());
+      });
+      await new Promise<void>((ok) => precoce.listen(0, '127.0.0.1', ok));
+      const porta = process.env.CLAMAV_PORT;
+      process.env.CLAMAV_PORT = String((precoce.address() as AddressInfo).port);
+      try {
+        async function* arquivo() {
+          for (let i = 0; i < 64; i++) {
+            yield Buffer.alloc(64 * 1024, 66); // 4 MB
+            await new Promise((r) => setImmediate(r));
+          }
+        }
+        await assert.rejects(
+          analisar(arquivo()),
+          (e: Error) => e instanceof AntivirusIndisponivel && /antes do fim do envio/.test(e.message),
+          `resposta ${quando}`,
+        );
+      } finally {
+        process.env.CLAMAV_PORT = porta;
+        await new Promise<void>((ok) => precoce.close(() => ok()));
+      }
+    }
+  });
+
+  it('DT26: clamd que responde "OK" e fecha no meio do envio também é falha, não "limpo"', async () => {
+    const fecha = createServer((socket) => {
+      socket.once('data', () => socket.end('stream: OK\0'));
+      socket.on('data', () => undefined);
+    });
+    await new Promise<void>((ok) => fecha.listen(0, '127.0.0.1', ok));
+    const porta = process.env.CLAMAV_PORT;
+    process.env.CLAMAV_PORT = String((fecha.address() as AddressInfo).port);
+    try {
+      async function* arquivo() {
+        for (let i = 0; i < 160; i++) {
+          yield Buffer.alloc(64 * 1024, 67); // 10 MB
+          await new Promise((r) => setImmediate(r));
+        }
+      }
+      await assert.rejects(analisar(arquivo()), AntivirusIndisponivel);
+    } finally {
+      process.env.CLAMAV_PORT = porta;
+      await new Promise<void>((ok) => fecha.close(() => ok()));
+    }
+  });
+
   it('sem CLAMAV_HOST ou com o clamd fora do ar: AntivirusIndisponivel', async () => {
     const host = process.env.CLAMAV_HOST;
     delete process.env.CLAMAV_HOST;
@@ -166,6 +228,7 @@ describe('escrever: ouvintes do socket não acumulam (contrapressão)', () => {
       await escrita;
       assert.equal(s.listenerCount('drain'), 0, `drain pendurado no bloco ${i}`);
       assert.equal(s.listenerCount('error'), 0, `error pendurado no bloco ${i}`);
+      assert.equal(s.listenerCount('close'), 0, `close pendurado no bloco ${i}`);
     }
   });
 
@@ -175,6 +238,7 @@ describe('escrever: ouvintes do socket não acumulam (contrapressão)', () => {
     s.emit('error', new Error('conexão caiu'));
     await assert.rejects(escrita, AntivirusIndisponivel);
     assert.equal(s.listenerCount('drain'), 0);
+    assert.equal(s.listenerCount('close'), 0);
     assert.equal(s.listenerCount('error'), 0);
   });
 
