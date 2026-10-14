@@ -1,4 +1,9 @@
-import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
+import axios, {
+  type AxiosError,
+  type AxiosInstance,
+  type AxiosRequestConfig,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 import type {
   AnalyzeFileOptions,
   BaluarteApi,
@@ -170,9 +175,30 @@ export const FEATURES: Readonly<ApiFeatures> = {
   multiRecipientCampaigns: true,
 };
 
+// Tempo limite de uma requisição e a retentativa de transporte.
+//
+// Por que 30 s e não os 15 s de antes: a API da demonstração responde por um Funnel do
+// Tailscale, que custa ~1 s fixo por requisição mesmo quando está bom (medido: 1–2 ms no
+// localhost da VM contra ~1.070 ms pelo Funnel). Num link residencial, uma oscilação de
+// poucos segundos estourava o limite e a tela morria com "A API demorou demais para
+// responder" — foi o que aconteceu com /trainings em 13/10/2026, e recarregar resolveu.
+const LEITURA_TIMEOUT_MS = 30_000;
+
+// Uma única retentativa, e só quando NADA chegou ao servidor: tempo esgotado ou falha de
+// rede. Erro com resposta (4xx/5xx) nunca é repetido — o servidor já decidiu. Só método de
+// leitura (GET/HEAD), porque repetir escrita pode duplicar efeito: a requisição pode ter
+// chegado e a resposta é que se perdeu.
+const METODOS_IDEMPOTENTES = ['get', 'head'];
+const ESPERA_RETENTATIVA_MS = 400;
+
+interface ConfigComRetentativa extends InternalAxiosRequestConfig {
+  /** Marca que esta requisição já foi repetida uma vez (não repetir em laço). */
+  jaRepetida?: boolean;
+}
+
 export const httpClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15_000,
+  timeout: LEITURA_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -229,6 +255,17 @@ httpClient.interceptors.response.use(
       if (status === 403) dispatchAuthEvent(FORBIDDEN_EVENT, { status, code, message });
       return Promise.reject(new HttpError(status, code, message));
     }
+    // Sem resposta: ou o tempo esgotou, ou não houve conexão. Uma retentativa resolve a
+    // oscilação curta do transporte sem o usuário ver tela de erro; se falhar de novo, o
+    // erro vai para a tela como antes (com o botão "Tentar novamente" do ErrorState).
+    const config = error.config as ConfigComRetentativa | undefined;
+    const metodo = (config?.method ?? 'get').toLowerCase();
+    if (config && !config.jaRepetida && METODOS_IDEMPOTENTES.includes(metodo)) {
+      config.jaRepetida = true;
+      await new Promise((resolve) => setTimeout(resolve, ESPERA_RETENTATIVA_MS));
+      return httpClient.request(config);
+    }
+
     if (error.code === 'ECONNABORTED') {
       return Promise.reject(new HttpError(0, 'TIMEOUT', 'A API demorou demais para responder.'));
     }
