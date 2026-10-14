@@ -219,6 +219,37 @@ function IntegrityPanel() {
   );
 }
 
+/**
+ * Autor do registro (melhoria 22). A API declara a origem e a tela não deduz: sem o campo,
+ * ou com valor que não conhecemos, fica o texto neutro em vez de um rótulo que pode mentir
+ * — é uma tela de auditoria, o custo de afirmar errado é alto.
+ */
+function AuditAuthor({ entry }: { entry: AuditEntry }) {
+  if (entry.origin === 'automatic') {
+    return (
+      <span className="text-slate-600 dark:text-slate-400" data-testid="audit-origin-automatic">
+        Baluarte (automático)
+      </span>
+    );
+  }
+  if (entry.origin === 'removed') {
+    return (
+      <span className="text-slate-600 dark:text-slate-400" data-testid="audit-origin-removed">
+        Usuário removido
+      </span>
+    );
+  }
+  if (entry.user) {
+    return (
+      <>
+        <div className="font-medium text-ink dark:text-white">{entry.user.name}</div>
+        <div className="mt-0.5 font-mono text-xs text-slate-600 dark:text-slate-400">{entry.user.email}</div>
+      </>
+    );
+  }
+  return <span className="text-slate-600 dark:text-slate-400">Sem usuário</span>;
+}
+
 function AuditRow({ entry }: { entry: AuditEntry }) {
   return (
     <Tr data-testid="audit-row" data-id={entry.id}>
@@ -228,16 +259,7 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
         </time>
       </Td>
       <Td className="min-w-[12rem]">
-        {entry.user ? (
-          <>
-            <div className="font-medium text-ink dark:text-white">{entry.user.name}</div>
-            <div className="mt-0.5 font-mono text-xs text-slate-600 dark:text-slate-400">
-              {entry.user.email}
-            </div>
-          </>
-        ) : (
-          <span className="text-slate-600 dark:text-slate-400">Sem usuário</span>
-        )}
+        <AuditAuthor entry={entry} />
       </Td>
       <Td className="min-w-[12rem]">
         <div className="font-medium text-ink dark:text-white">{auditActionLabel(entry.action)}</div>
