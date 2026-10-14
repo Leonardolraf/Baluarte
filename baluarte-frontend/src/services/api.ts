@@ -31,6 +31,8 @@ import type {
   MonitoringAcknowledgementListResponse,
   MonitoringAcknowledgementResult,
   MonitoringNotice,
+  TermsAcceptanceResult,
+  TermsOfUse,
   NotificationPreferences,
   PhishingReportResult,
   ScanReport,
@@ -53,7 +55,13 @@ import type {
 } from '@/types';
 import { VULN_PAGE_SIZE } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
-import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import {
+  dispatchAuthEvent,
+  FORBIDDEN_EVENT,
+  TERMS_NOT_ACCEPTED,
+  TERMS_REQUIRED_EVENT,
+  UNAUTHORIZED_EVENT,
+} from '@/lib/events';
 import { fileScanVerdict } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { filenameFromDisposition, vulnerabilityReportFilename } from '@/lib/download';
@@ -78,6 +86,8 @@ import {
   toMonitoringAcknowledgementList,
   toMonitoringAcknowledgementResult,
   toMonitoringNotice,
+  toTermsAcceptanceResult,
+  toTermsOfUse,
   toReceivedCampaigns,
   toNotificationPreferences,
   toScan,
@@ -109,6 +119,8 @@ import {
   type BackendMonitoringAcknowledgementResult,
   type BackendMonitoringAcknowledgementSummary,
   type BackendMonitoringNotice,
+  type BackendTermsAcceptanceResult,
+  type BackendTermsOfUse,
   type BackendNotificationPreferences,
   type BackendScan,
   type BackendSecurityPolicy,
@@ -132,7 +144,7 @@ import {
 // mocks (dados fictícios e credenciais de demonstração) do bundle.
 // -----------------------------------------------------------------------------
 
-export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT };
+export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT, TERMS_REQUIRED_EVENT };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -226,7 +238,11 @@ httpClient.interceptors.response.use(
       // Só derruba a sessão se havia uma sessão guardada (um 401 durante o próprio login não conta).
       if (status === 401 && tokenStorage.get())
         dispatchAuthEvent(UNAUTHORIZED_EVENT, { status, code, message });
-      if (status === 403) dispatchAuthEvent(FORBIDDEN_EVENT, { status, code, message });
+      // 403 TERMOS_NAO_ACEITOS (Melhorias #5) não é perfil desatualizado: pede o aceite dos
+      // termos, e ressincronizar com /me só daria outro 403.
+      if (status === 403 && code === TERMS_NOT_ACCEPTED)
+        dispatchAuthEvent(TERMS_REQUIRED_EVENT, { status, code, message });
+      else if (status === 403) dispatchAuthEvent(FORBIDDEN_EVENT, { status, code, message });
       return Promise.reject(new HttpError(status, code, message));
     }
     if (error.code === 'ECONNABORTED') {
@@ -897,6 +913,20 @@ export const realApi: BaluarteApi = {
       dados,
       resumo as BackendMonitoringAcknowledgementSummary | undefined,
       { page, pageSize },
+    );
+  },
+
+  async getTerms(): Promise<TermsOfUse> {
+    return toTermsOfUse(await request<BackendTermsOfUse>({ method: 'GET', url: '/conta/termos' }));
+  },
+
+  async acceptTerms(version: string): Promise<TermsAcceptanceResult> {
+    return toTermsAcceptanceResult(
+      await request<BackendTermsAcceptanceResult>({
+        method: 'POST',
+        url: '/conta/termos/aceite',
+        data: { versao: version },
+      }),
     );
   },
 

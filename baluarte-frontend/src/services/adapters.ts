@@ -25,6 +25,8 @@ import type {
   MonitoringAcknowledgementListResponse,
   MonitoringAcknowledgementResult,
   MonitoringNotice,
+  TermsAcceptanceResult,
+  TermsOfUse,
   ReceivedCampaign,
   ReceivedCampaignsResponse,
   SecondOpinion,
@@ -1350,6 +1352,37 @@ export function toMonitoringAcknowledgementResult(
   raw: BackendMonitoringAcknowledgementResult,
 ): MonitoringAcknowledgementResult {
   return { version: raw.versao, acknowledgedAt: raw.registradaEm, created: raw.nova === true };
+}
+
+// ---- Termos de uso (Melhorias #5) ---------------------------------------------
+
+export interface BackendTermsOfUse {
+  versao: string;
+  rascunho: boolean;
+  texto: string;
+  aceito: boolean;
+  aceitoEm: string | null;
+}
+
+export interface BackendTermsAcceptanceResult {
+  versao: string;
+  aceitoEm: string;
+  novo: boolean;
+}
+
+/** GET /conta/termos: só muda o idioma dos campos. */
+export function toTermsOfUse(raw: BackendTermsOfUse): TermsOfUse {
+  return {
+    version: raw.versao,
+    draft: raw.rascunho === true,
+    text: raw.texto ?? '',
+    accepted: raw.aceito === true,
+    acceptedAt: raw.aceitoEm ?? null,
+  };
+}
+
+export function toTermsAcceptanceResult(raw: BackendTermsAcceptanceResult): TermsAcceptanceResult {
+  return { version: raw.versao, acceptedAt: raw.aceitoEm, created: raw.novo === true };
 }
 
 export function toMonitoringAcknowledgement(

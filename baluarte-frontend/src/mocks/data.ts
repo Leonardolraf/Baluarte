@@ -19,6 +19,7 @@ import type {
   Evidence,
   FileScan,
   MonitoringNotice,
+  TermsOfUse,
   NotificationPreferences,
   ScanReport,
   SecurityPolicy,
@@ -2330,6 +2331,16 @@ export function buildMockStations(nowMs: number = Date.now()): MockStation[] {
     },
   ];
 }
+
+// ---- Termos de uso (Melhorias #5) ---------------------------------------------
+// CÓPIA do que a API serve (backend/src/models/termos.model.ts, o lugar único do texto), só
+// para a demonstração em modo mock. O teste backend/tests/termos.test.ts compara esta cópia
+// com a API: mudou lá, muda aqui. Ainda é o espaço reservado, até o texto ser aprovado.
+export const MOCK_TERMS: Omit<TermsOfUse, 'accepted' | 'acceptedAt'> = {
+  version: '2026-10-14-rascunho',
+  draft: true,
+  text: 'Texto dos termos de uso pendente de aprovação.',
+};
 
 // ---- Aviso de monitoramento da estação (B18) ---------------------------------
 // CÓPIA do texto que a API serve (backend/src/models/avisoMonitoramento.model.ts, o lugar

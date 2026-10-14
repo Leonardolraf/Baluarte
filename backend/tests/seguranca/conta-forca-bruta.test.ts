@@ -294,6 +294,10 @@ describe('politica de senha e senha provisoria', () => {
     assert.equal(r.status, 200);
     assert.equal(r.body.mensagem, 'Senha cadastrada com sucesso');
     const token = await login(alvo.email, 'MinhaNova@1');
+    // Ativa, mas presa ao aceite dos termos de uso (#5) ate aceitar.
+    esperaErro(await chamar('GET', '/me', { token }), 403, 'TERMOS_NAO_ACEITOS');
+    const { versao } = (await chamar('GET', '/conta/termos', { token })).body.dados;
+    assert.equal((await chamar('POST', '/conta/termos/aceite', { token, body: { versao } })).status, 201);
     assert.equal((await chamar('GET', '/me', { token })).body.dados.status, 'Ativo');
   });
 
