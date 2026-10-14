@@ -1,5 +1,5 @@
 import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RBACRole } from '@/types';
 import { httpClient, realApi } from '@/services/api';
 import { toFileScan, toSecondOpinion, type BackendFileScan } from '@/services/adapters';
@@ -8,9 +8,14 @@ import {
   fileScanErrorMessage,
   fileScanVerdict,
   formatBytes,
+  isLimitExceeded,
   isTooLarge,
+  LIMIT_EXCEEDED_LABEL,
   MAX_FILE_SIZE_BYTES,
+  SCAN_RESPONSE_TIMEOUT_MS,
   secondOpinionText,
+  UPLOAD_IDLE_TIMEOUT_MS,
+  watchUpload,
 } from '@/lib/files';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
@@ -310,13 +315,16 @@ describe('mockApi — análise de arquivos', () => {
     expect(byContent.scan.result).toBe('threat');
   });
 
-  it('acima de 10 MB responde 413 ARQUIVO_MUITO_GRANDE (exatamente 10 MB passa)', async () => {
+  it('acima de 250 MB responde 413 ARQUIVO_MUITO_GRANDE (exatamente 250 MB passa)', async () => {
     loginAs('analyst');
     const big = new File(['x'], 'grande.bin');
     Object.defineProperty(big, 'size', { value: MAX_FILE_SIZE_BYTES + 1 });
     await expectHttp(mockApi.analyzeFile(big), 413, 'ARQUIVO_MUITO_GRANDE');
 
-    const limit = new File([new Uint8Array(MAX_FILE_SIZE_BYTES)], 'limite.bin');
+    // O tamanho declarado é o que o limite confere; o conteúdo fica pequeno para o teste não
+    // alocar 250 MB.
+    const limit = new File(['x'], 'limite.bin');
+    Object.defineProperty(limit, 'size', { value: MAX_FILE_SIZE_BYTES });
     expect((await mockApi.analyzeFile(limit)).scan.size).toBe(MAX_FILE_SIZE_BYTES);
   });
 
@@ -445,12 +453,13 @@ describe('mockApi — análise de arquivos', () => {
 });
 
 describe('lib/files', () => {
-  it('formatBytes em pt-BR e o limite de 10 MB', () => {
+  it('formatBytes em pt-BR e o limite de 250 MB', () => {
     expect(formatBytes(1)).toBe('1 byte');
     expect(formatBytes(68)).toBe('68 bytes');
     expect(formatBytes(1536)).toBe('1,5 KB');
     expect(formatBytes(245_812)).toBe('240 KB');
-    expect(formatBytes(MAX_FILE_SIZE_BYTES)).toBe('10 MB');
+    expect(MAX_FILE_SIZE_BYTES).toBe(250 * 1024 * 1024);
+    expect(formatBytes(MAX_FILE_SIZE_BYTES)).toBe('250 MB');
     expect(formatBytes(-1)).toBe('—');
     expect(isTooLarge(MAX_FILE_SIZE_BYTES)).toBe(false);
     expect(isTooLarge(MAX_FILE_SIZE_BYTES + 1)).toBe(true);
@@ -458,7 +467,11 @@ describe('lib/files', () => {
 
   it('mensagem clara para cada erro do contrato', () => {
     expect(fileScanErrorMessage(new HttpError(400, 'ARQUIVO_OBRIGATORIO', 'x'))).toMatch(/Nenhum arquivo/);
-    expect(fileScanErrorMessage(new HttpError(413, 'ARQUIVO_MUITO_GRANDE', 'x'))).toMatch(/10 MB/);
+    expect(fileScanErrorMessage(new HttpError(413, 'ARQUIVO_MUITO_GRANDE', 'x'))).toMatch(/limite de 250 MB/);
+    // 413 sem o código da API (hospedagem, ex.: Vercel): não promete os 250 MB.
+    const hospedagem = fileScanErrorMessage(new HttpError(413, 'HTTP_413', 'Erro 413'));
+    expect(hospedagem).toMatch(/recusou o envio pelo tamanho/);
+    expect(hospedagem).not.toMatch(/250 MB/);
     expect(fileScanErrorMessage(new HttpError(429, 'MUITAS_ANALISES', 'x'))).toMatch(/limite de análises/);
     expect(fileScanErrorMessage(new HttpError(503, 'ANTIVIRUS_INDISPONIVEL', 'x'))).toMatch(
       /não está disponível neste ambiente/,
@@ -473,6 +486,89 @@ describe('lib/files', () => {
       'Ameaça encontrada: Eicar-Signature',
     );
     expect(fileScanVerdict({ result: 'threat', threat: null })).toBe('Ameaça encontrada: não identificada');
+  });
+
+  describe('vigia do envio: ociosidade, não prazo total (decisão do Leo)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('padrões: 90 s sem progresso no envio, 6 min pela resposta depois do último byte', () => {
+      expect(UPLOAD_IDLE_TIMEOUT_MS).toBe(90_000);
+      expect(SCAN_RESPONSE_TIMEOUT_MS).toBe(360_000);
+    });
+
+    it('envio lento porém estável nunca expira, por mais que dure', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      // 1 hora de envio, com progresso a cada 900 ms.
+      for (let t = 0; t < 4000; t++) {
+        vi.advanceTimersByTime(900);
+        vigia.progress(t + 1, 10_000);
+      }
+      expect(expirou).not.toHaveBeenCalled();
+      vigia.stop();
+    });
+
+    it('progresso parado além da ociosidade: expira por "idle"', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      vigia.progress(10, 100);
+      vi.advanceTimersByTime(999);
+      expect(expirou).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(expirou).toHaveBeenCalledWith('idle');
+    });
+
+    it('depois do último byte, espera a análise até o prazo da resposta e expira por "response"', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      vigia.progress(100, 100);
+      vi.advanceTimersByTime(4999);
+      expect(expirou).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      expect(expirou).toHaveBeenCalledWith('response');
+    });
+
+    it('stop: a resposta chegou, nada expira depois', () => {
+      vi.useFakeTimers();
+      const expirou = vi.fn();
+      const vigia = watchUpload(expirou, { idleMs: 1000, responseMs: 5000 });
+      vigia.stop();
+      vi.advanceTimersByTime(60_000);
+      expect(expirou).not.toHaveBeenCalled();
+    });
+
+    it('mensagens claras para envio parado (API ou navegador) e análise sem resposta', () => {
+      for (const codigo of ['ENVIO_PARADO', 'ENVIO_SEM_PROGRESSO'])
+        expect(fileScanErrorMessage(new HttpError(codigo === 'ENVIO_PARADO' ? 408 : 0, codigo, 'x'))).toMatch(
+          /parou de avançar/,
+        );
+      expect(fileScanErrorMessage(new HttpError(0, 'ANALISE_SEM_RESPOSTA', 'x'))).toMatch(
+        /não respondeu a tempo/,
+      );
+    });
+  });
+
+  it('limite do antivírus excedido (AlertExceedsMax): o nome técnico ganha a explicação', () => {
+    expect(isLimitExceeded('Heuristics.Limits.Exceeded.MaxFileSize')).toBe(true);
+    expect(isLimitExceeded('Heuristics.Limits.Exceeded')).toBe(true);
+    for (const outro of [
+      'Heuristics.Encrypted.Zip',
+      'xHeuristics.Limits.Exceeded.MaxFiles',
+      'Eicar-Signature',
+      null,
+    ])
+      expect(isLimitExceeded(outro)).toBe(false);
+    expect(fileScanVerdict({ result: 'threat', threat: 'Heuristics.Limits.Exceeded.MaxScanSize' })).toBe(
+      `Ameaça encontrada: Heuristics.Limits.Exceeded.MaxScanSize (${LIMIT_EXCEEDED_LABEL})`,
+    );
+    expect(LIMIT_EXCEEDED_LABEL).toBe(
+      'passa dos limites de análise do antivírus; tratado como ameaça por precaução',
+    );
   });
 
   it('textos da segunda opinião: claros para desconhecido e indisponível, nunca "seguro"', () => {
@@ -508,5 +604,22 @@ describe('lib/files', () => {
     expect(all[8]!.title).toMatch(/falha ao consultar/);
     expect(all[9]!.short).toBe('Desligada');
     for (const t of all) expect(`${t.title} ${t.detail}`).not.toMatch(/é seguro|arquivo seguro/i);
+  });
+});
+// #18: dois erros 429 diferentes. Antes desta correção, 'duas análises ao mesmo tempo' caía
+// na mensagem de 'limite por hora' — quem esperasse uma hora esperaria em vão.
+describe('mensagens dos limites do upload (#18)', () => {
+  it('análises simultâneas não usa a mensagem de limite por hora', () => {
+    const texto = fileScanErrorMessage(new HttpError(429, 'ANALISES_SIMULTANEAS', 'x'));
+    expect(texto).toMatch(/2 análises em andamento/);
+    expect(texto).not.toMatch(/por hora/);
+  });
+
+  it('limite por hora continua com a própria mensagem', () => {
+    expect(fileScanErrorMessage(new HttpError(429, 'MUITAS_ANALISES', 'x'))).toMatch(/por hora/);
+  });
+
+  it('tempo máximo de envio tem mensagem própria', () => {
+    expect(fileScanErrorMessage(new HttpError(408, 'ENVIO_TEMPO_MAXIMO', 'x'))).toMatch(/tempo máximo/);
   });
 });
