@@ -6,8 +6,15 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { erro, enviar } from './utils/resposta.js';
 import { apiRouter } from './routes/index.js';
+import { lerTrustProxy } from './config/trustProxy.js';
 
 export const app = express();
+
+// Proxies na frente da API (TRUST_PROXY, regra e motivo em config/trustProxy.ts). Lido na carga
+// do modulo: valor invalido lanca aqui e a API nao sobe (server.ts e a funcao da Vercel importam
+// este arquivo). Sem a variavel, nada muda: req.ip e o endereco do socket (nao forjavel).
+const saltosDeProxy = lerTrustProxy();
+if (saltosDeProxy > 0) app.set('trust proxy', saltosDeProxy);
 
 // Não anunciar o servidor (o proprio catalogo de achados do scanner trata X-Powered-By como A05).
 app.disable('x-powered-by');

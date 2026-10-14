@@ -66,6 +66,8 @@ export function configurarBancoDeTeste(testFileUrl: string): string {
   delete process.env.VIRUSTOTAL_API_KEY;
   delete process.env.VIRUSTOTAL_API_URL;
   process.env.FRONTEND_URL = 'http://localhost:5173';
+  // Sem proxy na frente da API nos testes (req.ip = socket); quem testa TRUST_PROXY define depois.
+  delete process.env.TRUST_PROXY;
   // B14: nada de rede real nos testes. As bases de vulnerabilidades apontam para uma porta local
   // sem servidor (quem testa o cruzamento sobe um OSV/NVD falso e troca estas URLs); sem chave
   // do NVD; o cruzamento automatico ja fica desligado com NODE_ENV=test.
