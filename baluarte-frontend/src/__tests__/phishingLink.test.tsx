@@ -6,6 +6,7 @@ import { routes } from '@/routes';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { toCampaignReport, type BackendCampaignReport } from '@/services/adapters';
 import { configureMocks, mockApi, resetMockState } from '@/mocks/api';
+import { MOCK_CREDENTIALS, MOCK_USERS } from '@/mocks/data';
 import { HttpError } from '@/lib/errors';
 import { tokenStorage, userStorage } from '@/lib/storage';
 
@@ -97,6 +98,92 @@ describe('adaptador do relatório da campanha', () => {
     const report = toCampaignReport(antigo);
     expect(report.recipients).toHaveLength(1);
     expect(report.timeline).toHaveLength(1);
+  });
+});
+
+describe('aberturas do link (Melhorias #6)', () => {
+  const comAberturas: BackendCampaignReport = {
+    id: 'c2',
+    nome: 'Campanha',
+    template: 'urgencia',
+    status: 'ATIVA',
+    criadoEm: '2026-10-01T10:00:00.000Z',
+    destinatarios: 2,
+    funil: {
+      enviados: { valor: 2, pct: 100 },
+      abertos: { valor: 2, pct: 100 },
+      clicados: { valor: 2, pct: 100 },
+      submeteram: { valor: 0, pct: 0 },
+      reportaram: { valor: 0, pct: 0 },
+    },
+    resumo: { aberturas: 4, possiveisRepasses: 1 },
+    treinamentos: [
+      {
+        destinatario: 'ana@empresa.com',
+        token: 'ev-1',
+        concluido: false,
+        aberturas: 3,
+        possivelRepasse: true,
+      },
+      {
+        destinatario: 'bruno@empresa.com',
+        token: 'ev-2',
+        concluido: true,
+        aberturas: 1,
+        possivelRepasse: false,
+      },
+    ],
+  };
+
+  it('o adaptador leva aberturas, possível repasse e o total do resumo', () => {
+    const report = toCampaignReport(comAberturas);
+    expect(report.linkOpens).toEqual({ total: 4, possibleForwardings: 1 });
+    expect(report.recipients.find((r) => r.email === 'ana@empresa.com')).toMatchObject({
+      linkOpens: 3,
+      possibleForwarding: true,
+    });
+    expect(report.recipients.find((r) => r.email === 'bruno@empresa.com')).toMatchObject({
+      linkOpens: 1,
+      possibleForwarding: false,
+    });
+  });
+
+  it('backend sem os campos novos: zero aberturas e nenhum repasse', () => {
+    const { resumo: _r, ...antigo } = comAberturas;
+    const report = toCampaignReport({
+      ...antigo,
+      treinamentos: antigo.treinamentos.map(({ aberturas: _a, possivelRepasse: _p, ...t }) => t),
+    });
+    expect(report.linkOpens).toEqual({ total: 0, possibleForwardings: 0 });
+    expect(report.recipients.every((r) => r.linkOpens === 0 && r.possibleForwarding === false)).toBe(true);
+  });
+
+  it('mock: cada abertura do link conta; a segunda marca possível repasse', async () => {
+    const admin = MOCK_USERS.find((u) => u.role === 'admin' && u.status !== 'inactive')!;
+    const cred = MOCK_CREDENTIALS.find((c) => c.userId === admin.id)!;
+    const sessao = await mockApi.login({ email: cred.email, password: cred.password });
+    tokenStorage.set(sessao.token);
+    userStorage.set(sessao.user);
+
+    const antes = await mockApi.getCampaignReport('camp-001');
+    const alvo = antes.recipients.find((r) => r.id === TOKEN_SEM_CLIQUE)!;
+    expect(alvo).toMatchObject({ linkOpens: 0, possibleForwarding: false });
+
+    await mockApi.getTrainingByLink(TOKEN_SEM_CLIQUE);
+    const uma = await mockApi.getCampaignReport('camp-001');
+    expect(uma.recipients.find((r) => r.id === TOKEN_SEM_CLIQUE)).toMatchObject({
+      linkOpens: 1,
+      possibleForwarding: false,
+    });
+
+    await mockApi.getTrainingByLink(TOKEN_SEM_CLIQUE);
+    const duas = await mockApi.getCampaignReport('camp-001');
+    expect(duas.recipients.find((r) => r.id === TOKEN_SEM_CLIQUE)).toMatchObject({
+      linkOpens: 2,
+      possibleForwarding: true,
+    });
+    expect(duas.linkOpens!.total).toBe(antes.linkOpens!.total + 2);
+    expect(duas.linkOpens!.possibleForwardings).toBe(antes.linkOpens!.possibleForwardings + 1);
   });
 });
 
