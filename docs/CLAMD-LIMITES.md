@@ -5,7 +5,7 @@ O risco: com o `StreamMaxLength` padrão, a cauda de um arquivo grande não é l
 confere três coisas: (1) os `CLAMD_CONF_*` do `docker-compose.yml` chegam ao clamd.conf que o
 clamd realmente lê, apesar do `entrypoint:` próprio do serviço `clamav` (o que copia as regras
 YARA); (2) arquivo simples com o marcador nos últimos bytes sai AMEAÇA; (3) estouro do limite
-nunca sai LIMPO.
+nunca sai LIMPO. O item 4 é a regressão da imagem para o Zip64 do DT27.
 
 ## 1. Na VM, depois do release
 
@@ -103,3 +103,46 @@ do bloco final, conexão encerrada no meio e qualquer resposta fora de `stream: 
 - `tests/unidade/antivirus.test.ts`: recusa só no fim (`erro do clamd vira AntivirusIndisponivel`)
   e `lerVeredito('INSTREAM size limit exceeded. ERROR')`.
 - `tests/unidade/config-clamd.test.ts`: `StreamMaxLength` acima do limite da API no compose.
+
+## 4. Zip64 (DT27): regressão da imagem
+
+O ClamAV 1.5.4 não lê a entrada de zip cujo cabeçalho **local** traz `0xFFFFFFFF` no tamanho
+comprimido ou no original **com o bit 3 da flag (descritor de dados) desligado**: o tamanho real
+só existe no campo extra Zip64 (0x0001), que ele não lê, e ele responde "OK" sem ter lido
+(Cisco-Talos/clamav#1527). É a forma do `zipfile` do Python com `force_zip64` e do 7-Zip lendo da
+entrada padrão (`-si`). As outras formas de Zip64 ele lê e varre. O critério (iii) do DT27
+(`backend/src/utils/detectorZip64.ts`) só trata como ameaça essa forma
+(`Baluarte.Zip64.NaoAnalisavel`); as outras seguem o veredito do clamd. Esse critério depende do
+comportamento da imagem, e `backend/tests/regressao-clamd-zip64.test.ts` confere esse
+comportamento: só roda com `CLAMAV_HOST`, não usa banco nem a API, e manda as formas **direto ao
+clamd** (INSTREAM, pelo cliente `config/antivirus.ts`), montadas em memória por
+`tests/zipDeTeste.ts`, com o marcador YARA inofensivo do Baluarte comprimido dentro (nunca o
+EICAR, nada em disco). Se a imagem mudar (deixar de ler uma forma, ou passar a ler a forma
+`0xFFFFFFFF` sem descritor), o teste falha com "comportamento do ClamAV mudou: rever o critério
+do DT27".
+
+Na estação, com um clamd isolado (projeto `dt27c`, sem a porta 3310 nem o volume do projeto
+`baluarte`; assinaturas copiadas de um volume existente, montado só leitura):
+
+```sh
+# override de portas (fora do repositório): ports: !override ["127.0.0.1:13122:3310"]
+docker compose -p dt27c -f docker-compose.yml -f dt27c-portas.yml --profile antivirus up -d --no-deps clamav
+cd backend
+CLAMAV_HOST=127.0.0.1 CLAMAV_PORT=13122 node --import tsx --test tests/regressao-clamd-zip64.test.ts
+```
+
+Resultado medido em 19/10/2026 (ClamAV 1.5.4, daily 28157, regras do Baluarte carregadas), 6/6:
+
+| Forma (marcador YARA comprimido dentro) | clamd | Esperado |
+|---|---|---|
+| zip comum (controle) | `YARA.BaluarteMarcadorTeste.UNOFFICIAL` | detecta |
+| Zip64 com tamanhos reais no cabeçalho local e extra 0x0001 (NetBeans) | `YARA.BaluarteMarcadorTeste.UNOFFICIAL` | detecta (lê) |
+| Zip64 com `0xFFFFFFFF` no local e descritor de dados Zip64 (Info-ZIP por pipe) | `YARA.BaluarteMarcadorTeste.UNOFFICIAL` | detecta (lê) |
+| Zip64 só no diretório central e no registro de fim Zip64 + localizador | `YARA.BaluarteMarcadorTeste.UNOFFICIAL` | detecta (lê) |
+| `0xFFFFFFFF` no local, sem descritor, com extra 0x0001 (Python `force_zip64`) | **OK** | não detecta (não lê) |
+| a mesma, sem o extra 0x0001 (montada à mão) | **OK** | não detecta (não lê) |
+
+A última linha é o motivo de o detector não exigir o campo extra: sem ele o clamd falha do mesmo
+jeito. Medido à parte, fora do teste: com `0xFFFFFFFF` **só** no tamanho original (o comprimido
+real), o clamd lê e detecta; o critério aprovado cobre "comprimido **ou** original", então essa
+forma (que nenhuma ferramenta conhecida grava sozinha) cai por precaução no detector.

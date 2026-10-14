@@ -8,6 +8,7 @@ import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { ADMIN, ANALISTA, SENHA_CONTA, criarUsuario, encerrarServidor, esperaErro, iniciarServidor, login, prepararBanco, urlBase, chamar } from './helpers.js';
 import { enviarArquivoEmFluxo, lerInstream } from './envioEmFluxo.js';
+import { MARCADOR_TESTE, montarZip } from './zipDeTeste.js';
 
 prepararBanco(import.meta.url);
 
@@ -228,6 +229,79 @@ describe('POST /arquivos/analise', () => {
     assert.equal(r.status, 429);
     assert.equal(r.body.codigoErro, 'MUITAS_ANALISES');
     assert.equal((await enviarArquivo(colab, 'y')).status, 201);
+  });
+});
+
+// DT27: o ClamAV 1.5.4 nao le a entrada cujo cabecalho local traz 0xFFFFFFFF num tamanho sem
+// descritor de dados (Cisco-Talos/clamav#1527) e responde "OK" sem ter lido (medido com o clamd
+// real: tests/regressao-clamd-zip64.test.ts). O clamd falso daqui so reconhece o marcador em texto
+// puro, e dentro de uma entrada comprimida ele nao aparece: o AMEACA tem de vir da API. As formas
+// de Zip64 que o clamd le seguem o veredito dele.
+describe('POST /arquivos/analise: o Zip64 que o clamd não lê vira ameaça por precaução (DT27)', () => {
+  let token = '';
+  let usuarioId = '';
+  before(async () => {
+    const u = await criarUsuario(admin, 'Colaborador', 'zip64');
+    token = await login(u.email, SENHA_CONTA);
+    usuarioId = u.id;
+  });
+
+  const marcador = [{ nome: 'leia.txt', dados: MARCADOR_TESTE }];
+
+  it('Zip64 com 0xFFFFFFFF no cabeçalho local, sem descritor, e o marcador inofensivo: 201 AMEACA Baluarte.Zip64.NaoAnalisavel, com o rótulo, registro e auditoria', async () => {
+    const zip = montarZip(marcador, { zip64Local: true });
+    const r = await enviarArquivo(token, zip, 'marcador-zip64.zip');
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.dados.resultado, 'AMEACA');
+    assert.equal(r.body.dados.ameaca, 'Baluarte.Zip64.NaoAnalisavel');
+    assert.equal(
+      r.body.mensagem,
+      'Ameaça encontrada: Baluarte.Zip64.NaoAnalisavel (formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução)',
+    );
+    assert.equal(r.body.dados.regraPropria, false);
+    assert.equal(recebidoPeloClamd, zip.length, 'o antivírus continua recebendo o arquivo inteiro');
+    const reg = await prisma.fileScan.findUnique({ where: { id: r.body.dados.id } });
+    assert.equal(reg?.resultado, 'AMEACA');
+    assert.equal(reg?.ameaca, 'Baluarte.Zip64.NaoAnalisavel');
+    const auditoria = await prisma.auditLog.findFirst({ where: { usuarioId, acao: 'ANALISAR_ARQUIVO' }, orderBy: { sequencia: 'desc' } });
+    assert.match(auditoria?.detalhe ?? '', /AMEACA Baluarte\.Zip64\.NaoAnalisavel/);
+  });
+
+  it('docx Zip64 (container zip) e Zip64 comprimido dentro de zip comum também caem', async () => {
+    const docx = montarZip([{ nome: '[Content_Types].xml', dados: Buffer.from('<Types/>') }, { nome: 'word/document.xml', dados: MARCADOR_TESTE }], { zip64Local: true });
+    const aninhado = montarZip([{ nome: 'interno.zip', dados: montarZip(marcador, { zip64Local: true }) }]);
+    for (const [nome, dados] of [['relatorio.docx', docx], ['pacote.zip', aninhado]] as const) {
+      const r = await enviarArquivo(token, dados, nome);
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.dados.resultado, 'AMEACA', nome);
+      assert.equal(r.body.dados.ameaca, 'Baluarte.Zip64.NaoAnalisavel', nome);
+    }
+  });
+
+  it('Zip64 que o clamd lê (NetBeans, Info-ZIP por pipe, só no central/EOCD64) segue o veredito dele: LIMPO aqui', async () => {
+    for (const o of [{ zip64TamanhosReais: true }, { zip64Local: true, descritor: true }, { zip64Central: true, fim64: true }]) {
+      const r = await enviarArquivo(token, montarZip(marcador, o), 'zip64-lido.zip');
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.dados.resultado, 'LIMPO', JSON.stringify(o));
+      assert.equal(r.body.dados.ameaca, null, JSON.stringify(o));
+    }
+  });
+
+  it('controle: zip comum segue o caminho normal (limpo quando o clamd diz OK, a detecção dele quando acha)', async () => {
+    const limpo = await enviarArquivo(token, montarZip(marcador), 'comum.zip');
+    assert.equal(limpo.status, 201, JSON.stringify(limpo.body));
+    assert.equal(limpo.body.dados.resultado, 'LIMPO');
+    assert.equal(limpo.body.dados.ameaca, null);
+    assert.equal(limpo.body.mensagem, 'Nenhuma ameaça conhecida encontrada');
+    // Marcador guardado sem compressao: o clamd falso o ve e a deteccao dele vale como veio.
+    const detectado = await enviarArquivo(token, montarZip([{ nome: 'leia.txt', dados: MARCADOR_TESTE, metodo: 'guardado' }]), 'comum-guardado.zip');
+    assert.equal(detectado.body.dados.ameaca, 'Eicar-Signature');
+  });
+
+  it('Zip64 em que o clamd também acha algo: fica o nome do clamd (diz mais que o do formato)', async () => {
+    const r = await enviarArquivo(token, Buffer.concat([Buffer.from(EICAR), montarZip(marcador, { zip64Local: true })]), 'eicar-e-zip64.bin');
+    assert.equal(r.body.dados.resultado, 'AMEACA');
+    assert.equal(r.body.dados.ameaca, 'Eicar-Signature');
   });
 });
 
