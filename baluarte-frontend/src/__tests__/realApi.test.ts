@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { httpClient, realApi, vulnerabilitySortParams } from '@/services/api';
 import type { BackendCampaign, BackendFinding, BackendTraining, BackendUser } from '@/services/adapters';
 import { HttpError } from '@/lib/errors';
-import { FORBIDDEN_EVENT, TERMS_REQUIRED_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
 
@@ -169,16 +169,6 @@ describe('realApi — interceptadores HTTP', () => {
     const err = await rejection(realApi.listUsers());
     expect(err.status).toBe(403);
     expect((spy.mock.calls[0]?.[0] as CustomEvent).type).toBe(FORBIDDEN_EVENT);
-  });
-
-  it('403 TERMOS_NAO_ACEITOS dispara o evento dos termos de uso, não o de ressincronização', async () => {
-    const spy = vi.spyOn(window, 'dispatchEvent');
-    on('GET /me', fail(403, 'TERMOS_NAO_ACEITOS', 'Aceite os termos de uso para continuar'));
-    const err = await rejection(realApi.me());
-    expect(err).toMatchObject({ status: 403, code: 'TERMOS_NAO_ACEITOS' });
-    const tipos = spy.mock.calls.map((c) => (c[0] as CustomEvent).type);
-    expect(tipos).toContain(TERMS_REQUIRED_EVENT);
-    expect(tipos).not.toContain(FORBIDDEN_EVENT);
   });
 
   it('usa código e mensagem genéricos quando o corpo do erro vem vazio', async () => {
@@ -1185,41 +1175,6 @@ describe('realApi — configurações', () => {
       auditRegistersActions: true,
       auditLogImmutable: true,
       auditRetentionMonths: null,
-    });
-  });
-});
-
-describe('realApi — termos de uso (Melhorias #5)', () => {
-  it('lê os termos em GET /conta/termos e converte os campos', async () => {
-    on(
-      'GET /conta/termos',
-      ok({ versao: '2026-10-14-rascunho', rascunho: true, texto: 'Texto', aceito: false, aceitoEm: null }),
-    );
-    expect(await realApi.getTerms()).toEqual({
-      version: '2026-10-14-rascunho',
-      draft: true,
-      text: 'Texto',
-      accepted: false,
-      acceptedAt: null,
-    });
-  });
-
-  it('aceita em POST /conta/termos/aceite com a versão lida e propaga o 409', async () => {
-    on('POST /conta/termos/aceite', {
-      status: 201,
-      data: { status: 'sucesso', dados: { versao: 'v1', aceitoEm: '2026-10-14T12:00:00.000Z', novo: true } },
-    });
-    expect(await realApi.acceptTerms('v1')).toEqual({
-      version: 'v1',
-      acceptedAt: '2026-10-14T12:00:00.000Z',
-      created: true,
-    });
-    expect(body()).toEqual({ versao: 'v1' });
-
-    on('POST /conta/termos/aceite', fail(409, 'VERSAO_DESATUALIZADA', 'Os termos mudaram'));
-    expect(await rejection(realApi.acceptTerms('v0'))).toMatchObject({
-      status: 409,
-      code: 'VERSAO_DESATUALIZADA',
     });
   });
 });

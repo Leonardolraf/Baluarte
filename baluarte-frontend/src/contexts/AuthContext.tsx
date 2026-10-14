@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AuthUser, LoginCredentials, RBACRole } from '@/types';
 import { api } from '@/services/api';
-import { FORBIDDEN_EVENT, TERMS_NOT_ACCEPTED, UNAUTHORIZED_EVENT } from '@/lib/events';
-import { isHttpError } from '@/lib/errors';
+import { FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { isTokenExpired, userFromToken } from '@/lib/jwt';
 import { clearSession, tokenStorage, userStorage } from '@/lib/storage';
 import { hasAnyRole } from '@/lib/roles';
@@ -110,9 +109,6 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
           typeof error === 'object' && error && 'status' in error
             ? Number((error as { status: number }).status)
             : 0;
-        // 403 TERMOS_NAO_ACEITOS (Melhorias #5): a sessão é válida, só falta aceitar os termos
-        // de uso. Não derruba; o interceptor já emitiu TERMS_REQUIRED_EVENT.
-        if (isHttpError(error) && error.code === TERMS_NOT_ACCEPTED) return;
         if (status === 401 || status === 403) logout('Sua sessão expirou. Faça login novamente.');
       });
     return () => {

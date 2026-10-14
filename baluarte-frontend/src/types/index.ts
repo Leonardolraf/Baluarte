@@ -756,29 +756,6 @@ export interface MonitoringAcknowledgementListResponse extends Paginated<Monitor
   pendingCurrentVersion: number;
 }
 
-// ---- Termos de uso (Melhorias #5) --------------------------------------------
-
-/**
- * Termos de uso em vigor. O texto vem da API (lugar único); enquanto não há aceite, a API
- * recusa as rotas autenticadas com 403 `TERMOS_NAO_ACEITOS`.
- */
-export interface TermsOfUse {
-  version: string;
-  /** Texto ainda não aprovado (espaço reservado); a tela avisa. */
-  draft: boolean;
-  text: string;
-  accepted: boolean;
-  /** ISO 8601; `null` sem aceite. */
-  acceptedAt: string | null;
-}
-
-export interface TermsAcceptanceResult {
-  version: string;
-  acceptedAt: string;
-  /** `false` quando o aceite já existia (a operação é idempotente). */
-  created: boolean;
-}
-
 // ---- Estações monitoradas (B13) -----------------------------------------------
 
 /** Online enquanto o último contato do agente estiver dentro da janela do servidor. */

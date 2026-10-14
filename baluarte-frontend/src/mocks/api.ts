@@ -38,8 +38,6 @@ import type {
   MonitoringAcknowledgementListResponse,
   MonitoringAcknowledgementResult,
   MonitoringNotice,
-  TermsAcceptanceResult,
-  TermsOfUse,
   NotificationPreferences,
   PhishingReportResult,
   RBACRole,
@@ -84,7 +82,6 @@ import {
   MOCK_FILE_SCANS,
   MOCK_MONITORING_ACKS,
   MOCK_MONITORING_NOTICE,
-  MOCK_TERMS,
   MOCK_NOTIFICATION_PREFERENCES,
   MOCK_RECIPIENTS,
   MOCK_SCANS,
@@ -188,11 +185,6 @@ interface MockState {
   secondOpinionMode: MockSecondOpinionMode;
   /** Ciências do aviso de monitoramento (B18): uma por usuário e versão. */
   monitoringAcks: MockMonitoringAcknowledgement[];
-  /**
-   * Aceite dos termos de uso (Melhorias #5), por id de usuário. As contas do seed já nascem com
-   * aceite, como no seed do backend. O mock não simula o bloqueio 403 TERMOS_NAO_ACEITOS.
-   */
-  termsAcceptedAt: Map<string, string>;
 }
 
 export type MockSecondOpinionMode = 'enabled' | 'disabled' | 'quota';
@@ -232,7 +224,6 @@ function createState(): MockState {
     stations: buildMockStations(),
     secondOpinionMode: 'enabled',
     monitoringAcks: clone(MOCK_MONITORING_ACKS),
-    termsAcceptedAt: new Map(MOCK_USERS.map((u): [string, string] => [u.id, '2026-10-01T12:00:00.000Z'])),
   };
 }
 
@@ -2019,34 +2010,6 @@ export const mockApi: BaluarteApi = {
       requireRole(user, ['admin']);
       return { intact: true, verifiedCount: state.auditLog.length, databaseLock: true, firstBreak: null };
     });
-  },
-
-  // ---- Termos de uso (Melhorias #5) ----
-  async getTerms(): Promise<TermsOfUse> {
-    return simulate(() => {
-      const user = requireUser();
-      const acceptedAt = state.termsAcceptedAt.get(user.id) ?? null;
-      return { ...MOCK_TERMS, accepted: acceptedAt !== null, acceptedAt };
-    });
-  },
-
-  async acceptTerms(version: string): Promise<TermsAcceptanceResult> {
-    await delay();
-    const user = requireUser();
-    if (typeof version !== 'string' || !/^[0-9A-Za-z._-]{1,32}$/.test(version))
-      throw new HttpError(400, 'VERSAO_INVALIDA', 'Versão dos termos inválida');
-    if (version !== MOCK_TERMS.version)
-      throw new HttpError(
-        409,
-        'VERSAO_DESATUALIZADA',
-        'Os termos mudaram desde a sua leitura: leia a versão atual antes de aceitar',
-      );
-    const existing = state.termsAcceptedAt.get(user.id);
-    if (existing) return { version, acceptedAt: existing, created: false };
-    const acceptedAt = nowIso();
-    state.termsAcceptedAt.set(user.id, acceptedAt);
-    pushAudit(user, 'ACEITAR_TERMOS', `versao=${version}`);
-    return { version, acceptedAt, created: true };
   },
 
   // ---- Aviso de monitoramento da estação (B18) ----

@@ -24,8 +24,6 @@ import type {
   MonitoringAcknowledgementListResponse,
   MonitoringAcknowledgementResult,
   MonitoringNotice,
-  TermsAcceptanceResult,
-  TermsOfUse,
   NotificationPreferences,
   PhishingReportResult,
   ScanReport,
@@ -179,12 +177,6 @@ export interface BaluarteApi {
   listMonitoringAcknowledgements(
     filters?: MonitoringAcknowledgementFilters,
   ): Promise<MonitoringAcknowledgementListResponse>;
-
-  // Termos de uso (Melhorias #5): liberadas mesmo sem aceite
-  /** Texto em vigor (servido pela API), a versão e se o usuário atual já aceitou. Qualquer perfil. */
-  getTerms(): Promise<TermsOfUse>;
-  /** Aceita a versão lida; idempotente. 409 `VERSAO_DESATUALIZADA` se o texto mudou nesse meio-tempo. */
-  acceptTerms(version: string): Promise<TermsAcceptanceResult>;
 
   // Configurações
   getNotificationPreferences(): Promise<NotificationPreferences>;
