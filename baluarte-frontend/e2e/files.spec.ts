@@ -89,4 +89,15 @@ test.describe('Análise de arquivos', () => {
     // A análise do EICAR do seed é do analista: não aparece para o colaborador.
     await expect(rows.filter({ hasText: 'eicar.com' })).toHaveCount(0);
   });
+
+  // DT27: arquivo que o antivírus não consegue analisar aparece como "não analisável", não
+  // como ameaça identificada — a tela não inventa uma detecção que não houve.
+  test('arquivo Zip64 aparece como não analisável, não como ameaça identificada', async ({ page }) => {
+    await login(page, 'analyst');
+    await page.goto('/files');
+    const linha = page.getByRole('row').filter({ hasText: 'backup-arquivos.zip' });
+    await expect(linha).toBeVisible();
+    await expect(linha).toContainText('Não analisável');
+    await expect(linha).not.toContainText('Baluarte.Zip64');
+  });
 });

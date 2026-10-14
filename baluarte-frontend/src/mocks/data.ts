@@ -1909,6 +1909,19 @@ export const MOCK_FILE_SCANS: MockFileScan[] = [
     },
   },
   {
+    // DT27: o veredito é "ameaça" por precaução — o antivírus não consegue abrir Zip64.
+    // Nada foi identificado, e a tela precisa dizer isso em vez de inventar uma detecção.
+    id: 'arq-005',
+    userId: 'u-001',
+    name: 'backup-arquivos.zip',
+    size: 240_000_000,
+    sha256: '9f2c4b1e7a3d5c8f0b6e2a4d7c9f1b3e5a8d0c2f4b6e8a1d3c5f7b9e0a2d4c6f',
+    result: 'threat',
+    threat: 'Baluarte.Zip64.NaoAnalisavel',
+    scannedAt: diasAntesDoRelogio(1),
+    secondOpinion: null,
+  },
+  {
     id: 'arq-003',
     userId: 'u-001',
     name: 'eicar.com',
