@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
 import { MemoryRouter } from 'react-router-dom';
@@ -238,7 +238,7 @@ describe('realApi.exportVulnerabilityReport', () => {
   });
 });
 
-describe('botão "Exportar PDF" na tela de vulnerabilidades', () => {
+describe('menu "Exportar" na tela de vulnerabilidades', () => {
   let saved: Array<{ blob: Blob; name: string }>;
   beforeEach(() => {
     saved = [];
@@ -252,11 +252,12 @@ describe('botão "Exportar PDF" na tela de vulnerabilidades', () => {
   it('Analista baixa o PDF com os filtros ativos; a exportação vai para a auditoria', async () => {
     const user = userEvent.setup();
     renderPage('analyst');
-    const button = await screen.findByRole('button', { name: 'Exportar PDF' });
+    const button = await screen.findByRole('button', { name: 'Exportar' });
     await waitFor(() => expect(button).toBeEnabled());
 
     await user.selectOptions(screen.getByLabelText('Severidade'), 'critical');
     await user.click(button);
+    await user.click(await screen.findByRole('menuitem', { name: 'PDF' }));
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].name).toMatch(/^baluarte-vulnerabilidades-\d{4}-\d{2}-\d{2}\.pdf$/);
@@ -270,21 +271,22 @@ describe('botão "Exportar PDF" na tela de vulnerabilidades', () => {
   it('mostra "Gerando PDF…" enquanto gera e o erro quando falha', async () => {
     const user = userEvent.setup();
     renderPage('admin');
-    const button = await screen.findByRole('button', { name: 'Exportar PDF' });
+    const button = await screen.findByRole('button', { name: 'Exportar' });
     await waitFor(() => expect(button).toBeEnabled());
 
     configureMocks({ latencyMs: [400, 400], failureRate: 1 });
     await user.click(button);
+    await user.click(await screen.findByRole('menuitem', { name: 'PDF' }));
     expect(await screen.findByRole('button', { name: 'Gerando PDF…' })).toHaveAttribute('aria-busy', 'true');
     expect(await screen.findByRole('alert')).toHaveTextContent('Serviço temporariamente indisponível');
-    expect(screen.getByRole('button', { name: 'Exportar PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Exportar' })).toBeEnabled();
     expect(saved).toHaveLength(0);
   });
 
   it('sem achados com os filtros atuais, o botão fica desabilitado', async () => {
     const user = userEvent.setup();
     renderPage('analyst');
-    const button = await screen.findByRole('button', { name: 'Exportar PDF' });
+    const button = await screen.findByRole('button', { name: 'Exportar' });
     await user.type(screen.getByLabelText('Buscar'), 'nada-casa-com-isto');
     await waitFor(() => expect(button).toBeDisabled());
     expect(button).toHaveAttribute('title', 'Nenhuma vulnerabilidade com os filtros atuais');
@@ -293,6 +295,35 @@ describe('botão "Exportar PDF" na tela de vulnerabilidades', () => {
   it('Colaborador não vê o botão', async () => {
     renderPage('collaborator');
     await screen.findByRole('heading', { name: 'Vulnerabilidades' });
-    expect(screen.queryByRole('button', { name: /Exportar PDF/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Exportar/ })).not.toBeInTheDocument();
+  });
+
+  // Melhoria 17: o Excel é gerado no servidor. No modo mock (o da demonstração sem API) a
+  // opção aparece desabilitada e com o motivo visível, em vez de deixar clicar e dar erro.
+  it('o menu traz PDF e Excel; no modo mock o Excel fica desabilitado com o motivo', async () => {
+    const user = userEvent.setup();
+    renderPage('analyst');
+    const button = await screen.findByRole('button', { name: 'Exportar' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+
+    const menu = await screen.findByRole('menu', { name: 'Formato do relatório' });
+    expect(within(menu).getByRole('menuitem', { name: 'PDF' })).toBeEnabled();
+    const excel = within(menu).getByRole('menuitem', { name: /Excel/ });
+    expect(excel).toBeDisabled();
+    expect(excel).toHaveAttribute('title', 'Só com a API real');
+
+    // Esc fecha e devolve o foco ao botão.
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(button).toHaveFocus();
+  });
+
+  it('a camada mock recusa o Excel com 501 (o .xlsx é gerado no servidor)', async () => {
+    login('analyst');
+    await expect(mockApi.exportVulnerabilityReportExcel({})).rejects.toMatchObject({
+      status: 501,
+      code: 'NAO_IMPLEMENTADO',
+    });
   });
 });

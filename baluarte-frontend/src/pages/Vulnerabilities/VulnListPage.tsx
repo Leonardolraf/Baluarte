@@ -8,7 +8,7 @@ import {
   type VulnerabilitySortKey,
   type VulnerabilitySummary,
 } from '@/types';
-import { api } from '@/services/api';
+import { USE_MOCKS, api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
 import { useAuth } from '@/contexts/useAuth';
 import { saveBlob } from '@/lib/download';
@@ -73,25 +73,155 @@ function SummaryMeta({ summary }: { summary: VulnerabilitySummary }) {
  * Exportar o relatório em PDF (B24) com os filtros ativos na tela. O arquivo é gerado no
  * servidor (que também registra a exportação na auditoria) e baixado pelo cliente da API.
  */
+/** Formatos oferecidos pelo menu Exportar (melhoria 17). */
+type ReportFormat = 'pdf' | 'xlsx';
+
 function useReportExport(filters: VulnerabilityFilters) {
-  const [exporting, setExporting] = useState(false);
+  // Guarda QUAL formato está sendo gerado: o botão mostra o estado certo.
+  const [exporting, setExporting] = useState<ReportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  async function exportReport() {
-    setExporting(true);
+  async function exportReport(format: ReportFormat = 'pdf') {
+    setExporting(format);
     setExportError(null);
     try {
-      const { blob, filename } = await api.exportVulnerabilityReport(filters);
+      const { blob, filename } =
+        format === 'xlsx'
+          ? await api.exportVulnerabilityReportExcel(filters)
+          : await api.exportVulnerabilityReport(filters);
       saveBlob(blob, filename);
       notify.success(`Relatório gerado: ${filename}`);
     } catch (error) {
-      setExportError(errorMessage(error, 'Não foi possível gerar o relatório em PDF.'));
+      const rotulo = format === 'xlsx' ? 'Excel' : 'PDF';
+      setExportError(errorMessage(error, `Não foi possível gerar o relatório em ${rotulo}.`));
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
   return { exporting, exportError, exportReport };
+}
+
+/**
+ * Menu "Exportar" (melhoria 17): PDF e Excel com os filtros da tela. Teclado completo
+ * (setas e Esc devolvendo o foco ao botão) porque é um menu, não um dropdown decorativo.
+ */
+function ExportMenu({
+  exporting,
+  disabled,
+  disabledReason,
+  onExport,
+}: {
+  exporting: ReportFormat | null;
+  disabled: boolean;
+  disabledReason?: string;
+  onExport: (format: ReportFormat) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const itemsRef = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocumentClick = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocumentClick);
+    return () => document.removeEventListener('mousedown', onDocumentClick);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) itemsRef.current.find((el) => el && !el.disabled)?.focus();
+  }, [open]);
+
+  function fechar(devolverFoco = true) {
+    setOpen(false);
+    if (devolverFoco) buttonRef.current?.focus();
+  }
+
+  const opcoes: { format: ReportFormat; label: string; indisponivel?: string }[] = [
+    { format: 'pdf', label: 'PDF' },
+    {
+      format: 'xlsx',
+      label: 'Excel (.xlsx)',
+      // O .xlsx é gerado no servidor (exceljs); no modo de demonstração não há servidor.
+      indisponivel: USE_MOCKS ? 'Só com a API real' : undefined,
+    },
+  ];
+
+  function mover(passo: number) {
+    const itens = itemsRef.current.filter((el): el is HTMLButtonElement => Boolean(el) && !el!.disabled);
+    if (itens.length === 0) return;
+    const atual = itens.findIndex((el) => el === document.activeElement);
+    itens[(atual + passo + itens.length) % itens.length]?.focus();
+  }
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <Button
+        ref={buttonRef}
+        variant="outline"
+        leftIcon={<DownloadIcon size={16} />}
+        loading={exporting !== null}
+        disabled={disabled}
+        title={disabledReason}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-testid="export-menu-button"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {exporting ? `Gerando ${exporting === 'xlsx' ? 'Excel' : 'PDF'}…` : 'Exportar'}
+      </Button>
+
+      {open && (
+        <div
+          role="menu"
+          tabIndex={-1}
+          aria-label="Formato do relatório"
+          data-testid="export-menu"
+          className="absolute right-0 z-20 mt-1 min-w-[14rem] overflow-hidden rounded-plate border border-slate-200 bg-white py-1 shadow-card dark:border-slate-800 dark:bg-slate-900"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              fechar();
+            } else if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              mover(1);
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              mover(-1);
+            } else if (event.key === 'Tab') {
+              setOpen(false);
+            }
+          }}
+        >
+          {opcoes.map((opcao, indice) => (
+            <button
+              key={opcao.format}
+              ref={(el) => {
+                itemsRef.current[indice] = el;
+              }}
+              type="button"
+              role="menuitem"
+              disabled={Boolean(opcao.indisponivel)}
+              title={opcao.indisponivel}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-ink hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-slate-400 dark:text-white dark:hover:bg-slate-800 dark:focus-visible:bg-slate-800 dark:disabled:text-slate-500"
+              onClick={() => {
+                fechar(false);
+                onExport(opcao.format);
+              }}
+            >
+              <span>{opcao.label}</span>
+              {opcao.indisponivel && (
+                <span className="text-xs text-slate-500 dark:text-slate-400">{opcao.indisponivel}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function VulnListPage() {
@@ -188,16 +318,12 @@ export default function VulnListPage() {
         }
         actions={
           canExport ? (
-            <Button
-              variant="outline"
-              leftIcon={<DownloadIcon size={16} />}
-              loading={exporting}
+            <ExportMenu
+              exporting={exporting}
               disabled={nothingToExport}
-              title={nothingToExport ? 'Nenhuma vulnerabilidade com os filtros atuais' : undefined}
-              onClick={() => void exportReport()}
-            >
-              {exporting ? 'Gerando PDF…' : 'Exportar PDF'}
-            </Button>
+              disabledReason={nothingToExport ? 'Nenhuma vulnerabilidade com os filtros atuais' : undefined}
+              onExport={(format) => void exportReport(format)}
+            />
           ) : null
         }
       />
