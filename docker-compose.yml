@@ -71,8 +71,11 @@ services:
       - SEED_DEMO=${SEED_DEMO:-0}
       # 1 = recusa subir com qualquer SEED_*=1 (ligado no docker-compose.servidor.yml; NODE_ENV=production faz o mesmo).
       - SEMEAR_PROIBIDO=${SEMEAR_PROIBIDO:-0}
-      # Domínio interno aceito como destinatário de campanha (padrão: @empresa.com, o do contrato).
-      - DOMINIO_INTERNO=${DOMINIO_INTERNO:-@empresa.com}
+      # Domínio interno aceito como destinatário de campanha. Sem padrão aqui (DT28): vazio, a
+      # API usa @empresa.com (o do contrato N2 AT1) só fora de produção; com NODE_ENV=production
+      # ela recusa subir sem um DOMINIO_INTERNO próprio. Escrever @empresa.com aqui faria
+      # qualquer produção montada só com este arquivo herdar o domínio de um terceiro.
+      - DOMINIO_INTERNO=${DOMINIO_INTERNO:-}
     # /data guarda só o JWT_SECRET gerado e os marcadores dos seeds (os dados ficam no Postgres).
     volumes:
       - backend-data:/data
