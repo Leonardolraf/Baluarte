@@ -11,6 +11,7 @@ import { ROUTE_ROLES } from '@/lib/roles';
 const LoginPage = lazy(() => import('@/pages/Auth/LoginPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/Auth/ResetPasswordPage'));
 const AboutPage = lazy(() => import('@/pages/About/AboutPage'));
+const TermsPage = lazy(() => import('@/pages/Account/TermsPage'));
 const HomePage = lazy(() => import('@/pages/Home/HomePage'));
 const DashboardPage = lazy(() => import('@/pages/Dashboard/DashboardPage'));
 const VulnListPage = lazy(() => import('@/pages/Vulnerabilities/VulnListPage'));
@@ -85,6 +86,9 @@ export const routes: RouteObject[] = [
           { path: '/files', element: page(<FileAnalysisPage />) },
           { path: '/training/:id', element: page(<TrainingPage />) },
           { path: '/settings', element: page(<SettingsPage />) },
+          // Melhorias #5: exige login, mas é a saída do 403 de termos — não pode
+          // depender de nada que o aceite bloqueie.
+          { path: '/termos', element: page(<TermsPage />) },
           // Aviso de monitoramento da estação (B18): texto, ciência e, para o Administrador, a lista.
           { path: '/monitoring', element: page(<MonitoringNoticePage />) },
           {

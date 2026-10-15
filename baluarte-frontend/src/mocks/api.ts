@@ -64,6 +64,8 @@ import type {
   VulnerabilityListResponse,
   VulnerabilityReportFile,
   VulnerabilityStatus,
+  TermsOfUse,
+  TermsAcceptance,
 } from '@/types';
 import { SEVERITIES, VULN_PAGE_SIZE } from '@/types';
 import { HttpError } from '@/lib/errors';
@@ -235,6 +237,7 @@ let state: MockState = createState();
 
 /** Restaura o estado inicial (usado em testes). */
 export function resetMockState(): void {
+  termsAcceptedAt.clear();
   state = createState();
 }
 
@@ -279,6 +282,14 @@ async function simulate<T>(produce: () => T, options: { canFail?: boolean } = {}
 }
 
 /** Rejeita com 401/403 e emite o mesmo evento global que a camada HTTP real emitiria. */
+// Termos de uso (Melhorias #5). O servidor guarda o INSTANTE do aceite em User.termosAceitosEm;
+// aqui, um mapa por id de usuário com o mesmo significado. Os valores espelham o model do
+// backend: enquanto o texto não for aprovado, `rascunho` é true e a tela avisa.
+const MOCK_TERMS_VERSION = '2026-10-14-rascunho';
+const MOCK_TERMS_DRAFT = true;
+const MOCK_TERMS_TEXT = 'Texto dos termos de uso pendente de aprovação.';
+const termsAcceptedAt = new Map<string, string>();
+
 /** Grava na trilha de auditoria da sessão, como o servidor faz nas rotas de escrita. */
 function pushAudit(
   user: Pick<User, 'id' | 'name' | 'email'> | null,
@@ -2206,6 +2217,41 @@ export const mockApi: BaluarteApi = {
     requireUser();
     state.notificationPreferences = { ...state.notificationPreferences, ...prefs };
     return clone(state.notificationPreferences);
+  },
+
+  async getTerms(): Promise<TermsOfUse> {
+    return simulate(() => {
+      const user = requireUser();
+      const acceptedAt = termsAcceptedAt.get(user.id) ?? null;
+      return {
+        version: MOCK_TERMS_VERSION,
+        draft: MOCK_TERMS_DRAFT,
+        text: MOCK_TERMS_TEXT,
+        accepted: acceptedAt !== null,
+        acceptedAt,
+      };
+    });
+  },
+
+  async acceptTerms(version: string): Promise<TermsAcceptance> {
+    return simulate(() => {
+      const user = requireUser();
+      // Mesmas regras do servidor: formato primeiro, depois a versão em vigor.
+      if (!/^[0-9A-Za-z._-]{1,32}$/.test(version))
+        throw new HttpError(400, 'VERSAO_INVALIDA', 'Versão dos termos inválida');
+      if (version !== MOCK_TERMS_VERSION)
+        throw new HttpError(
+          409,
+          'VERSAO_DESATUALIZADA',
+          'Os termos mudaram desde a sua leitura: leia a versão atual antes de aceitar',
+        );
+      const existente = termsAcceptedAt.get(user.id);
+      if (existente) return { version, acceptedAt: existente, isNew: false };
+      const acceptedAt = nowIso();
+      termsAcceptedAt.set(user.id, acceptedAt);
+      pushAudit(user, 'ACEITAR_TERMOS', `versao=${version}`);
+      return { version, acceptedAt, isNew: true };
+    });
   },
 
   async getSecurityPolicy(): Promise<SecurityPolicy> {

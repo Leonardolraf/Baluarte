@@ -43,6 +43,8 @@ import type {
   VulnerabilityListResponse,
   VulnerabilityReportFile,
   VulnerabilityStatus,
+  TermsOfUse,
+  TermsAcceptance,
 } from '@/types';
 
 export interface ChangePasswordResult extends MessageResponse {
@@ -128,6 +130,10 @@ export interface BaluarteApi {
   // Treinamento
   /** Consolidado de quem concluiu treinamento (uma requisição, calculada no servidor). */
   getTrainingOverview(): Promise<TrainingOverview>;
+  // Termos de uso (Melhorias #5): liberadas mesmo sem aceite.
+  getTerms(): Promise<TermsOfUse>;
+  acceptTerms(version: string): Promise<TermsAcceptance>;
+
   getTraining(id: string): Promise<Training>;
   completeTraining(id: string): Promise<Training>;
   /** Link público do e-mail da campanha (/t/:token): abre o treinamento e registra o clique. */

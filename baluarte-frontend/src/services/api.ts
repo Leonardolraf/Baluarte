@@ -58,10 +58,12 @@ import type {
   VulnerabilitySortKey,
   VulnerabilityReportFile,
   VulnerabilityStatus,
+  TermsOfUse,
+  TermsAcceptance,
 } from '@/types';
 import { VULN_PAGE_SIZE } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
-import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { dispatchAuthEvent, FORBIDDEN_EVENT, TERMS_REQUIRED_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { filenameFromDisposition, vulnerabilityReportFilename } from '@/lib/download';
@@ -133,6 +135,9 @@ import {
   type BackendTrainingOverview,
   type BackendUser,
   type BackendVulnerabilitySummary,
+  toTerms,
+  type BackendTerms,
+  type BackendTermsAcceptance,
 } from '@/services/adapters';
 
 // -----------------------------------------------------------------------------
@@ -145,7 +150,7 @@ import {
 // mocks (dados fictícios e credenciais de demonstração) do bundle.
 // -----------------------------------------------------------------------------
 
-export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT };
+export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT, TERMS_REQUIRED_EVENT };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -260,7 +265,14 @@ httpClient.interceptors.response.use(
       // Só derruba a sessão se havia uma sessão guardada (um 401 durante o próprio login não conta).
       if (status === 401 && tokenStorage.get())
         dispatchAuthEvent(UNAUTHORIZED_EVENT, { status, code, message });
-      if (status === 403) dispatchAuthEvent(FORBIDDEN_EVENT, { status, code, message });
+      // Melhorias #5: 403 TERMOS_NAO_ACEITOS é aceite pendente, não perfil sem acesso.
+      // Tratar como FORBIDDEN mostraria "acesso negado" numa situação que o usuário resolve.
+      if (status === 403)
+        dispatchAuthEvent(code === 'TERMOS_NAO_ACEITOS' ? TERMS_REQUIRED_EVENT : FORBIDDEN_EVENT, {
+          status,
+          code,
+          message,
+        });
       return Promise.reject(new HttpError(status, code, message));
     }
     // Sem resposta: ou o tempo esgotou, ou não houve conexão. Uma retentativa resolve a
@@ -664,6 +676,22 @@ export const realApi: BaluarteApi = {
       params,
     });
     return toEligibleRecipients(dados, resumo as BackendEligibleRecipientsSummary | undefined);
+  },
+
+  // Termos de uso (Melhorias #5). Estas duas continuam liberadas quando o aceite falta:
+  // é por elas que a pessoa sai do 403.
+  async getTerms(): Promise<TermsOfUse> {
+    return toTerms(await request<BackendTerms>({ method: 'GET', url: '/conta/termos' }));
+  },
+
+  async acceptTerms(version: string): Promise<TermsAcceptance> {
+    const raw = await request<BackendTermsAcceptance>({
+      method: 'POST',
+      url: '/conta/termos/aceite',
+      // A versão lida vai no corpo: se o texto mudou nesse meio-tempo, a API devolve 409.
+      data: { versao: version },
+    });
+    return { version: raw.versao, acceptedAt: raw.aceitoEm, isNew: Boolean(raw.novo) };
   },
 
   async getTraining(id: string): Promise<Training> {
