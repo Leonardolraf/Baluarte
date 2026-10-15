@@ -52,6 +52,8 @@ import type {
   User,
   UserInput,
   UserStatus,
+  DepartmentOption,
+  EligibleRecipientsResponse,
   Vulnerability,
   VulnerabilityHistoryEntry,
   VulnerabilityListResponse,
@@ -1055,6 +1057,7 @@ export function fromCampaignInput(input: CampaignInput): {
   destinatario: string;
   destinatarios: string[];
   template: string;
+  confirmarEnvioTotal?: true;
 } {
   const destinatarios = Array.from(
     new Set(input.recipients.map((email) => email.trim().toLowerCase()).filter(Boolean)),
@@ -1064,6 +1067,8 @@ export function fromCampaignInput(input: CampaignInput): {
     destinatario: destinatarios[0] ?? '',
     destinatarios,
     template: TEMPLATE_TO_LABEL[input.template],
+    // Aditivo: só vai no corpo quando a tela confirmou o envio em massa.
+    ...(input.confirmMassSend ? { confirmarEnvioTotal: true as const } : {}),
   };
 }
 
@@ -1089,6 +1094,53 @@ export interface BackendFileScan {
 }
 
 /** Campanha recebida (GET /arquivos/campanhas-recebidas, B23). */
+/** Departamento como `GET /departamentos` devolve. */
+export interface BackendDepartment {
+  id: string;
+  nome: string;
+  usuarios: number;
+}
+
+export function toDepartmentOption(raw: BackendDepartment): DepartmentOption {
+  return { id: String(raw.id), name: raw.nome, users: Number(raw.usuarios) || 0 };
+}
+
+/** Destinatário elegível de `GET /campanhas/destinatarios` (só id, nome, e-mail e departamento). */
+export interface BackendEligibleRecipient {
+  id: string;
+  nome: string;
+  email: string;
+  departamento: string | null;
+}
+
+export interface BackendEligibleRecipientsSummary {
+  total?: number;
+  inativos?: number;
+  pendentes?: number;
+  foraDoDominio?: number;
+}
+
+export function toEligibleRecipients(
+  dados: BackendEligibleRecipient[],
+  resumo: BackendEligibleRecipientsSummary | undefined,
+): EligibleRecipientsResponse {
+  const items = (dados ?? []).map((r) => ({
+    id: String(r.id),
+    name: r.nome,
+    email: r.email,
+    department: r.departamento ?? null,
+  }));
+  return {
+    items,
+    summary: {
+      total: Number(resumo?.total ?? items.length) || 0,
+      inactive: Number(resumo?.inativos) || 0,
+      pending: Number(resumo?.pendentes) || 0,
+      outsideDomain: Number(resumo?.foraDoDominio) || 0,
+    },
+  };
+}
+
 export interface BackendReceivedCampaign {
   id: string;
   campanha: { id: string; nome: string };

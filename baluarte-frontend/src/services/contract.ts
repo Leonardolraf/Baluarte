@@ -12,6 +12,9 @@ import type {
   CampaignReport,
   ChangePasswordInput,
   CreatedUser,
+  DepartmentOption,
+  EligibleRecipientsFilter,
+  EligibleRecipientsResponse,
   TrainingOverview,
   DashboardMetrics,
   FileScanFilters,
@@ -115,6 +118,12 @@ export interface BaluarteApi {
   listCampaigns(filters?: CampaignFilters): Promise<Campaign[]>;
   getCampaignReport(id: string): Promise<CampaignReport>;
   createCampaign(input: CampaignInput): Promise<Campaign>;
+  /**
+   * Destinatários elegíveis de um ou mais departamentos (ou de todos) para preencher o
+   * formulário de campanha (Administrador/Analista). O envio continua por `recipients` em
+   * `createCampaign`, que o servidor confere de novo.
+   */
+  listEligibleRecipients(filter: EligibleRecipientsFilter): Promise<EligibleRecipientsResponse>;
 
   // Treinamento
   /** Consolidado de quem concluiu treinamento (uma requisição, calculada no servidor). */
@@ -139,6 +148,8 @@ export interface BaluarteApi {
   deleteUser(id: string): Promise<void>;
   /** Nomes dos departamentos cadastrados (opções do cadastro de usuário). */
   listDepartments(): Promise<string[]>;
+  /** Departamentos com id e número de usuários (filtro de destinatários da campanha). */
+  listDepartmentOptions(): Promise<DepartmentOption[]>;
 
   // Análise de arquivos (B04/B05)
   /** Envia um arquivo (multipart, campo `arquivo`) para o antivírus. O servidor descarta o arquivo. */

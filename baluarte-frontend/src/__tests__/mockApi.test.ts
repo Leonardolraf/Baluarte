@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configureMocks, getMockConfig, mockApi, resetMockState } from '@/mocks/api';
-import { MOCK_CAMPAIGNS, MOCK_CREDENTIALS, MOCK_USERS } from '@/mocks/data';
+import { MOCK_CAMPAIGNS, MOCK_CREDENTIALS, MOCK_DEPARTMENTS, MOCK_USERS } from '@/mocks/data';
 import { tokenStorage, userStorage } from '@/lib/storage';
 import { HttpError } from '@/lib/errors';
 import type { RBACRole } from '@/types';
@@ -446,6 +446,99 @@ describe('mockApi — campanhas e treinamento', () => {
     await loginAs('analyst');
     const dashboard = await mockApi.getDashboard();
     expect(dashboard.timeline.some((e) => e.kind === 'training')).toBe(true);
+  });
+});
+
+describe('mockApi — destinatários elegíveis da campanha', () => {
+  const depId = (name: string) => MOCK_DEPARTMENTS.find((d) => d.name === name)!.id;
+
+  it('um departamento: só os não inativos, com o resumo dos excluídos', async () => {
+    await loginAs('analyst');
+    const r = await mockApi.listEligibleRecipients({ departmentIds: [depId('Comercial')] });
+    expect(r.items).toEqual([
+      { id: 'u-002', name: 'João Pereira', email: 'colaborador@empresa.com', department: 'Comercial' },
+    ]);
+    expect(r.summary).toEqual({ total: 1, inactive: 1, pending: 0, outsideDomain: 0 });
+  });
+
+  it('vários departamentos (Pendente fica de fora) e todos', async () => {
+    await loginAs('admin');
+    const varios = await mockApi.listEligibleRecipients({ departmentIds: [depId('TI'), depId('Diretoria')] });
+    expect(varios.items.map((u) => u.email)).toEqual([
+      'edson.marcelino@empresa.com',
+      'admin@empresa.com',
+      'analista@empresa.com',
+    ]);
+    expect(varios.summary).toEqual({ total: 3, inactive: 0, pending: 1, outsideDomain: 0 });
+    const todos = await mockApi.listEligibleRecipients({ all: true });
+    expect(todos.items).toHaveLength(MOCK_USERS.filter((u) => u.status === 'active').length);
+    expect(todos.items.some((u) => u.email === 'carla.dias@empresa.com')).toBe(false);
+    expect(todos.items.some((u) => u.email === 'marina.costa@empresa.com')).toBe(false);
+  });
+
+  it('createCampaign: pendente e inativo recusados; envio em massa exige confirmação', async () => {
+    await loginAs('admin');
+    const base = {
+      name: 'Massa',
+      template: 'urgency' as const,
+      targetGroup: 'Todos',
+      scheduledAt: new Date().toISOString(),
+    };
+    await expectHttp(
+      mockApi.createCampaign({ ...base, recipients: ['marina.costa@empresa.com'] }),
+      422,
+      'DESTINATARIO_PENDENTE',
+    );
+    await expectHttp(
+      mockApi.createCampaign({ ...base, recipients: ['carla.dias@empresa.com'] }),
+      422,
+      'DESTINATARIO_NAO_CADASTRADO',
+    );
+    // Menos de 10 elegíveis (o seed tem 6): cobrir todos não exige confirmação.
+    const seis = (await mockApi.listEligibleRecipients({ all: true })).items.map((u) => u.email);
+    expect(seis.length).toBeLessThan(10);
+    await expect(mockApi.createCampaign({ ...base, recipients: seis })).resolves.toBeTruthy();
+    // Com 10 elegíveis, cobrir todos exige.
+    for (let i = 0; i < 10 - seis.length; i++) {
+      const novo = await mockApi.createUser({
+        name: `Extra ${i}`,
+        email: `extra${i}@empresa.com`,
+        role: 'collaborator',
+      });
+      await mockApi.updateUser(novo.id, { status: 'active' });
+    }
+    const todos = (await mockApi.listEligibleRecipients({ all: true })).items.map((u) => u.email);
+    expect(todos).toHaveLength(10);
+    await expectHttp(
+      mockApi.createCampaign({ ...base, recipients: todos }),
+      422,
+      'CONFIRMACAO_ENVIO_EM_MASSA',
+    );
+    await expect(mockApi.createCampaign({ ...base, recipients: todos.slice(1) })).resolves.toBeTruthy();
+    await expect(
+      mockApi.createCampaign({ ...base, recipients: todos, confirmMassSend: true }),
+    ).resolves.toMatchObject({ metrics: { recipients: todos.length } });
+    const muitos = Array.from({ length: 51 }, (_, i) => `pessoa${i}@empresa.com`);
+    await expectHttp(
+      mockApi.createCampaign({ ...base, recipients: muitos }),
+      422,
+      'CONFIRMACAO_ENVIO_EM_MASSA',
+    );
+    await expect(mockApi.createCampaign({ ...base, recipients: muitos.slice(0, 50) })).resolves.toBeTruthy();
+  });
+
+  it('RBAC e entrada inválida como no servidor', async () => {
+    await loginAs('collaborator');
+    await expectHttp(mockApi.listEligibleRecipients({ all: true }), 403, 'PERFIL_SEM_PERMISSAO');
+    await loginAs('analyst');
+    await expectHttp(mockApi.listEligibleRecipients({ departmentIds: [] }), 400, 'FILTRO_OBRIGATORIO');
+    await expectHttp(
+      mockApi.listEligibleRecipients({ departmentIds: ['dep-nao-existe'] }),
+      404,
+      'DEPARTAMENTO_NAO_ENCONTRADO',
+    );
+    const opcoes = await mockApi.listDepartmentOptions();
+    expect(opcoes.find((d) => d.name === 'TI')).toEqual({ id: 'dep-ti', name: 'TI', users: 2 });
   });
 });
 
