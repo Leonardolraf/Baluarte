@@ -88,4 +88,20 @@ test.describe('Configurações e treinamento', () => {
       await expect(page.getByText(nome).first()).toBeVisible();
     }
   });
+
+  // Melhorias #5: a tela de termos é a saída do 403; enquanto o texto for rascunho, ela diz.
+  test('termos: avisa que o texto é provisório e só aceita com a caixa marcada', async ({ page }) => {
+    await login(page, 'collaborator');
+    await page.goto('/termos');
+    await expect(page.getByRole('heading', { name: 'Termos de uso', exact: true })).toBeVisible();
+    await expect(page.getByTestId('termos-rascunho')).toContainText('Texto provisório');
+
+    const aceitar = page.getByTestId('termos-aceitar');
+    await expect(aceitar).toBeDisabled();
+    await page.getByTestId('termos-checkbox').check();
+    await expect(aceitar).toBeEnabled();
+    await aceitar.click();
+
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
 });

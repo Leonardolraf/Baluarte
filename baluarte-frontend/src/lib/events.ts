@@ -10,7 +10,14 @@ export const UNAUTHORIZED_EVENT = 'baluarte:unauthorized';
 /** A API respondeu 403: o perfil em memória pode estar desatualizado. */
 export const FORBIDDEN_EVENT = 'baluarte:forbidden';
 
-export type AuthEventName = typeof UNAUTHORIZED_EVENT | typeof FORBIDDEN_EVENT;
+/**
+ * Melhorias #5: a API respondeu 403 TERMOS_NAO_ACEITOS. Não é falta de permissão nem sessão
+ * expirada — é aceite pendente, e a tela de termos resolve. Evento próprio para a aplicação
+ * não tratar isso como "perfil sem acesso" (que manda o usuário embora sem saída).
+ */
+export const TERMS_REQUIRED_EVENT = 'baluarte:terms-required';
+
+export type AuthEventName = typeof UNAUTHORIZED_EVENT | typeof FORBIDDEN_EVENT | typeof TERMS_REQUIRED_EVENT;
 
 /** O usuário registrou a ciência do aviso de monitoramento da estação (B18): o banner some. */
 export const MONITORING_ACK_EVENT = 'baluarte:monitoring-ack';

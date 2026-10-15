@@ -673,6 +673,26 @@ export interface FileScanOutcome {
  * Registro da trilha de auditoria (RN-008). A ação é o código gravado pelo servidor
  * (ex.: `CRIAR_ATIVO`): texto aberto, para que ações novas apareçam sem mudar o frontend.
  */
+/**
+ * Termos de uso (Melhorias #5). `draft` = o texto em vigor ainda não foi aprovado: a tela
+ * precisa dizer isso, senão a página afirma ser um termo válido sem ser.
+ */
+export interface TermsOfUse {
+  version: string;
+  draft: boolean;
+  text: string;
+  accepted: boolean;
+  /** ISO 8601; `null` sem aceite em vigor. */
+  acceptedAt: string | null;
+}
+
+/** Resposta do aceite; `isNew: false` quando já havia aceite (a rota é idempotente). */
+export interface TermsAcceptance {
+  version: string;
+  acceptedAt: string;
+  isNew: boolean;
+}
+
 export interface AuditEntry {
   id: string;
   action: string;

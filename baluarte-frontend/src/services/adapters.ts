@@ -56,6 +56,7 @@ import type {
   VulnerabilityHistoryEntry,
   VulnerabilityListResponse,
   VulnerabilityStatus,
+  TermsOfUse,
 } from '@/types';
 import { isOwnRule } from '@/lib/files';
 import { roleFromLabel } from '@/lib/roles';
@@ -1268,6 +1269,34 @@ export interface BackendAuditSummary {
   pagina?: number;
   tamanho?: number;
   acoes?: string[];
+}
+
+/** GET /conta/termos (Melhorias #5). Campos em português, como a API manda. */
+export interface BackendTerms {
+  versao: string;
+  rascunho: boolean;
+  texto: string;
+  aceito: boolean;
+  aceitoEm: string | null;
+}
+
+/** POST /conta/termos/aceite. */
+export interface BackendTermsAcceptance {
+  versao: string;
+  aceitoEm: string;
+  novo: boolean;
+}
+
+export function toTerms(raw: BackendTerms): TermsOfUse {
+  return {
+    version: raw.versao,
+    // Sem o campo, trata como rascunho: é o lado seguro — avisar à toa não engana ninguém,
+    // deixar de avisar apresenta um texto provisório como se fosse válido.
+    draft: raw.rascunho !== false,
+    text: raw.texto,
+    accepted: Boolean(raw.aceito),
+    acceptedAt: raw.aceitoEm ?? null,
+  };
 }
 
 export function toAuditEntry(raw: BackendAuditEntry): AuditEntry {
