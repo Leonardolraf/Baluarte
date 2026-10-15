@@ -11,6 +11,8 @@ import {
   isTooLarge,
   MAX_FILE_SIZE_BYTES,
   secondOpinionText,
+  isUnanalyzable,
+  unanalyzableLabel,
 } from '@/lib/files';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
@@ -389,14 +391,17 @@ describe('mockApi — análise de arquivos', () => {
   it('dashboard conta arquivo malicioso como crítico, uma vez por SHA-256 (B17)', async () => {
     loginAs('analyst');
     const before = await mockApi.getDashboard();
-    // O seed tem um EICAR de ontem: já conta.
-    expect(before.kpis.maliciousFiles).toBe(1);
+    // O seed tem dois vereditos de ameaça de ontem: o EICAR e o Zip64 não analisável (DT27).
+    // Os dois contam, porque a regra do B17 conta SHA-256 distintos com AMEACA — e o Zip64 é
+    // AMEACA por precaução. Vale lembrar que isso soma ao KPI de "arquivos maliciosos" algo
+    // que ninguém conseguiu analisar; a regra é do servidor e o mock a espelha.
+    expect(before.kpis.maliciousFiles).toBe(2);
     // O mesmo EICAR de novo (mesmo conteúdo = mesmo hash) não soma; um arquivo malicioso novo soma.
     const eicar = new File(['X5O!P%@AP EICAR-STANDARD-ANTIVIRUS-TEST-FILE'], 'eicar.txt');
     await mockApi.analyzeFile(eicar);
     await mockApi.analyzeFile(eicar);
     const after = await mockApi.getDashboard();
-    expect(after.kpis.maliciousFiles).toBe(2);
+    expect(after.kpis.maliciousFiles).toBe(3);
     expect(after.kpis.criticalVulnerabilities).toBe(before.kpis.criticalVulnerabilities! + 1);
     expect(after.severityDistribution!.critical).toBe(before.severityDistribution!.critical + 1);
     expect(after.kpis.openVulnerabilities).toBe(before.kpis.openVulnerabilities);
@@ -508,5 +513,29 @@ describe('lib/files', () => {
     expect(all[8]!.title).toMatch(/falha ao consultar/);
     expect(all[9]!.short).toBe('Desligada');
     for (const t of all) expect(`${t.title} ${t.detail}`).not.toMatch(/é seguro|arquivo seguro/i);
+  });
+});
+// DT27: arquivo que o antivírus não consegue analisar vira veredito de ameaça por precaução.
+// A tela não pode chamar isso de ameaça encontrada: nada foi identificado.
+describe('arquivo não analisável (DT27)', () => {
+  it('Zip64 não é apresentado como ameaça identificada', () => {
+    const verdito = fileScanVerdict({ result: 'threat', threat: 'Baluarte.Zip64.NaoAnalisavel' });
+    expect(verdito).toMatch(/não analisável/i);
+    expect(verdito).toMatch(/precaução/);
+    expect(verdito).not.toMatch(/Ameaça encontrada/);
+  });
+
+  it('verificação incompleta tem o próprio motivo', () => {
+    expect(fileScanVerdict({ result: 'threat', threat: 'Baluarte.Zip64.VerificacaoIncompleta' })).toMatch(
+      /limite de descompressão|aninhamento/,
+    );
+  });
+
+  it('detecção de verdade continua dizendo ameaça encontrada', () => {
+    expect(fileScanVerdict({ result: 'threat', threat: 'Eicar-Signature' })).toMatch(
+      /Ameaça encontrada: Eicar-Signature/,
+    );
+    expect(unanalyzableLabel('Eicar-Signature')).toBeNull();
+    expect(isUnanalyzable('Eicar-Signature')).toBe(false);
   });
 });

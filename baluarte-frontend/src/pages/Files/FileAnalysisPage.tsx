@@ -29,6 +29,7 @@ import {
   FILE_TOO_LARGE_MESSAGE,
   fileScanErrorMessage,
   fileScanVerdict,
+  unanalyzableLabel,
   formatBytes,
   isTooLarge,
   OWN_RULE_LABEL,
@@ -134,10 +135,24 @@ function Verdict({ scan }: { scan: FileScan }) {
       >
         <AlertTriangleIcon size={22} className="mt-0.5 shrink-0" />
         <div className="min-w-0">
-          <p className="text-base font-semibold">Ameaça encontrada</p>
-          <p className="mt-1 break-all font-mono text-sm font-semibold">
-            {scan.threat ?? 'Não identificada'}
+          {/*
+            DT27: há dois motivos para o veredito ser "ameaça" — detecção, e arquivo que o
+            antivírus não consegue analisar. Dizer "ameaça encontrada" no segundo caso seria
+            afirmar o que ninguém sabe: nada foi identificado. O arquivo continua barrado (o
+            aviso de não abrir vale igual), mas a tela não inventa uma detecção.
+          */}
+          <p className="text-base font-semibold">
+            {unanalyzableLabel(scan.threat) ? 'Arquivo não analisável' : 'Ameaça encontrada'}
           </p>
+          {unanalyzableLabel(scan.threat) ? (
+            <p className="mt-1 text-sm font-medium" data-testid="file-unanalyzable">
+              {unanalyzableLabel(scan.threat)}
+            </p>
+          ) : (
+            <p className="mt-1 break-all font-mono text-sm font-semibold">
+              {scan.threat ?? 'Não identificada'}
+            </p>
+          )}
           {scan.ownRule && <OwnRuleNote />}
           <p className="mt-2 text-sm">
             Não abra nem repasse este arquivo. Apague as cópias e avise a equipe de segurança.
@@ -339,7 +354,12 @@ function HistoryTable({
                 {scan.result === 'threat' ? (
                   <div className="flex flex-col items-start gap-1">
                     <StatusPill
-                      label={`Ameaça: ${scan.threat ?? 'não identificada'}`}
+                      label={
+                        unanalyzableLabel(scan.threat)
+                          ? 'Não analisável'
+                          : `Ameaça: ${scan.threat ?? 'não identificada'}`
+                      }
+                      title={unanalyzableLabel(scan.threat) ?? undefined}
                       colorClass={SEVERITY_BADGE_CLASS.critical}
                       icon={<AlertTriangleIcon size={12} />}
                     />

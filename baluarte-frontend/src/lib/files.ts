@@ -52,9 +52,35 @@ export function fileScanErrorMessage(error: unknown): string {
   return errorMessage(error, 'Não foi possível analisar o arquivo. Tente de novo.');
 }
 
+// ---- Arquivo que o antivírus não consegue analisar (DT27) --------------------
+//
+// Nestes casos o veredito do servidor é "ameaça", mas por PRECAUÇÃO: nada foi identificado.
+// Chamar isso de "ameaça encontrada" seria afirmar o que não se sabe — e numa ferramenta de
+// segurança, acusar um arquivo de conter malware sem detecção é pior que dizer "não deu para
+// analisar". Os nomes vêm do backend (`AMEACA_ZIP64*`) e são valores fixos, não heurística.
+const UNANALYZABLE_LABEL: Record<string, string> = {
+  'Baluarte.Zip64.NaoAnalisavel':
+    'formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução',
+  'Baluarte.Zip64.VerificacaoIncompleta':
+    'a busca por Zip64 passou do limite de descompressão ou de aninhamento; tratado como ameaça por precaução',
+};
+
+/** O arquivo foi barrado por não ser analisável, não por detecção. */
+export function isUnanalyzable(threat: string | null | undefined): boolean {
+  return typeof threat === 'string' && threat in UNANALYZABLE_LABEL;
+}
+
+/** Rótulo honesto do motivo; `null` quando houve detecção de verdade. */
+export function unanalyzableLabel(threat: string | null | undefined): string | null {
+  return typeof threat === 'string' ? (UNANALYZABLE_LABEL[threat] ?? null) : null;
+}
+
 /** Veredito em uma linha (lista de análises e anúncio para leitores de tela). */
 export function fileScanVerdict(scan: Pick<FileScan, 'result' | 'threat'>): string {
   if (scan.result !== 'threat') return CLEAN_VERDICT;
+  // DT27: barrado por não ser analisável — o nome não é de uma ameaça identificada.
+  const motivo = unanalyzableLabel(scan.threat);
+  if (motivo) return `Arquivo não analisável: ${motivo}`;
   const verdict = `Ameaça encontrada: ${scan.threat ?? 'não identificada'}`;
   return isOwnRule(scan.threat) ? `${verdict} (${OWN_RULE_LABEL})` : verdict;
 }
