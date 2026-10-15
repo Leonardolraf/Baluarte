@@ -221,7 +221,12 @@ export interface BackendCampaignReport {
     concluidoEm?: string | null;
     /** Quando reportou o e-mail simulado (também quem clicou pode reportar). */
     reportouEm?: string | null;
+    /** Melhorias #6: aberturas do link do e-mail (a API nunca expõe IP nem user-agent). */
+    aberturas?: number;
+    possivelRepasse?: boolean;
   }>;
+  /** Melhorias #6: total de aberturas do link e destinatários com mais de uma abertura. */
+  resumo?: { aberturas: number; possiveisRepasses: number };
   /** Quem reportou o e-mail simulado pelo rodapé, em ordem de reporte (clicando ou não). */
   reportes?: Array<{
     destinatario: string;
@@ -753,6 +758,8 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
     trainingCompleted: t.concluido,
     // O treinamento pós-clique é acessado pelo id do evento (token) de cada destinatário.
     trainingId: t.token ?? null,
+    linkOpens: t.aberturas ?? 0,
+    possibleForwarding: t.possivelRepasse ?? false,
   }));
   // Quem reportou sem clicar não está em `treinamentos`: entra como linha própria.
   const clicaram = new Set(raw.treinamentos.map((t) => t.destinatario.toLowerCase()));
@@ -772,6 +779,9 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
         reportedAt: r.reportouEm,
         trainingCompleted: false,
         trainingId: null,
+        // Reportou sem abrir o link: nenhuma abertura.
+        linkOpens: 0,
+        possibleForwarding: false,
       }),
     );
   const funnel: FunnelStage[] = [
@@ -816,6 +826,7 @@ export function toCampaignReport(raw: BackendCampaignReport): CampaignReport {
       clickRate: d.taxaClique,
     })),
     attachments: toCampaignAttachments(raw.anexos),
+    linkOpens: { total: raw.resumo?.aberturas ?? 0, possibleForwardings: raw.resumo?.possiveisRepasses ?? 0 },
   };
 }
 

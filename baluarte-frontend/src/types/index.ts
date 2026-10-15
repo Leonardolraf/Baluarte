@@ -387,6 +387,10 @@ export interface CampaignRecipient {
   reportedAt?: string | null;
   trainingCompleted: boolean;
   trainingId?: string | null;
+  /** Melhorias #6: quantas vezes o link do e-mail foi aberto (cada abertura conta; o clique, uma vez). */
+  linkOpens?: number;
+  /** Mais de uma abertura do mesmo link: possível repasse do e-mail. */
+  possibleForwarding?: boolean;
 }
 
 export interface FunnelStage {
@@ -412,6 +416,8 @@ export interface CampaignReport {
   byDepartment: Array<{ department: string; recipients: number; clicked: number; clickRate: number }>;
   /** B23: anexos suspeitos que os destinatários enviaram para análise, com os vereditos. */
   attachments: CampaignAttachments;
+  /** Melhorias #6: total de aberturas do link e quantos destinatários abriram mais de uma vez. */
+  linkOpens?: { total: number; possibleForwardings: number };
 }
 
 export interface CampaignFilters {

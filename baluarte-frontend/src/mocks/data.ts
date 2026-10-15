@@ -1539,6 +1539,9 @@ function buildRecipients(plan: RecipientPlan): CampaignRecipient[] {
       reportedAt: reportedMs !== null ? new Date(reportedMs).toISOString() : null,
       trainingCompleted: isTrained,
       trainingId: isTrained ? plan.trainingId : null,
+      // Melhorias #6: quem clicou abriu o link ao menos uma vez; o primeiro de cada campanha
+      // abriu três vezes, para a demonstração ter um "possível repasse".
+      linkOpens: isClicked ? (i === 0 ? 3 : 1) : 0,
     });
   }
 
