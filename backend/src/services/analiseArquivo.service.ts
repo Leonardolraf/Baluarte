@@ -5,9 +5,11 @@ import type { UsuarioAtual } from '../models/usuario.model.js';
 import { OPERADORES } from '../models/dominio.model.js';
 import {
   JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANALISES_SIMULTANEAS, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES,
-  MENSAGEM_ARQUIVO_GRANDE, intervaloRenovacaoReservaMs, validadeReservaAnaliseMs, ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
+  LIMITE_DESCOMPRESSAO_ZIP64_BYTES, MENSAGEM_ARQUIVO_GRANDE, PROFUNDIDADE_MAXIMA_ZIP64, intervaloRenovacaoReservaMs, validadeReservaAnaliseMs, ehRegraPropria,
+  mensagemDoResultado, nomeParaExibir, vereditoComZip64, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
   type CampanhaRecebidaDto, type FiltrosHistorico, type ResultadoAnalise,
 } from '../models/analiseArquivo.model.js';
+import { DetectorZip64 } from '../utils/detectorZip64.js';
 import { segundaOpiniaoDto } from '../models/segundaOpiniao.model.js';
 import * as repo from '../repositories/analiseArquivo.repository.js';
 import { falhar } from '../utils/resposta.js';
@@ -130,11 +132,12 @@ export type FluxoArquivo = Readable & { truncated?: boolean };
  * Repassa os blocos ao antivirus calculando o SHA-256 e o tamanho. Passou do limite: interrompe
  * o envio com 413 (o veredito de um arquivo cortado nao vale).
  */
-async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: ReturnType<typeof createHash> }) {
+async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: ReturnType<typeof createHash> }, zip64: DetectorZip64) {
   for await (const bloco of fluxo as AsyncIterable<Buffer>) {
     medida.bytes += bloco.length;
     if (medida.bytes > LIMITE_ARQUIVO_BYTES) break;
     medida.hash.update(bloco);
+    await zip64.observar(bloco);
     yield bloco;
   }
   if (fluxo.truncated || medida.bytes > LIMITE_ARQUIVO_BYTES)
@@ -145,10 +148,15 @@ async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: Return
 export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | undefined, fluxo: FluxoArquivo, vaga: VagaAnalise) {
   const { origem } = vaga;
   const medida = { bytes: 0, hash: createHash('sha256') };
+  // DT27: o clamd responde "OK" sem ler a entrada com 0xFFFFFFFF num tamanho do cabecalho local
+  // e sem descritor (forma de Zip64 do Python e do 7-Zip -si); a API procura essa forma nos mesmos
+  // blocos, a caminho do clamd, e o "limpo" so vale se ela nao aparecer.
+  const zip64 = new DetectorZip64({ limiteDescompressao: LIMITE_DESCOMPRESSAO_ZIP64_BYTES, profundidadeMaxima: PROFUNDIDADE_MAXIMA_ZIP64 });
   let veredito;
   try {
-    veredito = await analisarNoAntivirus(medir(fluxo, medida));
+    veredito = vereditoComZip64(await analisarNoAntivirus(medir(fluxo, medida, zip64)), await zip64.finalizar());
   } catch (e) {
+    zip64.descartar();
     if (e instanceof AntivirusIndisponivel) {
       console.error('[antivirus] indisponível:', e.message);
       falhar(503, MSG_INDISPONIVEL, 'ANTIVIRUS_INDISPONIVEL');
