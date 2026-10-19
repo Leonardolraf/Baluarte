@@ -13,6 +13,7 @@ import {
   ADMIN, ANALISTA, SENHA_CONTA, chamar, criarUsuario, encerrarServidor, esperaErro, iniciarServidor, login,
   prepararBanco, urlBase,
 } from './helpers.js';
+import { enviarArquivoEmFluxo, lerInstream } from './envioEmFluxo.js';
 
 prepararBanco(import.meta.url);
 
@@ -30,27 +31,15 @@ let pedidosAoClamd = 0;
 
 /** clamd falso: devolve o nome da regra YARA como o ClamAV real com as regras do Baluarte. */
 function falsoClamd(socket: Socket) {
-  let bruto = Buffer.alloc(0);
-  socket.on('data', (d) => {
-    bruto = Buffer.concat([bruto, d]);
-    let pos = 'zINSTREAM\0'.length;
-    const partes: Buffer[] = [];
-    while (pos + 4 <= bruto.length) {
-      const n = bruto.readUInt32BE(pos);
-      if (n === 0) {
-        pedidosAoClamd += 1;
-        const conteudo = Buffer.concat(partes).toString('latin1');
-        if (conteudo.includes(MARCADOR)) socket.end('stream: YARA.BaluarteMarcadorTeste.UNOFFICIAL FOUND\0');
-        else if (conteudo.includes('Document_Open') && conteudo.includes('CreateObject'))
-          socket.end('stream: YARA.BaluarteMacroSuspeita.UNOFFICIAL FOUND\0');
-        else if (conteudo.includes('assinatura-oficial')) socket.end('stream: Win.Test.Oficial-1 FOUND\0');
-        else socket.end('stream: OK\0');
-        return;
-      }
-      if (pos + 4 + n > bruto.length) return;
-      partes.push(bruto.subarray(pos + 4, pos + 4 + n));
-      pos += 4 + n;
-    }
+  // Em fluxo (envioEmFluxo.ts): os marcadores dos testes cabem no comeco do arquivo.
+  lerInstream(socket, (amostra) => {
+    pedidosAoClamd += 1;
+    const conteudo = amostra.toString('latin1');
+    if (conteudo.includes(MARCADOR)) socket.end('stream: YARA.BaluarteMarcadorTeste.UNOFFICIAL FOUND\0');
+    else if (conteudo.includes('Document_Open') && conteudo.includes('CreateObject'))
+      socket.end('stream: YARA.BaluarteMacroSuspeita.UNOFFICIAL FOUND\0');
+    else if (conteudo.includes('assinatura-oficial')) socket.end('stream: Win.Test.Oficial-1 FOUND\0');
+    else socket.end('stream: OK\0');
   });
 }
 
@@ -235,9 +224,10 @@ describe('POST /arquivos/analise?eventoCampanha= (anexo suspeito de campanha, B2
     esperaErro(await toResposta(enviar(null, 'x', `?eventoCampanha=${eventoAna}`)), 401, 'TOKEN_AUSENTE');
   });
 
-  it('mesmo limite de tamanho: acima de 10 MB dá 413 e nada é registrado', async () => {
+  it('mesmo limite de tamanho: acima de 250 MB dá 413 e nada é registrado', async () => {
     const antes = await prisma.fileScan.count({ where: { campaignEventId: eventoBruno } });
-    const r = await enviar(bruno.token, Buffer.alloc(10 * 1024 * 1024 + 1, 65), `?eventoCampanha=${eventoBruno}`, 'grande.bin');
+    const { LIMITE_ARQUIVO_BYTES } = await import('../src/models/analiseArquivo.model.js');
+    const r = await enviarArquivoEmFluxo({ token: bruno.token, tamanho: LIMITE_ARQUIVO_BYTES + 1, query: `?eventoCampanha=${eventoBruno}` });
     assert.equal(r.status, 413);
     assert.equal(r.body.codigoErro, 'ARQUIVO_MUITO_GRANDE');
     assert.equal(await prisma.fileScan.count({ where: { campaignEventId: eventoBruno } }), antes);
