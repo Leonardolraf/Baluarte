@@ -1,4 +1,5 @@
 import { prisma } from '../config/db.js';
+import { reservaValidaDesde } from './analiseArquivo.repository.js';
 
 /** Usuarios pelos e-mails (citext: ignora maiusculas). */
 export function usuariosPorEmail(emails: string[]) {
@@ -44,10 +45,13 @@ export function buscar(id: string) {
  * em analise agora (reservas validas desde `reservasDesde`), para a exclusao nao apagar o evento
  * no meio de uma analise em curso.
  */
-export async function contarAnalisesDaCampanha(id: string, reservasDesde: Date) {
-  const [analisados, emAnalise] = await Promise.all([
+export async function contarAnalisesDaCampanha(id: string, validadeReservaMs: number) {
+  const [analisados, [{ n: emAnalise }]] = await Promise.all([
     prisma.fileScan.count({ where: { campaignEvent: { campaignId: id } } }),
-    prisma.fileScanReserva.count({ where: { campaignEvent: { campaignId: id }, criadoEm: { gte: reservasDesde } } }),
+    // Reserva com heartbeat em dia, pelo relogio do banco (o mesmo da reserva e da renovacao).
+    prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM "FileScanReserva" r JOIN "CampaignEvent" e ON e."id" = r."campaignEventId"
+       WHERE e."campaignId" = ${id} AND r."criadoEm" >= ${reservaValidaDesde(validadeReservaMs)}`,
   ]);
   return analisados + emAnalise;
 }

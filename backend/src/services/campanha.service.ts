@@ -163,7 +163,7 @@ export async function excluir(atorId: string, id: string): Promise<void> {
   // eventos e a analise perderia a origem em silencio (FK SET NULL). Mesmo espirito do
   // USUARIO_COM_HISTORICO: a campanha com evidencia fica.
   // Reserva com heartbeat em dia = analise em curso (o envio pode durar ate o teto de 30 min).
-  if ((await repo.contarAnalisesDaCampanha(campanha.id, new Date(Date.now() - validadeReservaAnaliseMs()))) > 0)
+  if ((await repo.contarAnalisesDaCampanha(campanha.id, validadeReservaAnaliseMs())) > 0)
     falhar(409, 'Campanha com anexos analisados não pode ser excluída', 'CAMPANHA_COM_ANALISES');
   await repo.excluir(campanha.id);
   await registrarAuditoria(atorId, 'EXCLUIR_CAMPANHA', `${campanha.id} (${campanha.nome})`);

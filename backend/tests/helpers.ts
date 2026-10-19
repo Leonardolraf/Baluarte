@@ -55,6 +55,12 @@ export function configurarBancoDeTeste(testFileUrl: string): string {
   // TEST_DB_PREFIXO separa execucoes simultaneas (ex.: dois worktrees rodando a suite ao mesmo tempo).
   const prefixo = (process.env.TEST_DB_PREFIXO ?? '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
   url.pathname = `/baluarte_test_${prefixo}${nome}`;
+  // `localhost` no Windows resolve primeiro para ::1, e o Postgres do Compose escuta so em
+  // 127.0.0.1: cada conexao NOVA esperava ~2 s pela volta ao IPv4 (medido: 2.044 ms de mediana
+  // contra 14 ms com 127.0.0.1). Com o pool do Prisma abrindo conexoes sob demanda, a consulta
+  // que precisava de uma conexao nova parava 2 s no meio do teste (o heartbeat de 200 ms do
+  // reserva-heartbeat.test.ts perdia a validade de 1 s e a reserva era podada: o 400 no lugar do 429).
+  if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
   process.env.DATABASE_URL = url.toString();
   process.env.DIRECT_URL = url.toString();
   process.env.JWT_SECRET = 'segredo-somente-para-testes';
