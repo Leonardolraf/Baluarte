@@ -14,21 +14,25 @@ async function main() {
   const senhaAnalista = await bcrypt.hash('Senha@123', 10);
   const senhaAdmin = await bcrypt.hash('Admin@123', 10);
   const senhaColab = await bcrypt.hash('Colab@123', 10);
+  // Melhorias #5: as contas do seed ja nascem com os termos de uso aceitos (o Newman e o Robot
+  // da N2 AT1 usam essas contas e nao passam pela tela de aceite). So no create: rodar o seed
+  // de novo num banco existente nao mexe em quem ja esta la.
+  const termosAceitosEm = new Date();
 
   await prisma.user.upsert({
     where: { email: 'analista@empresa.com' },
     update: {},
-    create: { id: 'u-001', nome: 'Analista de Segurança', email: 'analista@empresa.com', senhaHash: senhaAnalista, perfil: 'Analista', status: 'Ativo' },
+    create: { id: 'u-001', nome: 'Analista de Segurança', email: 'analista@empresa.com', senhaHash: senhaAnalista, perfil: 'Analista', status: 'Ativo', termosAceitosEm },
   });
   await prisma.user.upsert({
     where: { email: 'admin@empresa.com' },
     update: {},
-    create: { id: 'u-000', nome: 'Administrador', email: 'admin@empresa.com', senhaHash: senhaAdmin, perfil: 'Administrador', status: 'Ativo' },
+    create: { id: 'u-000', nome: 'Administrador', email: 'admin@empresa.com', senhaHash: senhaAdmin, perfil: 'Administrador', status: 'Ativo', termosAceitosEm },
   });
   await prisma.user.upsert({
     where: { email: 'colaborador@empresa.com' },
     update: {},
-    create: { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', senhaHash: senhaColab, perfil: 'Colaborador', status: 'Ativo' },
+    create: { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', senhaHash: senhaColab, perfil: 'Colaborador', status: 'Ativo', termosAceitosEm },
   });
 
   for (const name of DEPARTAMENTOS_PADRAO) {
