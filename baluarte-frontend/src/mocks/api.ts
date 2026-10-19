@@ -67,7 +67,7 @@ import type {
 } from '@/types';
 import { SEVERITIES, VULN_PAGE_SIZE } from '@/types';
 import { HttpError } from '@/lib/errors';
-import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { ACK_REQUIRED_EVENT, dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict, isOwnRule, MAX_ATTACHMENTS_PER_CAMPAIGN, MAX_FILE_SIZE_BYTES } from '@/lib/files';
 import { SCAN_DURATION_MS, scanProgressByTime } from './scanProgress';
 import { vulnerabilityReportFilename } from '@/lib/download';
@@ -297,7 +297,16 @@ function pushAudit(
 
 function deny(status: 401 | 403, code: string, message: string): never {
   const error = new HttpError(status, code, message);
-  dispatchAuthEvent(status === 401 ? UNAUTHORIZED_EVENT : FORBIDDEN_EVENT, error);
+  // Mesma separacao do cliente real (services/api.ts): ciencia pendente do aviso tem tela de
+  // saida, o resto do 403 nao. Se o mock mandasse tudo como FORBIDDEN, a camada simulada
+  // mostraria "acesso negado" onde o servidor de verdade leva ao aviso.
+  const evento =
+    status === 401
+      ? UNAUTHORIZED_EVENT
+      : code === 'CIENCIA_AVISO_PENDENTE'
+        ? ACK_REQUIRED_EVENT
+        : FORBIDDEN_EVENT;
+  dispatchAuthEvent(evento, error);
   throw error;
 }
 

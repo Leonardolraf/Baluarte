@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { MonitoringAcknowledgement, MonitoringAcknowledgementFilters, MonitoringNotice } from '@/types';
 import { api, MONITORING_ACK_PAGE_SIZE } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
@@ -53,7 +54,7 @@ function NoticeText({ notice }: { notice: MonitoringNotice }) {
         <h2 id="aviso-titulo" className="font-display text-lg font-semibold text-ink dark:text-white">
           {notice.title}
         </h2>
-        <p>{notice.intro}</p>
+        {notice.intro.trim() !== '' && <p>{notice.intro}</p>}
       </header>
       {notice.sections.map((section) => (
         <section key={section.id} aria-labelledby={`aviso-${section.id}`} className="space-y-2">
@@ -258,6 +259,10 @@ export default function MonitoringNoticePage() {
   const { hasRole } = useAuth();
   const { data: notice, error, loading, reload, setData } = useAsync(() => api.getMonitoringNotice(), []);
   const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Veio pelo gate do servidor (403 CIENCIA_AVISO_PENDENTE): o AppLayout guardou a origem.
+  const origem = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? null;
 
   const acknowledge = async () => {
     if (!notice) return;
@@ -269,6 +274,8 @@ export default function MonitoringNoticePage() {
       );
       dispatchMonitoringAcknowledged({ version: result.version, acknowledgedAt: result.acknowledgedAt });
       notify.success('Ciência registrada.');
+      // O mesmo token já vale: devolve a pessoa à tela que o gate interrompeu.
+      if (origem) navigate(origem, { replace: true });
     } catch (err) {
       notify.error(errorMessage(err, 'Não foi possível registrar a ciência.'));
       // O texto mudou desde a leitura: carrega a versão nova para a pessoa ler antes.
@@ -296,6 +303,17 @@ export default function MonitoringNoticePage() {
           ) : null
         }
       />
+
+      {origem && !notice?.acknowledged && (
+        <p
+          data-testid="monitoring-ack-required"
+          className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        >
+          Confirme que leu este aviso para usar o Baluarte. É ciência obrigatória, não consentimento: a
+          plataforma depende dela para registrar que você foi informado sobre o monitoramento técnico das
+          estações.
+        </p>
+      )}
 
       {error && !notice ? (
         <ErrorState

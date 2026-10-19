@@ -61,7 +61,7 @@ import type {
 } from '@/types';
 import { VULN_PAGE_SIZE } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
-import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { ACK_REQUIRED_EVENT, dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { fileScanVerdict } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { filenameFromDisposition, vulnerabilityReportFilename } from '@/lib/download';
@@ -145,7 +145,7 @@ import {
 // mocks (dados fictícios e credenciais de demonstração) do bundle.
 // -----------------------------------------------------------------------------
 
-export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT };
+export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT, ACK_REQUIRED_EVENT };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -260,7 +260,13 @@ httpClient.interceptors.response.use(
       // Só derruba a sessão se havia uma sessão guardada (um 401 durante o próprio login não conta).
       if (status === 401 && tokenStorage.get())
         dispatchAuthEvent(UNAUTHORIZED_EVENT, { status, code, message });
-      if (status === 403) dispatchAuthEvent(FORBIDDEN_EVENT, { status, code, message });
+      // Ciência pendente do aviso (gate do servidor) tem tela de saída; o resto do 403 não.
+      if (status === 403)
+        dispatchAuthEvent(code === 'CIENCIA_AVISO_PENDENTE' ? ACK_REQUIRED_EVENT : FORBIDDEN_EVENT, {
+          status,
+          code,
+          message,
+        });
       return Promise.reject(new HttpError(status, code, message));
     }
     // Sem resposta: ou o tempo esgotou, ou não houve conexão. Uma retentativa resolve a

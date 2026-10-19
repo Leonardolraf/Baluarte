@@ -5,17 +5,21 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuthUser, RBACRole } from '@/types';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { HttpError } from '@/lib/errors';
+import { ACK_REQUIRED_EVENT } from '@/lib/events';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage, userStorage } from '@/lib/storage';
 import { mockApi } from '@/mocks/api';
-import { MOCK_MONITORING_NOTICE, MOCK_RECIPIENTS, MOCK_USERS } from '@/mocks/data';
+import { MOCK_MONITORING_ACKS, MOCK_MONITORING_NOTICE, MOCK_RECIPIENTS, MOCK_USERS } from '@/mocks/data';
 import { routes } from '@/routes';
 import { notify } from '@/store/uiStore';
 
 // B18 — aviso de monitoramento da estação (RNF-006, LGPD): a página com o texto e o botão de
-// ciência, o banner enquanto a ciência da versão atual não foi registrada, a lista do
-// Administrador, as regras do mock (espelho da API) e a cópia do texto no mock conferida
-// contra o lugar único do texto, o model do backend.
+// ciência, a REAÇÃO AO GATE do servidor (403 CIENCIA_AVISO_PENDENTE, "opção C" de 19/10/2026),
+// a lista do Administrador, as regras do mock (espelho da API) e a cópia do texto no mock
+// conferida contra o lugar único do texto, o model do backend.
+//
+// O banner que avisava da ciência pendente foi aposentado: com o gate não existe navegação
+// para avisar — enquanto falta a ciência, nenhuma rota autenticada responde.
 
 const USER_ID_BY_ROLE: Record<RBACRole, string> = { admin: 'u-000', analyst: 'u-001', collaborator: 'u-002' };
 
@@ -68,9 +72,14 @@ describe('cópia do texto no mock', () => {
   });
 
   it('diz a frequência de cada categoria da coleta (B08)', () => {
-    expect(MOCK_MONITORING_NOTICE.intro).toContain('as portas de rede abertas a cada 15 minutos');
-    expect(MOCK_MONITORING_NOTICE.intro).toContain('a lista de programas instalados a cada 1 hora');
-    expect(MOCK_MONITORING_NOTICE.intro).toContain('a versão do sistema operacional a cada 6 horas');
+    // O texto de 19/10/2026 traz as frequências nos itens da seção "coletado" (a introdução
+    // ficou vazia); o que não pode é a frequência DESAPARECER, porque ela vem do servidor.
+    const texto = MOCK_MONITORING_NOTICE.sections
+      .flatMap((section) => [...section.paragraphs, ...section.items, ...section.notes])
+      .join(' ');
+    expect(texto).toContain('a cada 15 minutos');
+    expect(texto).toContain('a cada 1 hora');
+    expect(texto).toContain('a cada 6 horas');
   });
 });
 
@@ -86,13 +95,14 @@ describe('página "Monitoramento da estação"', () => {
     for (const section of MOCK_MONITORING_NOTICE.sections) {
       expect(screen.getByRole('heading', { name: section.title, level: 3 })).toBeInTheDocument();
     }
-    expect(screen.getByText('arquivos e documentos;')).toBeInTheDocument();
-    expect(screen.getByText(/art\. 7º, inciso IX/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Arquivos pessoais ou documentos armazenados no computador;'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/artigo 7º, inciso IX/)).toBeInTheDocument();
     expect(screen.queryByText('Rascunho em aprovação')).not.toBeInTheDocument();
     expect(screen.getByText(MOCK_MONITORING_NOTICE.version)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Li e estou ciente' })).toBeEnabled();
-    // Na própria página do aviso o banner não aparece, e o colaborador não vê a lista.
-    expect(screen.queryByTestId('monitoring-banner')).not.toBeInTheDocument();
+    // O colaborador não vê a lista de ciências.
     await waitForIdle();
     expect(screen.queryByText('Ciências registradas')).not.toBeInTheDocument();
   });
@@ -141,8 +151,8 @@ describe('página "Monitoramento da estação"', () => {
     renderApp('/monitoring', 'collaborator');
     await user.click(await screen.findByRole('button', { name: 'Li e estou ciente' }, FIND));
     await waitFor(() => expect(error).toHaveBeenCalledWith('O aviso mudou desde a sua leitura'), FIND);
-    // Página + banner (que não aparece aqui, mas consulta) na abertura, e a página de novo depois do 409.
-    await waitFor(() => expect(load.mock.calls.length).toBeGreaterThanOrEqual(3), FIND);
+    // A página carrega na abertura e de novo depois do 409, para a pessoa ler a versão nova.
+    await waitFor(() => expect(load.mock.calls.length).toBeGreaterThanOrEqual(2), FIND);
     expect(screen.getByRole('button', { name: 'Li e estou ciente' })).toBeInTheDocument();
   });
 
@@ -161,39 +171,55 @@ describe('página "Monitoramento da estação"', () => {
   });
 });
 
-describe('banner do aviso pendente', () => {
-  it('aparece para quem não deu ciência e some depois de registrar', async () => {
+describe('gate de ciência do servidor (403 CIENCIA_AVISO_PENDENTE)', () => {
+  // A camada mock NAO implementa o gate de proposito: ligar isso no mock trancaria toda a
+  // demonstracao offline e todas as suites. O mapeamento do 403 para o evento esta provado
+  // contra o cliente HTTP de verdade em realApi.test.ts ('403 CIENCIA_AVISO_PENDENTE dispara
+  // o evento do aviso'); aqui o que precisa de prova e a REACAO da tela ao evento.
+  function exigirCiencia() {
+    window.dispatchEvent(
+      new CustomEvent(ACK_REQUIRED_EVENT, {
+        detail: {
+          status: 403,
+          code: 'CIENCIA_AVISO_PENDENTE',
+          message: 'Confirme que leu o aviso de monitoramento para usar o Baluarte',
+        },
+      }),
+    );
+  }
+
+  it('o 403 do gate leva ao aviso e cobra a ciência, em vez de "acesso negado"', async () => {
+    renderApp('/dashboard', 'collaborator');
+    await screen.findByRole('heading', { name: 'Visão geral de risco' }, FIND);
+    exigirCiencia();
+    expect(await screen.findByTestId('monitoring-ack-required', {}, FIND)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Li e estou ciente' }, FIND)).toBeEnabled();
+  });
+
+  it('depois da ciência, devolve a pessoa à tela que o gate interrompeu', async () => {
     const user = userEvent.setup();
     renderApp('/dashboard', 'collaborator');
-    const banner = await screen.findByTestId('monitoring-banner', {}, FIND);
-    await user.click(within(banner).getByRole('link', { name: 'Ler o aviso de monitoramento' }));
-
+    await screen.findByRole('heading', { name: 'Visão geral de risco' }, FIND);
+    exigirCiencia();
     await user.click(await screen.findByRole('button', { name: 'Li e estou ciente' }, FIND));
-    await screen.findByTestId('monitoring-ack-done', {}, FIND);
-
-    // Volta ao dashboard pelo menu: o banner não volta.
-    await user.click(screen.getAllByRole('link', { name: /Dashboard/ })[0]!);
+    // O mesmo token ja vale depois da ciencia: a pessoa volta para onde estava.
     expect(await screen.findByRole('heading', { name: 'Visão geral de risco' }, FIND)).toBeInTheDocument();
-    await waitForIdle();
-    expect(screen.queryByTestId('monitoring-banner')).not.toBeInTheDocument();
   });
 
-  it('não aparece para quem já deu ciência da versão atual', async () => {
-    renderApp('/dashboard', 'admin');
-    expect(await screen.findByRole('heading', { name: 'Visão geral de risco' }, FIND)).toBeInTheDocument();
-    await waitForIdle();
-    expect(screen.queryByTestId('monitoring-banner')).not.toBeInTheDocument();
+  it('quem abre o aviso pelo menu não vê a cobrança do gate', async () => {
+    renderApp('/monitoring', 'collaborator');
+    await screen.findByRole('button', { name: 'Li e estou ciente' }, FIND);
+    expect(screen.queryByTestId('monitoring-ack-required')).not.toBeInTheDocument();
   });
 
-  it('não aparece quando o aviso não carrega (o menu continua levando a ele)', async () => {
-    vi.spyOn(mockApi, 'getMonitoringNotice').mockRejectedValue(
-      new HttpError(503, 'SERVICO_INDISPONIVEL', 'x'),
-    );
-    renderApp('/dashboard', 'collaborator');
-    expect(await screen.findByRole('heading', { name: 'Visão geral de risco' }, FIND)).toBeInTheDocument();
+  it('já estando no aviso, o 403 não redireciona em laço', async () => {
+    renderApp('/monitoring', 'collaborator');
+    await screen.findByRole('button', { name: 'Li e estou ciente' }, FIND);
+    exigirCiencia();
     await waitForIdle();
-    expect(screen.queryByTestId('monitoring-banner')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /^Monitoramento$/ }).length).toBeGreaterThan(0);
+    // Sem origem guardada, nao ha o que cobrar nem para onde voltar.
+    expect(screen.queryByTestId('monitoring-ack-required')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Li e estou ciente' })).toBeInTheDocument();
   });
 });
 
@@ -206,8 +232,14 @@ describe('lista de ciências (Administrador)', () => {
     expect(rows).toHaveLength(2);
     expect(within(list).getByText('admin@empresa.com')).toBeInTheDocument();
     const active = MOCK_USERS.filter((u) => u.status === 'active').length;
+    // Das duas ciências semeadas, só a do Administrador é da versão em vigor: a antiga não
+    // conta como pendência resolvida, do mesmo jeito que não vale para o gate.
+    const naVersaoAtual = MOCK_MONITORING_ACKS.filter(
+      (ack) => ack.version === MOCK_MONITORING_NOTICE.version,
+    ).length;
+    expect(naVersaoAtual).toBe(1);
     expect(within(list).getByTestId('monitoring-pending')).toHaveTextContent(
-      `${active - 2} contas ativas ainda não deram ciência da versão ${MOCK_MONITORING_NOTICE.version}.`,
+      `${active - naVersaoAtual} contas ativas ainda não deram ciência da versão ${MOCK_MONITORING_NOTICE.version}.`,
     );
   });
 

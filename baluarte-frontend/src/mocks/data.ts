@@ -2563,6 +2563,8 @@ export interface MockMonitoringAcknowledgement {
 }
 
 export const MOCK_MONITORING_ACKS: MockMonitoringAcknowledgement[] = [
-  { id: 'ack-001', userId: 'u-000', version: '2026-10-10', acknowledgedAt: '2026-10-10T12:10:00.000Z' },
+  // u-000 (Administrador) já leu a versão em vigor; u-003 ficou na anterior de propósito, que
+  // é a situação medida em produção em 19/10/2026: ciência antiga NÃO vale para o gate.
+  { id: 'ack-001', userId: 'u-000', version: '2026-10-19', acknowledgedAt: '2026-10-19T12:10:00.000Z' },
   { id: 'ack-002', userId: 'u-003', version: '2026-10-10', acknowledgedAt: '2026-10-10T13:42:00.000Z' },
 ];

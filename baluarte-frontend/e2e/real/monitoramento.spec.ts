@@ -10,9 +10,12 @@ import {
   signIn,
 } from './apoio';
 
-// B18 — aviso de monitoramento da estação contra a API real: o texto vem do servidor (com a
-// frequência de coleta do agente), a ciência é gravada por versão e o Administrador a vê na
-// lista. Conta nova a cada execução, para o banner aparecer (ninguém nasce com ciência).
+// B18 — aviso de monitoramento da estação contra a API real, agora com o GATE do servidor
+// ("opção C", 19/10/2026): sem ciência da versão em vigor, toda rota autenticada responde 403
+// CIENCIA_AVISO_PENDENTE e a tela leva a pessoa ao aviso sozinha. O texto vem do servidor (com
+// a frequência de coleta do agente), a ciência é gravada por versão e o Administrador a vê na
+// lista. Conta nova a cada execução: as contas do seed já nascem com ciência, uma conta criada
+// pela API não — é ela que exercita o gate.
 
 test.describe('Aviso de monitoramento da estação (API real)', () => {
   test('colaborador novo lê o aviso, registra a ciência e o Administrador a vê', async ({
@@ -24,16 +27,24 @@ test.describe('Aviso de monitoramento da estação (API real)', () => {
     await aceitarConvite(request, conta.email);
 
     await signIn(page, conta.email, SENHA_CONTA);
-    const banner = page.getByTestId('monitoring-banner');
-    await expect(banner).toBeVisible();
-    await banner.getByRole('link', { name: 'Ler o aviso de monitoramento' }).click();
+    // Ninguém clicou em nada: o 403 do gate trouxe a conta nova para o aviso.
+    await expect(page).toHaveURL(/\/monitoring$/);
+    await expect(page.getByTestId('monitoring-ack-required')).toBeVisible();
 
     await expect(page.getByRole('heading', { name: 'Monitoramento da estação', level: 1 })).toBeVisible();
-    await expect(page.getByText(/as portas de rede abertas a cada 15 minutos/)).toBeVisible();
+    await expect(page.getByText(/a cada 15 minutos/)).toBeVisible();
     await page.getByRole('button', { name: 'Li e estou ciente' }).click();
+
+    // O mesmo token passa a valer: a tela interrompida carrega na volta, sem novo login.
+    await expect(page.getByRole('heading', { name: 'Visão geral de risco' })).toBeVisible();
+
+    // Voltando ao aviso pelo menu, a ciência está registrada e o gate não cobra mais nada.
+    const nav = page.getByRole('navigation', { name: 'Navegação principal' }).first();
+    await nav.getByRole('link', { name: 'Monitoramento' }).click();
     await expect(page.getByTestId('monitoring-ack-done')).toContainText(
       'Você registrou ciência desta versão',
     );
+    await expect(page.getByTestId('monitoring-ack-required')).toHaveCount(0);
 
     // Quem, quando e qual versão ficaram no servidor; repetir não duplica (200).
     const aviso = await request.get(`${API_URL}/monitoramento/aviso`, { headers: bearer(admin) });
