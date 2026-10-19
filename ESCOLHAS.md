@@ -76,7 +76,7 @@ Todas em `lib/validation.ts`, puras e com as mensagens do produto web:
 
 ## 8. Testes (jest-expo + Testing Library)
 
-106 testes em 16 suítes (`src/__tests__/`):
+109 testes em 16 suítes (`src/__tests__/`):
 
 - **lib/** — `format` (datas pt-BR, taxa de clique 24/28/31/17% e "—", iniciais, nome a partir do e-mail), `validation` (todas as mensagens, datas inexistentes, passado, próxima ocorrência do mês e virada do ano), `auth` (contas, senha curta, RBAC), `campaigns` (ordem, filtro, KPIs, campanha nova).
 - **routes/** — `linking` (caminho de cada tela na web, a tela de base embaixo de quem é aberto pela URL e o e-mail fora da URL).
@@ -126,3 +126,22 @@ Por quê e como:
 - **Testes da camada nova:** `lib/mappers` (16) cobrem as conversões puras;
   `lib/apiRepository` (8) exercitam login/RBAC/erro de rede/lista/detalhe/criar
   com `fetch` e `expo-secure-store` mockados — nenhuma rede real é tocada.
+
+## 11. Gate de ciência de aviso (modo API)
+
+O backend passou a exigir que a conta registre a ciência do aviso de
+monitoramento na versão em vigor; enquanto pendente, as rotas de dados
+respondem `403 CIENCIA_AVISO_PENDENTE`. No app (modo API):
+
+- O `GET /me` fica **fora** do gate e traz `cienciaAvisoPendente`, mapeado para
+  `User.noticePending`. Como o `/me` responde normalmente, o `restoreSession`
+  **não apaga o token** por causa da pendência — a sessão é válida, falta só um
+  ato da pessoa. (Token só é limpo em falha real de autenticação.)
+- A lista de campanhas (`GET /campanhas`) pode responder 403; o contexto
+  reconhece o código `CIENCIA_AVISO_PENDENTE` e, em vez de erro genérico, a Home
+  mostra "Confirme o aviso de monitoramento no portal Baluarte para usar o app"
+  (sem botão de repetir, que não ajudaria até a ciência ser dada no portal).
+- É o conserto **mínimo**: dar a ciência pelo app (tela própria consumindo
+  `GET /monitoramento/aviso` + `POST /monitoramento/ciencia`) ficou como opcional,
+  já que o portal web resolve a ciência e o app é entrega extra.
+- No modo demo nada disso existe (o gate é só do backend real).

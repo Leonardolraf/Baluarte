@@ -79,7 +79,7 @@ sem destinatários — o detalhe traz quem clicou/reportou).
 
 | Comando | O que faz |
 |---|---|
-| `npm test` | Jest (jest-expo + Testing Library) — 16 suítes, 106 testes |
+| `npm test` | Jest (jest-expo + Testing Library) — 16 suítes, 109 testes |
 | `npm run typecheck` | `tsc --noEmit` com TypeScript estrito |
 | `npm run export:web` | `expo export --platform web` (gera `dist/`) |
 | `npx expo-doctor` | confere dependências e configuração do SDK |

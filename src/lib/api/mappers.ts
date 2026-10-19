@@ -83,6 +83,8 @@ export interface BackendMeData {
   email: string;
   perfil: string;
   departamento?: string | null;
+  /** `true` enquanto a conta não registrou a ciência do aviso de monitoramento. */
+  cienciaAvisoPendente?: boolean;
 }
 
 /**
@@ -96,6 +98,7 @@ export function userFromMe(me: BackendMeData): User {
     email: me.email,
     role: roleFromPerfil(me.perfil),
     department: me.departamento?.trim() || '—',
+    noticePending: me.cienciaAvisoPendente === true,
   };
 }
 

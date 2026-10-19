@@ -8,6 +8,12 @@ export interface User {
   email: string;
   role: Role;
   department: string;
+  /**
+   * Modo API: `true` quando a conta ainda não registrou a ciência do aviso de
+   * monitoramento na versão em vigor. Enquanto pendente, as rotas de dados
+   * respondem 403 e a pessoa precisa dar ciência no portal web. Ausente no demo.
+   */
+  noticePending?: boolean;
 }
 
 export type TemplateId = 'urgency' | 'authority' | 'curiosity';

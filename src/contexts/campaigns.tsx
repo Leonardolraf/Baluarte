@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { buildInitialCampaigns } from '../data/campaigns';
 import { campaignRepository } from '../data/repository';
+import { ApiError } from '../lib/api/client';
 import { IS_API_MODE } from '../lib/config';
 import { sortByScheduleDesc } from '../lib/campaigns';
 import type { Campaign, NewCampaignInput } from '../types';
@@ -20,6 +21,12 @@ interface CampaignsContextValue {
   loading: boolean;
   /** Mensagem de erro do carregamento da lista, ou `null`. */
   error: string | null;
+  /**
+   * `true` quando a API barra os dados por ciência do aviso pendente
+   * (403 CIENCIA_AVISO_PENDENTE): a sessão é válida, mas falta a pessoa dar
+   * ciência no portal web. A UI mostra orientação em vez de erro genérico.
+   */
+  noticePending: boolean;
   getCampaign: (id: string) => Campaign | undefined;
   /** No modo API, busca o detalhe completo (funil, destinatários) da campanha. */
   loadCampaignDetail: (id: string) => Promise<Campaign | undefined>;
@@ -48,6 +55,7 @@ export function CampaignsProvider({ children, initialCampaigns }: CampaignsProvi
   const shouldFetch = IS_API_MODE && !initialCampaigns;
   const [loading, setLoading] = useState(shouldFetch);
   const [error, setError] = useState<string | null>(null);
+  const [noticePending, setNoticePending] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -55,13 +63,20 @@ export function CampaignsProvider({ children, initialCampaigns }: CampaignsProvi
     let active = true;
     setLoading(true);
     setError(null);
+    setNoticePending(false);
     campaignRepository
       .list()
       .then((list) => {
         if (active) setCampaigns(sortByScheduleDesc(list));
       })
-      .catch(() => {
-        if (active) setError(LOAD_ERROR);
+      .catch((err) => {
+        if (!active) return;
+        // Ciência do aviso pendente: sessão válida, falta ato no portal — não é erro.
+        if (err instanceof ApiError && err.code === 'CIENCIA_AVISO_PENDENTE') {
+          setNoticePending(true);
+        } else {
+          setError(LOAD_ERROR);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -102,8 +117,17 @@ export function CampaignsProvider({ children, initialCampaigns }: CampaignsProvi
   const reload = useCallback(() => setReloadKey((key) => key + 1), []);
 
   const value = useMemo(
-    () => ({ campaigns, loading, error, getCampaign, loadCampaignDetail, scheduleCampaign, reload }),
-    [campaigns, loading, error, getCampaign, loadCampaignDetail, scheduleCampaign, reload],
+    () => ({
+      campaigns,
+      loading,
+      error,
+      noticePending,
+      getCampaign,
+      loadCampaignDetail,
+      scheduleCampaign,
+      reload,
+    }),
+    [campaigns, loading, error, noticePending, getCampaign, loadCampaignDetail, scheduleCampaign, reload],
   );
 
   return <CampaignsContext.Provider value={value}>{children}</CampaignsContext.Provider>;

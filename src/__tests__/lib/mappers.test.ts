@@ -70,6 +70,7 @@ describe('mappers: usuário', () => {
       email: 'ana@baluarte.test',
       role: 'analyst',
       department: 'TI',
+      noticePending: false,
     });
   });
 
@@ -78,6 +79,13 @@ describe('mappers: usuário', () => {
     expect(user.name).toBe('x@baluarte.test');
     expect(user.department).toBe('—');
     expect(user.role).toBe('admin');
+  });
+
+  it('userFromMe mapeia cienciaAvisoPendente → noticePending', () => {
+    expect(userFromMe({ id: 'u', email: 'a@b.test', perfil: 'Analista', cienciaAvisoPendente: true }).noticePending).toBe(true);
+    expect(userFromMe({ id: 'u', email: 'a@b.test', perfil: 'Analista', cienciaAvisoPendente: false }).noticePending).toBe(false);
+    // Ausente (backend antigo, sem o campo) → false, nunca undefined.
+    expect(userFromMe({ id: 'u', email: 'a@b.test', perfil: 'Analista' }).noticePending).toBe(false);
   });
 
   it('userFromLogin monta o mínimo a partir do login', () => {

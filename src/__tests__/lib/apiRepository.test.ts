@@ -56,7 +56,14 @@ describe('apiAuthRepository.signIn', () => {
 
     expect(result).toEqual({
       ok: true,
-      user: { id: 'u-1', name: 'Ana Souza', email: 'ana@baluarte.test', role: 'analyst', department: 'TI' },
+      user: {
+        id: 'u-1',
+        name: 'Ana Souza',
+        email: 'ana@baluarte.test',
+        role: 'analyst',
+        department: 'TI',
+        noticePending: false,
+      },
     });
     expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('baluarte.token', 'jwt-abc');
 
@@ -113,6 +120,27 @@ describe('apiAuthRepository.signIn', () => {
     if (!result.ok) expect(result.error).toMatch(/conectar/i);
   });
 
+  it('carrega noticePending do /me quando a ciência está pendente', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        reply(200, {
+          status: 'sucesso',
+          dados: { token: 'jwt-abc', idUsuario: 'u-1', email: 'ana@baluarte.test', perfil: 'Administrador' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        reply(200, {
+          status: 'sucesso',
+          dados: { id: 'u-1', nome: 'Ana', email: 'ana@baluarte.test', perfil: 'Administrador', cienciaAvisoPendente: true },
+        }),
+      );
+
+    const result = await apiAuthRepository.signIn('ana@baluarte.test', 'segredo123');
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.user.noticePending).toBe(true);
+  });
+
   it('segue com os dados do login quando o /me falha', async () => {
     fetchMock
       .mockResolvedValueOnce(
@@ -161,6 +189,17 @@ describe('apiCampaignRepository', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://vm.test/api/campanhas');
     expect(init.headers.Authorization).toBe('Bearer jwt-abc');
+  });
+
+  it('list: 403 de ciência pendente propaga o código (a UI trata, não é erro genérico)', async () => {
+    mockSecureStore.getItemAsync.mockResolvedValue('jwt-abc');
+    fetchMock.mockResolvedValueOnce(
+      reply(403, { status: 'erro', mensagem: 'x', codigoErro: 'CIENCIA_AVISO_PENDENTE' }),
+    );
+    await expect(apiCampaignRepository.list()).rejects.toMatchObject({
+      code: 'CIENCIA_AVISO_PENDENTE',
+      status: 403,
+    });
   });
 
   it('get: 404 devolve undefined', async () => {

@@ -22,7 +22,7 @@ import { greetingBlockHeight, styles } from './styles';
 
 export function HomeScreen({ navigation }: AppScreenProps<'Home'>) {
   const { user, signOut } = useAuth();
-  const { campaigns, loading, error, reload } = useCampaigns();
+  const { campaigns, loading, error, noticePending, reload } = useCampaigns();
   const insets = useSafeAreaInsets();
   // Estado da seleção de modelo: `null` = sem filtro (todas as campanhas).
   const [template, setTemplate] = useState<TemplateId | null>(null);
@@ -89,6 +89,12 @@ export function HomeScreen({ navigation }: AppScreenProps<'Home'>) {
         ListEmptyComponent={
           loading ? (
             <Text style={styles.empty}>Carregando campanhas…</Text>
+          ) : noticePending ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>
+                Confirme o aviso de monitoramento no portal Baluarte para usar o app.
+              </Text>
+            </View>
           ) : error ? (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyText}>{error}</Text>
