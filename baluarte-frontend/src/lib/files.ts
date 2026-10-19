@@ -60,7 +60,7 @@ export function fileScanErrorMessage(error: unknown): string {
 // analisar". Os nomes vêm do backend (`AMEACA_ZIP64*`) e são valores fixos, não heurística.
 const UNANALYZABLE_LABEL: Record<string, string> = {
   'Baluarte.Zip64.NaoAnalisavel':
-    'formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução',
+    'variante de Zip64 que o antivírus não lê; tratado como ameaça por precaução',
   'Baluarte.Zip64.VerificacaoIncompleta':
     'a busca por Zip64 passou do limite de descompressão ou de aninhamento; tratado como ameaça por precaução',
 };
