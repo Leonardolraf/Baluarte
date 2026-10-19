@@ -18,7 +18,8 @@ export interface UsuarioAtual {
   senhaHash: string;
   senhaAlteradaEm: Date | null;
   sessaoEncerradaEm: Date | null;
-  termosAceitosEm: Date | null;
+  /** Ciencia do aviso de monitoramento na VERSAO_AVISO em vigor (null = pendente). Ver exigeCienciaAviso. */
+  cienciaAvisoEm: Date | null;
   departmentId: string | null;
 }
 

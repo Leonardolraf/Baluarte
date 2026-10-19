@@ -36,13 +36,17 @@ const CIENCIAS = '/monitoramento/ciencias';
 
 let admin: string;
 let analista: string;
+/** Colaborador SEM ciência (as contas do seed já nascem com ela): os testes de registro em sequência. */
 let colaborador: string;
+let colabId: string;
 
 before(async () => {
   await iniciarServidor(app);
   admin = await login(ADMIN.email, ADMIN.senha);
   analista = await login(ANALISTA.email, ANALISTA.senha);
-  colaborador = await login('colaborador@empresa.com', 'Colab@123');
+  const c = await novoUsuario('Colaborador');
+  colaborador = c.token;
+  colabId = c.id;
 });
 after(async () => {
   await encerrarServidor();
@@ -63,9 +67,12 @@ async function listar(query = '', token = admin) {
   return r.body as { status: string; dados: Ciencia[]; resumo: Resumo };
 }
 
-/** Um usuário novo, ativo e logado, para testes que não podem herdar ciência de outro. */
+/**
+ * Um usuário novo, ativo, logado e SEM ciência ({ cienciaAviso: false }), para testes que não
+ * podem herdar ciência de outro. Sem ciência ele só passa pelas 4 exceções do gate.
+ */
 async function novoUsuario(perfil: 'Administrador' | 'Analista' | 'Colaborador' = 'Colaborador') {
-  const u = await criarUsuario(admin, perfil, 'b18');
+  const u = await criarUsuario(admin, perfil, 'b18', { cienciaAviso: false });
   return { ...u, token: await login(u.email, SENHA_CONTA) };
 }
 
@@ -75,17 +82,14 @@ describe('GET /monitoramento/aviso', () => {
     assert.equal(r.status, 401);
   });
 
-  for (const [perfil, token] of [
-    ['Administrador', () => admin],
-    ['Analista', () => analista],
-    ['Colaborador', () => colaborador],
-  ] as const) {
-    it(`${perfil}: texto aprovado, versão e ciência ainda não registrada`, async () => {
-      const r = await chamar('GET', AVISO, { token: token() });
+  for (const perfil of ['Administrador', 'Analista', 'Colaborador'] as const) {
+    it(`${perfil} sem ciência: texto aprovado, versão e ciência ainda não registrada`, async () => {
+      const { token } = await novoUsuario(perfil);
+      const r = await chamar('GET', AVISO, { token });
       assert.equal(r.status, 200, JSON.stringify(r.body));
       const d = r.body.dados;
       assert.equal(d.versao, VERSAO_AVISO);
-      // Texto aprovado pelo Leo em 10/10/2026: deixou de ser rascunho.
+      // Texto do Leo de 19/10/2026: não é rascunho.
       assert.equal(d.rascunho, false);
       assert.equal(d.titulo, TEXTO_AVISO.titulo);
       assert.equal(d.introducao, TEXTO_AVISO.introducao);
@@ -94,24 +98,28 @@ describe('GET /monitoramento/aviso', () => {
     });
   }
 
-  it('o texto cobre o que o cartão pede: coletado, não coletado, finalidade, acesso, retenção, base legal, dúvidas', async () => {
+  it('o texto cobre o que o cartão pede: coletado, não coletado, finalidade, acesso, retenção, base legal, direitos e dúvidas, ciência', async () => {
     const r = await chamar('GET', AVISO, { token: colaborador });
     const ids = (r.body.dados.secoes as { id: string }[]).map((s) => s.id);
-    for (const id of ['coletado', 'nao-coletado', 'finalidade', 'acesso', 'retencao', 'base-legal', 'duvidas', 'ciencia'])
-      assert.ok(ids.includes(id), `falta a seção ${id}`);
+    assert.deepEqual(ids, ['sobre', 'coletado', 'nao-coletado', 'finalidade', 'acesso', 'retencao', 'base-legal', 'direitos', 'ciencia']);
     const texto = JSON.stringify(r.body.dados);
-    assert.match(texto, /art\. 7º, inciso IX/);
-    assert.match(texto, /art\. 46/);
-    for (const termo of ['programas instalados', 'sistema operacional', 'portas de rede', 'Administrador e Analista', 'inventário mais recente'])
+    assert.match(texto, /artigo 7º, inciso IX/);
+    assert.match(texto, /artigo 46/);
+    for (const termo of ['Programas instalados', 'Sistema operacional', 'Portas de rede', 'O Colaborador não possui permissão', 'inventário técnico mais recente', 'encarregado pelo tratamento de dados pessoais'])
       assert.ok(texto.includes(termo), `o texto não fala de "${termo}"`);
-    for (const naoColetado of ['arquivos e documentos', 'e-mails', 'histórico de navegação', 'teclado', 'tela', 'localização'])
+    for (const naoColetado of ['Arquivos pessoais ou documentos', 'e-mails', 'Histórico de navegação', 'teclado', 'Capturas de tela', 'localização'])
       assert.ok(texto.includes(naoColetado), `o texto não diz que não coleta "${naoColetado}"`);
-    // Aprovado sem a frase sobre produtividade (decisão do Leo, 10/10/2026).
-    assert.ok(!texto.includes('produtividade'), 'a frase sobre produtividade saiu do texto aprovado');
+    // Produtividade só aparece negada (o monitoramento NÃO serve para isso).
+    const comProdutividade = [...texto.matchAll(/[^."]*produtividade[^."]*/g)].map((m) => m[0]);
+    assert.equal(comProdutividade.length, 2, comProdutividade.join(' | '));
+    for (const frase of comProdutividade) assert.match(frase, /não (tem como objetivo|se destinam)/, frase);
+    // Ciência, não consentimento, com o rótulo do botão que a tela tem de usar.
+    assert.ok(texto.includes('Li e estou ciente'));
+    assert.ok(texto.includes('não constitui solicitação de consentimento'));
   });
 
-  it('a versão em vigor é a do texto aprovado (2026-10-10), não a do rascunho publicado (2026-10-08)', () => {
-    assert.equal(VERSAO_AVISO, '2026-10-10');
+  it('a versão em vigor é a do texto do Leo de 19/10/2026 (2026-10-19), não as anteriores (2026-10-08 e 2026-10-10)', () => {
+    assert.equal(VERSAO_AVISO, '2026-10-19');
     assert.equal(AVISO_RASCUNHO, false);
   });
 });
@@ -125,12 +133,12 @@ describe('POST /monitoramento/ciencia', () => {
   it('versão ausente, em outro tipo, objeto ou fora do formato: 400 VERSAO_INVALIDA', async () => {
     for (const body of [{}, { versao: '' }, { versao: 20261008 }, { versao: { $ne: 'x' } }, { versao: ['2026-10-08'] }, { versao: 'a b' }, { versao: 'x'.repeat(33) }])
       esperaErro(await chamar('POST', CIENCIA, { token: colaborador, body }), 400, 'VERSAO_INVALIDA');
-    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: 'u-002' } }), 0);
+    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: colabId } }), 0);
   });
 
   it('versão diferente da atual (texto mudou depois da leitura): 409 VERSAO_DESATUALIZADA, nada gravado', async () => {
     esperaErro(await chamar('POST', CIENCIA, { token: colaborador, body: { versao: '2026-01-01' } }), 409, 'VERSAO_DESATUALIZADA');
-    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: 'u-002' } }), 0);
+    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: colabId } }), 0);
   });
 
   it('Colaborador registra: 201 com quando e qual versão; grava quem, quando e a versão; audita uma vez', async () => {
@@ -142,32 +150,32 @@ describe('POST /monitoramento/ciencia', () => {
     const quando = Date.parse(r.body.dados.registradaEm);
     assert.ok(quando >= antes - 1000 && quando <= Date.now() + 1000);
 
-    const linhas = await prisma.monitoringAcknowledgement.findMany({ where: { userId: 'u-002' } });
+    const linhas = await prisma.monitoringAcknowledgement.findMany({ where: { userId: colabId } });
     assert.equal(linhas.length, 1);
     assert.equal(linhas[0].versao, VERSAO_AVISO);
     assert.equal(linhas[0].registradaEm.toISOString(), r.body.dados.registradaEm);
 
-    const auditoria = await prisma.auditLog.findMany({ where: { acao: 'REGISTRAR_CIENCIA_MONITORAMENTO', usuarioId: 'u-002' } });
+    const auditoria = await prisma.auditLog.findMany({ where: { acao: 'REGISTRAR_CIENCIA_MONITORAMENTO', usuarioId: colabId } });
     assert.equal(auditoria.length, 1);
     assert.equal(auditoria[0].detalhe, `versao=${VERSAO_AVISO}`);
   });
 
   it('idempotente: a mesma versão de novo devolve 200 com a ciência original, sem linha nem auditoria nova', async () => {
     const original = await prisma.monitoringAcknowledgement.findUniqueOrThrow({
-      where: { userId_versao: { userId: 'u-002', versao: VERSAO_AVISO } },
+      where: { userId_versao: { userId: colabId, versao: VERSAO_AVISO } },
     });
     const r = await chamar('POST', CIENCIA, { token: colaborador, body: { versao: VERSAO_AVISO } });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.dados.nova, false);
     assert.equal(r.body.dados.registradaEm, original.registradaEm.toISOString());
-    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: 'u-002' } }), 1);
-    assert.equal(await prisma.auditLog.count({ where: { acao: 'REGISTRAR_CIENCIA_MONITORAMENTO', usuarioId: 'u-002' } }), 1);
+    assert.equal(await prisma.monitoringAcknowledgement.count({ where: { userId: colabId } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { acao: 'REGISTRAR_CIENCIA_MONITORAMENTO', usuarioId: colabId } }), 1);
   });
 
   it('depois da ciência, o aviso diz que ela está registrada e quando', async () => {
     const r = await chamar('GET', AVISO, { token: colaborador });
     assert.equal(r.body.dados.ciencia.registrada, true);
-    const linha = await prisma.monitoringAcknowledgement.findFirstOrThrow({ where: { userId: 'u-002' } });
+    const linha = await prisma.monitoringAcknowledgement.findFirstOrThrow({ where: { userId: colabId } });
     assert.equal(r.body.dados.ciencia.registradaEm, linha.registradaEm.toISOString());
   });
 
@@ -216,9 +224,10 @@ describe('GET /monitoramento/ciencias (só Administrador)', () => {
     const datas = dados.map((c) => Date.parse(c.registradaEm));
     assert.deepEqual(datas, [...datas].sort((a, b) => b - a));
     const colab = dados.find((c) => c.usuario.id === 'u-002');
-    assert.ok(colab);
+    assert.ok(colab, 'a ciência que o seed de contrato cria para a conta de teste u-002 aparece');
     assert.equal(colab.versao, VERSAO_AVISO);
     assert.deepEqual(colab.usuario, { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', perfil: 'Colaborador', status: 'Ativo' });
+    assert.ok(dados.some((c) => c.usuario.id === colabId), 'a ciência registrada pela rota aparece');
     assert.ok(dados.some((c) => c.versao === '2026-10-08'), 'a versão antiga também aparece');
     // Nada de dado sensível da conta na resposta.
     assert.doesNotMatch(JSON.stringify(dados), /senhaHash|\$2[aby]\$/);
@@ -440,11 +449,13 @@ describe('a coleta se limita a programas, sistema e portas (o aviso e o código 
         assert.equal(intervalos.length, 1, `${categoria}: um intervalo só por categoria`);
         return duracaoPorExtenso(intervalos[0]);
       };
-      const intro = TEXTO_AVISO.introducao;
-      assert.ok(intro.includes(`as portas de rede abertas a cada ${frase('portas')}`), intro);
-      assert.ok(intro.includes(`a lista de programas instalados a cada ${frase('programas')}`), intro);
-      assert.ok(intro.includes(`a versão do sistema operacional a cada ${frase('sistema')}`), intro);
-      // Os valores de hoje (B08), para o texto não mudar sem ninguém perceber.
+      // As 3 frases da seção 2 do texto do Leo (19/10/2026).
+      const itens = TEXTO_AVISO.secoes.find((s) => s.id === 'coletado')!.itens;
+      const item = (inicio: string) => itens.find((i) => i.startsWith(inicio)) ?? assert.fail(`sem o item "${inicio}"`);
+      assert.ok(item('Programas instalados:').endsWith(`A coleta ocorre a cada ${frase('programas')}.`), item('Programas instalados:'));
+      assert.ok(item('Sistema operacional:').endsWith(`A verificação ocorre a cada ${frase('sistema')}.`), item('Sistema operacional:'));
+      assert.ok(item('Portas de rede:').endsWith(`A verificação ocorre a cada ${frase('portas')}.`), item('Portas de rede:'));
+      // Os valores de hoje (B08), na grafia do texto do Leo, para o texto não mudar sem ninguém perceber.
       assert.deepEqual([frase('portas'), frase('programas'), frase('sistema')], ['15 minutos', '1 hora', '6 horas']);
     } finally {
       process.env.NODE_ENV = ambiente.NODE_ENV;

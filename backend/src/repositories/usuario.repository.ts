@@ -24,6 +24,22 @@ export function buscarPorId(id: string, db: Db = prisma) {
   return db.user.findUnique({ where: { id } });
 }
 
+/**
+ * Usuario da requisicao autenticada (exigeSessao), com a ciencia do aviso de monitoramento na
+ * versao em vigor carregada na MESMA consulta (include filtrado por versao, take 1): o gate
+ * exigeCienciaAviso nao custa consulta extra por requisicao. `cienciaAvisoEm` e o instante da
+ * ciencia dessa versao, ou null (sem ciencia, ou so de versao antiga).
+ */
+export async function buscarParaSessao(id: string, versaoAviso: string) {
+  const u = await prisma.user.findUnique({
+    where: { id },
+    include: { ciencias: { where: { versao: versaoAviso }, take: 1, select: { registradaEm: true } } },
+  });
+  if (!u) return null;
+  const { ciencias, ...usuario } = u;
+  return { ...usuario, cienciaAvisoEm: ciencias[0]?.registradaEm ?? null };
+}
+
 /** Id do dono de um e-mail ja normalizado (ou null). */
 export function donoDoEmail(email: string, db: Db = prisma) {
   return db.user.findUnique({ where: { email }, select: { id: true } });

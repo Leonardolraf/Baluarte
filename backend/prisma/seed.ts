@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/db.js';
+import { VERSAO_AVISO } from '../src/models/avisoMonitoramento.model.js';
 
 // Dados de seed — mesmos IDs/credenciais que o contrato dos testes da N2 AT1 assume:
 //  - usuario analista@empresa.com / Senha@123  (login e dup de e-mail)
@@ -14,25 +15,28 @@ async function main() {
   const senhaAnalista = await bcrypt.hash('Senha@123', 10);
   const senhaAdmin = await bcrypt.hash('Admin@123', 10);
   const senhaColab = await bcrypt.hash('Colab@123', 10);
-  // Melhorias #5: as contas do seed ja nascem com os termos de uso aceitos (o Newman e o Robot
-  // da N2 AT1 usam essas contas e nao passam pela tela de aceite). So no create: rodar o seed
-  // de novo num banco existente nao mexe em quem ja esta la.
-  const termosAceitosEm = new Date();
+  // Gate de ciencia do aviso de monitoramento: as contas do seed ja nascem com a ciencia da
+  // VERSAO_AVISO em vigor (o Newman e o Robot da N2 AT1 usam essas contas e nao passam pela
+  // tela do aviso). Isso SO e aceitavel porque sao contas de teste com senha publica, que nunca
+  // existem em producao (DT28); uma pessoa de verdade registra a propria ciencia pela tela.
+  // Fica no `create` do upsert: rodar o seed de novo num banco existente nao mexe em quem ja
+  // esta la (`update: {}`).
+  const ciencias = { create: { versao: VERSAO_AVISO } };
 
   await prisma.user.upsert({
     where: { email: 'analista@empresa.com' },
     update: {},
-    create: { id: 'u-001', nome: 'Analista de Segurança', email: 'analista@empresa.com', senhaHash: senhaAnalista, perfil: 'Analista', status: 'Ativo', termosAceitosEm },
+    create: { id: 'u-001', nome: 'Analista de Segurança', email: 'analista@empresa.com', senhaHash: senhaAnalista, perfil: 'Analista', status: 'Ativo', ciencias },
   });
   await prisma.user.upsert({
     where: { email: 'admin@empresa.com' },
     update: {},
-    create: { id: 'u-000', nome: 'Administrador', email: 'admin@empresa.com', senhaHash: senhaAdmin, perfil: 'Administrador', status: 'Ativo', termosAceitosEm },
+    create: { id: 'u-000', nome: 'Administrador', email: 'admin@empresa.com', senhaHash: senhaAdmin, perfil: 'Administrador', status: 'Ativo', ciencias },
   });
   await prisma.user.upsert({
     where: { email: 'colaborador@empresa.com' },
     update: {},
-    create: { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', senhaHash: senhaColab, perfil: 'Colaborador', status: 'Ativo', termosAceitosEm },
+    create: { id: 'u-002', nome: 'Colaborador', email: 'colaborador@empresa.com', senhaHash: senhaColab, perfil: 'Colaborador', status: 'Ativo', ciencias },
   });
 
   for (const name of DEPARTAMENTOS_PADRAO) {

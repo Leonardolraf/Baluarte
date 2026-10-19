@@ -10,7 +10,6 @@ import { rotasDashboard } from './dashboard.routes.js';
 import { rotasDepartamentos } from './departamento.routes.js';
 import { rotasEstacoes } from './estacao.routes.js';
 import { rotasNotificacoes } from './notificacao.routes.js';
-import { rotasTermos } from './termos.routes.js';
 import { rotasTreinamento } from './treinamento.routes.js';
 import { rotasUsuarios } from './usuario.routes.js';
 import { rotasVarreduras } from './varredura.routes.js';
@@ -23,7 +22,6 @@ import { rotasVulnerabilidades } from './vulnerabilidade.routes.js';
 export const apiRouter = Router();
 
 rotasAuth(apiRouter);
-rotasTermos(apiRouter);
 rotasUsuarios(apiRouter);
 rotasDepartamentos(apiRouter);
 rotasAtivos(apiRouter);

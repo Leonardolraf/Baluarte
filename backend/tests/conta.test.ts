@@ -81,10 +81,10 @@ describe('cadastro por convite', () => {
     assert.equal(r.body.mensagem, 'Senha cadastrada com sucesso');
 
     const token = await login(conta.email, 'Primeira@1');
-    // Conta nova ainda precisa aceitar os termos de uso (#5) antes de usar o resto.
-    esperaErro(await chamar('GET', '/me', { token }), 403, 'TERMOS_NAO_ACEITOS');
-    const { versao } = (await chamar('GET', '/conta/termos', { token })).body.dados;
-    assert.equal((await chamar('POST', '/conta/termos/aceite', { token, body: { versao } })).status, 201);
+    // Conta nova ainda precisa dar ciência do aviso de monitoramento antes de usar o resto.
+    esperaErro(await chamar('GET', '/me', { token }), 403, 'CIENCIA_AVISO_PENDENTE');
+    const { versao } = (await chamar('GET', '/monitoramento/aviso', { token })).body.dados;
+    assert.equal((await chamar('POST', '/monitoramento/ciencia', { token, body: { versao } })).status, 201);
     assert.equal((await chamar('GET', '/me', { token })).body.dados.status, 'Ativo');
     // Uso único.
     esperaErro(await chamar('POST', '/auth/reset-password/confirm', { body: { token: conta.convite, novaSenha: 'Segunda@1' } }), 400, 'TOKEN_RESET_INVALIDO');

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/db.js';
+import { VERSAO_AVISO } from '../src/models/avisoMonitoramento.model.js';
 import { dadosAchado, type ChaveAchado } from '../src/models/catalogoAchado.model.js';
 import { gerarTokenLink, hashToken } from '../src/utils/tokens.js';
 
@@ -85,9 +86,12 @@ async function main() {
     { nome: 'Bruno Lima', email: 'bruno.lima@empresa.com', perfil: 'Colaborador', status: 'Ativo', departmentId: dep('Comercial') },
     { nome: 'Carla Dias', email: 'carla.dias@empresa.com', perfil: 'Colaborador', status: 'Inativo', departmentId: dep('RH') },
   ];
-  // Melhorias #5: contas de demonstracao ja com os termos de uso aceitos.
-  const termosAceitosEm = new Date();
-  for (const u of usuarios) await prisma.user.create({ data: { ...u, senhaHash: senha, termosAceitosEm } });
+  // Gate de ciencia do aviso de monitoramento: as contas de demonstracao ja nascem com a
+  // ciencia da VERSAO_AVISO em vigor. SO e aceitavel porque sao contas ficticias de teste e de
+  // demonstracao (senha publica, nunca em producao); uma pessoa de verdade registra a propria
+  // ciencia pela tela do aviso.
+  for (const u of usuarios)
+    await prisma.user.create({ data: { ...u, senhaHash: senha, ciencias: { create: { versao: VERSAO_AVISO } } } });
 
   // ---- Colaboradores-alvo das campanhas (campanha so aceita usuario cadastrado) ----
   const TOTAL_COLABS = 203; // maior campanha abaixo
@@ -100,12 +104,16 @@ async function main() {
       perfil: 'Colaborador',
       status: 'Ativo',
       senhaHash: senha,
-      termosAceitosEm,
       departmentId: dep(ROTACAO[i % ROTACAO.length]),
     })),
   });
   const colabs = await prisma.user.findMany({ where: { email: { startsWith: 'colab', endsWith: '@empresa.com' }, perfil: 'Colaborador', id: { not: 'u-002' } } });
   const idPorEmail = new Map(colabs.map((u) => [u.email, u.id]));
+  // Mesma ciencia das contas acima (so aceitavel por serem contas ficticias de demonstracao).
+  await prisma.monitoringAcknowledgement.createMany({
+    data: colabs.map((u) => ({ userId: u.id, versao: VERSAO_AVISO })),
+    skipDuplicates: true,
+  });
 
   // ---- Campanhas + eventos (funil) ----
   async function campanha(nome: string, template: string, status: string, total: number, abertos: number, clicados: number, submeteram: number, reportaram: number) {
