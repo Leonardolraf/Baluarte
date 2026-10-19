@@ -305,10 +305,10 @@ describe('veredito com Zip64 (DT27)', () => {
     assert.deepEqual(vereditoComZip64(limite, { zip64: false, incompleta: true }), limite);
   });
 
-  it('a mensagem diz que o antivírus não analisa o formato, e nunca "limpo" ou "seguro"', () => {
+  it('a mensagem diz que o antivírus não lê essa variante, e nunca "limpo" ou "seguro"', () => {
     const msg = mensagemDoResultado(AMEACA_ZIP64);
     assert.equal(msg, `Ameaça encontrada: Baluarte.Zip64.NaoAnalisavel (${ROTULO_ZIP64})`);
-    assert.match(msg, /formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução/);
+    assert.match(msg, /variante de Zip64 que o antivírus não lê; tratado como ameaça por precaução/);
     assert.match(mensagemDoResultado(AMEACA_ZIP64_INCOMPLETA), new RegExp(ROTULO_ZIP64_INCOMPLETA.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     for (const m of [msg, mensagemDoResultado(AMEACA_ZIP64_INCOMPLETA)]) {
       assert.notEqual(m, MENSAGEM_LIMPO);
