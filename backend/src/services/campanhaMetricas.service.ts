@@ -28,6 +28,8 @@ export function mapCampaign(c: { id: string; nome: string; template: string; sta
     template: c.template,
     status: c.status,
     destinatarios: c.eventos.length,
+    // Quantos e-mails sairam de fato (enviadoEm gravado): a tela nao deve deduzir do status.
+    enviados,
     taxaClique: enviados ? Math.round((clicados / enviados) * 100) : 0,
     criadoEm: c.criadoEm,
   };

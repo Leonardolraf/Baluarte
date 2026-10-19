@@ -101,6 +101,7 @@ describe('métricas de campanha', () => {
       eventos: [ev({ enviadoEm: d, clicadoEm: d }), ev({ enviadoEm: d }), ev({ enviadoEm: d }), ev({})],
     });
     assert.equal(c.destinatarios, 4);
+    assert.equal(c.enviados, 3);
     assert.equal(c.taxaClique, 33);
   });
 
