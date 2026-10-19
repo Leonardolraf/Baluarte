@@ -142,7 +142,7 @@ test.describe('Modo real (backend Express)', () => {
     const account = await apiCreateUser(request, admin, 'Colaborador');
     try {
       await aceitarConvite(request, account.email);
-      await signIn(page, account.email, SENHA_CONTA);
+      await signIn(page, account.email, SENHA_CONTA, { semCiencia: true });
       await page.goto('/settings');
       await page.locator('#senhaAtual').fill('Errada@123');
       await page.locator('#novaSenha').fill('Nova@1234');
@@ -165,7 +165,7 @@ test.describe('Modo real (backend Express)', () => {
     const account = await apiCreateUser(request, admin, 'Colaborador');
     try {
       await aceitarConvite(request, account.email);
-      await signIn(page, account.email, SENHA_CONTA);
+      await signIn(page, account.email, SENHA_CONTA, { semCiencia: true });
 
       const patch = await request.patch(`${API_URL}/users/${encodeURIComponent(account.id)}`, {
         headers: { Authorization: `Bearer ${admin}` },
@@ -235,7 +235,7 @@ test.describe('Modo real (backend Express)', () => {
     const account = await apiCreateUser(request, admin, 'Colaborador');
     try {
       await aceitarConvite(request, account.email);
-      await signIn(page, account.email, SENHA_CONTA);
+      await signIn(page, account.email, SENHA_CONTA, { semCiencia: true });
       const token = await apiToken(request, account.email, SENHA_CONTA);
       for (const path of ['/vulnerabilidades', '/campanhas', '/usuarios', '/assets']) {
         const response = await request.get(`${API_URL}${path}`, {

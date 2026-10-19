@@ -26,10 +26,9 @@ test.describe('Aviso de monitoramento da estação (API real)', () => {
     const conta = await apiCreateUser(request, admin, 'Colaborador');
     await aceitarConvite(request, conta.email);
 
-    await signIn(page, conta.email, SENHA_CONTA);
-    // Ninguém clicou em nada: o 403 do gate trouxe a conta nova para o aviso.
-    await expect(page).toHaveURL(/\/monitoring$/);
-    await expect(page.getByTestId('monitoring-ack-required')).toBeVisible();
+    // Sem aceitar nada automaticamente: este teste existe para VER o gate agir (o helper
+    // confere que o 403 trouxe a conta nova ao aviso e para ali).
+    await signIn(page, conta.email, SENHA_CONTA, { semCiencia: true, aceitarAviso: false });
 
     await expect(page.getByRole('heading', { name: 'Monitoramento da estação', level: 1 })).toBeVisible();
     await expect(page.getByText(/a cada 15 minutos/)).toBeVisible();
@@ -64,10 +63,9 @@ test.describe('Aviso de monitoramento da estação (API real)', () => {
     });
     expect(repetida.status()).toBe(200);
 
-    // De volta ao dashboard, o banner não aparece mais.
-    const nav = page.getByRole('navigation', { name: 'Navegação principal' }).first();
+    // De volta ao dashboard, o gate não cobra mais nada: a navegação segue normal.
     await nav.getByRole('link', { name: 'Dashboard' }).click();
     await expect(page.getByRole('heading', { name: 'Visão geral de risco' })).toBeVisible();
-    await expect(banner).toHaveCount(0);
+    await expect(page.getByTestId('monitoring-ack-required')).toHaveCount(0);
   });
 });

@@ -22,15 +22,46 @@ export function unique(prefix: string): string {
 }
 
 /** Login pela tela, partindo de uma sessão vazia, até o dashboard. */
-export async function signIn(page: Page, email: string, password: string): Promise<void> {
+/**
+ * Entra pela tela de login e deixa a pessoa no dashboard.
+ *
+ * Gate de ciencia do aviso de monitoramento ("opcao C", 19/10/2026): conta SEM ciencia da
+ * VERSAO_AVISO em vigor toma 403 CIENCIA_AVISO_PENDENTE em toda rota autenticada e a tela a
+ * leva ao aviso. As contas do seed ja nascem com ciencia; uma conta criada pela API, nao.
+ *
+ * Por isso o estado esperado e DECLARADO pelo teste, nunca farejado da tela:
+ *   - sem opcao: a conta ja tem ciencia e vai direto ao dashboard;
+ *   - `{ semCiencia: true }`: passa pelo aviso e registra a ciencia, como uma pessoa faria;
+ *   - `{ semCiencia: true, aceitarAviso: false }`: para no aviso, para o teste observar o gate.
+ * Amostrar a URL depois do login nao serve: o 403 chega DEPOIS de a rota trocar para
+ * /dashboard, entao a tela pisca o dashboard antes do redirecionamento (foi assim que este
+ * helper deu falso verde e quatro testes falharam adiante, em 19/10/2026).
+ */
+export async function signIn(
+  page: Page,
+  email: string,
+  password: string,
+  opcoes: { semCiencia?: boolean; aceitarAviso?: boolean } = {},
+): Promise<void> {
   await page.goto('/login');
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
   await page.locator('#email').fill(email);
   await page.locator('#senha').fill(password);
   await page.locator('#btnEntrar').click();
+
+  if (opcoes.semCiencia) {
+    // O gate traz a pessoa ao aviso sem ninguem clicar em nada.
+    await expect(page).toHaveURL(/\/monitoring$/);
+    await expect(page.getByTestId('monitoring-ack-required')).toBeVisible();
+    if (opcoes.aceitarAviso === false) return;
+    await page.getByRole('button', { name: 'Li e estou ciente' }).click();
+  }
+
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole('heading', { name: 'Visão geral de risco' })).toBeVisible();
+  // Com ciencia valida, nada redireciona depois: o dashboard carrega os dados.
+  await expect(page.getByTestId('risk-gauges')).toBeVisible();
 }
 
 export async function apiToken(request: APIRequestContext, email: string, password: string): Promise<string> {

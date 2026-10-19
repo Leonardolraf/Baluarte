@@ -109,6 +109,16 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
           typeof error === 'object' && error && 'status' in error
             ? Number((error as { status: number }).status)
             : 0;
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code: unknown }).code)
+            : '';
+        // Ciencia pendente do aviso de monitoramento NAO e sessao invalida: o gate do servidor
+        // responde 403 em toda rota autenticada, /me inclusive. Derrubar a sessao aqui criava
+        // um laco sem saida — login, 403 no /me, "sua sessao expirou", login de novo — e a
+        // pessoa nunca alcancava a tela que registra a ciencia, que exige estar logada. Quem
+        // reage a esse 403 e o AppLayout, levando ao aviso.
+        if (code === 'CIENCIA_AVISO_PENDENTE') return;
         if (status === 401 || status === 403) logout('Sua sessão expirou. Faça login novamente.');
       });
     return () => {

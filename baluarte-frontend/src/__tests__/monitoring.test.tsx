@@ -223,6 +223,50 @@ describe('gate de ciência do servidor (403 CIENCIA_AVISO_PENDENTE)', () => {
   });
 });
 
+describe('sessão sob o gate (revalidação com /me)', () => {
+  // O gate responde 403 em TODA rota autenticada, /me inclusive. O AuthContext derrubava a
+  // sessao em qualquer 403 da revalidacao, o que criava um laco sem saida: login, 403 no /me,
+  // "sua sessao expirou", login de novo. A pessoa nunca alcancava a tela do aviso, que exige
+  // estar logada. Medido pela suite real em 19/10/2026 (a tela caiu para o layout publico).
+  function renderComRevalidacao(role: RBACRole) {
+    const user = signIn(role);
+    return render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <AuthProvider
+          initialSession={{ status: 'authenticated', token: tokenStorage.get(), user }}
+          revalidateOnMount
+        >
+          <AppRoutes />
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it('403 de ciência pendente no /me NÃO encerra a sessão', async () => {
+    const sair = vi.spyOn(notify, 'info');
+    vi.spyOn(mockApi, 'me').mockRejectedValue(
+      new HttpError(
+        403,
+        'CIENCIA_AVISO_PENDENTE',
+        'Confirme que leu o aviso de monitoramento para usar o Baluarte',
+      ),
+    );
+    renderComRevalidacao('collaborator');
+    expect(await screen.findByRole('heading', { name: 'Visão geral de risco' }, FIND)).toBeInTheDocument();
+    await waitForIdle();
+    // Continua logado: nenhum aviso de sessao expirada e o token segue guardado.
+    expect(sair).not.toHaveBeenCalledWith(expect.stringContaining('sessão expirou'));
+    expect(tokenStorage.get()).not.toBeNull();
+    expect(screen.queryByText('Página de login')).not.toBeInTheDocument();
+  });
+
+  it('403 de permissão no /me continua encerrando a sessão', async () => {
+    vi.spyOn(mockApi, 'me').mockRejectedValue(new HttpError(403, 'USUARIO_REMOVIDO', 'Conta removida'));
+    renderComRevalidacao('collaborator');
+    await waitFor(() => expect(tokenStorage.get()).toBeNull(), FIND);
+  });
+});
+
 describe('lista de ciências (Administrador)', () => {
   it('mostra quem deu ciência de qual versão e quantas contas ativas faltam', async () => {
     renderApp('/monitoring', 'admin');
