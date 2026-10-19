@@ -75,6 +75,8 @@ export function configurarBancoDeTeste(testFileUrl: string): string {
   process.env.NVD_API_URL = 'http://127.0.0.1:9';
   delete process.env.NVD_API_KEY;
   delete process.env.CRUZAMENTO_AUTOMATICO;
+  // DT36: teto de producao do relatorio; quem testa o teto baixa a variavel no proprio teste.
+  delete process.env.RELATORIO_TETO_ACHADOS;
   return url.toString();
 }
 

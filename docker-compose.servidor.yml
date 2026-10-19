@@ -5,9 +5,35 @@
 # Nenhum segredo neste arquivo: tudo vem do .env da raiz (fora do git). Variáveis lidas aqui:
 #   POSTGRES_PASSWORD (obrigatória), OSQUERY_ENROLL_SECRET, DOMINIO_INTERNO.
 # DOMINIO_INTERNO pode liberar endereços de pessoas (DT19); por isso fica só no .env, nunca aqui (DT20).
+#
+# Memória por serviço (DT36). Sem limite, um serviço que cresce pode tomar a VM inteira (7,8 GiB,
+# ~6 GiB livres para os contêineres) e o OOM do kernel escolhe quem morre. Os três limites somam
+# 6 GiB (2304 + 512 + 3328 MiB), o que a VM tem livre: um serviço nunca come a memória de outro.
+# Base: as medições de 19/10/2026 do relatório (DT36) e as do clamd (Melhorias #18).
+#   backend 2304m  com o teto de 50.000 achados por relatório (TETO_ACHADOS_RELATORIO) e uma
+#                  exportação por vez, o pico medido é ~0,9 GB de heap e ~1,1 GB de RSS. O heap
+#                  fica em 1536 MiB (NODE_OPTIONS abaixo): sem a flag, o Node tiraria o teto do
+#                  próprio mem_limit (~1 GiB), apertado para o pico; com ela, sobra ~0,6 GiB de heap
+#                  para o resto da API durante uma exportação. Os 768 MiB entre o heap e o
+#                  mem_limit cobrem o que não é heap (motor do Prisma, buffers, geração nova do V8):
+#                  medido ~0,45 GB fora do heap com 100 mil achados (RSS 2,07 GB, heap 1,62 GB),
+#                  menos com 50 mil. Assim, se algo crescer além da conta, o Node para antes com
+#                  "heap out of memory" no log (e o restart sobe de novo), em vez de o OOM-killer
+#                  matar o contêiner sem mensagem.
+#   db 512m        Postgres 17 com a configuração padrão (shared_buffers 128 MB, work_mem 4 MB) e
+#                  as poucas conexões do pool de uma API; o cache de páginas conta no limite, mas o
+#                  kernel o devolve antes de chegar nele. Não medido na VM: estimativa pela
+#                  configuração e pelo tamanho do banco da demonstração.
+#   clamav 3328m   (3,25 GiB) o clamd fica em ~1 GiB parado (assinaturas) e chegou a 2,7 GiB num
+#                  zip com um membro de 900 MiB; o limite fica acima do pico com ~0,55 GiB de
+#                  folga. Não cobre a recarga diária das assinaturas COINCIDINDO com um arquivo
+#                  desse tamanho (a recarga concorrente segura duas cópias por um instante, ~+1 GiB):
+#                  nesse caso o clamd é reiniciado e a análise responde 503, nunca "limpo".
+# Mudou um número aqui, confira se a soma continua cabendo na memória livre da VM.
 services:
   backend:
     restart: unless-stopped
+    mem_limit: 2304m
     depends_on: !override   # só o Postgres local; o Mailpit não sobe aqui
       db:
         condition: service_healthy
@@ -27,11 +53,16 @@ services:
       # Número de proxies na frente da API (0 a 5; vazio = nenhum, o IP gravado é o do proxy). A VM
       # define no .env dela depois de medir a cadeia (Funnel = 1; Funnel + Nginx = 2).
       - TRUST_PROXY=${TRUST_PROXY:-}
+      # DT36: teto do heap abaixo do mem_limit (ver o comentário do topo). Vale para o tsx da API e
+      # para o `prisma migrate deploy` do entrypoint.
+      - NODE_OPTIONS=--max-old-space-size=1536
   db:
     image: postgres:17-alpine   # mesmo major do Supabase de onde veio o dump (restaurar um 17 num 16 falha)
     restart: unless-stopped
+    mem_limit: 512m
   # Os limites do clamd para o arquivo de 250 MB (CLAMD_CONF_*) vêm do docker-compose.yml e valem
   # aqui também; mudou lá, recrie o clamav (`... up -d --force-recreate clamav`). A API usa o
   # tempo limite padrão do código para o clamd (CLAMAV_TIMEOUT_MS, 300 s).
   clamav:
     restart: unless-stopped
+    mem_limit: 3328m

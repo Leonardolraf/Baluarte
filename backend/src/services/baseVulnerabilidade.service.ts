@@ -143,7 +143,9 @@ export async function cvesPorCpe(cpe: string, s: SessaoConsulta): Promise<CveNvd
       const pagina = lerCvesNvd(json);
       const contagem = contagemNvd(json);
       if (!pagina || !contagem) throw new BaseIndisponivel('NVD', 'resposta fora do formato');
-      cves.push(...pagina);
+      // Laco, nao `push(...pagina)`: a pagina vem de fora, e espalhar uma lista grande como
+      // argumentos estoura a pilha (DT36).
+      for (const cve of pagina) cves.push(cve);
       inicio += contagem.naPagina;
       if (contagem.naPagina === 0 || inicio >= contagem.total) {
         if (inicio < contagem.total) throw new BaseIndisponivel('NVD', `página vazia antes do fim (${inicio} de ${contagem.total})`);
