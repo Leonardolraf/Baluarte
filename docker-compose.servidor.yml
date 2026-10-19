@@ -30,5 +30,8 @@ services:
   db:
     image: postgres:17-alpine   # mesmo major do Supabase de onde veio o dump (restaurar um 17 num 16 falha)
     restart: unless-stopped
+  # Os limites do clamd para o arquivo de 250 MB (CLAMD_CONF_*) vêm do docker-compose.yml e valem
+  # aqui também; mudou lá, recrie o clamav (`... up -d --force-recreate clamav`). A API usa o
+  # tempo limite padrão do código para o clamd (CLAMAV_TIMEOUT_MS, 300 s).
   clamav:
     restart: unless-stopped

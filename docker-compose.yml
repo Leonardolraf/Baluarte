@@ -116,9 +116,58 @@ services:
   # sai do repositório sai do volume (apaga baluarte_*.yar e copia de novo). O freshclam só
   # mexe nos bancos oficiais (main, daily, bytecode) e não apaga arquivos extras. Regra nova:
   # `docker compose --profile antivirus restart clamav` (ver README, "Regras YARA").
+  #
+  # Limites do clamd (Melhorias #18, medidos em 13 e 14/10/2026 no ClamAV 1.5.4 com as assinaturas
+  # e as regras do Baluarte). O /init da imagem oficial grava cada CLAMD_CONF_<Opção>=<valor> no
+  # clamd.conf. A regra: SÓ A COTA CORTA, E ELA AVISA.
+  #   StreamMaxLength 251M  o envio: 250 MB da API (LIMITE_ARQUIVO_BYTES) + 1 MB de folga. Acima,
+  #                         o clamd recusa e a API responde 503 (o padrão, 100M, cortava em ~100 MB).
+  #   MaxScanSize 1000M     a cota: quanto o clamd varre por envio, somando o que sai de dentro de
+  #                         compactados e as cópias normalizadas de HTML/script. Estourou, volta
+  #                         Heuristics.Limits.Exceeded.MaxScanSize (AlertExceedsMax).
+  #   MaxFileSize, MaxHTMLNormalize, MaxScriptNormalize, PCREMaxFileSize 1001M
+  #                         esses quatro NÃO avisam: acima deles o clamd corta o arquivo (o de dentro
+  #                         de um zip é "trimmed" para o MaxFileSize e só o começo é varrido), pula a
+  #                         normalização ou pula as regras com expressão regular, e responde "OK".
+  #                         Medido: membro de 300 MiB com o marcador no fim saía "OK" em 1,3 s com
+  #                         MaxFileSize 251M; HTML acima de 40 MB saía "OK" sem a regra de HTML
+  #                         smuggling (padrão 40M). Acima da cota, eles nunca são o limite: tudo o
+  #                         que passaria deles estoura antes a cota, que avisa.
+  #   AlertExceedsMax yes   decisão do Leo: limite excedido conta como ameaça
+  #                         (Heuristics.Limits.Exceeded.<Limite>), não como "OK". Medido (14/10): avisa
+  #                         em MaxScanSize (zip que expande para 1,1 GiB), MaxRecursion (20 zips
+  #                         aninhados; 10 passam), MaxFiles (zip de 9.999 arquivos com MaxScanTime em
+  #                         600 s; 5.001 passam) e MaxScanTime. O clamd.conf.sample da 1.5.4 diz que
+  #                         cobre só MaxFileSize, MaxScanSize e MaxRecursion: está desatualizado (o
+  #                         MaxFileSize de membro de zip NÃO avisa, os outros dois avisam).
+  #   MaxScanTime 240000    tempo máximo de uma varredura (ms). Padrão implícito: 120000 (o clamd.log
+  #                         diz "Global time limit set to 120000"; o clamconf mostra "disabled").
+  #                         Estourou, com AlertExceedsMax volta Heuristics.Limits.Exceeded.MaxScanTime
+  #                         (ameaça); SEM o alerta, volta "OK" calado, até com o marcador no arquivo
+  #                         (medido). 240 s: abaixo do tempo limite do clamd na API (CLAMAV_TIMEOUT_MS,
+  #                         300 s), para quem responde ser sempre o clamd, com o alerta, e não um 503;
+  #                         e acima dos 120 s, porque um zip legítimo de ~10 mil arquivos levou 134 s
+  #                         aqui (~14 ms por arquivo) e numa VM menor levaria mais.
+  # Custo medido (desktop de 16 núcleos): 250 MB enviados direto, 20 a 65 s de varredura e +0,5 a
+  # +0,8 GiB de RAM; zip com um membro de 900 MiB, 84 s e pico de 2,7 GiB no contêiner (base de
+  # ~0,95 GiB), com o membro extraído no /tmp. A API espera até 300 s (CLAMAV_TIMEOUT_MS); passou
+  # disso, 503. Os tempos de leitura padrão bastam: ReadTimeout 120 s entre blocos (eles fluem
+  # enquanto o arquivo chega) e CommandReadTimeout 30 s até o comando (a API manda na hora).
+  # LIMITE CONHECIDO, fora do alcance da configuração: entrada de zip no formato Zip64 não é
+  # aberta pelo ClamAV 1.5.4 ("compressed data not available") e o zip sai "OK" (marcador dentro
+  # de uma entrada Zip64: "OK"; no zip comum: detectado). Registrado no relatório do #18.
   clamav:
     image: clamav/clamav:1.5
     profiles: ["antivirus"]
+    environment:
+      - CLAMD_CONF_StreamMaxLength=251M
+      - CLAMD_CONF_MaxScanSize=1000M
+      - CLAMD_CONF_MaxFileSize=1001M
+      - CLAMD_CONF_MaxHTMLNormalize=1001M
+      - CLAMD_CONF_MaxScriptNormalize=1001M
+      - CLAMD_CONF_PCREMaxFileSize=1001M
+      - CLAMD_CONF_AlertExceedsMax=yes
+      - CLAMD_CONF_MaxScanTime=240000
     entrypoint:
       - /bin/sh
       - -c

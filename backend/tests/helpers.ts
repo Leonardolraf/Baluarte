@@ -87,13 +87,12 @@ let server: Server | null = null;
 let base = '';
 
 /** Sobe a app numa porta efemera; `chamar` passa a apontar para ela. */
-export function iniciarServidor(app: Express): Promise<string> {
-  return new Promise((resolve) => {
-    server = app.listen(0, '127.0.0.1', () => {
-      base = `http://127.0.0.1:${(server!.address() as AddressInfo).port}/api`;
-      resolve(base);
-    });
-  });
+/** Sobe o app com as mesmas opcoes de producao (config/servidorHttp.ts). */
+export async function iniciarServidor(app: Express): Promise<string> {
+  const { escutar } = await import('../src/config/servidorHttp.js');
+  server = await escutar(app, 0, '127.0.0.1');
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
+  return base;
 }
 
 export function encerrarServidor(): Promise<void> {
