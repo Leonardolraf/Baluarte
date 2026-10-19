@@ -1,9 +1,9 @@
 // Testes de UNIDADE dos limites de memoria do docker-compose.servidor.yml (DT36, VM).
 // Os numeros foram medidos (comentario do topo do arquivo); este teste so impede que alguem mude
 // um deles e quebre a relacao entre eles sem perceber:
-//   - backend, db e clamav tem mem_limit;
-//   - a soma cabe nos ~6 GiB livres da VM;
-//   - o clamav fica acima do pico medido do clamd (2,7 GiB num zip com membro de 900 MiB);
+//   - backend e clamav tem mem_limit; o db NAO tem (OOM-killer no postmaster = crash recovery);
+//   - o clamav fica acima do pico medido do clamd (2,7 GiB num zip com membro de 900 MiB), e a
+//     recarga das assinaturas nao soma a esse pico (ConcurrentDatabaseReload no, no compose base);
 //   - o heap do Node (NODE_OPTIONS --max-old-space-size) fica abaixo do mem_limit da API, com
 //     folga para o que nao e heap, para o Node parar por heap antes do OOM-killer do conteiner,
 //     e acima do pico de heap medido com o teto de achados do relatorio (~0,9 GB com 50 mil).
@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { TETO_ACHADOS_RELATORIO } from '../../src/models/vulnerabilidade.model.js';
 
 const SERVIDOR = fileURLToPath(new URL('../../../docker-compose.servidor.yml', import.meta.url));
+const BASE = fileURLToPath(new URL('../../../docker-compose.yml', import.meta.url));
 const MIB = 1024 * 1024;
 const GIB = 1024 * MIB;
 
@@ -41,11 +42,15 @@ function memLimit(bloco: string | undefined, servico: string): number {
 describe('limites de memória do docker-compose.servidor.yml (VM)', () => {
   const texto = readFileSync(SERVIDOR, 'utf8');
   const b = blocos(texto);
-  const limites = { backend: memLimit(b.backend, 'backend'), db: memLimit(b.db, 'db'), clamav: memLimit(b.clamav, 'clamav') };
+  const limites = { backend: memLimit(b.backend, 'backend'), clamav: memLimit(b.clamav, 'clamav') };
 
-  it('a soma dos três cabe na memória livre da VM (~6 GiB)', () => {
-    const soma = limites.backend + limites.db + limites.clamav;
-    assert.ok(soma <= 6 * GIB, `soma ${(soma / GIB).toFixed(2)} GiB`);
+  it('o db não tem mem_limit (o OOM-killer no postmaster derrubaria o banco em crash recovery)', () => {
+    assert.ok(b.db, 'serviço db no docker-compose.servidor.yml');
+    assert.doesNotMatch(b.db, /^ {4}mem_limit:/m);
+  });
+
+  it('a recarga das assinaturas não soma ao pico do clamav (ConcurrentDatabaseReload no)', () => {
+    assert.match(readFileSync(BASE, 'utf8'), /^\s*- CLAMD_CONF_ConcurrentDatabaseReload=no\s*$/m);
   });
 
   it('o clamav fica acima do pico medido do clamd (2,7 GiB)', () => {
