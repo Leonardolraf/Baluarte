@@ -15,7 +15,7 @@ RUN npx prisma generate
 RUN sed -i 's/\r$//' docker-entrypoint.sh
 
 # Os dados ficam no PostgreSQL (serviço db do compose; DATABASE_URL vem do ambiente).
-# /data (volume) guarda só o JWT_SECRET gerado e o marcador do seed:demo.
+# /data (volume) guarda só o JWT_SECRET gerado e os marcadores dos seeds (DT28).
 # NODE_ENV vem do compose (development por padrão).
 ENV PORT=8080
 
@@ -27,5 +27,5 @@ USER node
 
 EXPOSE 8080
 
-# Aplica as migrations, semeia (demo só na primeira subida) e inicia a API.
+# Aplica as migrations, semeia só se SEED_CONTRATO/SEED_DEMO=1 (uma vez por volume) e inicia a API.
 CMD ["sh", "./docker-entrypoint.sh"]

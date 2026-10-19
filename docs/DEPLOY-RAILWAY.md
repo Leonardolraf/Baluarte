@@ -43,6 +43,8 @@ O `PORT` é injetado pelo Railway; o servidor já lê `process.env.PORT`.
 | `NODE_ENV` | `production` | idem |
 | `SEED_CONTRATO` | `0` | idem: **não** criar as contas com senha pública do README |
 | `SEED_DEMO` | `0` | idem: os dados vêm da migração do Supabase (passo 5) |
+| `DOMINIO_INTERNO` | o domínio da empresa (ex.: `@baluarte.test`) | idem: **obrigatório** com `NODE_ENV=production`; sem ele, inválido ou com `@empresa.com` a API recusa subir (DT28) |
+| `SEMEAR_PROIBIDO` | `1` | idem: o entrypoint recusa subir se algum `SEED_*` vier `1` (DT28; com `NODE_ENV=production` já recusa) |
 | `FRONTEND_URL` | `https://baluarte-security.vercel.app` | idem: base dos links nos e-mails |
 | `CORS_ORIGIN` | `https://baluarte-security.vercel.app` | idem |
 | `EMAIL_REMETENTE` | `Baluarte <leofilhoamorim@gmail.com>` | idem: remetente verificado no Brevo |

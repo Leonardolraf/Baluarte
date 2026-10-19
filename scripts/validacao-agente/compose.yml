@@ -32,6 +32,8 @@ services:
       - PORT=8080
       - NODE_ENV=development
       - SEED_DEMO=0
+      # O conferir.mjs entra com o analista do seed de contrato; desde o DT28 o seed é desligado por omissão.
+      - SEED_CONTRATO=1
       - OSQUERY_ENROLL_SECRET=${VAL_ENROLL_SECRET:?}
       # Base de 60 s: programas a cada 60 s, portas a cada 60 s (piso) e SO a cada 6 min.
       - OSQUERY_INTERVALO_S=60

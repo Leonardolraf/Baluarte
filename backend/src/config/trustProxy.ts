@@ -15,6 +15,13 @@
 // Hoje o unico uso de `req.ip` e o registro de abertura do link do e-mail da campanha
 // (Melhorias #6, treinamento.controller.ts). Os limites de login e de pedido de redefinicao de
 // senha (DT09) sao por conta/e-mail, NAO por IP: TRUST_PROXY nao muda nenhum limite.
+//
+// Atras do Tailscale Funnel (a producao na VM): o X-Forwarded-For e CONFIAVEL com TRUST_PROXY=1.
+// O tailscaled SOBRESCREVE o cabecalho com o IP real de quem conectou (nao acrescenta ao valor
+// que o cliente mandou), e a VM mediu a cadeia: n=1.
+// O X-Real-IP NAO e confiavel: o cliente controla esse cabecalho e nenhum proxy da cadeia o
+// reescreve. Nao leia X-Real-IP em lugar nenhum de src/; o IP do cliente e so o `req.ip`.
+// (Guarda: tests/unidade/sem-x-real-ip.test.ts falha se algum arquivo de src/ o ler.)
 
 export const TRUST_PROXY_MAX = 5;
 
