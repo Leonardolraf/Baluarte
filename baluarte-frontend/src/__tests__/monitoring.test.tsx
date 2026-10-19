@@ -72,14 +72,35 @@ describe('cópia do texto no mock', () => {
   });
 
   it('diz a frequência de cada categoria da coleta (B08)', () => {
-    // O texto de 19/10/2026 traz as frequências nos itens da seção "coletado" (a introdução
-    // ficou vazia); o que não pode é a frequência DESAPARECER, porque ela vem do servidor.
+    // O texto de 19/10/2026 traz as frequências nos itens da seção "coletado"; o que não pode
+    // é a frequência DESAPARECER, porque ela vem do servidor, do mesmo lugar único do B08.
     const texto = MOCK_MONITORING_NOTICE.sections
       .flatMap((section) => [...section.paragraphs, ...section.items, ...section.notes])
       .join(' ');
     expect(texto).toContain('a cada 15 minutos');
     expect(texto).toContain('a cada 1 hora');
     expect(texto).toContain('a cada 6 horas');
+  });
+
+  it('a introdução do servidor aparece no cabeçalho', async () => {
+    renderApp('/monitoring', 'collaborator');
+    const titulo = await screen.findByRole('heading', { name: MOCK_MONITORING_NOTICE.title }, FIND);
+    expect(MOCK_MONITORING_NOTICE.intro.trim()).not.toBe('');
+    expect(titulo.closest('header')!.querySelectorAll('p')).toHaveLength(1);
+  });
+
+  it('introdução vazia não vira parágrafo vazio', async () => {
+    // A introdução vem do servidor e JÁ foi vazia (a versão de 19/10 pela manhã). A guarda da
+    // tela precisa de prova própria, forçando o caso aqui, para não depender do texto em vigor:
+    // amarrar o teste ao texto atual deixaria a guarda sem cobertura no dia em que ele mudasse.
+    const original = mockApi.getMonitoringNotice.bind(mockApi);
+    vi.spyOn(mockApi, 'getMonitoringNotice').mockImplementation(async () => ({
+      ...(await original()),
+      intro: '',
+    }));
+    renderApp('/monitoring', 'collaborator');
+    const titulo = await screen.findByRole('heading', { name: MOCK_MONITORING_NOTICE.title }, FIND);
+    expect(titulo.closest('header')!.querySelectorAll('p')).toHaveLength(0);
   });
 });
 

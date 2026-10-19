@@ -304,14 +304,19 @@ export default function MonitoringNoticePage() {
         }
       />
 
+      {/*
+        Por que a cobrança é curta: a introdução do aviso (texto do servidor, aprovado em
+        19/10/2026) já diz que o reconhecimento é condição de uso e que o acesso fica bloqueado
+        até a ciência. Repetir aqui seria o mesmo parágrafo duas vezes seguidas. O que só esta
+        linha sabe é que a pessoa foi INTERROMPIDA e volta para onde estava.
+      */}
       {origem && !notice?.acknowledged && (
         <p
           data-testid="monitoring-ack-required"
           className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
         >
-          Confirme que leu este aviso para usar o Baluarte. É ciência obrigatória, não consentimento: a
-          plataforma depende dela para registrar que você foi informado sobre o monitoramento técnico das
-          estações.
+          Interrompemos o que você estava fazendo: leia o aviso e confirme no fim da página para continuar de
+          onde parou.
         </p>
       )}
 
