@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   fromCampaignInput,
+  toVulnerability,
+  type BackendFinding,
   fromNotificationPreferences,
   toNotificationPreferences,
   toTraining,
@@ -88,5 +90,45 @@ describe('services/adapters — treinamento', () => {
       progress: 100,
       completedAt: '2026-09-11T10:30:00.000Z',
     });
+  });
+});
+
+// DT33 — "Componente afetado" nao pode ser a categoria OWASP.
+//
+// O adaptador preenchia `affectedComponent` com a categoria OWASP, entao o campo rotulado
+// "Componente afetado" mostrava "Vulnerable and Outdated Components" em producao. No mock
+// aparecia "log4j-core" e por isso parecia certo na demonstracao. O unico componente que o
+// servidor conhece de verdade e o `programa` dos achados de estacao (B14).
+
+function backendFinding(overrides: Partial<BackendFinding> = {}): BackendFinding {
+  return {
+    id: 'f-900',
+    ativo: 'api.empresa.com',
+    ativoNome: 'API de Pagamentos',
+    categoria: 'A06:2021 - Vulnerable and Outdated Components',
+    cvss: 9.8,
+    severidade: 'Crítico',
+    status: 'Aberta',
+    descricao: 'Biblioteca desatualizada com execução remota de código.',
+    evidencia: 'trecho do log',
+    detectadoEm: '2026-10-01T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('services/adapters — componente afetado (DT33)', () => {
+  it('achado de estação: usa o programa e a versão que o servidor mandou', () => {
+    const v = toVulnerability(backendFinding({ programa: 'Mozilla Firefox', programaVersao: '128.1.0' }));
+    expect(v.affectedComponent).toBe('Mozilla Firefox');
+    expect(v.affectedVersion).toBe('128.1.0');
+  });
+
+  it('achado do scanner: componente desconhecido vira null, nunca a categoria OWASP', () => {
+    const v = toVulnerability(backendFinding());
+    expect(v.affectedComponent).toBeNull();
+    expect(v.affectedVersion).toBeNull();
+    // A categoria continua existindo, no campo dela.
+    expect(v.owaspCategory).toBe('Vulnerable and Outdated Components');
+    expect(v.affectedComponent).not.toBe(v.owaspCategory);
   });
 });

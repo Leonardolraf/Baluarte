@@ -136,6 +136,9 @@ export interface BackendFinding {
   cwe?: string | null;
   cve?: string | null;
   cvssVetor?: string | null;
+  /** B14: achado de estação — programa instalado e versão. Nulos nos achados do scanner. */
+  programa?: string | null;
+  programaVersao?: string | null;
   remediacao?: Array<{ ordem: number; titulo: string; descricao: string; esforco: string }>;
   /** Só no detalhe: a varredura e o ativo de origem. */
   origem?: {
@@ -602,8 +605,12 @@ export function toVulnerability(raw: BackendFinding): Vulnerability {
     assetId: raw.ativo,
     assetName: raw.ativoNome,
     assetHost: raw.ativo,
-    affectedComponent: owaspCategory,
-    affectedVersion: null,
+    // DT33: o componente afetado é o PROGRAMA que o servidor mandou (achado de estação, B14),
+    // nunca a categoria OWASP. Preencher com a categoria enchia o campo "Componente afetado"
+    // com "Vulnerable and Outdated Components" — um valor plausível e errado, que no mock
+    // aparecia como "log4j-core" e por isso parecia certo na demonstração.
+    affectedComponent: raw.programa ?? null,
+    affectedVersion: raw.programaVersao ?? null,
     fixedVersion: null,
     artifactHash: null,
     description: raw.descricao,
