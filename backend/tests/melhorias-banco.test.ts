@@ -28,7 +28,9 @@ async function recusadaPorCheck(escrita: Promise<unknown>, motivo: string) {
 
 describe('#5 aceite de termos (User.termosAceitosEm)', () => {
   it('nasce nulo para quem já existe e para conta nova, e guarda o instante do aceite', async () => {
-    const existentes = await prisma.user.count({ where: { termosAceitosEm: { not: null } } });
+    // As contas do seed de contrato (u-000/u-001/u-002) nascem com o aceite de propósito (#5,
+    // prisma/seed.ts); fora delas, a migration não pode marcar ninguém como tendo aceitado.
+    const existentes = await prisma.user.count({ where: { termosAceitosEm: { not: null }, id: { notIn: ['u-000', 'u-001', 'u-002'] } } });
     assert.equal(existentes, 0, 'a migration não pode marcar ninguém como tendo aceitado');
 
     const u = await prisma.user.create({ data: { nome: 'Termos', email: `termos.${Date.now()}@empresa.com`, senhaHash: 'x' } });

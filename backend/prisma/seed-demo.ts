@@ -85,7 +85,9 @@ async function main() {
     { nome: 'Bruno Lima', email: 'bruno.lima@empresa.com', perfil: 'Colaborador', status: 'Ativo', departmentId: dep('Comercial') },
     { nome: 'Carla Dias', email: 'carla.dias@empresa.com', perfil: 'Colaborador', status: 'Inativo', departmentId: dep('RH') },
   ];
-  for (const u of usuarios) await prisma.user.create({ data: { ...u, senhaHash: senha } });
+  // Melhorias #5: contas de demonstracao ja com os termos de uso aceitos.
+  const termosAceitosEm = new Date();
+  for (const u of usuarios) await prisma.user.create({ data: { ...u, senhaHash: senha, termosAceitosEm } });
 
   // ---- Colaboradores-alvo das campanhas (campanha so aceita usuario cadastrado) ----
   const TOTAL_COLABS = 203; // maior campanha abaixo
@@ -98,6 +100,7 @@ async function main() {
       perfil: 'Colaborador',
       status: 'Ativo',
       senhaHash: senha,
+      termosAceitosEm,
       departmentId: dep(ROTACAO[i % ROTACAO.length]),
     })),
   });

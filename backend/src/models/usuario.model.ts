@@ -18,6 +18,7 @@ export interface UsuarioAtual {
   senhaHash: string;
   senhaAlteradaEm: Date | null;
   sessaoEncerradaEm: Date | null;
+  termosAceitosEm: Date | null;
   departmentId: string | null;
 }
 
