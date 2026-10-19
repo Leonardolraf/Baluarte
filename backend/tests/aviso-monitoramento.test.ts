@@ -116,6 +116,9 @@ describe('GET /monitoramento/aviso', () => {
     // Ciência, não consentimento, com o rótulo do botão que a tela tem de usar.
     assert.ok(texto.includes('Li e estou ciente'));
     assert.ok(texto.includes('não constitui solicitação de consentimento'));
+    // O texto diz o que o gate faz: sem ciência, o acesso fica bloqueado; texto novo pede ciência nova.
+    assert.ok(texto.includes('O reconhecimento deste aviso é condição para a utilização da plataforma Baluarte'));
+    assert.ok(texto.includes('uma nova confirmação de ciência será solicitada'));
   });
 
   it('a versão em vigor é a do texto do Leo de 19/10/2026 (2026-10-19), não as anteriores (2026-10-08 e 2026-10-10)', () => {
@@ -457,6 +460,11 @@ describe('a coleta se limita a programas, sistema e portas (o aviso e o código 
       assert.ok(item('Portas de rede:').endsWith(`A verificação ocorre a cada ${frase('portas')}.`), item('Portas de rede:'));
       // Os valores de hoje (B08), na grafia do texto do Leo, para o texto não mudar sem ninguém perceber.
       assert.deepEqual([frase('portas'), frase('programas'), frase('sistema')], ['15 minutos', '1 hora', '6 horas']);
+      // A variação citada ("em até cerca de 10%") é o splay entregue ao agente.
+      const splay = r.body.options.schedule_splay_percent as number;
+      const observacoes = TEXTO_AVISO.secoes.find((s) => s.id === 'coletado')!.observacoes;
+      assert.ok(observacoes.some((o) => o.includes(`(em até cerca de ${splay}%)`)), observacoes.join(' | '));
+      assert.equal(splay, 10);
     } finally {
       process.env.NODE_ENV = ambiente.NODE_ENV;
       if (ambiente.OSQUERY_INTERVALO_S !== undefined) process.env.OSQUERY_INTERVALO_S = ambiente.OSQUERY_INTERVALO_S;

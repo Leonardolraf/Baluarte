@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { MonitoringAcknowledgement } from '@prisma/client';
 import { z } from 'zod';
 import { regra, regrasDePaginacao, seVeio } from '../utils/esquemas.js';
-import { INTERVALO_PRODUCAO_S, intervaloDaCategoriaNoBase, type CategoriaQuery } from './agente.model.js';
+import { INTERVALO_PRODUCAO_S, SPLAY_PERCENTUAL, intervaloDaCategoriaNoBase, type CategoriaQuery } from './agente.model.js';
 
 // Model do aviso de monitoramento da estacao (B18, RNF-006, LGPD): o texto que explica ao
 // colaborador o que o agente osquery coleta, a versao desse texto e as regras zod das rotas
@@ -15,9 +15,10 @@ import { INTERVALO_PRODUCAO_S, intervaloDaCategoriaNoBase, type CategoriaQuery }
 // exigeCienciaAviso (middlewares/auth.middleware.ts) responde 403 CIENCIA_AVISO_PENDENTE.
 // E CIENCIA (legitimo interesse, art. 7o, IX, da LGPD), NAO consentimento.
 //
-// TEXTO: o de 19/10/2026 (versao 2026-10-19) e o texto do Leo, transcrito palavra por palavra
-// das 9 secoes, sem parafrase; as frequencias das 3 frases da secao 2 saem de
-// frequenciaEmProducao(). Historico: 2026-10-08 rascunho publicado na demo; 2026-10-10 texto
+// TEXTO: o de 19/10/2026 (versao 2026-10-19) e o texto DEFINITIVO aprovado pelo Leo, transcrito
+// palavra por palavra das 9 secoes, sem parafrase; as frequencias das 3 frases da secao 2 saem de
+// frequenciaEmProducao() e a variacao "em ate cerca de 10%" sai de SPLAY_PERCENTUAL (o mesmo
+// valor entregue ao agente como schedule_splay_percent). Historico: 2026-10-08 rascunho publicado na demo; 2026-10-10 texto
 // aprovado em 10/10; 2026-10-19 texto atual.
 //
 // AO TROCAR O TEXTO (checklist): (1) VERSAO_AVISO nova (a ciencia e por versao: todos voltam a
@@ -26,8 +27,8 @@ import { INTERVALO_PRODUCAO_S, intervaloDaCategoriaNoBase, type CategoriaQuery }
 // true enquanto o texto nao estiver aprovado, false com a aprovacao do Leo; (4) a copia do mock
 // do frontend (MOCK_MONITORING_NOTICE em baluarte-frontend/src/mocks/data.ts, comparada por
 // tests/aviso-monitoramento.test.ts) muda junto; (5) as frequencias nunca sao digitadas: saem
-// de frequenciaEmProducao(), e mudar o agendamento (FATOR_INTERVALO, INTERVALO_PRODUCAO_S)
-// tambem muda o texto e exige (1) e (2).
+// de frequenciaEmProducao(), e mudar o agendamento (FATOR_INTERVALO, INTERVALO_PRODUCAO_S,
+// SPLAY_PERCENTUAL) tambem muda o texto e exige (1) e (2).
 //
 // O que o texto diz que e coletado tem de bater com QUERIES em models/agente.model.ts; o
 // teste tests/aviso-monitoramento.test.ts le a configuracao entregue ao osquery e falha se
@@ -50,7 +51,7 @@ export const VERSAO_AVISO = '2026-10-19';
  * frequencia, que sai do agendamento da coleta), tests/unidade/hash-aviso.test.ts falha ate
  * VERSAO_AVISO e esta constante serem atualizadas juntas.
  */
-export const HASH_TEXTO_AVISO = '105d65df0b98e77150c46b3ee455aaa76c4e0efdc4aad5307d66711e3acdb996';
+export const HASH_TEXTO_AVISO = 'df3f23ac17b76cc780933413f419b0e54910ec05a795f1d58cec420fce4ec9ed';
 
 /** O texto em vigor ainda nao foi aprovado? false: texto de 19/10/2026 entregue pelo Leo. */
 export const AVISO_RASCUNHO = false;
@@ -107,14 +108,15 @@ export const TEXTO_AVISO: TextoAviso = {
         'As informações coletadas incluem:',
       ],
       itens: [
-        `Programas instalados: nome, versão e fornecedor dos softwares presentes no equipamento. A coleta ocorre a cada ${frequenciaEmProducao('programas')}.`,
-        `Sistema operacional: nome e versão do sistema operacional utilizado. A verificação ocorre a cada ${frequenciaEmProducao('sistema')}.`,
-        `Portas de rede: identificação das portas abertas e dos processos ou programas associados a elas, permitindo identificar serviços potencialmente expostos. A verificação ocorre a cada ${frequenciaEmProducao('portas')}.`,
+        `Programas instalados: nome, versão e a identificação de origem de cada software — o fornecedor, o mantenedor do pacote ou o identificador do aplicativo, conforme o sistema operacional do equipamento. Em sistemas baseados em Debian, também é coletado o pacote de origem (nome e, quando diferente, versão). A coleta ocorre a cada ${frequenciaEmProducao('programas')}.`,
+        `Sistema operacional: nome, versão, número de compilação (build) e plataforma do sistema operacional utilizado. A verificação ocorre a cada ${frequenciaEmProducao('sistema')}.`,
+        `Portas de rede: as portas abertas, o protocolo e o endereço de escuta, e o nome do processo associado a cada uma — apenas o nome do processo, sem o caminho do arquivo nem a linha de comando —, permitindo identificar serviços potencialmente expostos. A verificação ocorre a cada ${frequenciaEmProducao('portas')}.`,
         'Identificação do equipamento: nome da estação de trabalho e identificador técnico utilizado para distinguir o dispositivo dentro da plataforma.',
         'Informações de comunicação: data e horário do último contato realizado entre o agente e o Baluarte, utilizados para acompanhar a conectividade do equipamento.',
       ],
       observacoes: [
         'Esses dados compõem um inventário técnico de segurança e permitem que a equipe responsável identifique situações que possam exigir atualização, correção ou investigação.',
+        `As frequências indicadas são as aplicadas no ambiente de produção e podem variar ligeiramente (em até cerca de ${SPLAY_PERCENTUAL}%) por motivos técnicos de distribuição da coleta.`,
       ],
     },
     {
@@ -168,7 +170,7 @@ export const TEXTO_AVISO: TextoAviso = {
       titulo: '6. Armazenamento e conservação das informações',
       paragrafos: [
         'O Baluarte mantém o inventário técnico mais recente de cada estação monitorada. A cada nova coleta, as informações correspondentes são atualizadas, substituindo os dados anteriores do inventário.',
-        'As vulnerabilidades identificadas a partir dessas informações podem gerar registros de segurança, denominados achados, que serão mantidos conforme a política de gestão de vulnerabilidades e os critérios de retenção definidos pela organização.',
+        'As vulnerabilidades identificadas a partir dessas informações geram registros de segurança, denominados achados, que são conservados para acompanhamento e histórico. Quando tratados, os achados passam a constar como resolvidos ou como risco aceito; eles não são excluídos automaticamente pela plataforma.',
         'Os registros de ciência deste aviso são tratados separadamente do inventário técnico, para permitir a comprovação de que o colaborador recebeu as informações relativas ao monitoramento.',
         'Os dados deverão ser conservados somente pelo período necessário às finalidades informadas e às obrigações legais aplicáveis, observados os critérios de retenção da organização.',
       ],
@@ -203,9 +205,10 @@ export const TEXTO_AVISO: TextoAviso = {
       titulo: '9. Registro de ciência',
       paragrafos: [
         'Ao selecionar a opção "Li e estou ciente", o colaborador declara ter recebido e tomado conhecimento das informações apresentadas neste aviso, incluindo as finalidades do monitoramento, os tipos de dados coletados, a frequência das verificações e as condições de utilização das informações.',
+        'O reconhecimento deste aviso é condição para a utilização da plataforma Baluarte: enquanto a ciência não for registrada, o acesso aos recursos do sistema permanece bloqueado. Esse bloqueio tem por objetivo assegurar que o colaborador tenha tomado conhecimento do monitoramento antes de utilizar a plataforma e não constitui pedido de consentimento para o tratamento de dados pessoais.',
         'O registro de ciência não constitui solicitação de consentimento para o tratamento de dados pessoais, nem representa renúncia aos direitos assegurados pela LGPD. Sua finalidade é documentar que as informações relativas ao monitoramento foram disponibilizadas ao colaborador.',
         'Para fins de rastreabilidade e transparência, o Baluarte registra a identificação do usuário que confirmou a ciência, a data e o horário da confirmação e a versão do aviso apresentada naquele momento.',
-        'Caso este aviso seja atualizado, uma nova confirmação de ciência poderá ser solicitada para assegurar que os colaboradores tomem conhecimento das alterações realizadas.',
+        'Caso este aviso seja atualizado, uma nova confirmação de ciência será solicitada para assegurar que os colaboradores tomem conhecimento das alterações realizadas.',
         'O registro de ciência não substitui as responsabilidades legais da organização quanto à proteção dos dados pessoais e à utilização adequada das informações coletadas.',
       ],
       itens: [],

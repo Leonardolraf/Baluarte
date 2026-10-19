@@ -2444,14 +2444,15 @@ export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'ac
         'As informações coletadas incluem:',
       ],
       items: [
-        'Programas instalados: nome, versão e fornecedor dos softwares presentes no equipamento. A coleta ocorre a cada 1 hora.',
-        'Sistema operacional: nome e versão do sistema operacional utilizado. A verificação ocorre a cada 6 horas.',
-        'Portas de rede: identificação das portas abertas e dos processos ou programas associados a elas, permitindo identificar serviços potencialmente expostos. A verificação ocorre a cada 15 minutos.',
+        'Programas instalados: nome, versão e a identificação de origem de cada software — o fornecedor, o mantenedor do pacote ou o identificador do aplicativo, conforme o sistema operacional do equipamento. Em sistemas baseados em Debian, também é coletado o pacote de origem (nome e, quando diferente, versão). A coleta ocorre a cada 1 hora.',
+        'Sistema operacional: nome, versão, número de compilação (build) e plataforma do sistema operacional utilizado. A verificação ocorre a cada 6 horas.',
+        'Portas de rede: as portas abertas, o protocolo e o endereço de escuta, e o nome do processo associado a cada uma — apenas o nome do processo, sem o caminho do arquivo nem a linha de comando —, permitindo identificar serviços potencialmente expostos. A verificação ocorre a cada 15 minutos.',
         'Identificação do equipamento: nome da estação de trabalho e identificador técnico utilizado para distinguir o dispositivo dentro da plataforma.',
         'Informações de comunicação: data e horário do último contato realizado entre o agente e o Baluarte, utilizados para acompanhar a conectividade do equipamento.',
       ],
       notes: [
         'Esses dados compõem um inventário técnico de segurança e permitem que a equipe responsável identifique situações que possam exigir atualização, correção ou investigação.',
+        'As frequências indicadas são as aplicadas no ambiente de produção e podem variar ligeiramente (em até cerca de 10%) por motivos técnicos de distribuição da coleta.',
       ],
     },
     {
@@ -2505,7 +2506,7 @@ export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'ac
       title: '6. Armazenamento e conservação das informações',
       paragraphs: [
         'O Baluarte mantém o inventário técnico mais recente de cada estação monitorada. A cada nova coleta, as informações correspondentes são atualizadas, substituindo os dados anteriores do inventário.',
-        'As vulnerabilidades identificadas a partir dessas informações podem gerar registros de segurança, denominados achados, que serão mantidos conforme a política de gestão de vulnerabilidades e os critérios de retenção definidos pela organização.',
+        'As vulnerabilidades identificadas a partir dessas informações geram registros de segurança, denominados achados, que são conservados para acompanhamento e histórico. Quando tratados, os achados passam a constar como resolvidos ou como risco aceito; eles não são excluídos automaticamente pela plataforma.',
         'Os registros de ciência deste aviso são tratados separadamente do inventário técnico, para permitir a comprovação de que o colaborador recebeu as informações relativas ao monitoramento.',
         'Os dados deverão ser conservados somente pelo período necessário às finalidades informadas e às obrigações legais aplicáveis, observados os critérios de retenção da organização.',
       ],
@@ -2540,9 +2541,10 @@ export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'ac
       title: '9. Registro de ciência',
       paragraphs: [
         'Ao selecionar a opção "Li e estou ciente", o colaborador declara ter recebido e tomado conhecimento das informações apresentadas neste aviso, incluindo as finalidades do monitoramento, os tipos de dados coletados, a frequência das verificações e as condições de utilização das informações.',
+        'O reconhecimento deste aviso é condição para a utilização da plataforma Baluarte: enquanto a ciência não for registrada, o acesso aos recursos do sistema permanece bloqueado. Esse bloqueio tem por objetivo assegurar que o colaborador tenha tomado conhecimento do monitoramento antes de utilizar a plataforma e não constitui pedido de consentimento para o tratamento de dados pessoais.',
         'O registro de ciência não constitui solicitação de consentimento para o tratamento de dados pessoais, nem representa renúncia aos direitos assegurados pela LGPD. Sua finalidade é documentar que as informações relativas ao monitoramento foram disponibilizadas ao colaborador.',
         'Para fins de rastreabilidade e transparência, o Baluarte registra a identificação do usuário que confirmou a ciência, a data e o horário da confirmação e a versão do aviso apresentada naquele momento.',
-        'Caso este aviso seja atualizado, uma nova confirmação de ciência poderá ser solicitada para assegurar que os colaboradores tomem conhecimento das alterações realizadas.',
+        'Caso este aviso seja atualizado, uma nova confirmação de ciência será solicitada para assegurar que os colaboradores tomem conhecimento das alterações realizadas.',
         'O registro de ciência não substitui as responsabilidades legais da organização quanto à proteção dos dados pessoais e à utilização adequada das informações coletadas.',
       ],
       items: [],

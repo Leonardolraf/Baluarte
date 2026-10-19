@@ -866,6 +866,21 @@ Na VM, o clamd.conf efetivo da `main` tem o `StreamMaxLength` só como comentár
 - **Exceção autorizada pelo Leo à regra "PR do Backend não mexe no frontend":** só a constante `MOCK_MONITORING_NOTICE` em `baluarte-frontend/src/mocks/data.ts`, gerada do mesmo texto, para `aviso-monitoramento.test.ts` ficar verde. Nenhum outro arquivo do frontend mudou. No frontend, `typecheck` e `lint` passam; o `npm test` tem 5 falhas em `monitoring.test.tsx` que dependem de arquivos fora da exceção (teste da frequência na `intro`, texto antigo na página, `MOCK_MONITORING_ACKS` ainda na versão `2026-10-10`), para a sessão Frontend.
 - **Testes:** backend 990 (310 unidade + 16 banco + 507 integração + 157 pentest), todos passam, nenhum pulado; novos `tests/ciencia-aviso-gate.test.ts` (inclusive toda rota `exigeToken` do router bloqueada sem ciência), `tests/unidade/ciencia-aviso.test.ts` (introspecção do router: só as 4 exceções usam `exigeSessao`) e `tests/unidade/hash-aviso.test.ts`. Newman 35/70 sem falhas, com as 35 respostas iguais às da `main` (só o `scanId` gerado difere). `migrate diff` sem drift.
 
+## 2026-10-19 — Texto final do aviso de monitoramento aprovado pelo Leo
+
+- **Texto definitivo aprovado pelo Leo em 19/10/2026** (`aviso-monitoramento-leo.md`), aplicado palavra por palavra no `TEXTO_AVISO` (60 linhas do markdown conferidas uma a uma contra o texto servido, na mesma ordem). Versão continua `2026-10-19` (o texto fechou no mesmo dia), `AVISO_RASCUNHO = false`.
+- **O que mudou em relação ao texto anterior, corrigindo as divergências texto × código levantadas:**
+  - seção 2, programas: a "identificação de origem" (fornecedor no Windows e no rpm, mantenedor no deb, identificador do aplicativo no macOS) e o pacote de origem no Debian (nome e, quando diferente, versão);
+  - seção 2, sistema operacional: build e plataforma;
+  - seção 2, portas: protocolo, endereço de escuta e só o nome do processo;
+  - seção 2: frase nova sobre a variação das frequências de produção;
+  - seção 6: achados conservados, resolvidos ou com risco aceito, nunca excluídos automaticamente;
+  - seção 9: parágrafo novo dizendo que a ciência é condição de uso (o gate) e "será solicitada" (antes, "poderá") para texto novo.
+- **Números derivados, nunca digitados:** as três frequências seguem saindo de `frequenciaEmProducao()` e o "em até cerca de 10%" sai de `SPLAY_PERCENTUAL` (o mesmo `schedule_splay_percent` entregue ao agente; `aviso-monitoramento.test.ts` confere contra a configuração). Mudar o splay muda o texto e cai no teste de hash (controle negativo feito com o splay em 15 e com `FATOR_INTERVALO.portas` em 0,5; os dois falharam e foram desfeitos). Comentário junto de `SPLAY_PERCENTUAL` em `models/agente.model.ts`.
+- `HASH_TEXTO_AVISO` = `df3f23ac17b76cc780933413f419b0e54910ec05a795f1d58cec420fce4ec9ed`.
+- **Mesma exceção autorizada pelo Leo no frontend:** só `MOCK_MONITORING_NOTICE` em `baluarte-frontend/src/mocks/data.ts`, regenerada do texto servido. No frontend, `typecheck` e `lint` passam; continuam as 5 falhas de `monitoring.test.tsx` (frequência na `intro`, texto antigo na página, `MOCK_MONITORING_ACKS` na versão `2026-10-10`), corrigidas na branch da sessão Frontend.
+- **Testes:** backend 990 (310 unidade + 16 banco + 507 integração + 157 pentest), todos passam; Newman 35/70 sem falhas, respostas iguais às da `main` (só o `scanId` gerado difere); `migrate diff` sem drift.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |

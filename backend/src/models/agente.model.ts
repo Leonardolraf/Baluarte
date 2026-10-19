@@ -131,7 +131,11 @@ export function intervaloDaCategoriaNoBase(categoria: CategoriaQuery, base: numb
   return Math.min(INTERVALO_MAX_S, Math.max(INTERVALO_MIN_S, s));
 }
 
-/** Espalha cada execucao em ate +-10% do intervalo, para as estacoes nao coletarem juntas. */
+/**
+ * Espalha cada execucao em ate +-10% do intervalo, para as estacoes nao coletarem juntas.
+ * ATENCAO: o aviso de monitoramento escreve este percentual ("em ate cerca de 10%"); mudar o
+ * valor muda o texto do aviso e exige VERSAO_AVISO e HASH_TEXTO_AVISO novos.
+ */
 export const SPLAY_PERCENTUAL = 10;
 
 // ---- Formato dos dados recebidos ------------------------------------------------
