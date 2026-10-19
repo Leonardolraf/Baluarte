@@ -266,13 +266,18 @@ describe('mock de dados — invariantes', () => {
       '%s: métricas internamente coerentes',
       (_id, campaign) => {
         const m = campaign.metrics;
+        // Campanha semeada tem o funil inteiro: abertura nula aqui seria erro do mock, nao
+        // "campanha sem abertura" (a lista da API real e que nao traz esse dado).
+        expect(m.opened).not.toBeNull();
+        expect(m.openRate).not.toBeNull();
+        const opened = m.opened!;
         expect(m.sent).toBeLessThanOrEqual(m.recipients);
-        expect(m.opened).toBeLessThanOrEqual(m.sent);
-        expect(m.clicked).toBeLessThanOrEqual(m.opened);
+        expect(opened).toBeLessThanOrEqual(m.sent);
+        expect(m.clicked).toBeLessThanOrEqual(opened);
         expect(m.submitted).toBeLessThanOrEqual(m.clicked);
         expect(m.reported).toBeLessThanOrEqual(m.sent);
         expect(m.trained).toBeLessThanOrEqual(m.clicked);
-        expect(m.openRate).toBe(rate(m.opened, m.sent));
+        expect(m.openRate).toBe(rate(opened, m.sent));
         expect(m.clickRate).toBe(rate(m.clicked, m.sent));
         expect(m.submitRate).toBe(rate(m.submitted, m.sent));
         expect(m.reportRate).toBe(rate(m.reported, m.sent));

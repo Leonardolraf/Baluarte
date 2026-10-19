@@ -657,7 +657,18 @@ function linkTraining(token: string, recipient: CampaignRecipient): Training {
   };
 }
 
-function buildFunnel(metrics: CampaignMetrics): FunnelStage[] {
+/**
+ * Métricas de uma campanha semeada, que sempre tem abertura (o relatório simula o servidor,
+ * que tem o funil inteiro). Falha alto em vez de assumir 0: zero afirmaria "ninguém abriu".
+ */
+function comAberturas(m: CampaignMetrics): CampaignMetrics & { opened: number; openRate: number } {
+  if (m.opened === null || m.openRate === null)
+    throw new Error('campanha do mock sem abertura: o relatório precisa do funil completo');
+  return { ...m, opened: m.opened, openRate: m.openRate };
+}
+
+function buildFunnel(bruto: CampaignMetrics): FunnelStage[] {
+  const metrics = comAberturas(bruto);
   return [
     { key: 'sent', label: FUNNEL_STAGE_LABEL.sent, value: metrics.sent, pct: metrics.sent > 0 ? 100 : 0 },
     { key: 'opened', label: FUNNEL_STAGE_LABEL.opened, value: metrics.opened, pct: metrics.openRate },
