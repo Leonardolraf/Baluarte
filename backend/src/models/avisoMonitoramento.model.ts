@@ -51,7 +51,7 @@ export const VERSAO_AVISO = '2026-10-19';
  * frequencia, que sai do agendamento da coleta), tests/unidade/hash-aviso.test.ts falha ate
  * VERSAO_AVISO e esta constante serem atualizadas juntas.
  */
-export const HASH_TEXTO_AVISO = 'df3f23ac17b76cc780933413f419b0e54910ec05a795f1d58cec420fce4ec9ed';
+export const HASH_TEXTO_AVISO = 'dc9d242825beb17e787532316e066d383e43d71ab6ef9db87f83a6b576567e5b';
 
 /** O texto em vigor ainda nao foi aprovado? false: texto de 19/10/2026 entregue pelo Leo. */
 export const AVISO_RASCUNHO = false;
@@ -85,8 +85,8 @@ export function frequenciaEmProducao(categoria: CategoriaQuery): string {
 
 export const TEXTO_AVISO: TextoAviso = {
   titulo: 'Aviso de Monitoramento das Estações de Trabalho e Tratamento de Dados',
-  // O texto de 19/10/2026 nao tem introducao fora das secoes (a secao 1 cumpre esse papel).
-  introducao: '',
+  // Introducao aprovada pelo Leo em 19/10/2026 (paragrafo entre o titulo e a secao 1).
+  introducao: 'Este aviso descreve o monitoramento técnico das estações de trabalho pela plataforma Baluarte e o tratamento dos dados coletados. O reconhecimento deste aviso é condição para a utilização da plataforma: enquanto a ciência não for registrada, o acesso aos recursos do sistema permanece bloqueado.',
   secoes: [
     {
       id: 'sobre',

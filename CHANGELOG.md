@@ -881,6 +881,14 @@ Na VM, o clamd.conf efetivo da `main` tem o `StreamMaxLength` só como comentár
 - **Mesma exceção autorizada pelo Leo no frontend:** só `MOCK_MONITORING_NOTICE` em `baluarte-frontend/src/mocks/data.ts`, regenerada do texto servido. No frontend, `typecheck` e `lint` passam; continuam as 5 falhas de `monitoring.test.tsx` (frequência na `intro`, texto antigo na página, `MOCK_MONITORING_ACKS` na versão `2026-10-10`), corrigidas na branch da sessão Frontend.
 - **Testes:** backend 990 (310 unidade + 16 banco + 507 integração + 157 pentest), todos passam; Newman 35/70 sem falhas, respostas iguais às da `main` (só o `scanId` gerado difere); `migrate diff` sem drift.
 
+## 2026-10-19 — Introdução do aviso de monitoramento
+
+- **Introdução aprovada pelo Leo em 19/10/2026:** o parágrafo entre o título e a seção 1 de `aviso-monitoramento-leo.md` entra palavra por palavra em `TEXTO_AVISO.introducao`, que deixa de ser vazia. O resto do texto foi conferido linha a linha contra o `d7b32e0`: nada mais mudou (61 linhas do markdown iguais ao texto servido, na mesma ordem).
+- A frase da introdução sobre a condição de uso ("enquanto a ciência não for registrada, o acesso aos recursos do sistema permanece bloqueado") confere com o gate `exigeCienciaAviso`; `aviso-monitoramento.test.ts` passa a conferi-la.
+- `VERSAO_AVISO` continua `2026-10-19` (mesmo dia, nenhuma ciência colhida); `HASH_TEXTO_AVISO` = `dc9d242825beb17e787532316e066d383e43d71ab6ef9db87f83a6b576567e5b`.
+- **Mesma exceção autorizada pelo Leo no frontend:** só `MOCK_MONITORING_NOTICE` regenerada (a `intro` longa quebra a linha como o Prettier do frontend pede). `typecheck`, `lint` e `prettier --check` passam; continuam as 5 falhas de `monitoring.test.tsx`, corrigidas na branch da sessão Frontend.
+- **Testes:** backend 990 (310 unidade + 16 banco + 507 integração + 157 pentest), todos passam; Newman 35/70 sem falhas, respostas iguais às da `main` (só o `scanId` gerado difere); `migrate diff` sem drift.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |

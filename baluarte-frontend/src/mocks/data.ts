@@ -2422,7 +2422,8 @@ export const MOCK_MONITORING_NOTICE: Omit<MonitoringNotice, 'acknowledged' | 'ac
   version: '2026-10-19',
   draft: false,
   title: 'Aviso de Monitoramento das Estações de Trabalho e Tratamento de Dados',
-  intro: '',
+  intro:
+    'Este aviso descreve o monitoramento técnico das estações de trabalho pela plataforma Baluarte e o tratamento dos dados coletados. O reconhecimento deste aviso é condição para a utilização da plataforma: enquanto a ciência não for registrada, o acesso aos recursos do sistema permanece bloqueado.',
   sections: [
     {
       id: 'sobre',

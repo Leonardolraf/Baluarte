@@ -118,6 +118,8 @@ describe('GET /monitoramento/aviso', () => {
     assert.ok(texto.includes('não constitui solicitação de consentimento'));
     // O texto diz o que o gate faz: sem ciência, o acesso fica bloqueado; texto novo pede ciência nova.
     assert.ok(texto.includes('O reconhecimento deste aviso é condição para a utilização da plataforma Baluarte'));
+    // A introdução (aprovada em 19/10) já diz que, sem ciência, o acesso fica bloqueado (o gate).
+    assert.ok(r.body.dados.introducao.includes('O reconhecimento deste aviso é condição para a utilização da plataforma: enquanto a ciência não for registrada, o acesso aos recursos do sistema permanece bloqueado.'));
     assert.ok(texto.includes('uma nova confirmação de ciência será solicitada'));
   });
 
