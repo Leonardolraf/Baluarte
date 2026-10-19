@@ -283,6 +283,72 @@ describe('menu "Exportar" na tela de vulnerabilidades', () => {
     expect(saved).toHaveLength(0);
   });
 
+  // DT36 — as duas recusas do servidor. A tela mostra a `mensagem` COMO VEIO (o número do teto
+  // e a contagem são do backend; repetir aqui criaria uma segunda fonte para o mesmo número),
+  // mantém os filtros, não baixa nada e reabilita o botão. Nada de retentativa automática: o
+  // 429 não traz Retry-After e tentar de novo sozinho só disputaria a vaga única do servidor.
+  it('relatório grande demais (422): mostra a recusa do servidor e não baixa nada', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(mockApi, 'exportVulnerabilityReport').mockRejectedValue(
+      new HttpError(
+        422,
+        'RELATORIO_GRANDE_DEMAIS',
+        'O relatório teria 62.500 achados (máximo 50.000). Filtre por severidade, status ou ativo para gerar um relatório menor.',
+      ),
+    );
+    renderPage('analyst');
+    const button = await screen.findByRole('button', { name: 'Exportar' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.selectOptions(screen.getByLabelText('Severidade'), 'critical');
+    await user.click(button);
+    await user.click(await screen.findByRole('menuitem', { name: 'PDF' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'O relatório teria 62.500 achados (máximo 50.000).',
+    );
+    expect(saved).toHaveLength(0);
+    // O filtro que a pessoa escolheu continua lá: é por ele que ela vai estreitar o relatório.
+    expect(screen.getByLabelText('Severidade')).toHaveValue('critical');
+    expect(screen.getByRole('button', { name: 'Exportar' })).toBeEnabled();
+  });
+
+  it('exportação em andamento (429): mostra a mensagem e reabilita, sem tentar de novo', async () => {
+    const user = userEvent.setup();
+    const exportar = vi
+      .spyOn(mockApi, 'exportVulnerabilityReport')
+      .mockRejectedValue(
+        new HttpError(
+          429,
+          'EXPORTACAO_EM_ANDAMENTO',
+          'Já há uma exportação de relatório em andamento. Tente de novo em instantes.',
+        ),
+      );
+    renderPage('analyst');
+    const button = await screen.findByRole('button', { name: 'Exportar' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    await user.click(await screen.findByRole('menuitem', { name: 'PDF' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Já há uma exportação de relatório em andamento.',
+    );
+    expect(screen.getByRole('button', { name: 'Exportar' })).toBeEnabled();
+    expect(saved).toHaveLength(0);
+    // A vaga é do servidor inteiro (uma por processo da API, de qualquer pessoa): insistir
+    // sozinho não ajudaria, então foi UMA tentativa.
+    expect(exportar).toHaveBeenCalledTimes(1);
+  });
+
+  it('a vaga do mock é global: pedir dois relatórios ao mesmo tempo recusa o segundo', async () => {
+    // Espelha a vaga única do servidor na camada simulada, sem spy nenhum.
+    configureMocks({ latencyMs: [150, 150], failureRate: 0 });
+    login('analyst');
+    const primeiro = mockApi.exportVulnerabilityReport();
+    const segundo = mockApi.exportVulnerabilityReport().catch((e: unknown) => e);
+    await expect(primeiro).resolves.toHaveProperty('filename');
+    expect(await segundo).toMatchObject({ status: 429, code: 'EXPORTACAO_EM_ANDAMENTO' });
+  });
+
   it('sem achados com os filtros atuais, o botão fica desabilitado', async () => {
     const user = userEvent.setup();
     renderPage('analyst');
