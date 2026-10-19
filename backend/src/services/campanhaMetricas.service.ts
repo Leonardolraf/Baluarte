@@ -1,4 +1,4 @@
-import type { EventoFunil } from '../models/campanha.model.js';
+import { statusEfetivo, type EventoFunil } from '../models/campanha.model.js';
 import { PESO_RISCO_HUMANO } from '../models/dominio.model.js';
 
 // Metricas de campanha usadas pelo relatorio, pela lista e pelo dashboard.
@@ -26,7 +26,8 @@ export function mapCampaign(c: { id: string; nome: string; template: string; sta
     id: c.id,
     nome: c.nome,
     template: c.template,
-    status: c.status,
+    // Derivado dos envios (DT34): o status gravado fica AGENDADA ate alguem encerrar.
+    status: statusEfetivo(c.status, c.eventos),
     destinatarios: c.eventos.length,
     // Quantos e-mails sairam de fato (enviadoEm gravado): a tela nao deve deduzir do status.
     enviados,

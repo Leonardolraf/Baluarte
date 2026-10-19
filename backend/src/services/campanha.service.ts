@@ -1,4 +1,4 @@
-import { cobreTodosOsElegiveis, elegivelParaCampanha, exigeConfirmacao, statusRecebeCampanha, type CadastroCampanha, type DestinatarioElegivel } from '../models/campanha.model.js';
+import { cobreTodosOsElegiveis, elegivelParaCampanha, exigeConfirmacao, statusEfetivo, statusRecebeCampanha, type CadastroCampanha, type DestinatarioElegivel } from '../models/campanha.model.js';
 import { falhar } from '../utils/resposta.js';
 import { gerarTokenLink, hashToken } from '../utils/tokens.js';
 import { SEM_DEPARTAMENTO } from '../models/dominio.model.js';
@@ -101,7 +101,7 @@ export async function listar() {
   return {
     lista: campanhas.map(mapCampaign),
     resumo: {
-      ativas: campanhas.filter((c) => c.status === 'ATIVA').length,
+      ativas: campanhas.filter((c) => statusEfetivo(c.status, c.eventos) === 'ATIVA').length,
       taxaMediaClique: enviados ? Math.round((clicados / enviados) * 100) : 0,
       colaboradoresAlcancados: campanhas.reduce((a, c) => a + c.eventos.length, 0),
       resilienciaMedia: enviados ? Math.round((1 - clicados / enviados) * 100) : 0,
@@ -124,7 +124,7 @@ export async function relatorio(id: string) {
     grupos.set(depDe(e), g);
   }
   return {
-    id: c.id, nome: c.nome, template: c.template, status: c.status, criadoEm: c.criadoEm,
+    id: c.id, nome: c.nome, template: c.template, status: statusEfetivo(c.status, c.eventos), criadoEm: c.criadoEm,
     destinatarios: c.eventos.length,
     funil: funilDe(c.eventos),
     // Resumo das aberturas do link do e-mail (Melhorias #6): o total conta toda abertura, nao pessoas.
