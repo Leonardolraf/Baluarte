@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AuthUser, LoginCredentials, RBACRole } from '@/types';
 import { api } from '@/services/api';
-import { FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { ACK_REQUIRED_EVENT, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT, dispatchAuthEvent } from '@/lib/events';
 import { isTokenExpired, userFromToken } from '@/lib/jwt';
 import { clearSession, tokenStorage, userStorage } from '@/lib/storage';
 import { hasAnyRole } from '@/lib/roles';
@@ -98,10 +98,23 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
     let cancelled = false;
     api
       .me()
-      .then((user) => {
+      .then((atual) => {
         if (cancelled) return;
+        // A pendência e transitoria: guardar envelheceria (a pessoa registra a ciencia e o valor
+        // guardado continuaria dizendo que falta).
+        const { noticePending, ...user } = atual;
         userStorage.set(user);
         setSession((current) => (current.status === 'authenticated' ? { ...current, user } : current));
+        // `GET /me` esta fora do gate e diz se a ciencia falta (19/10/2026). Com isso a tela leva
+        // a pessoa ao aviso ANTES de disparar requisicao condenada, em vez de esperar o 403 de
+        // outra rota — o que fazia o dashboard piscar antes do redirecionamento. Só `true`
+        // roteia: `null` e desconhecido, e ai quem decide continua sendo o 403.
+        if (noticePending === true)
+          dispatchAuthEvent(ACK_REQUIRED_EVENT, {
+            status: 403,
+            code: 'CIENCIA_AVISO_PENDENTE',
+            message: 'Confirme que leu o aviso de monitoramento para usar o Baluarte',
+          });
       })
       .catch((error: unknown) => {
         if (cancelled) return;

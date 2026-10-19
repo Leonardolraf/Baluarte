@@ -281,6 +281,47 @@ describe('sessão sob o gate (revalidação com /me)', () => {
     expect(screen.queryByText('Página de login')).not.toBeInTheDocument();
   });
 
+  /**
+   * Força a pendência no `/me`. A camada mock **não** informa esse campo de propósito (ela não
+   * implementa o gate; informar a pendência ali rotearia toda a demonstração offline e a suíte
+   * do Playwright), então o valor vem daqui — como virá da API real, que é quem sabe.
+   */
+  function comPendenciaNoMe() {
+    const original = mockApi.me.bind(mockApi);
+    vi.spyOn(mockApi, 'me').mockImplementation(async () => ({
+      ...(await original()),
+      noticePending: true,
+    }));
+  }
+
+  it('pendência vinda do /me leva ao aviso sem nenhum 403 no caminho', async () => {
+    comPendenciaNoMe();
+    // O /me saiu do gate (19/10/2026) e diz `cienciaAvisoPendente`. Nenhuma rota do mock
+    // recusa por ciência: se a tela leva ao aviso, foi pelo campo, nunca por erro.
+    const dashboard = vi.spyOn(mockApi, 'getDashboard');
+    renderComRevalidacao('collaborator');
+    expect(await screen.findByTestId('monitoring-ack-required', {}, FIND)).toBeInTheDocument();
+    await waitForIdle();
+    for (const chamada of dashboard.mock.results) expect(chamada.type).not.toBe('throw');
+  });
+
+  it('pendência desconhecida (API sem o campo) NÃO roteia: quem decide é o 403', async () => {
+    // É o caso do próprio mock, que não manda o campo, e o da API anterior a 19/10/2026.
+    renderComRevalidacao('collaborator');
+    expect(await screen.findByRole('heading', { name: 'Visão geral de risco' }, FIND)).toBeInTheDocument();
+    await waitForIdle();
+    expect(screen.queryByTestId('monitoring-ack-required')).not.toBeInTheDocument();
+  });
+
+  it('a pendência NÃO é guardada no armazenamento local', async () => {
+    comPendenciaNoMe();
+    renderComRevalidacao('collaborator');
+    await screen.findByTestId('monitoring-ack-required', {}, FIND);
+    // Guardar envelheceria: a pessoa registra a ciência e o valor guardado seguiria dizendo
+    // que falta. O campo vive só na revalidação.
+    expect(userStorage.get()).not.toHaveProperty('noticePending');
+  });
+
   it('403 de permissão no /me continua encerrando a sessão', async () => {
     vi.spyOn(mockApi, 'me').mockRejectedValue(new HttpError(403, 'USUARIO_REMOVIDO', 'Conta removida'));
     renderComRevalidacao('collaborator');

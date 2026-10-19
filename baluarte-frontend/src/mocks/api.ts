@@ -1003,6 +1003,12 @@ export const mockApi: BaluarteApi = {
     return simulate(
       () => {
         const u = requireUser();
+        // `noticePending` fica de FORA de proposito, e isso nao e esquecimento: a camada mock
+        // nao implementa o gate de ciencia (ligar o gate aqui trancaria a demonstracao offline
+        // e toda a suite do Playwright). Informar a pendencia pelo /me teria o mesmo efeito do
+        // gate, porque a tela roteia com o campo: medido em 19/10/2026, quebrou 32 specs de
+        // uma vez. Campo ausente = DESCONHECIDO, e no mock quem sabe do aceite e a tela do
+        // aviso (`getMonitoringNotice`), que segue mostrando o estado real de cada conta.
         return { id: u.id, name: u.name, email: u.email, role: u.role };
       },
       { canFail: false },

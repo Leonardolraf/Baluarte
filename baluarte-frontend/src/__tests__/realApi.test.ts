@@ -139,7 +139,26 @@ describe('realApi — interceptadores HTTP', () => {
     on('GET /me', ok(backendUser({ perfil: 'Administrador' })));
     const me = await realApi.me();
     expect(authHeader(0)).toBe('Bearer tok-123');
-    expect(me).toEqual({ id: 'u-1', name: 'Ana Souza', email: 'ana@empresa.com', role: 'admin' });
+    // `noticePending` null: a resposta deste teste nao traz `cienciaAvisoPendente`, e campo
+    // ausente e DESCONHECIDO — nunca "nada pendente" (quem decide, ai, e o 403 das outras rotas).
+    expect(me).toEqual({
+      id: 'u-1',
+      name: 'Ana Souza',
+      email: 'ana@empresa.com',
+      role: 'admin',
+      noticePending: null,
+    });
+  });
+
+  it('`cienciaAvisoPendente` do /me vira noticePending; ausente é null, não false', async () => {
+    // Campo aditivo de 19/10/2026, com o /me fora do gate de ciência.
+    tokenStorage.set('tok-123');
+    on('GET /me', ok(backendUser({ cienciaAvisoPendente: true })));
+    expect((await realApi.me()).noticePending).toBe(true);
+    on('GET /me', ok(backendUser({ cienciaAvisoPendente: false })));
+    expect((await realApi.me()).noticePending).toBe(false);
+    on('GET /me', ok(backendUser()));
+    expect((await realApi.me()).noticePending).toBeNull();
   });
 
   it('não envia Authorization sem sessão e aceita corpo sem envelope', async () => {
@@ -216,7 +235,13 @@ describe('realApi — autenticação e conta', () => {
     expect(authHeader(1)).toBe('Bearer jwt-novo');
     expect(result).toEqual({
       token: 'jwt-novo',
-      user: { id: 'u-1', name: 'Ana Souza', email: 'ana@empresa.com', role: 'analyst' },
+      user: {
+        id: 'u-1',
+        name: 'Ana Souza',
+        email: 'ana@empresa.com',
+        role: 'analyst',
+        noticePending: null,
+      },
     });
     expect(tokenStorage.get()).toBeNull();
   });
