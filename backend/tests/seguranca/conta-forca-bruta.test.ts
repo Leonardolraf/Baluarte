@@ -295,9 +295,11 @@ describe('politica de senha e senha provisoria', () => {
     assert.equal(r.body.mensagem, 'Senha cadastrada com sucesso');
     const token = await login(alvo.email, 'MinhaNova@1');
     // Ativa, mas presa ao gate de ciência do aviso de monitoramento até registrar a ciência.
-    esperaErro(await chamar('GET', '/me', { token }), 403, 'CIENCIA_AVISO_PENDENTE');
+    esperaErro(await chamar('GET', '/dashboard', { token }), 403, 'CIENCIA_AVISO_PENDENTE');
+    assert.equal((await chamar('GET', '/me', { token })).body.dados.cienciaAvisoPendente, true);
     const { versao } = (await chamar('GET', '/monitoramento/aviso', { token })).body.dados;
     assert.equal((await chamar('POST', '/monitoramento/ciencia', { token, body: { versao } })).status, 201);
+    assert.equal((await chamar('GET', '/dashboard', { token })).status, 200);
     assert.equal((await chamar('GET', '/me', { token })).body.dados.status, 'Ativo');
   });
 

@@ -1,9 +1,11 @@
 // Gate de ciência do aviso de monitoramento (opção C do Leo, 19/10/2026): o aviso (B18) é o
 // documento ÚNICO que todo usuário precisa reconhecer para usar o Baluarte. É CIÊNCIA
 // obrigatória (legítimo interesse), não consentimento. Sem ciência da VERSAO_AVISO em vigor,
-// toda rota autenticada responde 403 CIENCIA_AVISO_PENDENTE (antes do RBAC), exceto as 4
-// exceções (logout, renovação, ler o aviso e registrar a ciência); as rotas públicas não passam
-// pelo gate. Substitui o gate dos termos de uso (#5, aposentado).
+// toda rota autenticada responde 403 CIENCIA_AVISO_PENDENTE (antes do RBAC), exceto as 5
+// exceções (logout, renovação, GET /me, ler o aviso e registrar a ciência); as rotas públicas
+// não passam pelo gate. Substitui o gate dos termos de uso (#5, aposentado).
+// GET /me (desde 19/10/2026) responde a quem não deu ciência e traz `cienciaAvisoPendente`, que
+// só orienta o cliente; quem decide acesso é o 403 das outras rotas.
 // Banco Postgres isolado (baluarte_test_ciencia_aviso_gate).
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -31,6 +33,8 @@ const { exigeToken } = await import('../src/middlewares/auth.middleware.js');
 const AVISO = '/monitoramento/aviso';
 const CIENCIA = '/monitoramento/ciencia';
 const PENDENTE = 'CIENCIA_AVISO_PENDENTE';
+/** Campos do GET /me: os de sempre + o aditivo cienciaAvisoPendente. Nenhum dado de recurso. */
+const CAMPOS_ME = ['cienciaAvisoPendente', 'departamento', 'email', 'id', 'nome', 'perfil', 'status'];
 
 let admin: string;
 
@@ -66,13 +70,19 @@ describe('contas que já nascem com ciência', () => {
 });
 
 describe('bloqueio sem ciência', () => {
-  it('rotas protegidas, inclusive /me, respondem 403 CIENCIA_AVISO_PENDENTE para qualquer perfil', async () => {
+  it('GET /me responde 200 com cienciaAvisoPendente=true; as outras rotas protegidas, 403, para qualquer perfil', async () => {
     for (const perfil of ['Administrador', 'Analista', 'Colaborador'] as const) {
-      const { token } = await semCiencia(perfil, `gate-bloq-${perfil.toLowerCase()}`);
-      const r = await chamar('GET', '/me', { token });
+      const { id, email, token } = await semCiencia(perfil, `gate-bloq-${perfil.toLowerCase()}`);
+      const me = await chamar('GET', '/me', { token });
+      assert.equal(me.status, 200);
+      assert.deepEqual(Object.keys(me.body.dados).sort(), CAMPOS_ME);
+      assert.equal(me.body.dados.cienciaAvisoPendente, true);
+      assert.equal(me.body.dados.id, id);
+      assert.equal(me.body.dados.email, email.toLowerCase());
+      assert.equal(me.body.dados.perfil, perfil);
+      const r = await chamar('GET', '/dashboard', { token });
       esperaErro(r, 403, PENDENTE);
       assert.equal(r.body.mensagem, 'Confirme que leu o aviso de monitoramento para usar o Baluarte');
-      esperaErro(await chamar('GET', '/dashboard', { token }), 403, PENDENTE);
       esperaErro(await chamar('GET', '/configuracoes/seguranca', { token }), 403, PENDENTE);
       esperaErro(
         await chamar('POST', '/auth/change-password', { token, body: { senhaAtual: SENHA_CONTA, novaSenha: 'Outra@12345' } }),
@@ -114,15 +124,33 @@ describe('bloqueio sem ciência', () => {
     esperaErro(await chamar('GET', AVISO, { token: 'x.y.z' }), 401, 'TOKEN_INVALIDO');
   });
 
-  it('ciência de versão ANTIGA não libera', async () => {
+  it('ciência de versão ANTIGA não libera: /me diz pendente e as outras rotas seguem 403', async () => {
     const { id, token } = await semCiencia('Analista', 'gate-antiga');
     await prisma.monitoringAcknowledgement.createMany({ data: [{ userId: id, versao: '2026-10-08' }, { userId: id, versao: '2026-10-10' }] });
     assert.notEqual(VERSAO_AVISO, '2026-10-10');
-    esperaErro(await chamar('GET', '/me', { token }), 403, PENDENTE);
+    const me = await chamar('GET', '/me', { token });
+    assert.equal(me.status, 200);
+    assert.equal(me.body.dados.cienciaAvisoPendente, true);
+    esperaErro(await chamar('GET', '/dashboard', { token }), 403, PENDENTE);
     const aviso = await chamar('GET', AVISO, { token });
     assert.deepEqual(aviso.body.dados.ciencia, { registrada: false, registradaEm: null });
     assert.equal((await chamar('POST', CIENCIA, { token, body: { versao: VERSAO_AVISO } })).status, 201);
-    assert.equal((await chamar('GET', '/me', { token })).status, 200);
+    assert.equal((await chamar('GET', '/me', { token })).body.dados.cienciaAvisoPendente, false);
+    assert.equal((await chamar('GET', '/dashboard', { token })).status, 200);
+  });
+
+  it('com ciência da versão atual, /me responde 200 com cienciaAvisoPendente=false e os mesmos campos', async () => {
+    const conta = await criarUsuario(admin, 'Colaborador', 'gate-com');
+    const token = await login(conta.email, SENHA_CONTA);
+    const me = await chamar('GET', '/me', { token });
+    assert.equal(me.status, 200);
+    assert.deepEqual(Object.keys(me.body.dados).sort(), CAMPOS_ME);
+    assert.equal(me.body.dados.cienciaAvisoPendente, false);
+    // Seed de contrato (u-000, com ciência): mesma resposta de antes + o campo novo.
+    const adm = await chamar('GET', '/me', { token: admin });
+    assert.deepEqual(Object.keys(adm.body.dados).sort(), CAMPOS_ME);
+    assert.equal(adm.body.dados.cienciaAvisoPendente, false);
+    assert.equal(adm.body.dados.id, 'u-000');
   });
 });
 
@@ -149,7 +177,8 @@ describe('exceções liberadas sem ciência (só exigeSessao)', () => {
     assert.equal(r.status, 200);
     const novo = r.body.dados.token as string;
     assert.equal((await chamar('GET', AVISO, { token: novo })).status, 200);
-    esperaErro(await chamar('GET', '/me', { token: novo }), 403, PENDENTE);
+    assert.equal((await chamar('GET', '/me', { token: novo })).body.dados.cienciaAvisoPendente, true);
+    esperaErro(await chamar('GET', '/dashboard', { token: novo }), 403, PENDENTE);
   });
 
   it('logout funciona e encerra a sessão (depois dele, 401 até nas exceções)', async () => {
@@ -160,12 +189,13 @@ describe('exceções liberadas sem ciência (só exigeSessao)', () => {
 
   it('POST /monitoramento/ciencia libera o acesso com o MESMO token (o gate lê o banco a cada requisição)', async () => {
     const { id, token } = await semCiencia('Colaborador', 'gate-liberar');
-    esperaErro(await chamar('GET', '/me', { token }), 403, PENDENTE);
+    esperaErro(await chamar('GET', '/dashboard', { token }), 403, PENDENTE);
     esperaErro(await chamar('POST', CIENCIA, { token, body: { versao: '1999-01-01' } }), 409, 'VERSAO_DESATUALIZADA');
-    esperaErro(await chamar('GET', '/me', { token }), 403, PENDENTE);
+    esperaErro(await chamar('GET', '/dashboard', { token }), 403, PENDENTE);
+    assert.equal((await chamar('GET', '/me', { token })).body.dados.cienciaAvisoPendente, true);
     const r = await chamar('POST', CIENCIA, { token, body: { versao: VERSAO_AVISO } });
     assert.equal(r.status, 201);
-    assert.equal((await chamar('GET', '/me', { token })).status, 200);
+    assert.equal((await chamar('GET', '/me', { token })).body.dados.cienciaAvisoPendente, false);
     assert.equal((await chamar('GET', '/dashboard', { token })).status, 200);
     assert.equal(await prisma.auditLog.count({ where: { acao: 'REGISTRAR_CIENCIA_MONITORAMENTO', usuarioId: id } }), 1);
   });

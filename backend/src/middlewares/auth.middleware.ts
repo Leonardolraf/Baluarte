@@ -25,9 +25,11 @@ export function tokenDe(req: Request): TokenPayload {
 }
 
 // Middleware que exige um Bearer token JWT valido E um usuario existente e ativo no banco,
-// SEM exigir a ciencia do aviso de monitoramento. So para as 4 rotas que quem ainda nao deu
-// ciencia precisa usar: POST /auth/logout, POST /auth/renovar, GET /monitoramento/aviso e
-// POST /monitoramento/ciencia. As demais usam exigeToken. A ciencia da VERSAO_AVISO em vigor
+// SEM exigir a ciencia do aviso de monitoramento. So para as 5 rotas que quem ainda nao deu
+// ciencia precisa usar: POST /auth/logout, POST /auth/renovar, GET /me (dados do proprio
+// usuario + cienciaAvisoPendente, que so orienta o cliente e nunca decide acesso),
+// GET /monitoramento/aviso e POST /monitoramento/ciencia. As demais usam exigeToken, e o 403
+// CIENCIA_AVISO_PENDENTE delas e a autoridade. A ciencia da VERSAO_AVISO em vigor
 // vem na mesma consulta do usuario (buscarParaSessao), sem consulta extra por requisicao.
 // Espelha o contrato do stub: ausente -> 401 TOKEN_AUSENTE; invalido -> 401 TOKEN_INVALIDO.
 // Codigos adicionais: 401 USUARIO_REMOVIDO (conta excluida) e 401 USUARIO_INATIVO (conta inativada).
@@ -72,7 +74,7 @@ export function exigeCienciaAviso(req: Request, res: Response, next: NextFunctio
 // Padrao das rotas autenticadas: sessao valida (exigeSessao) E ciencia do aviso em vigor
 // (exigeCienciaAviso), antes do RBAC. Fechado por padrao: rota nova com exigeToken ja nasce
 // bloqueada para quem nao deu ciencia; liberar exige trocar por exigeSessao de proposito (e
-// atualizar a lista de excecoes de tests/ciencia-aviso-gate.test.ts).
+// atualizar a lista de excecoes de tests/unidade/ciencia-aviso.test.ts).
 export function exigeToken(req: Request, res: Response, next: NextFunction): void {
   exigeSessao(req, res, () => exigeCienciaAviso(req, res, next));
 }

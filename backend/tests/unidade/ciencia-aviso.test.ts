@@ -1,7 +1,7 @@
 // Testes de UNIDADE (sem banco) do gate de ciencia do aviso de monitoramento (opcao C do Leo,
 // 19/10/2026): o middleware exigeCienciaAviso sobre o usuario ja carregado, a ordem
 // exigeSessao -> gate -> RBAC e a introspeccao do router: toda rota autenticada usa exigeToken
-// (com o gate), menos as 4 excecoes, que usam exigeSessao. Rota nova autenticada que nao entrar
+// (com o gate), menos as 5 excecoes, que usam exigeSessao. Rota nova autenticada que nao entrar
 // nesta regra faz o teste falhar.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,7 +25,9 @@ function resposta() {
 }
 
 /** As unicas rotas autenticadas liberadas sem ciencia (so exigeSessao). */
-const EXCECOES_DO_GATE = ['POST /auth/logout', 'POST /auth/renovar', 'GET /monitoramento/aviso', 'POST /monitoramento/ciencia'];
+// GET /me entrou em 19/10/2026: so dados do proprio usuario + cienciaAvisoPendente (o campo
+// orienta o cliente; o 403 CIENCIA_AVISO_PENDENTE das demais rotas e a autoridade).
+const EXCECOES_DO_GATE = ['POST /auth/logout', 'POST /auth/renovar', 'GET /me', 'GET /monitoramento/aviso', 'POST /monitoramento/ciencia'];
 
 /** Rotas publicas (sem sessao nem gate): login, conta por link, treinamento por link, agente, classificacao. */
 const PUBLICAS = [
@@ -98,9 +100,10 @@ describe('exigeCienciaAviso', () => {
 describe('introspecção do router: o gate cobre toda rota autenticada', () => {
   const todas = rotas();
 
-  it('toda rota autenticada usa exigeToken (com o gate), menos as 4 exceções', () => {
+  it('toda rota autenticada usa exigeToken (com o gate), menos as 5 exceções', () => {
     assert.ok(todas.length > 40, `poucas rotas lidas do router: ${todas.length}`);
     const comSessaoSemGate = todas.filter((r) => r.handles.includes(exigeSessao)).map((r) => r.chave).sort();
+    assert.equal(EXCECOES_DO_GATE.length, 5);
     assert.deepEqual(comSessaoSemGate, [...EXCECOES_DO_GATE].sort());
     for (const r of todas) {
       const autenticada = r.handles.includes(exigeToken) || r.handles.includes(exigeSessao);
