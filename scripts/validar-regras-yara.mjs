@@ -27,6 +27,17 @@ const AMOSTRAS = [
     dados: () => Buffer.from(j('relatorio\n', 'BALUARTE-TESTE-', 'AMEACA-0001-ARQUIVO-INOFENSIVO', '\n')),
   },
   {
+    // DT26: em HTML o YARA so via a forma normalizada (minusculas, sem comentarios)
+    nome: 'marcador de teste num comentario HTML (precisa do baluarte_html_cru.cfg)',
+    esperado: 'YARA.BaluarteMarcadorTeste.UNOFFICIAL',
+    dados: () => Buffer.from(j('<html><body><p>relatorio</p><!-- BALUARTE-TESTE-', 'AMEACA-0001-ARQUIVO-INOFENSIVO --></body></html>\n')),
+  },
+  {
+    nome: 'marcador de teste em HTML com entidades (precisa do nocase)',
+    esperado: 'YARA.BaluarteMarcadorTeste.UNOFFICIAL',
+    dados: () => Buffer.from(j('<html><body><p>', [...j('BALUARTE-TESTE-', 'AMEACA-0001-ARQUIVO-INOFENSIVO')].map((c) => `&#${c.charCodeAt(0)};`).join(''), '</p></body></html>\n')),
+  },
+  {
     nome: 'documento sintetico com macro que abre e chama o sistema',
     esperado: 'YARA.BaluarteMacroSuspeita.UNOFFICIAL',
     dados: () => Buffer.from(j('Attribute VB_Name = "ThisDocument"\n', 'Sub Document', '_Open()\n',
