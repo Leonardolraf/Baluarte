@@ -142,6 +142,9 @@ async function iniciarApi() {
       ...envBanco(),
       NODE_ENV: 'production',
       PORT: String(API_PORT),
+      // DT28: em produção a API exige um domínio válido e recusa @empresa.com (o do backend/.env local).
+      // A carga não cria campanha; o domínio reservado (RFC 2606) só cumpre a exigência.
+      DOMINIO_INTERNO: '@baluarte.test',
       JWT_SECRET: randomBytes(32).toString('hex'),
       // Nada sai da máquina: sem e-mail, sem VirusTotal/OSV/NVD, sem ClamAV, sem agente.
       SMTP_HOST: '',

@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import { app } from './app.js';
 import { validarSegredoJwt } from './services/token.service.js';
+import { validarDominioInterno } from './models/dominio.model.js';
 
-// Em producao, sem JWT_SECRET adequado o processo nem sobe.
+// Em producao, sem JWT_SECRET adequado ou sem DOMINIO_INTERNO valido (DT28) o processo nem sobe.
 validarSegredoJwt();
+validarDominioInterno();
 
 const PORT = Number(process.env.PORT) || 8080;
 
