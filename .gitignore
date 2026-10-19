@@ -32,3 +32,6 @@ e2e/resultados*/
 
 # área de trabalho do sonar-scanner (B30, scripts/sonarqube.mjs)
 .scannerwork/
+
+# DT32: senhas da demonstração nunca entram no repositório (o seed:demo já recusa caminho aqui dentro)
+senhas-demo*.txt
