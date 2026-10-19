@@ -98,7 +98,11 @@ export function userFromMe(me: BackendMeData): User {
     email: me.email,
     role: roleFromPerfil(me.perfil),
     department: me.departamento?.trim() || '—',
-    noticePending: me.cienciaAvisoPendente === true,
+    // Repassa como veio: ausente = `undefined` = DESCONHECIDO, nunca `false`
+    // (API antiga, como a VM hoje, não manda o campo). A autoridade sobre a
+    // pendência é sempre o 403 CIENCIA_AVISO_PENDENTE das rotas de dados; este
+    // campo serve só para rotear antes, nunca para concluir "sem pendência".
+    noticePending: me.cienciaAvisoPendente,
   };
 }
 

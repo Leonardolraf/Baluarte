@@ -63,6 +63,7 @@ describe('mappers: usuário', () => {
       email: 'ana@baluarte.test',
       perfil: 'Analista',
       departamento: 'TI',
+      cienciaAvisoPendente: false,
     });
     expect(user).toEqual({
       id: 'u-1',
@@ -81,11 +82,12 @@ describe('mappers: usuário', () => {
     expect(user.role).toBe('admin');
   });
 
-  it('userFromMe mapeia cienciaAvisoPendente → noticePending', () => {
+  it('userFromMe mapeia cienciaAvisoPendente → noticePending (ausente = desconhecido)', () => {
     expect(userFromMe({ id: 'u', email: 'a@b.test', perfil: 'Analista', cienciaAvisoPendente: true }).noticePending).toBe(true);
     expect(userFromMe({ id: 'u', email: 'a@b.test', perfil: 'Analista', cienciaAvisoPendente: false }).noticePending).toBe(false);
-    // Ausente (backend antigo, sem o campo) → false, nunca undefined.
-    expect(userFromMe({ id: 'u', email: 'a@b.test', perfil: 'Analista' }).noticePending).toBe(false);
+    // Ausente (backend antigo, como a VM hoje) → undefined (DESCONHECIDO), NUNCA
+    // false: ausência de dado não é ausência de pendência. A autoridade é o 403.
+    expect(userFromMe({ id: 'u', email: 'a@b.test', perfil: 'Analista' }).noticePending).toBeUndefined();
   });
 
   it('userFromLogin monta o mínimo a partir do login', () => {

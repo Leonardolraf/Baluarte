@@ -54,6 +54,8 @@ describe('apiAuthRepository.signIn', () => {
 
     const result = await apiAuthRepository.signIn('ana@baluarte.test', 'segredo123');
 
+    // /me sem o campo cienciaAvisoPendente → noticePending undefined (desconhecido),
+    // que toEqual trata como ausente. Nunca false.
     expect(result).toEqual({
       ok: true,
       user: {
@@ -62,9 +64,9 @@ describe('apiAuthRepository.signIn', () => {
         email: 'ana@baluarte.test',
         role: 'analyst',
         department: 'TI',
-        noticePending: false,
       },
     });
+    if (result.ok) expect(result.user.noticePending).toBeUndefined();
     expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('baluarte.token', 'jwt-abc');
 
     // Primeira chamada: POST /login sem Authorization.
@@ -158,6 +160,57 @@ describe('apiAuthRepository.signIn', () => {
       expect(result.user.role).toBe('admin');
       expect(result.user.name).toBe('ana@baluarte.test'); // fallback sem /me
     }
+  });
+});
+
+describe('apiAuthRepository.restoreSession', () => {
+  it('ciência pendente (403): MANTÉM o token (sessão válida), devolve null', async () => {
+    mockSecureStore.getItemAsync.mockResolvedValue('jwt-abc');
+    fetchMock.mockResolvedValueOnce(
+      reply(403, { status: 'erro', mensagem: 'x', codigoErro: 'CIENCIA_AVISO_PENDENTE' }),
+    );
+
+    const user = await apiAuthRepository.restoreSession();
+
+    expect(user).toBeNull();
+    expect(mockSecureStore.deleteItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('token inválido (401): LIMPA o token', async () => {
+    mockSecureStore.getItemAsync.mockResolvedValue('jwt-velho');
+    fetchMock.mockResolvedValueOnce(
+      reply(401, { status: 'erro', mensagem: 'x', codigoErro: 'TOKEN_INVALIDO' }),
+    );
+
+    const user = await apiAuthRepository.restoreSession();
+
+    expect(user).toBeNull();
+    expect(mockSecureStore.deleteItemAsync).toHaveBeenCalledWith('baluarte.token');
+  });
+
+  it('erro de rede: MANTÉM o token (pode ser queda momentânea)', async () => {
+    mockSecureStore.getItemAsync.mockResolvedValue('jwt-abc');
+    fetchMock.mockRejectedValueOnce(new TypeError('offline'));
+
+    const user = await apiAuthRepository.restoreSession();
+
+    expect(user).toBeNull();
+    expect(mockSecureStore.deleteItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('sucesso: restaura o usuário do /me', async () => {
+    mockSecureStore.getItemAsync.mockResolvedValue('jwt-abc');
+    fetchMock.mockResolvedValueOnce(
+      reply(200, {
+        status: 'sucesso',
+        dados: { id: 'u-1', nome: 'Ana', email: 'ana@baluarte.test', perfil: 'Analista' },
+      }),
+    );
+
+    const user = await apiAuthRepository.restoreSession();
+
+    expect(user?.id).toBe('u-1');
+    expect(user?.role).toBe('analyst');
   });
 });
 

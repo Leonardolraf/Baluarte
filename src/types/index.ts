@@ -9,9 +9,11 @@ export interface User {
   role: Role;
   department: string;
   /**
-   * Modo API: `true` quando a conta ainda não registrou a ciência do aviso de
-   * monitoramento na versão em vigor. Enquanto pendente, as rotas de dados
-   * respondem 403 e a pessoa precisa dar ciência no portal web. Ausente no demo.
+   * Modo API: `true`/`false` quando o backend informa a ciência do aviso de
+   * monitoramento; `undefined` = DESCONHECIDO (API antiga que não manda o campo,
+   * ou modo demo). Nunca assumir `false` na ausência. A autoridade sobre a
+   * pendência é o 403 CIENCIA_AVISO_PENDENTE das rotas de dados; este campo só
+   * serve para rotear antes.
    */
   noticePending?: boolean;
 }

@@ -89,9 +89,14 @@ export const apiAuthRepository: AuthRepository = {
       const me = await request<BackendMeData>('/me');
       const user = userFromMe(me);
       return canAccessCampaigns(user.role) ? user : null;
-    } catch {
-      // Token expirado/inválido: limpa e volta ao login.
-      await tokenStore.clear();
+    } catch (error) {
+      // Ciência pendente: a sessão é VÁLIDA, só falta um ato no portal — mantém
+      // o token (se o /me estiver gated, só não dá pra restaurar o perfil aqui;
+      // o login refaz e a Home orienta pelo 403). Erro de rede: também mantém.
+      // Só uma falha REAL de autenticação (token inválido/expirado) limpa.
+      if (error instanceof ApiError && error.code !== 'CIENCIA_AVISO_PENDENTE') {
+        await tokenStore.clear();
+      }
       return null;
     }
   },
