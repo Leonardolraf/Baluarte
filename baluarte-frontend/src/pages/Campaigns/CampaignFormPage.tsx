@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAsync } from '@/hooks/useAsync';
 import { useNavigate } from 'react-router-dom';
@@ -48,9 +48,10 @@ const FIELD_BY_ERROR_CODE = new Map<string, CampaignField>([
 ]);
 
 /**
- * Melhorias #1 e #2: o grupo-alvo deixou de ser uma lista fixa digitada aqui e passa a ser a
- * seleção de departamentos reais (`GET /departamentos`). O texto do grupo que vai para a API
- * é derivado da seleção, porque o contrato continua exigindo `grupoAlvo`.
+ * Melhorias #1 e #2: o grupo-alvo é a seleção de departamentos reais (`GET /departamentos`), num
+ * dropdown de múltipla escolha. É um ATALHO para preencher a caixa de destinatários, e opcional:
+ * `targetGroup` não faz parte do corpo do POST /campaigns (que leva nome/template/destinatarios),
+ * então dá para enviar só digitando um e-mail, sem escolher grupo.
  */
 const ALL_LABEL = 'Todos os colaboradores';
 
@@ -156,6 +157,10 @@ export default function CampaignFormPage() {
   );
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [allSelected, setAllSelected] = useState(false);
+  // Dropdown do grupo-alvo: botão que abre um painel com as opções (multi-seleção por caixas).
+  const [deptsOpen, setDeptsOpen] = useState(false);
+  const deptsRef = useRef<HTMLDivElement>(null);
+  const deptsButtonRef = useRef<HTMLButtonElement>(null);
   const [eligible, setEligible] = useState<EligibleRecipientsResponse | null>(null);
   const [loadingEligible, setLoadingEligible] = useState(false);
   const [eligibleError, setEligibleError] = useState<string | null>(null);
@@ -198,10 +203,14 @@ export default function CampaignFormPage() {
     };
   }, [allSelected, selectedDepartments, setValue]);
 
-  // O contrato exige `grupoAlvo`: aqui ele descreve a seleção, em vez de ser escolhido à parte.
+  // `targetGroup` descreve a seleção, mas é só rótulo da UI: NÃO vai no corpo do POST /campaigns
+  // (o payload é nome/template/destinatarios/confirmado), então o grupo é opcional. Sem nenhum
+  // departamento marcado, o rótulo vira "Destinatários individuais" para o cartão otimista não
+  // nascer vazio — quem define quem recebe é a caixa de e-mails abaixo.
+  const INDIVIDUAL_LABEL = 'Destinatários individuais';
   const targetGroupLabel = useMemo(() => {
     if (allSelected) return ALL_LABEL;
-    if (selectedDepartments.length === 0) return '';
+    if (selectedDepartments.length === 0) return INDIVIDUAL_LABEL;
     const nomes = (departments ?? []).filter((d) => selectedDepartments.includes(d.id)).map((d) => d.name);
     return nomes.join(', ');
   }, [allSelected, selectedDepartments, departments]);
@@ -209,6 +218,26 @@ export default function CampaignFormPage() {
   useEffect(() => {
     setValue('targetGroup', targetGroupLabel, { shouldValidate: true });
   }, [targetGroupLabel, setValue]);
+
+  // Fecha o dropdown de departamentos ao clicar fora ou apertar Esc (Esc devolve o foco ao botão).
+  useEffect(() => {
+    if (!deptsOpen) return;
+    const aoClicarFora = (event: MouseEvent) => {
+      if (deptsRef.current && !deptsRef.current.contains(event.target as Node)) setDeptsOpen(false);
+    };
+    const aoTeclar = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDeptsOpen(false);
+        deptsButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', aoClicarFora);
+    document.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('mousedown', aoClicarFora);
+      document.removeEventListener('keydown', aoTeclar);
+    };
+  }, [deptsOpen]);
 
   async function enviar(values: CampaignFormValues, confirmMassSend: boolean): Promise<void> {
     if (!isCampaignTemplate(values.template)) return;
@@ -431,18 +460,17 @@ export default function CampaignFormPage() {
                   )}
                 </fieldset>
 
-                {/* O valor exigido pelo contrato (`grupoAlvo`) é derivado da seleção. */}
-                <input
-                  type="hidden"
-                  {...register('targetGroup', { required: 'Selecione ao menos um departamento.' })}
-                />
+                {/* `targetGroup` é só rótulo da UI (não vai no POST): opcional, sem `required`. */}
+                <input type="hidden" {...register('targetGroup')} />
 
-                <fieldset data-testid="grupo-alvo">
+                <fieldset data-testid="grupo-alvo" className="min-w-0">
                   <legend className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                    Grupo-alvo <span aria-hidden="true">*</span>
+                    Grupo-alvo{' '}
+                    <span className="font-normal text-slate-400 dark:text-slate-500">(opcional)</span>
                   </legend>
                   <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                    Escolha os departamentos: os destinatários são preenchidos abaixo e seguem editáveis.
+                    Atalho para preencher os destinatários por departamento — eles seguem editáveis abaixo.
+                    Para mandar a poucas pessoas, deixe sem grupo e digite os e-mails.
                   </p>
 
                   {departmentsError ? (
@@ -450,44 +478,81 @@ export default function CampaignFormPage() {
                       Não foi possível carregar os departamentos. Informe os e-mails à mão abaixo.
                     </p>
                   ) : (
-                    <div className="space-y-1.5">
-                      <label className="flex items-center gap-2 text-sm text-ink dark:text-white">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
-                          checked={allSelected}
-                          onChange={(event) => {
-                            setAllSelected(event.target.checked);
-                            if (event.target.checked) setSelectedDepartments([]);
-                          }}
-                        />
-                        {ALL_LABEL}
-                      </label>
-
-                      {(departments ?? []).map((dep) => (
-                        <label
-                          key={dep.id}
-                          className="flex items-center gap-2 text-sm text-ink dark:text-white"
+                    <div className="relative" ref={deptsRef}>
+                      <button
+                        type="button"
+                        ref={deptsButtonRef}
+                        aria-haspopup="true"
+                        aria-expanded={deptsOpen}
+                        onClick={() => setDeptsOpen((aberto) => !aberto)}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm text-ink hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-ink dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800 dark:focus:ring-white"
+                      >
+                        <span
+                          className={cn(
+                            'truncate',
+                            !allSelected &&
+                              selectedDepartments.length === 0 &&
+                              'text-slate-400 dark:text-slate-500',
+                          )}
                         >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
-                            disabled={allSelected}
-                            checked={selectedDepartments.includes(dep.id)}
-                            onChange={(event) =>
-                              setSelectedDepartments((atual) =>
-                                event.target.checked
-                                  ? [...atual, dep.id]
-                                  : atual.filter((id) => id !== dep.id),
-                              )
-                            }
-                          />
-                          <span>{dep.name}</span>
-                          <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
-                            {dep.users} {dep.users === 1 ? 'pessoa' : 'pessoas'}
-                          </span>
-                        </label>
-                      ))}
+                          {allSelected
+                            ? ALL_LABEL
+                            : selectedDepartments.length > 0
+                              ? targetGroupLabel
+                              : 'Selecionar departamentos'}
+                        </span>
+                        <Icons.ChevronDownIcon
+                          size={16}
+                          className={cn('shrink-0 transition-transform', deptsOpen && 'rotate-180')}
+                          aria-hidden="true"
+                        />
+                      </button>
+
+                      {deptsOpen && (
+                        <div
+                          role="group"
+                          aria-label="Departamentos"
+                          className="absolute z-10 mt-1 max-h-64 w-full space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                        >
+                          <label className="flex items-center gap-2 rounded px-1.5 py-1 text-sm text-ink hover:bg-slate-50 dark:text-white dark:hover:bg-slate-800">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
+                              checked={allSelected}
+                              onChange={(event) => {
+                                setAllSelected(event.target.checked);
+                                if (event.target.checked) setSelectedDepartments([]);
+                              }}
+                            />
+                            {ALL_LABEL}
+                          </label>
+
+                          {(departments ?? []).map((dep) => (
+                            <label
+                              key={dep.id}
+                              className="flex items-center gap-2 rounded px-1.5 py-1 text-sm text-ink hover:bg-slate-50 dark:text-white dark:hover:bg-slate-800"
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
+                                disabled={allSelected}
+                                checked={selectedDepartments.includes(dep.id)}
+                                onChange={(event) =>
+                                  setSelectedDepartments((atual) =>
+                                    event.target.checked
+                                      ? [...atual, dep.id]
+                                      : atual.filter((id) => id !== dep.id),
+                                  )
+                                }
+                              />
+                              <span>{dep.name}</span>
+                              <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                                {dep.users} {dep.users === 1 ? 'pessoa' : 'pessoas'}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
