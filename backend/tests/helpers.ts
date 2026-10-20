@@ -75,6 +75,9 @@ export function configurarBancoDeTeste(testFileUrl: string): string {
   process.env.NVD_API_URL = 'http://127.0.0.1:9';
   delete process.env.NVD_API_KEY;
   delete process.env.CRUZAMENTO_AUTOMATICO;
+  // Allowlist OFF por padrao nos testes: a trava de dominio da campanha vale (contrato N2 AT1);
+  // quem testa o flag (campanha-allowlist.test.ts) o liga/desliga por conta.
+  delete process.env.CAMPANHA_SEM_TRAVA_DOMINIO;
   return url.toString();
 }
 

@@ -38,8 +38,22 @@ export function destinatariosInternos(): { dominios: string[]; enderecos: string
   return { dominios, enderecos };
 }
 
+/**
+ * Flag aditivo (allowlist, decisao do Leo em 21/10/2026): com CAMPANHA_SEM_TRAVA_DOMINIO=1 a
+ * trava de dominio da campanha cai e QUALQUER usuario cadastrado e Ativo pode ser destinatario,
+ * de qualquer dominio (gmail, outlook, ...). O gate continua sendo "Ativo cadastrado"
+ * (CampaignEvent.userId obrigatorio) — o administrador, que cadastra, e quem controla.
+ * DEFAULT OFF (ausente ou != '1'): comportamento de sempre, contrato N2 AT1 intacto (o CT-C2 do
+ * Newman manda gmail e exige 422 DESTINATARIO_EXTERNO). Lido a cada chamada para os testes
+ * ligarem/desligarem. So e ligado por ambiente na VM; os testes apagam a variavel (helpers.ts).
+ */
+export function travaDeDominioDesligada(): boolean {
+  return process.env.CAMPANHA_SEM_TRAVA_DOMINIO === '1';
+}
+
 /** O e-mail pode receber campanha: termina num dominio interno ou esta liberado na lista. */
 export function destinatarioInterno(email: string): boolean {
+  if (travaDeDominioDesligada()) return true;
   const e = email.trim().toLowerCase();
   const { dominios, enderecos } = destinatariosInternos();
   return enderecos.includes(e) || dominios.some((d) => e.endsWith(d));

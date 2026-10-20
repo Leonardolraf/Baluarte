@@ -23,6 +23,10 @@ services:
       # Número de proxies na frente da API (0 a 5; vazio = nenhum, o IP gravado é o do proxy). A VM
       # define no .env dela depois de medir a cadeia (Funnel = 1; Funnel + Nginx = 2).
       - TRUST_PROXY=${TRUST_PROXY:-}
+      # Allowlist (21/10/2026): =1 derruba a trava de domínio da campanha (aceita qualquer usuário
+      # Ativo cadastrado, de qualquer domínio). Vazio = off = só domínio interno (contrato intacto).
+      # A VM liga pelo .env; sem esta linha o valor do .env não chega ao container (como o TRUST_PROXY).
+      - CAMPANHA_SEM_TRAVA_DOMINIO=${CAMPANHA_SEM_TRAVA_DOMINIO:-}
   db:
     image: postgres:17-alpine   # mesmo major do Supabase de onde veio o dump (restaurar um 17 num 16 falha)
     restart: unless-stopped
