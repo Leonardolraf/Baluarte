@@ -58,6 +58,10 @@ services:
       # DT36: teto do heap abaixo do mem_limit (ver o comentário do topo). Vale para o tsx da API e
       # para o `prisma migrate deploy` do entrypoint.
       - NODE_OPTIONS=--max-old-space-size=1536
+      # Allowlist (21/10/2026): =1 derruba a trava de domínio da campanha (aceita qualquer usuário
+      # Ativo cadastrado, de qualquer domínio). Vazio = off = só domínio interno (contrato intacto).
+      # A VM liga pelo .env; sem esta linha o valor do .env não chega ao container (como o TRUST_PROXY).
+      - CAMPANHA_SEM_TRAVA_DOMINIO=${CAMPANHA_SEM_TRAVA_DOMINIO:-}
   db:
     image: postgres:17-alpine   # mesmo major do Supabase de onde veio o dump (restaurar um 17 num 16 falha)
     restart: unless-stopped

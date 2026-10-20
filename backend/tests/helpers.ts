@@ -83,6 +83,9 @@ export function configurarBancoDeTeste(testFileUrl: string): string {
   delete process.env.CRUZAMENTO_AUTOMATICO;
   // DT36: teto de producao do relatorio; quem testa o teto baixa a variavel no proprio teste.
   delete process.env.RELATORIO_TETO_ACHADOS;
+  // Allowlist OFF por padrao nos testes: a trava de dominio da campanha vale (contrato N2 AT1);
+  // quem testa o flag (campanha-allowlist.test.ts) o liga/desliga por conta.
+  delete process.env.CAMPANHA_SEM_TRAVA_DOMINIO;
   return url.toString();
 }
 
