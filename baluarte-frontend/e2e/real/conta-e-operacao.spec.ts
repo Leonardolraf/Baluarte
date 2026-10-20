@@ -81,7 +81,7 @@ test.describe('Modo real (backend Express)', () => {
       await page.goto('/campaigns/new');
       await page.locator('#nome').fill(name);
       await page.getByRole('radio', { name: /Curiosidade/ }).check();
-      await page.locator('#grupo').selectOption({ label: 'TI' });
+      // O grupo-alvo é opcional (Melhorias #1 e #2): aqui os destinatários são digitados à mão.
       await page.locator('#destinatarios').fill('ana.souza@empresa.com\nbruno.lima@empresa.com');
       await expect(page.getByText('2 destinatários válidos')).toBeVisible();
       await page.getByRole('button', { name: 'Agendar campanha' }).click();
