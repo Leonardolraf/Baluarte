@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { Navigate, type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { PublicLayout } from '@/components/Layout/PublicLayout';
@@ -65,8 +65,13 @@ export const routes: RouteObject[] = [
       { path: '/reset-password', element: page(<ResetPasswordPage />) },
       // Link do convite por e-mail: mesma tela, com o texto de primeira senha.
       { path: '/definir-senha', element: page(<ResetPasswordPage />) },
-      // Melhoria 11: apresentação pública em /home. A raiz segue como era (login, ou
-      // dashboard para quem tem sessão) — decisão do Leo em 14/10.
+      // Melhoria 11: apresentação pública. A raiz `/` renderiza a HomePage para TODO MUNDO,
+      // com ou sem sessão (decisão do Leo em 20/10, revendo a de 14/10 que a mantinha em
+      // /home): a página é a porta de entrada da demonstração. O CTA "Entrar" leva ao /login,
+      // e o login segue jogando no /dashboard; quem já tem sessão vê o atalho "Ir ao
+      // dashboard" na própria página. `/home` continua servindo a mesma página, para não
+      // quebrar links existentes.
+      { path: '/', element: page(<HomePage />) },
       { path: '/home', element: page(<HomePage />) },
       { path: '/about', element: page(<AboutPage />) },
       // Links do e-mail simulado da campanha (token aleatório por destinatário, sem login):
@@ -126,5 +131,4 @@ export const routes: RouteObject[] = [
       },
     ],
   },
-  { path: '/', element: <Navigate to="/dashboard" replace /> },
 ];
