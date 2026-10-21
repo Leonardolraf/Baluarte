@@ -302,13 +302,18 @@ export const CAMPAIGN_TEMPLATES: readonly CampaignTemplate[] = ['urgency', 'auth
 export interface CampaignMetrics {
   recipients: number;
   sent: number;
-  opened: number;
+  /**
+   * Aberturas do e-mail. `null` quando a fonte não sabe: o item de `GET /campanhas` não traz
+   * abertura nenhuma, e afirmar 0 ali diria "ninguém abriu" sobre uma campanha que pode ter
+   * sido aberta por todos. Só o relatório da campanha (`GET /campanhas/:id`) tem o funil.
+   */
+  opened: number | null;
   clicked: number;
   submitted: number;
   reported: number;
   trained: number;
-  /** Percentuais 0–100, calculados sobre `sent`. */
-  openRate: number;
+  /** Percentuais 0–100, calculados sobre `sent`. `openRate` é `null` junto com `opened`. */
+  openRate: number | null;
   clickRate: number;
   submitRate: number;
   reportRate: number;
