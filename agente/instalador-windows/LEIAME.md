@@ -76,9 +76,29 @@ Um código errado ou expirado produz exatamente o mesmo caminho: serviço de pé
 401, e nada no painel. **Serviço em execução não é estação inscrita.**
 
 Por isso a tela final não afirma que deu certo: ela manda conferir no painel e diz o que fazer se a
-máquina não aparecer. Fechar isso de verdade exige o instalador ler o resultado da inscrição — o
-osquery registra a falha nos logs de status dele — e não dá para escrever e testar essa leitura
-sem um servidor emitindo códigos de verdade. Fica para quando a implementação do Backend subir.
+máquina não aparecer.
+
+### Por que a correção óbvia não funciona (medido em 21/10/2026)
+
+A ideia natural é o instalador ler o resultado da inscrição no log do osquery. **Não dá, com as
+flags de hoje.** Medido extraindo o `osqueryd.exe` do MSI (`msiexec /a`, sem instalar nada) e
+rodando-o contra a `localhost:8443` com ninguém escutando:
+
+- A falha sai assim, e só no console:
+  `W tls_enroll.cpp:101] Failed enrollment request to https://.../api/agentes/osquery/enroll
+  (Request error: ...) retrying...`, repetida a cada ~9 s.
+- **A pasta de log fica vazia.** Com `--logger_plugin=tls`, os logs de status vão para o servidor,
+  não para o disco — e quando a inscrição falha não há servidor com quem falar. Rodando como
+  serviço do Windows, esse texto não vai para lugar nenhum.
+
+Ou seja: um detector que lesse o log local **nunca dispararia**, e pareceria funcionar. É a mesma
+armadilha da tela que ele deveria consertar.
+
+**Proposta para o Backend** (o `osquery.flags.modelo` é de lá): acrescentar o `filesystem` ao
+`--logger_plugin` (`tls,filesystem`), ou ligar `--logger_status_sync`, para que o agente registre o
+próprio resultado da inscrição em disco. Aí o instalador observa a inscrição **sem falar com o
+servidor**, que é a propriedade que se quer preservar. Enquanto isso não existir, a limitação fica,
+e a tela final continua mandando conferir no painel — que é verdadeiro.
 
 ## O que o Backend ainda precisa fechar
 
@@ -157,14 +177,21 @@ O plugin `tls` do osquery **exige HTTPS**: o alvo local é `localhost:8443` + a 
 `localhost:8080` (essa é a API em HTTP, o osqueryd não fala com ela). O certificado local já traz
 `DNS:localhost` e `IP:127.0.0.1` no SAN.
 
-Em 21/10/2026 o `certs/` desta máquina está **vazio**. Antes de um teste ponta a ponta:
+Os certificados locais **foram gerados em 21/10/2026** (`sh scripts/gerar-certificados.sh`, pelo
+openssl do próprio Git Bash — o `--docker` é opcional e não foi necessário). A CA é
+`CN=Baluarte CA local`, válida até 2036-10-18, e o `.exe` do `saida/` já vai **com ela embutida**.
+
+Falta subir o servidor antes do teste ponta a ponta:
 
 ```bash
-sh scripts/gerar-certificados.sh
-docker compose up --build -d app
+docker compose up --build -d app        # HTTPS em https://localhost:8443
+curl --cacert certs/ca.crt https://localhost:8443/
 ```
 
-Só então empacotar (o `empacotar.ps1` embute `certs/ca.crt`) e rodar o `.exe` como Administrador.
+Depois é rodar o `.exe` como Administrador, com um código emitido pelo painel.
+
+**Trocou a CA?** Gere o pacote de novo: a `ca.crt` vai dentro do `.exe`, e um instalador antigo
+passa a confiar numa autoridade que não existe mais.
 
 **Nunca apontar para a VM de produção** (`baluarte.tail862474.ts.net` / o Funnel): cada teste do
 agente criaria uma estação real na produção.
