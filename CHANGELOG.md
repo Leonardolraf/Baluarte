@@ -2,6 +2,11 @@
 
 > Histórico do que foi construído no repositório de código, do commit inicial até hoje. Para o que falta e o roteiro futuro, ver [`backend/PLANO.md`](backend/PLANO.md). Para como rodar cada peça, ver [`README.md`](README.md).
 
+## 2026-10-21 — Deploy da VM: status efetivo da campanha (DT34) sobre o flag de allowlist
+
+- **Branch de deploy da VM** (`deploy/vm-flag-dt34`), construída sobre `e244f30` (= `f399cb0` + flag `CAMPANHA_SEM_TRAVA_DOMINIO`). NÃO sai de `main`: não arrasta o gate 403 de termos (`03f100d`). O SHA que a VM passa a rodar = flag + DT34, tudo fora de `main`; o release coordenado fora de `main` depois substitui tudo (o DT34 já é uma das 6 branches do release, então não precisa de cherry-pick à parte como o flag).
+- **DT34 (aditivo, só leitura, sem migration):** `statusEfetivo(gravado, eventos)` em `models/campanha.model.ts` deriva o status na leitura (ENCERRADA gravada respeitada; com algum `enviadoEm`, ATIVA; sem envio, AGENDADA) e `mapCampaign` passa a devolver `enviados`. A API continua gravando só `AGENDADA`; `POST /campaigns` (contrato N2 AT1) segue respondendo o status gravado. Assim uma campanha nova aparece "Ativa" com os números de envio/abertura certos na demo, em vez de "Agendada"/"—". Portado de `314fd3b` + `609ff31` (`fix/campanha-enviados`) sobre o flag; a documentação de contagem de testes do release fica para a branch de release, não para esta.
+
 ## 2026-03-26 — Ponto de partida
 
 - **[`732a69f`](https://github.com/Leonardolraf/Baluarte/commit/732a69f)** `Initial commit` — repositório criado, só com um `README.md` mínimo.
