@@ -41,8 +41,18 @@ desconhecido, expirado ou já usado dão todos **`401 SEGREDO_INVALIDO`**, mensa
 propósito, para não permitir enumeração. A emissão é `POST /estacoes/vinculos` (Administrador).
 Uso único, TTL de 24 h, e o relógio lido depois do `FOR UPDATE`.
 
-A implementação do servidor é do Backend, em branch, pós-demo. **Até ela subir não há como testar
-ponta a ponta**: um código emitido não existe.
+A implementação do servidor é do Backend, na branch `feat/vinculo-agente` (worktree em
+`../Baluarte-vinculo`, `.git` compartilhado — dá para ler daqui sem push).
+
+**Conformidade conferida estaticamente contra `86edcab` (21/10/2026):** o alfabeto
+(`ALFABETO_CODIGO` em `backend/src/models/vinculoEstacao.model.ts`) é literalmente o mesmo, o
+`FORMATO_CODIGO` deles equivale ao `CodigoValido` daqui (prefixo + 3 grupos de 4), e o
+`normalizarCodigo` deles (`trim` + `toUpperCase`) equivale ao que o wizard e o `aplicar.ps1` fazem
+antes de gravar. `agente/osquery.flags.modelo` está intocado na branch deles, conferido por `git
+diff`. Nenhum ajuste necessário deste lado.
+
+**Mas isso não é o teste ponta a ponta.** Naquele corte só `tsc` e os testes de unidade rodaram; a
+integração não, porque o Postgres local estava fora. Um código emitido ainda não existe.
 
 ### Não há verificação de código pela rede, e é de propósito
 
