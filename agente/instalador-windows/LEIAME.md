@@ -103,6 +103,10 @@ armadilha da tela que ele deveria consertar.
 2. **Flags efêmeras só durante a instalação**: subir o serviço uma vez com um arquivo temporário
    que inclui `filesystem`, observar, e depois gravar as flags permanentes e reiniciar. Não deixa
    rastro no permanente, mas põe um para-e-sobe a mais no caminho da instalação.
+
+   **Esse arquivo é do instalador, não do Backend.** É um flagfile temporário criado aqui, em
+   `{tmp}`, e nada tem a ver com o `agente/osquery.flags.modelo`, que continua intocado. Ou seja,
+   esta opção **não depende de ninguém** — está disponível mesmo se a 3 cair.
 3. **Sonda em primeiro plano, sem mudar flag nenhuma** (preferida). Antes de ligar o serviço, rodar
    o `osqueryd.exe` uma vez em primeiro plano com as flags definitivas, lendo a saída padrão
    diretamente — é exatamente ali que a linha de falha aparece, como medido acima. A inscrição fica
@@ -122,8 +126,13 @@ armadilha da tela que ele deveria consertar.
      que o serviço não aceite, ele não abre — e a falha apareceria longe da causa. **Conferir isso
      na medição**, não depois.
 
-A escolha entre 2 e 3 é do instalador, não do servidor — as duas respeitam "nada permanente". O
-endpoint vem na branch `feat/vinculo-agente` do Backend.
+A escolha entre 2 e 3 é do instalador, não do servidor — as duas respeitam "nada permanente" e
+nenhuma das duas exige o Backend tocar nas flags de produção. O endpoint vem na branch
+`feat/vinculo-agente` do Backend.
+
+A 3 é a preferida **por enquanto**, e o Backend também prefere ela — mas isso não a escolhe: a
+preferência dele foi dada antes do risco de ACL acima existir, e a medição (b) ainda pode derrubá-la.
+Se cair, a 2 assume sem depender de nada nem de ninguém.
 
 **O que impede escolher agora:** as duas dependem de reconhecer o **sucesso**, e só a falha está
 medida. Não se sabe o que o osquery escreve quando a inscrição dá certo — e tratar "não apareceu a
