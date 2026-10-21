@@ -58,6 +58,7 @@ Está em dois lugares, e os dois têm um comentário apontando para cá: `Codigo
 | `empacotar.ps1` | Gera o `.exe`: baixa e confere o MSI, copia o `ca.crt`, chama o ISCC. |
 | `baixar-osquery.ps1` | Baixa o MSI oficial na versão fixa de `agente/osquery-versao.conf` e recusa se o SHA-256 ou a assinatura não baterem. |
 | `termos-instalacao.txt` | O texto do passo 2 (UTF-8 com BOM: o Inno lê a licença assim). |
+| `recursos/gerar-imagens.py` | Rasteriza o escudo canônico do produto no ícone e nas duas imagens do wizard. Rodado uma vez; as saídas estão versionadas ao lado. |
 
 ## O trabalho de máquina não está aqui
 
@@ -120,6 +121,7 @@ Verificado em 21/10/2026:
   caractere fora do alfabeto, vazio e de tamanho errado são recusados; minúsculo e com espaços é
   normalizado e repassado; o arquivo temporário é apagado nos quatro casos; o diário mostra só os
   4 últimos caracteres.
+- O ícone do produto está embutido no `.exe` (extraído do binário compilado e conferido na tela).
 
 **Não** verificado: o wizard rodando. As páginas, a acentuação na tela e o fluxo de Voltar/Avançar
 não foram vistos — o instalador exige elevação e o Windows não deixa um processo controlar um
@@ -129,10 +131,11 @@ código de vínculo válido, que depende do Backend).
 
 ## Pendências menores
 
-- **Sem ícone nem imagem de marca.** O Inno aceita `SetupIconFile` (.ico), `WizardImageFile`
-  (164×314 BMP, nas páginas de boas-vindas e conclusão) e `WizardSmallImageFile` (55×55 BMP, no
-  alto das outras). O escudo do protótipo em SVG daria os três e aproximaria bastante a tela do
-  desenho original. Hoje o wizard usa o visual padrão do Inno.
+- **A marca aparece, o texto do protótipo não.** O painel da página de boas-vindas traz o escudo
+  sobre a tinta escura `#0B1220`, a mesma do cabeçalho do protótipo, mas sem o letreiro
+  "BALUARTE" (exigiria embutir a fonte Archivo). O resto do wizard é o visual padrão do Inno: a
+  trilha de passos à esquerda do protótipo em HTML não existe no Inno, que marca a posição pelo
+  próprio fluxo de páginas.
 - **Página "Local de instalação".** Ela escolhe onde ficam os nossos arquivos (scripts, `ca.crt`,
   desinstalador). O osquery em si vai para `C:\Program Files\osquery`, onde o MSI oficial o
   coloca, e isso não é configurável sem mexer no MSI.

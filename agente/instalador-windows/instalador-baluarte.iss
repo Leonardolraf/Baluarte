@@ -44,7 +44,13 @@ WizardStyle=modern
 DisableWelcomePage=no
 LicenseFile=termos-instalacao.txt
 UninstallDisplayName={#MeuNome}
-; Sem icone proprio ainda (ver LEIAME.md): o Inno usa o dele.
+; Marca: o escudo canonico do produto (baluarte-frontend\public\baluarte.svg), rasterizado por
+; recursos\gerar-imagens.py. WizardImageFile e o painel das paginas de boas-vindas e conclusao;
+; WizardSmallImageFile, o selo no alto das demais.
+SetupIconFile=recursos\baluarte.ico
+WizardImageFile=recursos\wizard-grande.bmp
+WizardSmallImageFile=recursos\wizard-pequeno.bmp
+UninstallDisplayIcon={app}\baluarte.ico
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -58,6 +64,8 @@ brazilianportuguese.FinishedHeadingLabel=Tudo pronto
 ; O wizard e a ponte.
 Source: "aplicar.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "termos-instalacao.txt"; DestDir: "{app}"; Flags: ignoreversion
+; O icone fica instalado para a entrada em Aplicativos Instalados (UninstallDisplayIcon).
+Source: "recursos\baluarte.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; O trabalho de maquina, reaproveitado da pasta agente\ sem alteracao.
 Source: "..\instalar-agente.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\desinstalar-agente.ps1"; DestDir: "{app}"; Flags: ignoreversion
