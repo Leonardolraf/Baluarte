@@ -94,11 +94,27 @@ rodando-o contra a `localhost:8443` com ninguém escutando:
 Ou seja: um detector que lesse o log local **nunca dispararia**, e pareceria funcionar. É a mesma
 armadilha da tela que ele deveria consertar.
 
-**Proposta para o Backend** (o `osquery.flags.modelo` é de lá): acrescentar o `filesystem` ao
-`--logger_plugin` (`tls,filesystem`), ou ligar `--logger_status_sync`, para que o agente registre o
-próprio resultado da inscrição em disco. Aí o instalador observa a inscrição **sem falar com o
-servidor**, que é a propriedade que se quer preservar. Enquanto isso não existir, a limitação fica,
-e a tela final continua mandando conferir no painel — que é verdadeiro.
+### Três caminhos, e o que falta medir antes de escolher
+
+1. **Ligar `filesystem` no `osquery.flags.modelo`** (`--logger_plugin=tls,filesystem`). Simples,
+   mas o modelo é o que **toda** estação usa em produção: liga log de status em disco em todas,
+   para sempre, com o custo de espaço e rotação que isso traz — para um benefício que só importa
+   nos segundos da instalação.
+2. **Flags efêmeras só durante a instalação**: subir o serviço uma vez com um arquivo temporário
+   que inclui `filesystem`, observar, e depois gravar as flags permanentes e reiniciar. Não deixa
+   rastro no permanente, mas põe um para-e-sobe a mais no caminho da instalação.
+3. **Sonda em primeiro plano, sem mudar flag nenhuma** (preferida). Antes de ligar o serviço, rodar
+   o `osqueryd.exe` uma vez em primeiro plano com as flags definitivas, lendo a saída padrão
+   diretamente — é exatamente ali que a linha de falha aparece, como medido acima. A inscrição fica
+   gravada no banco do osquery (`osquery.db`), então o serviço sobe depois já inscrito. Nenhum
+   arquivo de log, nenhuma flag a mais, nada permanente.
+
+**O que impede escolher agora:** os três dependem de reconhecer o **sucesso**, e só a falha está
+medida. Não se sabe o que o osquery escreve quando a inscrição dá certo — e tratar "não apareceu a
+linha de falha" como sucesso é a mesma troca que este documento inteiro critica: ausência de dado
+lida como ausência de risco. A medição do caso de sucesso exige o servidor de pé com o endpoint do
+Backend. **Até lá, nada disso é implementado**, e a tela final continua mandando conferir no painel
+— que é verdadeiro.
 
 ## O que o Backend ainda precisa fechar
 
