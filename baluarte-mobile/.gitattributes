@@ -1,0 +1,3 @@
+# Todo arquivo de texto fica LF, inclusive no working tree do Windows (core.autocrlf=true).
+# Binários (PNG etc.) são detectados por text=auto e não são tocados.
+* text=auto eol=lf
