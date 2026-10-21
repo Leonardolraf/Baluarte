@@ -844,7 +844,7 @@ export const realApi: BaluarteApi = {
         params: options.campaignEventId ? { eventoCampanha: options.campaignEventId } : undefined,
         data: form,
         headers: { 'Content-Type': 'multipart/form-data' },
-        // Envio de até 250 MB numa conexão lenta pode levar o tempo que for (lib/files.ts).
+        // Envio de até 100 MB numa conexão lenta pode levar o tempo que for (lib/files.ts).
         timeout: 0,
         signal: controller.signal,
         onUploadProgress: (event) => {

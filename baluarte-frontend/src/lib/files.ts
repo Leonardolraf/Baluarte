@@ -7,16 +7,18 @@ import type { FileScan, SecondOpinion, SecondOpinionReason } from '@/types';
 // -----------------------------------------------------------------------------
 
 /**
- * Limite da API (B04, LIMITE_ARQUIVO_BYTES no backend): 250 MB de 1024 × 1024 bytes. A tela barra
- * antes de enviar; a API responde 413 ARQUIVO_MUITO_GRANDE acima disso.
+ * Limite da TELA: 100 MB de 1024 × 1024 bytes (decisão do Leo, Melhorias #18). A API aceita até
+ * 250 MB (B04, LIMITE_ARQUIVO_BYTES no backend); a tela corta abaixo disso, de propósito, como
+ * margem — envio muito grande pelo Funnel é lento e frágil. A tela barra antes de enviar; a API
+ * responde 413 ARQUIVO_MUITO_GRANDE acima do limite dela.
  */
-export const MAX_FILE_SIZE_MB = 250;
+export const MAX_FILE_SIZE_MB = 100;
 export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 export const MAX_FILE_SIZE_LABEL = `${MAX_FILE_SIZE_MB} MB`;
 
 /**
  * Tempo do envio no navegador (decisão do Leo, Melhorias #18): como no servidor, o envio não tem
- * prazo total, só de OCIOSIDADE. 250 MB numa conexão lenta porém estável podem levar o tempo que
+ * prazo total, só de OCIOSIDADE. 100 MB numa conexão lenta porém estável podem levar o tempo que
  * for; sem progresso por 90 s (o servidor desiste em 60 s, então normalmente quem responde é a
  * API, com 408 ENVIO_PARADO) a tela desiste. Depois do último byte, espera a análise por até
  * 6 min (o antivírus tem até 5 min na API, CLAMAV_TIMEOUT_MS).
@@ -89,7 +91,7 @@ export const FILE_TOO_LARGE_MESSAGE = `O arquivo passa do limite de ${MAX_FILE_S
 
 /**
  * 413 sem o código da API: quem recusou foi a hospedagem, antes de a API ler o arquivo (ex.: a
- * função serverless da Vercel, que só aceita corpos de poucos MB). O limite de 250 MB não se
+ * função serverless da Vercel, que só aceita corpos de poucos MB). O limite de 100 MB não se
  * aplica ali, então a mensagem não o repete.
  */
 /** Espelha LIMITE_ANALISES_SIMULTANEAS do backend (2): só para a mensagem da tela. */
