@@ -8,3 +8,6 @@ recursos/ca.crt
 
 # Saida do empacotamento.
 saida/
+
+# Copias de teste do wizard geradas na mao.
+teste-*.iss
