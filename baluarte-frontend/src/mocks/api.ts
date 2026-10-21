@@ -901,6 +901,53 @@ function campaignAttachments(campaignId: string): CampaignAttachments {
   };
 }
 
+/**
+ * Recusas da exportação de relatório (DT36), espelhando o servidor.
+ *
+ * `TETO_ACHADOS_RELATORIO` é o mesmo número do backend (`TETO_ACHADOS_RELATORIO`). Com o
+ * volume semeado aqui a regra nunca dispara; está escrita de propósito, para a camada
+ * simulada ter a MESMA regra e não só o caminho felizmente curto — quem exercita a tela é o
+ * teste, forçando o erro.
+ *
+ * A vaga do 429 é GLOBAL, como na API: uma por processo, de qualquer pessoa (a API da VM é
+ * uma instância só). Por isso é um booleano de módulo, e não algo por usuário.
+ */
+const TETO_ACHADOS_RELATORIO = 50_000;
+let exportandoRelatorio = false;
+
+/**
+ * Toma a vaga ANTES de contar os achados. A ordem importa: checar a vaga depois do trabalho
+ * deixaria dois pedidos simultâneos passarem juntos, que é o defeito que o DT09 corrigiu nos
+ * limites do backend ("reservar antes da operação cara"). Medido aqui em 19/10/2026.
+ */
+function exigirVagaDeExportacao(): void {
+  if (exportandoRelatorio)
+    throw new HttpError(
+      429,
+      'EXPORTACAO_EM_ANDAMENTO',
+      'Já há uma exportação de relatório em andamento. Tente de novo em instantes.',
+    );
+}
+
+function recusarPorTeto(total: number): void {
+  if (total > TETO_ACHADOS_RELATORIO)
+    throw new HttpError(
+      422,
+      'RELATORIO_GRANDE_DEMAIS',
+      `O relatório teria ${total.toLocaleString('pt-BR')} achados (máximo ${TETO_ACHADOS_RELATORIO.toLocaleString('pt-BR')}). Filtre por severidade, status ou ativo para gerar um relatório menor.`,
+    );
+}
+
+/** Mantém a vaga global ocupada enquanto o relatório é gerado, e sempre a devolve. */
+async function comVagaDeExportacao<T>(gerar: () => Promise<T>): Promise<T> {
+  exportandoRelatorio = true;
+  try {
+    return await gerar();
+  } finally {
+    exportandoRelatorio = false;
+  }
+}
+
 export const mockApi: BaluarteApi = {
   // ---- Autenticação ----
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
@@ -1275,43 +1322,48 @@ export const mockApi: BaluarteApi = {
   // Sem backend, o relatório é um PDF simples de texto (src/mocks/pdf.ts) com os mesmos
   // filtros da lista; a exportação entra na trilha de auditoria da sessão, como no servidor.
   async exportVulnerabilityReport(filters: VulnerabilityFilters = {}): Promise<VulnerabilityReportFile> {
-    // O relatório não pagina: leva todos os achados do filtro (como o servidor).
-    const { summary } = await this.listVulnerabilities(filters, { pageSize: 1 });
-    const items = filterVulnerabilities(filters);
-    const user = requireUser();
-    const sorted = [...items].sort((a, b) => b.cvss.base - a.cvss.base);
-    const severity =
-      filters.severity && filters.severity !== 'all' ? SEVERITY_LABEL[filters.severity] : 'todas';
-    const status = filters.status && filters.status !== 'all' ? VULN_STATUS_LABEL[filters.status] : 'todos';
-    const query = filters.query?.trim();
-    // O ativo (filtro `assetId`) sai pelo nome e host; o id só na auditoria, como no servidor.
-    const asset = filters.assetId?.trim() ? findFilterAsset(filters.assetId.trim()) : undefined;
-    const filtersText =
-      `severidade: ${severity}; status: ${status}; busca: ${query ? `"${query}"` : 'nenhuma'}` +
-      (asset ? `; ativo: ${asset.name} (${asset.host})` : '');
-    const scores = sorted.map((v) => v.cvss.base);
-    const lines = [
-      'Baluarte — Relatório de vulnerabilidades (modo demonstração)',
-      `Gerado em ${formatDateTime(new Date())} por ${user.name} (${user.email})`,
-      `Filtros — ${filtersText}`,
-      '',
-      `Achados: ${summary.total} · Ativos afetados: ${summary.assets}` +
-        (scores.length
-          ? ` · CVSS médio: ${(scores.reduce((s, n) => s + n, 0) / scores.length).toFixed(1)} · CVSS máximo: ${Math.max(...scores).toFixed(1)}`
-          : ''),
-      '',
-      ...sorted.flatMap((v, i) => [
-        `${i + 1}. [${v.cvss.base.toFixed(1)} ${SEVERITY_LABEL[v.severity]}] ${v.assetHost} — ${v.owaspId} ${v.owaspCategory}`,
-        `    ${[v.cwe, v.cve].filter(Boolean).join(' · ') || 'sem CWE/CVE'} · ${VULN_STATUS_LABEL[v.status]} · ${formatDate(v.detectedAt)}`,
-      ]),
-      ...(sorted.length ? [] : ['Nenhum achado para os filtros aplicados.']),
-    ];
-    pushAudit(
-      user,
-      'EXPORTAR_RELATORIO_VULNERABILIDADES',
-      `${summary.total} ${summary.total === 1 ? 'achado' : 'achados'}; ${filtersText}${asset ? ` [${asset.id}]` : ''}; formato: PDF`,
-    );
-    return { blob: simplePdf(lines, 'Baluarte (demonstração)'), filename: vulnerabilityReportFilename() };
+    // DT36: a vaga única do servidor é tomada antes de qualquer trabalho.
+    exigirVagaDeExportacao();
+    return comVagaDeExportacao(async () => {
+      // O relatório não pagina: leva todos os achados do filtro (como o servidor).
+      const { summary } = await this.listVulnerabilities(filters, { pageSize: 1 });
+      recusarPorTeto(summary.total);
+      const items = filterVulnerabilities(filters);
+      const user = requireUser();
+      const sorted = [...items].sort((a, b) => b.cvss.base - a.cvss.base);
+      const severity =
+        filters.severity && filters.severity !== 'all' ? SEVERITY_LABEL[filters.severity] : 'todas';
+      const status = filters.status && filters.status !== 'all' ? VULN_STATUS_LABEL[filters.status] : 'todos';
+      const query = filters.query?.trim();
+      // O ativo (filtro `assetId`) sai pelo nome e host; o id só na auditoria, como no servidor.
+      const asset = filters.assetId?.trim() ? findFilterAsset(filters.assetId.trim()) : undefined;
+      const filtersText =
+        `severidade: ${severity}; status: ${status}; busca: ${query ? `"${query}"` : 'nenhuma'}` +
+        (asset ? `; ativo: ${asset.name} (${asset.host})` : '');
+      const scores = sorted.map((v) => v.cvss.base);
+      const lines = [
+        'Baluarte — Relatório de vulnerabilidades (modo demonstração)',
+        `Gerado em ${formatDateTime(new Date())} por ${user.name} (${user.email})`,
+        `Filtros — ${filtersText}`,
+        '',
+        `Achados: ${summary.total} · Ativos afetados: ${summary.assets}` +
+          (scores.length
+            ? ` · CVSS médio: ${(scores.reduce((s, n) => s + n, 0) / scores.length).toFixed(1)} · CVSS máximo: ${Math.max(...scores).toFixed(1)}`
+            : ''),
+        '',
+        ...sorted.flatMap((v, i) => [
+          `${i + 1}. [${v.cvss.base.toFixed(1)} ${SEVERITY_LABEL[v.severity]}] ${v.assetHost} — ${v.owaspId} ${v.owaspCategory}`,
+          `    ${[v.cwe, v.cve].filter(Boolean).join(' · ') || 'sem CWE/CVE'} · ${VULN_STATUS_LABEL[v.status]} · ${formatDate(v.detectedAt)}`,
+        ]),
+        ...(sorted.length ? [] : ['Nenhum achado para os filtros aplicados.']),
+      ];
+      pushAudit(
+        user,
+        'EXPORTAR_RELATORIO_VULNERABILIDADES',
+        `${summary.total} ${summary.total === 1 ? 'achado' : 'achados'}; ${filtersText}${asset ? ` [${asset.id}]` : ''}; formato: PDF`,
+      );
+      return { blob: simplePdf(lines, 'Baluarte (demonstração)'), filename: vulnerabilityReportFilename() };
+    });
   },
 
   // Sem backend não há gerador de .xlsx (o exceljs vive só no servidor): o modo mock recusa
