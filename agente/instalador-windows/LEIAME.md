@@ -44,18 +44,29 @@ Uso único, TTL de 24 h, e o relógio lido depois do `FOR UPDATE`.
 A implementação do servidor é do Backend, em branch, pós-demo. **Até ela subir não há como testar
 ponta a ponta**: um código emitido não existe.
 
-### O botão "Testar código" foi recusado
+### Não há verificação de código pela rede, e é de propósito
 
-O contrato oferece um `GET /agentes/osquery/vinculos/:codigo` **público**, que diz se um código
-vale sem consumi-lo, para o wizard pré-validar. Não foi usado, por dois motivos:
+Uma versão anterior do contrato oferecia um `GET /agentes/osquery/vinculos/:codigo` **público**,
+para o wizard pré-validar o código com um botão "Testar código". Foi recusado aqui e **retirado do
+contrato** pelo Backend em 21/10/2026, por dois motivos:
 
-1. **Contradiz o próprio contrato.** O enroll devolve um 401 único para desconhecido, expirado e
-   usado justamente para não permitir enumeração — e esse endpoint devolve
-   `motivo: EXPIRADO | USADO | DESCONHECIDO` numa rota pública, sem autenticação. É o oráculo que
-   o 401 foi desenhado para negar.
-2. **Reintroduz rede no instalador.** O `.exe` não fazer chamada nenhuma é a propriedade que torna
-   o desenho limpo: sem segredo embutido, sem CA para validar na hora do wizard, sem servidor
-   precisando estar de pé para a instalação andar. Trocar isso por uma pré-validação é caro.
+1. **Contradizia o próprio contrato.** O enroll devolve um 401 único para desconhecido, expirado e
+   usado justamente para não permitir enumeração — e aquele endpoint devolvia
+   `motivo: EXPIRADO | USADO | DESCONHECIDO` numa rota aberta. Era o oráculo que o 401 nega.
+2. **Reintroduzia rede no instalador.** O `.exe` não fazer chamada nenhuma é a propriedade que
+   torna o desenho limpo: sem segredo embutido, sem CA para validar na hora do wizard, sem
+   servidor precisando estar de pé para a instalação andar.
+
+Quem vê o estado de um código é o **painel**, por `GET /estacoes/vinculos` (Administrador,
+autenticado). O instalador valida só o formato, localmente.
+
+### Reexecutar o instalador exige um código novo
+
+O consumo é uso único por código, sempre. Reexecutar numa máquina já inscrita é uma reinscrição
+legítima — é o caminho de recuperação que a tela de falha indica — e **exige um código fresco**:
+o próprio código já consumido dá `401 SEGREDO_INVALIDO`, nunca é reaproveitado em silêncio. Isso
+importa para o texto da tela final, que manda gerar um novo no painel; se dissesse só "execute de
+novo", o operador ficaria preso.
 
 ### Falha de inscrição não aparece no wizard
 
