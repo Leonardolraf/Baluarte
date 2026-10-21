@@ -109,6 +109,19 @@ armadilha da tela que ele deveria consertar.
    gravada no banco do osquery (`osquery.db`), então o serviço sobe depois já inscrito. Nenhum
    arquivo de log, nenhuma flag a mais, nada permanente.
 
+   **Duas armadilhas, as duas fatais se erradas:**
+   - A sonda tem de usar o **mesmo `--database_path` do serviço** (o padrão,
+     `C:\Program Files\osquery\osquery.db`). Com banco separado, a sonda consome o código e o
+     serviço tenta se inscrever de novo — e como o código é de **uso único**, ele toma `401` e a
+     estação nunca sobe. Ou seja, a sonda teria *causado* a falha que foi feita para detectar.
+     Na prática isso sai de graça passando o flagfile definitivo sem sobrescrever nada; o perigo é
+     alguém "isolar" a sonda num banco temporário achando que é mais limpo.
+   - O serviço roda como **SYSTEM** e a sonda rodaria como o **administrador** que abriu o
+     instalador. Os dois escrevem o mesmo `osquery.db`, e na medição da falha o osquery já
+     reclamou `Failed to apply safe permssions to the database`. Se o banco ficar com dono ou ACL
+     que o serviço não aceite, ele não abre — e a falha apareceria longe da causa. **Conferir isso
+     na medição**, não depois.
+
 **O que impede escolher agora:** os três dependem de reconhecer o **sucesso**, e só a falha está
 medida. Não se sabe o que o osquery escreve quando a inscrição dá certo — e tratar "não apareceu a
 linha de falha" como sucesso é a mesma troca que este documento inteiro critica: ausência de dado
