@@ -122,7 +122,8 @@ begin
 end;
 
 { BLT-XXXX-XXXX-XXXX, alfabeto sem 0/O/1/I para nao confundir quem le da tela e digita.
-  CONFIRMAR COM O BACKEND o formato e o alfabeto exatos (ver LEIAME.md). }
+  Formato confirmado pelo contrato do Backend em 21/10/2026 (ver LEIAME.md). O servidor normaliza
+  o recebido com trim + maiusculas e compara por hash, que e o que o wizard grava. }
 function CodigoValido(S: String): Boolean;
 var
   I: Integer;
@@ -234,5 +235,10 @@ begin
   if Falhou then
     WizardForm.FinishedLabel.Caption := 'A instalação terminou com erros e o agente pode não estar coletando.' + #13#10#13#10 + 'Veja o diário em ' + ExpandConstant('{app}\instalacao.log') + ' e, depois de corrigir, execute este instalador de novo com um código de vínculo novo.'
   else
-    WizardForm.FinishedLabel.Caption := 'O Agente Baluarte está instalado e rodando como serviço do Windows.' + #13#10#13#10 + 'A estação aparece no painel do Baluarte, em Estações, logo após a inscrição; o inventário técnico chega no primeiro ciclo de coleta.' + #13#10#13#10 + 'O código de vínculo informado já foi consumido e não vale uma segunda vez.';
+    { Cuidado: daqui NAO da para afirmar que a estacao se inscreveu. A inscricao acontece quando
+      o osqueryd sobe, depois que o instalar-agente.ps1 termina, e o que foi conferido ate aqui e
+      so que o servico esta em execucao. Codigo errado ou expirado da exatamente este mesmo
+      caminho: servico de pe, inscricao recusada com 401 e nada no painel. Por isso o texto manda
+      conferir no painel em vez de dizer que deu certo. }
+    WizardForm.FinishedLabel.Caption := 'O Agente Baluarte está instalado e o serviço do Windows está em execução.' + #13#10#13#10 + 'Confirme no painel do Baluarte, em Estações: a máquina deve aparecer em até um minuto, e o inventário técnico chega no primeiro ciclo de coleta.' + #13#10#13#10 + 'Se ela não aparecer, o código de vínculo provavelmente estava expirado ou já tinha sido usado. Gere um novo no painel e execute este instalador de novo.';
 end;

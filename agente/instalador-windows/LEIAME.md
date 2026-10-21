@@ -32,22 +32,48 @@ O ganho sobre a alternativa (o instalador emitindo o código) é que o `.exe` **
 segredo nenhum**. Se ele emitisse, precisaria do `OSQUERY_ENROLL_SECRET` da organização embutido,
 e qualquer um com o arquivo inscreveria estação falsa e leria a configuração da org.
 
+## Contrato fechado com o Backend (21/10/2026)
+
+O formato bate com o que já estava implementado, sem mudança: `BLT-` + três grupos de 4 no alfabeto
+`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, 18 caracteres. O agente manda com os traços e em maiúsculas,
+como o wizard grava; o servidor normaliza (`trim` + maiúsculas) e compara por hash. Código
+desconhecido, expirado ou já usado dão todos **`401 SEGREDO_INVALIDO`**, mensagem única, de
+propósito, para não permitir enumeração. A emissão é `POST /estacoes/vinculos` (Administrador).
+Uso único, TTL de 24 h, e o relógio lido depois do `FOR UPDATE`.
+
+A implementação do servidor é do Backend, em branch, pós-demo. **Até ela subir não há como testar
+ponta a ponta**: um código emitido não existe.
+
+### O botão "Testar código" foi recusado
+
+O contrato oferece um `GET /agentes/osquery/vinculos/:codigo` **público**, que diz se um código
+vale sem consumi-lo, para o wizard pré-validar. Não foi usado, por dois motivos:
+
+1. **Contradiz o próprio contrato.** O enroll devolve um 401 único para desconhecido, expirado e
+   usado justamente para não permitir enumeração — e esse endpoint devolve
+   `motivo: EXPIRADO | USADO | DESCONHECIDO` numa rota pública, sem autenticação. É o oráculo que
+   o 401 foi desenhado para negar.
+2. **Reintroduz rede no instalador.** O `.exe` não fazer chamada nenhuma é a propriedade que torna
+   o desenho limpo: sem segredo embutido, sem CA para validar na hora do wizard, sem servidor
+   precisando estar de pé para a instalação andar. Trocar isso por uma pré-validação é caro.
+
+### Falha de inscrição não aparece no wizard
+
+**Limitação conhecida, não resolvida.** A inscrição acontece quando o `osqueryd` sobe, *depois* que
+o `instalar-agente.ps1` termina, e o que o instalador confere é só que o serviço ficou em execução.
+Um código errado ou expirado produz exatamente o mesmo caminho: serviço de pé, enroll recusado com
+401, e nada no painel. **Serviço em execução não é estação inscrita.**
+
+Por isso a tela final não afirma que deu certo: ela manda conferir no painel e diz o que fazer se a
+máquina não aparecer. Fechar isso de verdade exige o instalador ler o resultado da inscrição — o
+osquery registra a falha nos logs de status dele — e não dá para escrever e testar essa leitura
+sem um servidor emitindo códigos de verdade. Fica para quando a implementação do Backend subir.
+
 ## O que o Backend ainda precisa fechar
 
-1. **Endpoint de emissão**, autenticado (Administrador), gravando a inscrição pendente com
-   nome/tipo/IP e devolvendo o código.
-2. **O enroll aceitando o código** no lugar do `OSQUERY_ENROLL_SECRET`, reconhecido pelo formato.
-3. **Uso único e TTL**: o código tem de ser consumido na primeira inscrição e expirar se não for
-   usado (24 h). Sem isso é uma credencial de pé, de 12 caracteres úteis e reutilizável.
-4. **O relógio lido depois do `FOR UPDATE`** da inscrição pendente, não antes — é o DT10 de
-   10/10 (`now()` antes da trava) e o jeito mais fácil de um código de 24 h valer para sempre.
-5. **Formato e alfabeto exatos** do código, e a resposta do enroll com código já usado ou
-   expirado (para a mensagem de erro do wizard).
-
-Enquanto não vier, o wizard valida pelo que o protótipo usava: `BLT-` + três grupos de 4, no
-alfabeto `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (sem `0`, `O`, `1` e `I`, que se confundem na tela).
-Está em dois lugares, e os dois têm um comentário apontando para cá: `CodigoValido` no
-`instalador-baluarte.iss` e `$PadraoCodigo` no `aplicar.ps1`. **Mudou o formato, mude os dois.**
+Nada do contrato. Ficaram dois pontos em aberto do lado dele, nenhum travando este diretorio:
+se o responsavel pela maquina aparece no ativo-estacao (hoje fica so no vinculo) e se o Analista
+tambem pode emitir codigo, alem do Administrador.
 
 ## Arquivos
 

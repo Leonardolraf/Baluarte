@@ -42,7 +42,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Alfabeto do codigo de vinculo: sem 0/O/1/I, para nao confundir quem le da tela e digita.
-# CONFIRMAR COM O BACKEND: formato e alfabeto exatos do codigo (ver LEIAME.md).
+# Formato confirmado pelo contrato do Backend em 21/10/2026 (ver LEIAME.md): o agente manda o
+# codigo com os tracos e em maiusculas, como gravado aqui, e o servidor compara por hash.
 $PadraoCodigo = '^BLT-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$'
 
 function Falhar([string]$m) { Write-Host "ERRO: $m"; exit 1 }
