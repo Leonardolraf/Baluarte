@@ -1,0 +1,10 @@
+# O MSI oficial do osquery (~19 MB) nao vai para o repositorio: baixar-osquery.ps1 o busca
+# na versao fixa de agente/osquery-versao.conf e confere o SHA-256 e a assinatura.
+recursos/*.msi
+
+# Certificado da CA local, copiado de certs/ca.crt na hora de empacotar (o certs/ inteiro ja
+# esta fora do git). Nunca a ca.key.
+recursos/ca.crt
+
+# Saida do empacotamento.
+saida/
