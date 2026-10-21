@@ -1,44 +1,56 @@
+import { useId } from 'react';
 import { cn } from '@/lib/cn';
+
+/** Caminho do escudo com ameias (bastião). Compartilhado pelas duas metades de cor. */
+const ESCUDO =
+  'M8,6 L18,6 L18,12 L27,12 L27,6 L37,6 L37,12 L46,12 L46,6 L56,6 L56,12 L55,30 Q52,46 32,58 Q12,46 9,30 L8,12 Z';
 
 export interface BaluarteMarkProps {
   /** Lado do quadrado, em px. */
   size?: number;
-  /** Fundo do quadrado: `ink` (padrão, sobre superfícies claras) ou `inverse` (branco, sobre a placa/barra lateral). */
-  tone?: 'ink' | 'inverse';
   className?: string;
 }
 
 /**
- * Marca do Baluarte: a planta pentagonal de um bastião. Mesmo desenho do favicon
- * (`public/baluarte.svg`). Decorativa por padrão; passe `aria-label` no elemento pai
- * quando for o único conteúdo de um link.
+ * Marca do Baluarte (#25): escudo com ameias partido em duas metades de azul, com um check
+ * branco de "segurança verificada". Mesmo desenho do favicon (`public/baluarte.svg`, que lá
+ * mora sobre um tile escuro para ler na aba do navegador).
+ *
+ * A marca é COLORIDA FIXA: as cores (azul-800/azul-500, nunca navy) foram escolhidas para ler
+ * tanto sobre superfícies claras quanto sobre a barra lateral escura, então não troca com o
+ * tema — diferente da marca monocromática antiga, que tinha `tone`. O check branco fica dentro
+ * do escudo, logo independe do fundo da página.
+ *
+ * Decorativa por padrão; passe `aria-label` no elemento pai quando for o único conteúdo de um
+ * link.
  */
-export function BaluarteMark({ size = 32, tone = 'ink', className }: BaluarteMarkProps) {
-  const inverse = tone === 'inverse';
+export function BaluarteMark({ size = 32, className }: BaluarteMarkProps) {
+  // Id único por instância: o escudo é renderizado em vários lugares da mesma página (topbar,
+  // barra lateral, login) e um id de clipPath fixo colidiria no DOM, quebrando o recorte.
+  const clipId = useId();
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 64 64"
       aria-hidden="true"
       focusable="false"
       className={cn('shrink-0', className)}
     >
-      <rect width="32" height="32" rx="8" className={inverse ? 'fill-white' : 'fill-ink dark:fill-white'} />
+      <defs>
+        <clipPath id={clipId}>
+          <rect x="32" y="0" width="32" height="64" />
+        </clipPath>
+      </defs>
+      <path d={ESCUDO} fill="#1e40af" />
+      <path d={ESCUDO} fill="#3b82f6" clipPath={`url(#${clipId})`} />
       <path
-        d="M16 5.5 26.5 12.6 22.6 25.5H9.4L5.5 12.6Z"
+        d="M22,33 L29,40 L44,25"
         fill="none"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-        className={inverse ? 'stroke-ink' : 'stroke-white dark:stroke-ink'}
-      />
-      <path
-        d="M12.2 17.2 15 20l4.9-5.2"
-        fill="none"
-        strokeWidth="2.2"
+        stroke="#FFFFFF"
+        strokeWidth="5"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className={inverse ? 'stroke-ink' : 'stroke-white dark:stroke-ink'}
       />
     </svg>
   );
