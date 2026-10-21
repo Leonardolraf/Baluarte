@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   fromCampaignInput,
+  toCampaign,
+  type BackendCampaign,
+  toVulnerability,
+  type BackendFinding,
   fromNotificationPreferences,
   toNotificationPreferences,
   toTraining,
@@ -88,5 +92,98 @@ describe('services/adapters — treinamento', () => {
       progress: 100,
       completedAt: '2026-09-11T10:30:00.000Z',
     });
+  });
+});
+
+// DT33 — "Componente afetado" nao pode ser a categoria OWASP.
+//
+// O adaptador preenchia `affectedComponent` com a categoria OWASP, entao o campo rotulado
+// "Componente afetado" mostrava "Vulnerable and Outdated Components" em producao. No mock
+// aparecia "log4j-core" e por isso parecia certo na demonstracao. O unico componente que o
+// servidor conhece de verdade e o `programa` dos achados de estacao (B14).
+
+function backendFinding(overrides: Partial<BackendFinding> = {}): BackendFinding {
+  return {
+    id: 'f-900',
+    ativo: 'api.empresa.com',
+    ativoNome: 'API de Pagamentos',
+    categoria: 'A06:2021 - Vulnerable and Outdated Components',
+    cvss: 9.8,
+    severidade: 'Crítico',
+    status: 'Aberta',
+    descricao: 'Biblioteca desatualizada com execução remota de código.',
+    evidencia: 'trecho do log',
+    detectadoEm: '2026-10-01T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('services/adapters — componente afetado (DT33)', () => {
+  it('achado de estação: usa o programa e a versão que o servidor mandou', () => {
+    const v = toVulnerability(backendFinding({ programa: 'Mozilla Firefox', programaVersao: '128.1.0' }));
+    expect(v.affectedComponent).toBe('Mozilla Firefox');
+    expect(v.affectedVersion).toBe('128.1.0');
+  });
+
+  it('achado do scanner: componente desconhecido vira null, nunca a categoria OWASP', () => {
+    const v = toVulnerability(backendFinding());
+    expect(v.affectedComponent).toBeNull();
+    expect(v.affectedVersion).toBeNull();
+    // A categoria continua existindo, no campo dela.
+    expect(v.owaspCategory).toBe('Vulnerable and Outdated Components');
+    expect(v.affectedComponent).not.toBe(v.owaspCategory);
+  });
+});
+
+// Lista de campanhas: o alcance e um dado do servidor, nao uma deducao do status.
+//
+// Contexto medido em 19/10/2026: nenhum caminho da API tira a campanha de AGENDADA
+// (campanha.repository.ts escreve so esse status), entao derivar o envio do status zerava o
+// alcance de toda campanha criada pela plataforma — inclusive a `Fake Invoice Julho` do
+// seed-demo, com `enviadoEm` gravado nos 180 eventos. O backend passou a mandar `enviados`
+// (fix/campanha-enviados); aqui fica a prova de que a tela usa o dado e nao a deducao.
+
+function backendCampaign(overrides: Partial<BackendCampaign> = {}): BackendCampaign {
+  return {
+    id: 'camp-900',
+    nome: 'Fake Invoice Julho',
+    template: 'curiosidade',
+    status: 'AGENDADA',
+    destinatarios: 180,
+    taxaClique: 10,
+    criadoEm: '2026-10-01T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('services/adapters — alcance da lista de campanhas', () => {
+  it('usa `enviados` do servidor mesmo com a campanha em AGENDADA', () => {
+    const c = toCampaign(backendCampaign({ enviados: 180 }));
+    expect(c.status).toBe('scheduled');
+    expect(c.metrics.sent).toBe(180);
+    // Com envio, a data de inicio deixa de ser nula e o clique sai da taxa real.
+    expect(c.startedAt).not.toBeNull();
+    expect(c.metrics.clicked).toBe(18);
+  });
+
+  it('campanha sem nenhum envio continua com alcance zero', () => {
+    const c = toCampaign(backendCampaign({ enviados: 0, taxaClique: 0 }));
+    expect(c.metrics.sent).toBe(0);
+    expect(c.startedAt).toBeNull();
+  });
+
+  it('sem o campo (API antiga) mantem a conta de antes, sem piorar', () => {
+    const agendada = toCampaign(backendCampaign());
+    expect(agendada.metrics.sent).toBe(0);
+    const ativa = toCampaign(backendCampaign({ status: 'ATIVA' }));
+    expect(ativa.metrics.sent).toBe(180);
+  });
+
+  it('abertura da lista e desconhecida, nunca zero', () => {
+    const c = toCampaign(backendCampaign({ enviados: 180 }));
+    // A lista nao traz abertura: afirmar 0 diria "ninguem abriu" sobre uma campanha que
+    // pode ter sido aberta por todos. Quem tem o funil e o relatorio da campanha.
+    expect(c.metrics.opened).toBeNull();
+    expect(c.metrics.openRate).toBeNull();
   });
 });

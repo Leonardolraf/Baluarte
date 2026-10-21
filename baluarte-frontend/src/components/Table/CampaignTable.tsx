@@ -195,8 +195,8 @@ function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
 }
 
 interface RateCellProps {
-  /** Percentual 0–100. */
-  value: number;
+  /** Percentual 0–100, ou `null` quando a fonte não sabe (a lista não traz abertura). */
+  value: number | null;
   /** `false` exibe "—" (campanha ainda sem envios/cliques). */
   available: boolean;
   /** Classe de cor do número (padrão neutro). */
@@ -215,7 +215,8 @@ function RateCell({
   barClass = 'bg-slate-500 dark:bg-slate-400',
   className,
 }: RateCellProps) {
-  if (!available) {
+  // Sem base de cálculo ou sem o dado: "—". Nunca 0%, que afirmaria "ninguém abriu".
+  if (!available || value === null) {
     return (
       <Td align="right" className={cn('text-slate-500 dark:text-slate-400', className)}>
         —

@@ -136,6 +136,9 @@ export interface BackendFinding {
   cwe?: string | null;
   cve?: string | null;
   cvssVetor?: string | null;
+  /** B14: achado de estação — programa instalado e versão. Nulos nos achados do scanner. */
+  programa?: string | null;
+  programaVersao?: string | null;
   remediacao?: Array<{ ordem: number; titulo: string; descricao: string; esforco: string }>;
   /** Só no detalhe: a varredura e o ativo de origem. */
   origem?: {
@@ -191,6 +194,11 @@ export interface BackendCampaign {
   template: string;
   status: string;
   destinatarios: number;
+  /**
+   * E-mails que saíram (eventos com `enviadoEm`). Opcional porque a API da VM só passa a
+   * mandar depois do release de `fix/campanha-enviados`; sem o campo, cai no antigo.
+   */
+  enviados?: number;
   taxaClique: number;
   criadoEm: string;
 }
@@ -602,8 +610,12 @@ export function toVulnerability(raw: BackendFinding): Vulnerability {
     assetId: raw.ativo,
     assetName: raw.ativoNome,
     assetHost: raw.ativo,
-    affectedComponent: owaspCategory,
-    affectedVersion: null,
+    // DT33: o componente afetado é o PROGRAMA que o servidor mandou (achado de estação, B14),
+    // nunca a categoria OWASP. Preencher com a categoria enchia o campo "Componente afetado"
+    // com "Vulnerable and Outdated Components" — um valor plausível e errado, que no mock
+    // aparecia como "log4j-core" e por isso parecia certo na demonstração.
+    affectedComponent: raw.programa ?? null,
+    affectedVersion: raw.programaVersao ?? null,
     fixedVersion: null,
     artifactHash: null,
     description: raw.descricao,
@@ -670,7 +682,11 @@ export function toVulnerabilityList(
   };
 }
 
-function metricsFromFunnel(recipients: number, funnel: BackendFunnel | null, trained = 0): CampaignMetrics {
+function metricsFromFunnel(
+  recipients: number,
+  funnel: BackendFunnel | null,
+  trained = 0,
+): CampaignMetrics & { opened: number; openRate: number } {
   const sent = funnel?.enviados.valor ?? 0;
   const clicked = funnel?.clicados.valor ?? 0;
   const pct = (n: number) => (sent > 0 ? Math.round((n / sent) * 100) : 0);
@@ -695,7 +711,11 @@ function metricsFromFunnel(recipients: number, funnel: BackendFunnel | null, tra
 
 export function toCampaign(raw: BackendCampaign): Campaign {
   const status = CAMPAIGN_STATUS_FROM_LABEL[norm(raw.status)] ?? 'scheduled';
-  const sent = status === 'scheduled' || status === 'draft' ? 0 : raw.destinatarios;
+  // Quantos e-mails saíram é um dado do servidor (`enviados`), não uma dedução do status: a
+  // API nunca tira uma campanha de AGENDADA, então derivar daqui zerava o alcance de toda
+  // campanha criada pela plataforma, mesmo com o e-mail já enviado a todos. Sem o campo
+  // (API antiga), mantém a conta de antes — erra igual, nunca mais.
+  const sent = raw.enviados ?? (status === 'scheduled' || status === 'draft' ? 0 : raw.destinatarios);
   const clicked = Math.round((raw.taxaClique / 100) * sent);
   return {
     id: raw.id,
@@ -712,12 +732,13 @@ export function toCampaign(raw: BackendCampaign): Campaign {
     metrics: {
       recipients: raw.destinatarios,
       sent,
-      opened: 0,
+      // A lista não traz abertura: desconhecido, não zero (ver CampaignMetrics.opened).
+      opened: null,
       clicked,
       submitted: 0,
       reported: 0,
       trained: 0,
-      openRate: 0,
+      openRate: null,
       clickRate: raw.taxaClique,
       submitRate: 0,
       reportRate: 0,
