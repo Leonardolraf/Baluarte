@@ -19,23 +19,39 @@
 #define MinhaEmpresa "Baluarte"
 #define OsqueryMsi "osquery-" + OsqueryVersao + ".msi"
 
+; Modo demonstracao (empacotar.ps1 -Demonstracao): o MESMO wizard, pelas mesmas 7 paginas, mas
+; INCAPAZ de instalar. Serve para mostrar o fluxo numa maquina qualquer sem Docker, sem
+; certificados, sem backend e sem administrador. O que muda: nao embute o MSI do osquery, nao
+; chama o aplicar.ps1, nao pede elevacao, instala numa pasta temporaria do usuario e nao se
+; registra em Aplicativos Instalados. Sai com DEMONSTRACAO no nome do arquivo, de proposito,
+; para ninguem confundir com o instalador de verdade.
 [Setup]
+#ifdef Demonstracao
+AppId={{7C2E9A14-5B3D-4F60-8E71-2A4C6D8B0F93}
+OutputBaseFilename=InstaladorAgenteBaluarte-{#MinhaVersao}-DEMONSTRACAO
+PrivilegesRequired=lowest
+DefaultDirName={localappdata}\Temp\BaluarteAgenteDemonstracao
+Uninstallable=no
+#else
 AppId={{B4A1F7C2-6E3D-4A58-9C0B-1D7E2A9F5C34}
+OutputBaseFilename=InstaladorAgenteBaluarte-{#MinhaVersao}
+; O agente roda como servico do Windows e o MSI do osquery escreve em Program Files:
+; sem administrador nao ha instalacao possivel.
+PrivilegesRequired=admin
+DefaultDirName={autopf}\Baluarte\Agente
+UninstallDisplayName={#MeuNome}
+UninstallDisplayIcon={app}\baluarte.ico
+#endif
 AppName={#MeuNome}
 AppVersion={#MinhaVersao}
 AppVerName={#MeuNome} {#MinhaVersao}
 AppPublisher={#MinhaEmpresa}
 VersionInfoDescription=Instalador do Agente de Monitoramento Baluarte
 VersionInfoVersion={#MinhaVersao}
-DefaultDirName={autopf}\Baluarte\Agente
 DefaultGroupName=Baluarte
 DisableProgramGroupPage=yes
-; O agente roda como servico do Windows e o MSI do osquery escreve em Program Files:
-; sem administrador nao ha instalacao possivel.
-PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=saida
-OutputBaseFilename=InstaladorAgenteBaluarte-{#MinhaVersao}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -43,14 +59,12 @@ WizardStyle=modern
 ; concluido. O Inno esconde a de boas-vindas no estilo moderno; aqui ela faz parte do fluxo.
 DisableWelcomePage=no
 LicenseFile=termos-instalacao.txt
-UninstallDisplayName={#MeuNome}
 ; Marca: o escudo canonico do produto (baluarte-frontend\public\baluarte.svg), rasterizado por
 ; recursos\gerar-imagens.py. WizardImageFile e o painel das paginas de boas-vindas e conclusao;
 ; WizardSmallImageFile, o selo no alto das demais.
 SetupIconFile=recursos\baluarte.ico
 WizardImageFile=recursos\wizard-grande.bmp
 WizardSmallImageFile=recursos\wizard-pequeno.bmp
-UninstallDisplayIcon={app}\baluarte.ico
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -71,18 +85,22 @@ Source: "..\instalar-agente.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\desinstalar-agente.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\osquery-versao.conf"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\osquery.flags.modelo"; DestDir: "{app}"; Flags: ignoreversion
+#ifndef Demonstracao
 ; O MSI oficial do osquery, embutido para instalar sem internet (baixar-osquery.ps1).
 Source: "recursos\{#OsqueryMsi}"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 ; A CA local do Baluarte (certs\ca.crt). Opcional: sem ela o agente so confia em autoridades
 ; publicas, o que nao serve para um servidor com certificado proprio.
 Source: "recursos\ca.crt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
+#ifndef Demonstracao
 [UninstallRun]
 ; Remove o servico e o osquery antes de apagar a pasta (o script nao recebe parametros).
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -NonInteractive -File ""{app}\desinstalar-agente.ps1"""; StatusMsg: "Removendo o serviço do agente..."; Flags: runhidden waituntilterminated; RunOnceId: "RemoverAgente"
 
 [UninstallDelete]
 Type: files; Name: "{app}\instalacao.log"
+#endif
 
 [Code]
 const
@@ -199,6 +217,12 @@ var
 begin
   if CurStep <> ssPostInstall then Exit;
 
+#ifdef Demonstracao
+  { Modo demonstracao: o wizard percorre as 7 paginas, mas NADA e instalado. Sem o MSI embutido,
+    sem chamar o aplicar.ps1, sem servico. Sair aqui e o que garante isso. }
+  Exit;
+#endif
+
   ArqCodigo := ExpandConstant('{tmp}\vinculo.txt');
   ArqLog := ExpandConstant('{app}\instalacao.log');
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
@@ -232,6 +256,12 @@ end;
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID <> wpFinished then Exit;
+#ifdef Demonstracao
+  WizardForm.FinishedLabel.Caption :=
+    'Demonstração do instalador: nenhuma alteração foi feita neste computador.' + #13#10#13#10 +
+    'No instalador real, a esta altura o osquery já estaria instalado, o serviço do Windows em execução e o código de vínculo gravado — e a orientação seria conferir a estação no painel do Baluarte.';
+  Exit;
+#endif
   if Falhou then
     WizardForm.FinishedLabel.Caption := 'A instalação terminou com erros e o agente pode não estar coletando.' + #13#10#13#10 + 'Veja o diário em ' + ExpandConstant('{app}\instalacao.log') + ' e, depois de corrigir, execute este instalador de novo com um código de vínculo novo.'
   else

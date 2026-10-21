@@ -28,6 +28,7 @@ powershell -ExecutionPolicy Bypass -File agente\instalador-windows\empacotar.ps1
 param(
   [string]$CaCert,
   [switch]$SemCa,
+  [switch]$Demonstracao,
   [string]$Iscc
 )
 
@@ -70,15 +71,22 @@ if (-not $Versao) { Falhar "OSQUERY_VERSAO ausente em $ArqVersoes." }
 Info "osquery $Versao"
 
 # ---- MSI oficial ------------------------------------------------------------------------
-# Script do PowerShell, nao executavel: nao define $LASTEXITCODE. Uma falha ali vira excecao
-# (ErrorActionPreference = Stop) e para este script; o que confere aqui e o arquivo no fim.
-& (Join-Path $Aqui 'baixar-osquery.ps1')
-$Msi = Join-Path $Recursos "osquery-$Versao.msi"
-if (-not (Test-Path -LiteralPath $Msi)) { Falhar "o MSI nao esta em $Msi." }
+# Na demonstracao o MSI nem entra no pacote, entao nao ha o que baixar nem conferir.
+if ($Demonstracao) {
+  Info 'MODO DEMONSTRACAO: sem o MSI do osquery, sem elevacao, sem instalar nada.'
+} else {
+  # Script do PowerShell, nao executavel: nao define $LASTEXITCODE. Uma falha ali vira excecao
+  # (ErrorActionPreference = Stop) e para este script; o que confere aqui e o arquivo no fim.
+  & (Join-Path $Aqui 'baixar-osquery.ps1')
+  $Msi = Join-Path $Recursos "osquery-$Versao.msi"
+  if (-not (Test-Path -LiteralPath $Msi)) { Falhar "o MSI nao esta em $Msi." }
+}
 
 # ---- Certificado da CA ------------------------------------------------------------------
 $CaDestino = Join-Path $Recursos 'ca.crt'
-if ($SemCa) {
+if ($Demonstracao) {
+  Info 'demonstracao: o certificado da CA nao e exigido (nada se conecta a servidor nenhum).'
+} elseif ($SemCa) {
   Remove-Item -LiteralPath $CaDestino -Force -ErrorAction SilentlyContinue
   Info 'empacotando SEM certificado de CA (-SemCa): o agente vai confiar so em autoridades publicas.'
 } else {
@@ -105,7 +113,9 @@ Ou, se o servidor tem certificado publico, empacote com -SemCa.
 # ---- Compilacao -------------------------------------------------------------------------
 New-Item -ItemType Directory -Path $Saida -Force | Out-Null
 Info 'compilando o instalador'
-& $Iscc "/DOsqueryVersao=$Versao" "/O$Saida" $ArqIss
+$defines = @("/DOsqueryVersao=$Versao")
+if ($Demonstracao) { $defines += '/DDemonstracao' }
+& $Iscc @defines $ArqIss
 if ($LASTEXITCODE -ne 0) { Falhar "o ISCC terminou com codigo $LASTEXITCODE." }
 
 $exe = Get-ChildItem -LiteralPath $Saida -Filter '*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1

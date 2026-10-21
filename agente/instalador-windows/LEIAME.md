@@ -116,6 +116,28 @@ Linha de comando de processo é visível para qualquer usuário da máquina
 caminho; o `aplicar.ps1` lê, converte para `SecureString`, e no `finally` sobrescreve o arquivo
 com zeros antes de apagá-lo. O diário da instalação mostra só os 4 últimos caracteres.
 
+## Modo demonstração
+
+```powershell
+powershell -ExecutionPolicy Bypass -File agente\instalador-windows\empacotar.ps1 -Demonstracao
+```
+
+Sai em `saida\InstaladorAgenteBaluarte-0.1.0-DEMONSTRACAO.exe` (~2 MB). É o **mesmo wizard**,
+pelas mesmas 7 páginas, mas **incapaz de instalar**: não embute o MSI do osquery, não chama o
+`aplicar.ps1`, não pede elevação, grava os poucos arquivos numa pasta temporária do usuário e não
+se registra em Aplicativos Instalados. A tela final diz, com todas as letras, que nada foi alterado
+no computador.
+
+Serve para mostrar o fluxo numa máquina qualquer, sem Docker, sem certificados e sem backend.
+
+**Por que existe:** no instalador real, a página "Pronto para instalar" tem um botão que inicia uma
+instalação de verdade do osquery — o MSI está embutido e não precisa de servidor nenhum para rodar.
+Num walkthrough, um clique a mais instala um serviço na máquina de quem está apresentando. O modo
+demonstração torna esse clique inofensivo em vez de depender de cuidado.
+
+O nome do arquivo carrega `DEMONSTRACAO` de propósito: os dois binários são parecidos na tela, e a
+diferença importa.
+
 ## Como gerar
 
 ```powershell
