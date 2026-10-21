@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { EventEmitter } from 'node:events';
-import { AntivirusIndisponivel, analisar, escrever, lerVeredito } from '../../src/config/antivirus.js';
+import { AntivirusIndisponivel, TEMPO_LIMITE_PADRAO_MS, analisar, escrever, lerVeredito, tempoLimiteMs } from '../../src/config/antivirus.js';
 
 const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
 
@@ -48,7 +48,9 @@ async function* blocosDe(...textos: string[]) {
 }
 
 before(async () => {
-  servidor = createServer(tratar);
+  // allowHalfOpen: como o clamd de verdade, o falso continua aberto depois que o cliente fecha o
+  // lado dele (fim do envio); sem isto o "mudo" fecharia a conexao e o tempo limite nunca correria.
+  servidor = createServer({ allowHalfOpen: true }, tratar);
   await new Promise<void>((ok) => servidor.listen(0, '127.0.0.1', ok));
   process.env.CLAMAV_HOST = '127.0.0.1';
   process.env.CLAMAV_PORT = String((servidor.address() as AddressInfo).port);
@@ -92,13 +94,92 @@ describe('analisar (INSTREAM)', () => {
     comportamento = 'mudo';
     process.env.CLAMAV_TIMEOUT_MS = '300';
     try {
-      // O tempo limite e lido no carregamento do modulo; aqui o socket so precisa nao responder.
+      // O tempo limite e lido a cada analise: com 300 ms, o proprio cliente desiste.
       await assert.rejects(Promise.race([
         analisar(blocosDe('x')),
-        new Promise((_, falha) => setTimeout(() => falha(new AntivirusIndisponivel('teste')), 1500)),
-      ]), AntivirusIndisponivel);
+        new Promise((_, falha) => setTimeout(() => falha(new Error('o tempo limite do cliente nao disparou')), 5000)),
+      ]), (e: Error) => e instanceof AntivirusIndisponivel && /tempo esgotado/.test(e.message));
     } finally {
       delete process.env.CLAMAV_TIMEOUT_MS;
+    }
+  });
+
+  it('tempo limite: 5 min por padrão; vazio, zero, negativo ou texto voltam ao padrão (zero desligaria o socket)', () => {
+    const antes = process.env.CLAMAV_TIMEOUT_MS;
+    try {
+      assert.equal(TEMPO_LIMITE_PADRAO_MS, 300_000);
+      for (const v of [undefined, '', '0', '-5', 'abc', 'Infinity']) {
+        if (v === undefined) delete process.env.CLAMAV_TIMEOUT_MS;
+        else process.env.CLAMAV_TIMEOUT_MS = v;
+        assert.equal(tempoLimiteMs(), TEMPO_LIMITE_PADRAO_MS, `CLAMAV_TIMEOUT_MS=${v}`);
+      }
+      process.env.CLAMAV_TIMEOUT_MS = '90000';
+      assert.equal(tempoLimiteMs(), 90_000);
+    } finally {
+      if (antes === undefined) delete process.env.CLAMAV_TIMEOUT_MS;
+      else process.env.CLAMAV_TIMEOUT_MS = antes;
+    }
+  });
+
+  it('DT26: clamd que responde "OK" antes do fim do envio nunca vira "limpo"', async () => {
+    // Um clamd de verdade so responde depois do bloco de tamanho zero. Aqui o falso responde
+    // "stream: OK" assim que recebe o comando (e depois do primeiro bloco), mantendo a conexao
+    // aberta e lendo o resto: o veredito falaria de um arquivo que ele nao recebeu.
+    for (const quando of ['no comando', 'depois do primeiro bloco'] as const) {
+      const precoce = createServer({ allowHalfOpen: true }, (socket) => {
+        let recebidos = 0;
+        let respondeu = false;
+        socket.on('data', (d) => {
+          recebidos += d.length;
+          const limiar = quando === 'no comando' ? 1 : 'zINSTREAM\0'.length + 4 + 64 * 1024;
+          if (!respondeu && recebidos >= limiar) {
+            respondeu = true;
+            socket.write('stream: OK\0');
+          }
+        });
+        socket.on('end', () => socket.end());
+      });
+      await new Promise<void>((ok) => precoce.listen(0, '127.0.0.1', ok));
+      const porta = process.env.CLAMAV_PORT;
+      process.env.CLAMAV_PORT = String((precoce.address() as AddressInfo).port);
+      try {
+        async function* arquivo() {
+          for (let i = 0; i < 64; i++) {
+            yield Buffer.alloc(64 * 1024, 66); // 4 MB
+            await new Promise((r) => setImmediate(r));
+          }
+        }
+        await assert.rejects(
+          analisar(arquivo()),
+          (e: Error) => e instanceof AntivirusIndisponivel && /antes do fim do envio/.test(e.message),
+          `resposta ${quando}`,
+        );
+      } finally {
+        process.env.CLAMAV_PORT = porta;
+        await new Promise<void>((ok) => precoce.close(() => ok()));
+      }
+    }
+  });
+
+  it('DT26: clamd que responde "OK" e fecha no meio do envio também é falha, não "limpo"', async () => {
+    const fecha = createServer((socket) => {
+      socket.once('data', () => socket.end('stream: OK\0'));
+      socket.on('data', () => undefined);
+    });
+    await new Promise<void>((ok) => fecha.listen(0, '127.0.0.1', ok));
+    const porta = process.env.CLAMAV_PORT;
+    process.env.CLAMAV_PORT = String((fecha.address() as AddressInfo).port);
+    try {
+      async function* arquivo() {
+        for (let i = 0; i < 160; i++) {
+          yield Buffer.alloc(64 * 1024, 67); // 10 MB
+          await new Promise((r) => setImmediate(r));
+        }
+      }
+      await assert.rejects(analisar(arquivo()), AntivirusIndisponivel);
+    } finally {
+      process.env.CLAMAV_PORT = porta;
+      await new Promise<void>((ok) => fecha.close(() => ok()));
     }
   });
 
@@ -147,6 +228,7 @@ describe('escrever: ouvintes do socket não acumulam (contrapressão)', () => {
       await escrita;
       assert.equal(s.listenerCount('drain'), 0, `drain pendurado no bloco ${i}`);
       assert.equal(s.listenerCount('error'), 0, `error pendurado no bloco ${i}`);
+      assert.equal(s.listenerCount('close'), 0, `close pendurado no bloco ${i}`);
     }
   });
 
@@ -156,6 +238,7 @@ describe('escrever: ouvintes do socket não acumulam (contrapressão)', () => {
     s.emit('error', new Error('conexão caiu'));
     await assert.rejects(escrita, AntivirusIndisponivel);
     assert.equal(s.listenerCount('drain'), 0);
+    assert.equal(s.listenerCount('close'), 0);
     assert.equal(s.listenerCount('error'), 0);
   });
 

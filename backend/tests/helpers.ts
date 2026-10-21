@@ -87,13 +87,12 @@ let server: Server | null = null;
 let base = '';
 
 /** Sobe a app numa porta efemera; `chamar` passa a apontar para ela. */
-export function iniciarServidor(app: Express): Promise<string> {
-  return new Promise((resolve) => {
-    server = app.listen(0, '127.0.0.1', () => {
-      base = `http://127.0.0.1:${(server!.address() as AddressInfo).port}/api`;
-      resolve(base);
-    });
-  });
+/** Sobe o app com as mesmas opcoes de producao (config/servidorHttp.ts). */
+export async function iniciarServidor(app: Express): Promise<string> {
+  const { escutar } = await import('../src/config/servidorHttp.js');
+  server = await escutar(app, 0, '127.0.0.1');
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
+  return base;
 }
 
 export function encerrarServidor(): Promise<void> {
@@ -179,11 +178,29 @@ export async function criarUsuarioPendente(
   return { id: r.body.dados.idUsuario as string, email, convite };
 }
 
-/** Cria um usuario pelo contrato e aceita o convite com SENHA_CONTA (status Ativo). */
-export async function criarUsuario(token: string, perfil: Perfil, prefixo = 'teste'): Promise<{ id: string; email: string }> {
+/**
+ * Marca os termos de uso (Melhorias #5) como aceitos direto no banco, sem passar pela rota:
+ * nao gera LOGIN nem ACEITAR_TERMOS na trilha de auditoria dos outros testes.
+ */
+export async function aceitarTermosNoBanco(id: string): Promise<void> {
+  const { prisma } = await import('../src/config/db.js');
+  await prisma.user.update({ where: { id }, data: { termosAceitosEm: new Date() } });
+}
+
+/**
+ * Cria um usuario pelo contrato e aceita o convite com SENHA_CONTA (status Ativo). Por padrao
+ * a conta ja sai com os termos de uso aceitos (#5); `{ aceitarTermos: false }` deixa sem aceite.
+ */
+export async function criarUsuario(
+  token: string,
+  perfil: Perfil,
+  prefixo = 'teste',
+  opcoes: { aceitarTermos?: boolean } = {},
+): Promise<{ id: string; email: string }> {
   const { id, email, convite } = await criarUsuarioPendente(token, perfil, prefixo);
   const r = await chamar('POST', '/auth/reset-password/confirm', { body: { token: convite, novaSenha: SENHA_CONTA } });
   assert.equal(r.status, 200, JSON.stringify(r.body));
+  if (opcoes.aceitarTermos !== false) await aceitarTermosNoBanco(id);
   return { id, email };
 }
 

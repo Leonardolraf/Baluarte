@@ -35,6 +35,8 @@ async function preencherCampanhaValida() {
   });
   fireEvent.click(screen.getByRole('radio', { name: /Autoridade/ }));
   const grupo = await screen.findByTestId('grupo-alvo');
+  // O grupo-alvo virou dropdown (Melhorias #1 e #2): abre pelo botão antes de marcar.
+  fireEvent.click(grupo.querySelector('button')!);
   // Marca o primeiro departamento: isso preenche os destinatários sozinho.
   const caixas = grupo.querySelectorAll('input[type="checkbox"]');
   fireEvent.click(caixas[1]!);
@@ -110,5 +112,39 @@ describe('formulário de campanha por departamento (Melhorias #1 e #2)', () => {
 
     await waitFor(() => expect(screen.getByText(/convite pendente/i)).toBeInTheDocument());
     expect(screen.queryByTestId('confirmar-envio-massa')).not.toBeInTheDocument();
+  });
+
+  it('envia a um único e-mail sem escolher grupo (o grupo é opcional)', async () => {
+    const criar = vi.spyOn(mockApi, 'createCampaign').mockResolvedValue({ id: 'camp-nova' } as never);
+    renderizar();
+    fireEvent.change(screen.getByLabelText(/Nome da campanha/i), { target: { value: 'Só um e-mail' } });
+    fireEvent.click(screen.getByRole('radio', { name: /Autoridade/ }));
+    fireEvent.change(screen.getByLabelText(/Destinatários/i), {
+      target: { value: 'ana.souza@empresa.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Agendar campanha' }));
+
+    await waitFor(() => expect(criar).toHaveBeenCalledTimes(1));
+    expect(criar.mock.calls[0]![0]).toMatchObject({ recipients: ['ana.souza@empresa.com'] });
+    // Nenhuma trava de grupo: não apareceu erro pedindo departamento, e nada bloqueou o envio.
+    expect(screen.queryByText(/Selecione ao menos um departamento/i)).not.toBeInTheDocument();
+  });
+
+  it('o grupo-alvo é um dropdown: abre pelo botão, marca e fecha com Esc', async () => {
+    renderizar();
+    const grupo = await screen.findByTestId('grupo-alvo');
+    const botao = grupo.querySelector('button')!;
+
+    // Fechado por padrão: as opções não estão no DOM.
+    expect(botao).toHaveAttribute('aria-expanded', 'false');
+    expect(grupo.querySelector('input[type="checkbox"]')).toBeNull();
+
+    fireEvent.click(botao);
+    expect(botao).toHaveAttribute('aria-expanded', 'true');
+    // "Todos" + ao menos um departamento aparecem.
+    expect(grupo.querySelectorAll('input[type="checkbox"]').length).toBeGreaterThan(1);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(grupo.querySelector('input[type="checkbox"]')).toBeNull());
   });
 });

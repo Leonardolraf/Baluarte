@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 import { createServer, type Server, type Socket } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { ADMIN, ANALISTA, SENHA_CONTA, criarUsuario, encerrarServidor, esperaErro, iniciarServidor, login, prepararBanco, urlBase, chamar } from './helpers.js';
+import { enviarArquivoEmFluxo, lerInstream } from './envioEmFluxo.js';
+import { MARCADOR_TESTE, montarZip } from './zipDeTeste.js';
 
 prepararBanco(import.meta.url);
 
@@ -14,26 +16,24 @@ const EICAR = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$
 let clamd: Server;
 let recebidoPeloClamd = 0;
 
+/** clamd falso em fluxo (envioEmFluxo.ts): conta o total e olha so o comeco do arquivo. */
 function falsoClamd(socket: Socket) {
-  let bruto = Buffer.alloc(0);
-  socket.on('data', (d) => {
-    bruto = Buffer.concat([bruto, d]);
-    let pos = 'zINSTREAM\0'.length;
-    const partes: Buffer[] = [];
-    while (pos + 4 <= bruto.length) {
-      const n = bruto.readUInt32BE(pos);
-      if (n === 0) {
-        const conteudo = Buffer.concat(partes);
-        recebidoPeloClamd = conteudo.length;
-        socket.end(conteudo.includes(Buffer.from('EICAR-STANDARD-ANTIVIRUS-TEST-FILE')) ? 'stream: Eicar-Signature FOUND\0' : 'stream: OK\0');
-        return;
-      }
-      if (pos + 4 + n > bruto.length) return;
-      partes.push(bruto.subarray(pos + 4, pos + 4 + n));
-      pos += 4 + n;
-    }
+  lerInstream(socket, (amostra, total) => {
+    recebidoPeloClamd = total;
+    socket.end(amostra.includes(Buffer.from('EICAR-STANDARD-ANTIVIRUS-TEST-FILE')) ? 'stream: Eicar-Signature FOUND\0' : 'stream: OK\0');
   });
 }
+
+/** SHA-256 de `tamanho` bytes iguais a `byte`, calculado em blocos (sem montar o arquivo). */
+function sha256Repetido(byte: number, tamanho: number) {
+  const h = createHash('sha256');
+  const bloco = Buffer.alloc(1024 * 1024, byte);
+  for (let falta = tamanho; falta > 0; falta -= bloco.length) h.update(falta >= bloco.length ? bloco : bloco.subarray(0, falta));
+  return h.digest('hex');
+}
+
+/** Limite real da API (250 MB), sem copia do numero: o teste acompanha a constante. */
+const { LIMITE_ARQUIVO_BYTES } = await import('../src/models/analiseArquivo.model.js');
 
 const { app } = await import('../src/app.js');
 const { prisma } = await import('../src/config/db.js');
@@ -107,18 +107,40 @@ describe('POST /arquivos/analise', () => {
     assert.doesNotMatch(JSON.stringify(r.body), /conteudo-secreto/);
   });
 
-  it('acima de 10 MB: 413 ARQUIVO_MUITO_GRANDE e nada é registrado', async () => {
+  // Os dois testes do limite geram o corpo em fluxo (envioEmFluxo.ts): 250 MB nunca ficam
+  // inteiros na memoria, nem do teste nem do clamd falso.
+  it('o limite é de 250 MB (MB de 1024 × 1024 bytes)', () => {
+    assert.equal(LIMITE_ARQUIVO_BYTES, 250 * 1024 * 1024);
+  });
+
+  it('acima de 250 MB: 413 ARQUIVO_MUITO_GRANDE com a mensagem do limite, e nada é registrado', async () => {
     const antes = await prisma.fileScan.count();
-    const r = await enviarArquivo(admin, Buffer.alloc(10 * 1024 * 1024 + 1, 65), 'grande.bin');
+    const r = await enviarArquivoEmFluxo({ token: admin, tamanho: LIMITE_ARQUIVO_BYTES + 1 });
     assert.equal(r.status, 413, JSON.stringify(r.body));
     assert.equal(r.body.codigoErro, 'ARQUIVO_MUITO_GRANDE');
+    assert.equal(r.body.mensagem, 'Arquivo maior que o limite de 250 MB');
     assert.equal(await prisma.fileScan.count(), antes);
   });
 
-  it('exatamente 10 MB passa', async () => {
-    const r = await enviarArquivo(admin, Buffer.alloc(10 * 1024 * 1024, 66), 'limite.bin');
-    assert.equal(r.status, 201, JSON.stringify(r.body));
-    assert.equal(r.body.dados.tamanho, 10 * 1024 * 1024);
+  it('exatamente 250 MB passa, o antivírus recebe o arquivo inteiro e a memória não cresce junto', async () => {
+    // Cliente, API e clamd falso estao no mesmo processo: se algum deles juntasse o arquivo, o
+    // RSS subiria pelo menos 250 MB. Em fluxo, o pico medido ficou bem abaixo do teto de 128 MB.
+    global.gc?.();
+    const base = process.memoryUsage().rss;
+    let pico = base;
+    const amostra = setInterval(() => { pico = Math.max(pico, process.memoryUsage().rss); }, 20);
+    try {
+      const r = await enviarArquivoEmFluxo({ token: admin, tamanho: LIMITE_ARQUIVO_BYTES, nome: 'limite.bin', byte: 66 });
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.dados.tamanho, LIMITE_ARQUIVO_BYTES);
+      assert.equal(recebidoPeloClamd, LIMITE_ARQUIVO_BYTES);
+      assert.equal(r.body.dados.sha256, sha256Repetido(66, LIMITE_ARQUIVO_BYTES), 'SHA-256 do arquivo inteiro');
+    } finally {
+      clearInterval(amostra);
+    }
+    const cresceuMb = (pico - base) / 1024 / 1024;
+    console.log(`[memoria] 250 MB em fluxo: RSS subiu ${cresceuMb.toFixed(1)} MB`);
+    assert.ok(cresceuMb < 128, `RSS subiu ${cresceuMb.toFixed(1)} MB durante o envio de 250 MB`);
   });
 
   it('sem arquivo, campo errado ou corpo JSON: 400 ARQUIVO_OBRIGATORIO', async () => {
@@ -158,6 +180,45 @@ describe('POST /arquivos/analise', () => {
     assert.equal(await prisma.fileScan.count(), antes);
   });
 
+  it('clamd que passa do StreamMaxLength ("INSTREAM size limit exceeded") no meio do envio: 503, nunca LIMPO, sem registro', async () => {
+    // Como o clamd real (medido em 19/10/2026 com a configuracao da main, StreamMaxLength padrao):
+    // ao passar do limite ele responde a recusa ANTES do fim do envio e fecha a conexao, sem ter
+    // lido a cauda do arquivo. Aqui o limite falso e de 1 MB e o arquivo tem 3 MB. Duas formas de
+    // fechar: com FIN (end) e derrubando a conexao (destroy, o cliente ve ECONNRESET/EPIPE).
+    // A terceira forma (le tudo e so recusa no fim) esta no teste de unidade do cliente.
+    const LIMITE_FALSO = 1024 * 1024;
+    for (const fechamento of ['end', 'destroy'] as const) {
+      const limitado = createServer({ allowHalfOpen: true }, (socket) => {
+        let recebidos = 0;
+        let recusou = false;
+        socket.on('data', (d) => {
+          recebidos += d.length;
+          if (recusou || recebidos <= LIMITE_FALSO) return;
+          recusou = true;
+          socket.write('INSTREAM size limit exceeded. ERROR\0', () => {
+            if (fechamento === 'end') socket.end();
+            else socket.destroy();
+          });
+        });
+        socket.on('error', () => undefined);
+      });
+      await new Promise<void>((ok) => limitado.listen(0, '127.0.0.1', ok));
+      const porta = process.env.CLAMAV_PORT;
+      process.env.CLAMAV_PORT = String((limitado.address() as AddressInfo).port);
+      const antes = await prisma.fileScan.count();
+      try {
+        const r = await enviarArquivoEmFluxo({ token: admin, tamanho: 3 * 1024 * 1024, nome: `estouro-${fechamento}.txt` });
+        assert.equal(r.status, 503, `${fechamento}: ${JSON.stringify(r.body)}`);
+        assert.equal(r.body.codigoErro, 'ANTIVIRUS_INDISPONIVEL');
+        assert.notEqual(r.body.dados?.resultado, 'LIMPO');
+      } finally {
+        process.env.CLAMAV_PORT = porta;
+        await new Promise<void>((ok) => limitado.close(() => ok()));
+      }
+      assert.equal(await prisma.fileScan.count(), antes, `${fechamento}: nenhuma análise registrada`);
+    }
+  });
+
   it('limite de 20 análises por hora por usuário: 429 MUITAS_ANALISES (os outros não são afetados)', async () => {
     const c = await criarUsuario(admin, 'Colaborador', 'arquivo-limite');
     const token = await login(c.email, SENHA_CONTA);
@@ -168,6 +229,79 @@ describe('POST /arquivos/analise', () => {
     assert.equal(r.status, 429);
     assert.equal(r.body.codigoErro, 'MUITAS_ANALISES');
     assert.equal((await enviarArquivo(colab, 'y')).status, 201);
+  });
+});
+
+// DT27: o ClamAV 1.5.4 nao le a entrada cujo cabecalho local traz 0xFFFFFFFF num tamanho sem
+// descritor de dados (Cisco-Talos/clamav#1527) e responde "OK" sem ter lido (medido com o clamd
+// real: tests/regressao-clamd-zip64.test.ts). O clamd falso daqui so reconhece o marcador em texto
+// puro, e dentro de uma entrada comprimida ele nao aparece: o AMEACA tem de vir da API. As formas
+// de Zip64 que o clamd le seguem o veredito dele.
+describe('POST /arquivos/analise: o Zip64 que o clamd não lê vira ameaça por precaução (DT27)', () => {
+  let token = '';
+  let usuarioId = '';
+  before(async () => {
+    const u = await criarUsuario(admin, 'Colaborador', 'zip64');
+    token = await login(u.email, SENHA_CONTA);
+    usuarioId = u.id;
+  });
+
+  const marcador = [{ nome: 'leia.txt', dados: MARCADOR_TESTE }];
+
+  it('Zip64 com 0xFFFFFFFF no cabeçalho local, sem descritor, e o marcador inofensivo: 201 AMEACA Baluarte.Zip64.NaoAnalisavel, com o rótulo, registro e auditoria', async () => {
+    const zip = montarZip(marcador, { zip64Local: true });
+    const r = await enviarArquivo(token, zip, 'marcador-zip64.zip');
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.dados.resultado, 'AMEACA');
+    assert.equal(r.body.dados.ameaca, 'Baluarte.Zip64.NaoAnalisavel');
+    assert.equal(
+      r.body.mensagem,
+      'Ameaça encontrada: Baluarte.Zip64.NaoAnalisavel (formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução)',
+    );
+    assert.equal(r.body.dados.regraPropria, false);
+    assert.equal(recebidoPeloClamd, zip.length, 'o antivírus continua recebendo o arquivo inteiro');
+    const reg = await prisma.fileScan.findUnique({ where: { id: r.body.dados.id } });
+    assert.equal(reg?.resultado, 'AMEACA');
+    assert.equal(reg?.ameaca, 'Baluarte.Zip64.NaoAnalisavel');
+    const auditoria = await prisma.auditLog.findFirst({ where: { usuarioId, acao: 'ANALISAR_ARQUIVO' }, orderBy: { sequencia: 'desc' } });
+    assert.match(auditoria?.detalhe ?? '', /AMEACA Baluarte\.Zip64\.NaoAnalisavel/);
+  });
+
+  it('docx Zip64 (container zip) e Zip64 comprimido dentro de zip comum também caem', async () => {
+    const docx = montarZip([{ nome: '[Content_Types].xml', dados: Buffer.from('<Types/>') }, { nome: 'word/document.xml', dados: MARCADOR_TESTE }], { zip64Local: true });
+    const aninhado = montarZip([{ nome: 'interno.zip', dados: montarZip(marcador, { zip64Local: true }) }]);
+    for (const [nome, dados] of [['relatorio.docx', docx], ['pacote.zip', aninhado]] as const) {
+      const r = await enviarArquivo(token, dados, nome);
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.dados.resultado, 'AMEACA', nome);
+      assert.equal(r.body.dados.ameaca, 'Baluarte.Zip64.NaoAnalisavel', nome);
+    }
+  });
+
+  it('Zip64 que o clamd lê (NetBeans, Info-ZIP por pipe, só no central/EOCD64) segue o veredito dele: LIMPO aqui', async () => {
+    for (const o of [{ zip64TamanhosReais: true }, { zip64Local: true, descritor: true }, { zip64Central: true, fim64: true }]) {
+      const r = await enviarArquivo(token, montarZip(marcador, o), 'zip64-lido.zip');
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.dados.resultado, 'LIMPO', JSON.stringify(o));
+      assert.equal(r.body.dados.ameaca, null, JSON.stringify(o));
+    }
+  });
+
+  it('controle: zip comum segue o caminho normal (limpo quando o clamd diz OK, a detecção dele quando acha)', async () => {
+    const limpo = await enviarArquivo(token, montarZip(marcador), 'comum.zip');
+    assert.equal(limpo.status, 201, JSON.stringify(limpo.body));
+    assert.equal(limpo.body.dados.resultado, 'LIMPO');
+    assert.equal(limpo.body.dados.ameaca, null);
+    assert.equal(limpo.body.mensagem, 'Nenhuma ameaça conhecida encontrada');
+    // Marcador guardado sem compressao: o clamd falso o ve e a deteccao dele vale como veio.
+    const detectado = await enviarArquivo(token, montarZip([{ nome: 'leia.txt', dados: MARCADOR_TESTE, metodo: 'guardado' }]), 'comum-guardado.zip');
+    assert.equal(detectado.body.dados.ameaca, 'Eicar-Signature');
+  });
+
+  it('Zip64 em que o clamd também acha algo: fica o nome do clamd (diz mais que o do formato)', async () => {
+    const r = await enviarArquivo(token, Buffer.concat([Buffer.from(EICAR), montarZip(marcador, { zip64Local: true })]), 'eicar-e-zip64.bin');
+    assert.equal(r.body.dados.resultado, 'AMEACA');
+    assert.equal(r.body.dados.ameaca, 'Eicar-Signature');
   });
 });
 

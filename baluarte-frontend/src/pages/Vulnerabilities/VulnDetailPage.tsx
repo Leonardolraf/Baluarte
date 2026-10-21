@@ -189,7 +189,7 @@ function RemediationTab({ vuln }: { vuln: Vulnerability }) {
     <div className="space-y-4">
       {vuln.fixedVersion && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-          Versão corrigida disponível: <Mono>{vuln.affectedComponent}</Mono>{' '}
+          Versão corrigida disponível: <Mono>{vuln.affectedComponent ?? 'componente'}</Mono>{' '}
           {vuln.affectedVersion && (
             <>
               <Mono>{vuln.affectedVersion}</Mono> →{' '}
@@ -390,7 +390,10 @@ export default function VulnDetailPage() {
         </span>
       ),
     },
-    { label: 'Componente afetado', value: <Mono breakAll>{vuln.affectedComponent}</Mono> },
+    {
+      label: 'Componente afetado',
+      value: vuln.affectedComponent ? <Mono breakAll>{vuln.affectedComponent}</Mono> : EMPTY,
+    },
     { label: 'Versão afetada', value: vuln.affectedVersion ? <Mono>{vuln.affectedVersion}</Mono> : EMPTY },
     { label: 'Versão corrigida', value: vuln.fixedVersion ? <Mono>{vuln.fixedVersion}</Mono> : EMPTY },
     {

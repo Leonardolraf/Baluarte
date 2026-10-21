@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Baluarte: planta pentagonal de um bastião sobre a tinta da marca. -->
-  <rect width="32" height="32" rx="8" fill="#0B1220"/>
-  <path d="M16 5.5 26.5 12.6 22.6 25.5H9.4L5.5 12.6Z" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linejoin="round"/>
-  <path d="M12.2 17.2 15 20l4.9-5.2" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Baluarte #25: escudo com ameias (bastião) + check de "verificado", partido em dois azuis.
+       Aqui, para a aba do navegador, sobre um tile escuro (a mesma tinta do theme-color) que dá
+       um fundo constante a 16px, claro ou escuro. Dentro do app o escudo vai sem tile. -->
+  <defs><clipPath id="rhalf"><rect x="32" y="0" width="32" height="64"/></clipPath></defs>
+  <rect width="64" height="64" rx="14" fill="#0B1220"/>
+  <path d="M12,10 L20,10 L20,15 L28,15 L28,10 L36,10 L36,15 L44,15 L44,10 L52,10 L52,15 L51,30 Q48.5,43 32,53 Q15.5,43 13,30 L12,15 Z" fill="#1e40af"/>
+  <path d="M12,10 L20,10 L20,15 L28,15 L28,10 L36,10 L36,15 L44,15 L44,10 L52,10 L52,15 L51,30 Q48.5,43 32,53 Q15.5,43 13,30 L12,15 Z" fill="#3b82f6" clip-path="url(#rhalf)"/>
+  <path d="M24,33 L30,39 L42,27" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

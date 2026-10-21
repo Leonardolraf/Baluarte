@@ -4,10 +4,12 @@ import { AntivirusIndisponivel, analisar as analisarNoAntivirus, antivirusConfig
 import type { UsuarioAtual } from '../models/usuario.model.js';
 import { OPERADORES } from '../models/dominio.model.js';
 import {
-  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES,
-  VALIDADE_RESERVA_ANALISE_MS, ehRegraPropria, mensagemDoResultado, nomeParaExibir, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
+  JANELA_ARQUIVOS_MALICIOSOS_DIAS, LIMITE_ANALISES_POR_HORA, LIMITE_ANALISES_SIMULTANEAS, LIMITE_ANEXOS_POR_CAMPANHA, LIMITE_ARQUIVO_BYTES,
+  LIMITE_DESCOMPRESSAO_ZIP64_BYTES, MENSAGEM_ARQUIVO_GRANDE, PROFUNDIDADE_MAXIMA_ZIP64, intervaloRenovacaoReservaMs, validadeReservaAnaliseMs, ehRegraPropria,
+  mensagemDoResultado, nomeParaExibir, vereditoComZip64, type AnaliseDto, type AnexoCampanhaDto, type CampanhaDeOrigem,
   type CampanhaRecebidaDto, type FiltrosHistorico, type ResultadoAnalise,
 } from '../models/analiseArquivo.model.js';
+import { DetectorZip64 } from '../utils/detectorZip64.js';
 import { segundaOpiniaoDto } from '../models/segundaOpiniao.model.js';
 import * as repo from '../repositories/analiseArquivo.repository.js';
 import { falhar } from '../utils/resposta.js';
@@ -56,7 +58,7 @@ function limiteDaHora(): never {
 export async function verificarAntesDeReceber(userId: string, eventoCampanha?: string): Promise<VagaAnalise> {
   if (!antivirusConfigurado()) falhar(503, MSG_INDISPONIVEL, 'ANTIVIRUS_INDISPONIVEL');
   const desde = new Date(Date.now() - UMA_HORA_MS);
-  const validaDesde = new Date(Date.now() - VALIDADE_RESERVA_ANALISE_MS);
+  const validaDesde = new Date(Date.now() - validadeReservaAnaliseMs());
   let origem: OrigemCampanha | null = null;
   if (eventoCampanha) {
     const evento = await repo.eventoDoUsuario(eventoCampanha, userId);
@@ -74,10 +76,13 @@ export async function verificarAntesDeReceber(userId: string, eventoCampanha?: s
     desde,
     validaDesde,
     maximoHora: LIMITE_ANALISES_POR_HORA,
+    maximoSimultaneas: LIMITE_ANALISES_SIMULTANEAS,
     maximoEvento: LIMITE_ANEXOS_POR_CAMPANHA,
   });
   if (!reserva.id) {
     if (reserva.naHora >= LIMITE_ANALISES_POR_HORA) limiteDaHora();
+    if (reserva.emCurso >= LIMITE_ANALISES_SIMULTANEAS)
+      falhar(429, `Já há ${LIMITE_ANALISES_SIMULTANEAS} análises suas em andamento. Aguarde uma terminar.`, 'ANALISES_SIMULTANEAS');
     falhar(429, `Limite de ${LIMITE_ANEXOS_POR_CAMPANHA} anexos por campanha atingido`, 'LIMITE_ANEXOS_CAMPANHA');
   }
   return { reservaId: reserva.id, origem };
@@ -88,6 +93,38 @@ export async function devolverVaga(vaga: VagaAnalise): Promise<void> {
   await repo.liberarReserva(vaga.reservaId);
 }
 
+/** Heartbeat em curso de uma vaga (`manterVagaViva`). */
+export interface RenovacaoDaVaga {
+  /** Para o heartbeat e espera a renovacao que estiver no meio: depois disto, nenhum UPDATE. */
+  parar(): Promise<void>;
+}
+
+/**
+ * Renova a reserva a cada `intervaloRenovacaoReservaMs()` enquanto o envio ou a varredura estao
+ * em curso (Melhorias #18), para ela nunca vencer no meio de uma analise longa e uma orfa
+ * vencer sozinha. Falha numa renovacao so vai para o log: o envio segue, e ha folga de
+ * RENOVACOES_PERDIDAS_TOLERADAS renovacoes antes de a reserva vencer. Quem chama tem de chamar
+ * `parar` em TODO desfecho (sucesso, 408, 413, 503, veredito antecipado, conexao caida).
+ */
+export function manterVagaViva(vaga: VagaAnalise): RenovacaoDaVaga {
+  let parado = false;
+  let emAndamento: Promise<unknown> = Promise.resolve();
+  const temporizador = setInterval(() => {
+    if (parado) return;
+    emAndamento = repo.renovarReserva(vaga.reservaId, new Date()).catch((e) => {
+      console.error('[analise] reserva não renovada (o envio segue):', e instanceof Error ? e.message : e);
+    });
+  }, intervaloRenovacaoReservaMs());
+  temporizador.unref();
+  return {
+    async parar() {
+      parado = true;
+      clearInterval(temporizador);
+      await emAndamento;
+    },
+  };
+}
+
 /** Fluxo do arquivo como recebido do multipart (busboy marca `truncated` ao passar do limite). */
 export type FluxoArquivo = Readable & { truncated?: boolean };
 
@@ -95,25 +132,31 @@ export type FluxoArquivo = Readable & { truncated?: boolean };
  * Repassa os blocos ao antivirus calculando o SHA-256 e o tamanho. Passou do limite: interrompe
  * o envio com 413 (o veredito de um arquivo cortado nao vale).
  */
-async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: ReturnType<typeof createHash> }) {
+async function* medir(fluxo: FluxoArquivo, medida: { bytes: number; hash: ReturnType<typeof createHash> }, zip64: DetectorZip64) {
   for await (const bloco of fluxo as AsyncIterable<Buffer>) {
     medida.bytes += bloco.length;
     if (medida.bytes > LIMITE_ARQUIVO_BYTES) break;
     medida.hash.update(bloco);
+    await zip64.observar(bloco);
     yield bloco;
   }
   if (fluxo.truncated || medida.bytes > LIMITE_ARQUIVO_BYTES)
-    falhar(413, 'Arquivo maior que o limite de 10 MB', 'ARQUIVO_MUITO_GRANDE');
+    falhar(413, MENSAGEM_ARQUIVO_GRANDE, 'ARQUIVO_MUITO_GRANDE');
 }
 
 /** Analisa, registra (consumindo a vaga reservada) e audita. Devolve a mensagem e o registro no formato da API. */
 export async function analisar(usuario: UsuarioAtual, nomeOriginal: string | undefined, fluxo: FluxoArquivo, vaga: VagaAnalise) {
   const { origem } = vaga;
   const medida = { bytes: 0, hash: createHash('sha256') };
+  // DT27: o clamd responde "OK" sem ler a entrada com 0xFFFFFFFF num tamanho do cabecalho local
+  // e sem descritor (forma de Zip64 do Python e do 7-Zip -si); a API procura essa forma nos mesmos
+  // blocos, a caminho do clamd, e o "limpo" so vale se ela nao aparecer.
+  const zip64 = new DetectorZip64({ limiteDescompressao: LIMITE_DESCOMPRESSAO_ZIP64_BYTES, profundidadeMaxima: PROFUNDIDADE_MAXIMA_ZIP64 });
   let veredito;
   try {
-    veredito = await analisarNoAntivirus(medir(fluxo, medida));
+    veredito = vereditoComZip64(await analisarNoAntivirus(medir(fluxo, medida, zip64)), await zip64.finalizar());
   } catch (e) {
+    zip64.descartar();
     if (e instanceof AntivirusIndisponivel) {
       console.error('[antivirus] indisponível:', e.message);
       falhar(503, MSG_INDISPONIVEL, 'ANTIVIRUS_INDISPONIVEL');

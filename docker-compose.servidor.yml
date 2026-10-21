@@ -17,6 +17,10 @@ services:
       - DIRECT_URL=postgresql://baluarte:${POSTGRES_PASSWORD}@db:5432/baluarte?schema=public     # plano B: ${SUPABASE_DIRECT_URL}
       - SEED_DEMO=0       # o seed-demo faz deleteMany e recria as contas com a senha pública do README
       - SEED_CONTRATO=0   # criaria contas com as senhas públicas do README
+      # DT28: trava. Com SEMEAR_PROIBIDO=1, qualquer SEED_*=1 (vindo de onde for) faz o entrypoint
+      # recusar subir (exit 1) em vez de semear. Não dá para travar pelo host do DATABASE_URL:
+      # aqui o banco também se chama `db`, igual ao compose local.
+      - SEMEAR_PROIBIDO=1
       - OSQUERY_ENROLL_SECRET=${OSQUERY_ENROLL_SECRET:-}
       - CRUZAMENTO_AUTOMATICO=1   # B14/DT17: verifica a estação depois de cada inventário de programas
       - DOMINIO_INTERNO=${DOMINIO_INTERNO:-@baluarte.test}   # DT19: domínio reservado (RFC 2606) + endereços liberados, no .env
@@ -26,5 +30,8 @@ services:
   db:
     image: postgres:17-alpine   # mesmo major do Supabase de onde veio o dump (restaurar um 17 num 16 falha)
     restart: unless-stopped
+  # Os limites do clamd para o arquivo de 250 MB (CLAMD_CONF_*) vêm do docker-compose.yml e valem
+  # aqui também; mudou lá, recrie o clamav (`... up -d --force-recreate clamav`). A API usa o
+  # tempo limite padrão do código para o clamd (CLAMAV_TIMEOUT_MS, 300 s).
   clamav:
     restart: unless-stopped

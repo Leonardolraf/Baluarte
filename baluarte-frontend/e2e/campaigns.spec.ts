@@ -50,12 +50,11 @@ test.describe('Campanhas de phishing', () => {
     await page.goto('/campaigns/new');
     await page.locator('#nome').fill('Simulação E2E – TI');
     await page.getByRole('radio', { name: /Autoridade/ }).check();
-    // Melhorias #1 e #2: o grupo-alvo virou seleção de departamentos reais, e marcar um
-    // preenche os destinatários (que seguem editáveis).
-    await page
-      .getByRole('group', { name: /Grupo-alvo/ })
-      .getByLabel('TI', { exact: false })
-      .check();
+    // Melhorias #1 e #2: o grupo-alvo é um dropdown de departamentos reais; abrir e marcar um
+    // preenche os destinatários (que seguem editáveis). O grupo é opcional — aqui usamos como atalho.
+    const grupo = page.getByRole('group', { name: /Grupo-alvo/ });
+    await grupo.getByRole('button').click();
+    await grupo.getByLabel('TI', { exact: false }).check();
     await expect(page.getByTestId('resumo-elegiveis')).toContainText('podem receber');
     await page.locator('#destinatarios').fill('fulano@gmail.com');
     await page.getByRole('button', { name: 'Agendar campanha' }).click();
@@ -68,6 +67,18 @@ test.describe('Campanhas de phishing', () => {
     await expect(toast(page, 'Campanha agendada com sucesso')).toBeVisible();
     await expect(page).toHaveURL(/\/campaigns\/camp-\d+$/);
     await expect(page.getByRole('heading', { name: 'Simulação E2E – TI' })).toBeVisible();
+  });
+
+  test('envia a um único destinatário sem escolher grupo (grupo opcional)', async ({ page }) => {
+    await page.goto('/campaigns/new');
+    await page.locator('#nome').fill('Simulação E2E – individual');
+    await page.getByRole('radio', { name: /Autoridade/ }).check();
+    // Sem abrir o dropdown de grupo: digita um e-mail e agenda. O grupo não é obrigatório.
+    await page.locator('#destinatarios').fill('ana.lima@empresa.com');
+    await expect(page.getByText('1 destinatário válido')).toBeVisible();
+    await page.getByRole('button', { name: 'Agendar campanha' }).click();
+    await expect(toast(page, 'Campanha agendada com sucesso')).toBeVisible();
+    await expect(page).toHaveURL(/\/campaigns\/camp-\d+$/);
   });
 
   test('relatório inexistente mostra não encontrado', async ({ page }) => {

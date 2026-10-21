@@ -187,7 +187,12 @@ export interface Vulnerability {
   assetName: string;
   assetHost: string;
   /** Componente afetado, ex.: log4j-core */
-  affectedComponent: string;
+  /**
+   * Programa afetado, quando o servidor sabe qual é: achado de estação (B14) traz o programa
+   * instalado. O scanner OWASP não identifica componente, então ali é `null` — e a tela mostra
+   * "—", nunca a categoria OWASP no lugar (DT33).
+   */
+  affectedComponent: string | null;
   affectedVersion?: string | null;
   fixedVersion?: string | null;
   /** Hash SHA-256 do artefato afetado, quando aplicável. */
@@ -297,13 +302,18 @@ export const CAMPAIGN_TEMPLATES: readonly CampaignTemplate[] = ['urgency', 'auth
 export interface CampaignMetrics {
   recipients: number;
   sent: number;
-  opened: number;
+  /**
+   * Aberturas do e-mail. `null` quando a fonte não sabe: o item de `GET /campanhas` não traz
+   * abertura nenhuma, e afirmar 0 ali diria "ninguém abriu" sobre uma campanha que pode ter
+   * sido aberta por todos. Só o relatório da campanha (`GET /campanhas/:id`) tem o funil.
+   */
+  opened: number | null;
   clicked: number;
   submitted: number;
   reported: number;
   trained: number;
-  /** Percentuais 0–100, calculados sobre `sent`. */
-  openRate: number;
+  /** Percentuais 0–100, calculados sobre `sent`. `openRate` é `null` junto com `opened`. */
+  openRate: number | null;
   clickRate: number;
   submitRate: number;
   reportRate: number;

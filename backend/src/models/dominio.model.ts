@@ -26,6 +26,13 @@ export function dominioInterno(): string {
  * dominio inteiro de um provedor. Sem entrada valida: so o dominio padrao.
  */
 export function destinatariosInternos(): { dominios: string[]; enderecos: string[] } {
+  const { dominios, enderecos } = entradasDominioInterno();
+  if (!dominios.length && !enderecos.length) dominios.push(DOMINIO_INTERNO_PADRAO);
+  return { dominios, enderecos };
+}
+
+/** As entradas de DOMINIO_INTERNO como vieram (minusculas, dominio sempre com '@'), sem o padrao. */
+function entradasDominioInterno(): { dominios: string[]; enderecos: string[] } {
   const dominios: string[] = [];
   const enderecos: string[] = [];
   for (const bruto of (process.env.DOMINIO_INTERNO ?? '').toLowerCase().split(/[\s,;]+/)) {
@@ -34,8 +41,45 @@ export function destinatariosInternos(): { dominios: string[]; enderecos: string
     if (arroba > 0) enderecos.push(bruto);
     else dominios.push(arroba === 0 ? bruto : `@${bruto}`);
   }
-  if (!dominios.length && !enderecos.length) dominios.push(DOMINIO_INTERNO_PADRAO);
   return { dominios, enderecos };
+}
+
+const ROTULO = '[a-z0-9](?:[a-z0-9-]*[a-z0-9])?';
+/** `@rotulo.rotulo[...]`: pelo menos um ponto (pega `@baluarte`, `@@x.com`, `@x..com`). */
+const DOMINIO_VALIDO = new RegExp(`^@${ROTULO}(?:\\.${ROTULO})+$`);
+const ENDERECO_VALIDO = new RegExp(`^[^\\s@]+@${ROTULO}(?:\\.${ROTULO})+$`);
+/** O dominio do contrato N2 AT1 tem dono (DT28): vale em dev e teste, nunca em producao. */
+const ehDominioDoContrato = (entrada: string) =>
+  entrada.endsWith(DOMINIO_INTERNO_PADRAO) || entrada.endsWith(`.${DOMINIO_INTERNO_PADRAO.slice(1)}`);
+
+/**
+ * DT28: falha cedo se DOMINIO_INTERNO nao servir para producao. Chamar antes do listen(),
+ * junto de validarSegredoJwt(). Em producao exige pelo menos uma entrada, todas validas e
+ * nenhuma no dominio do contrato (`@empresa.com`, que e de um terceiro real). Fora de
+ * producao nao faz nada: sem a variavel, o padrao continua `@empresa.com` (Newman, Robot,
+ * seed de contrato e testes).
+ * Por que recusar em vez de cair num padrao reservado (ex.: `@baluarte.test`): a producao mal
+ * configurada falharia EM SILENCIO (campanha para dominio inexistente, ninguem recebe e nada
+ * avisa). Recusar a subida transforma esse erro silencioso em erro visivel no log.
+ */
+export function validarDominioInterno(): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  const { dominios, enderecos } = entradasDominioInterno();
+  const entradas = [...dominios, ...enderecos];
+  if (!entradas.length) {
+    throw new Error('DOMINIO_INTERNO é obrigatório em produção: defina o domínio da empresa que recebe as campanhas '
+      + '(ex.: DOMINIO_INTERNO=@minhaempresa.com.br). Sem ele o padrão seria @empresa.com, domínio de um terceiro.');
+  }
+  const invalidas = [...dominios.filter((d) => !DOMINIO_VALIDO.test(d)), ...enderecos.filter((e) => !ENDERECO_VALIDO.test(e))];
+  if (invalidas.length) {
+    throw new Error(`DOMINIO_INTERNO inválido em produção: ${invalidas.join(', ')}. Use domínios (@minhaempresa.com.br) `
+      + 'ou endereços (pessoa@dominio.com) separados por vírgula.');
+  }
+  const doContrato = entradas.filter(ehDominioDoContrato);
+  if (doContrato.length) {
+    throw new Error(`DOMINIO_INTERNO não pode usar ${DOMINIO_INTERNO_PADRAO} em produção (${doContrato.join(', ')}): `
+      + 'é o domínio de um terceiro real, usado só pelo contrato de teste N2 AT1. Defina o domínio da empresa.');
+  }
 }
 
 /** O e-mail pode receber campanha: termina num dominio interno ou esta liberado na lista. */

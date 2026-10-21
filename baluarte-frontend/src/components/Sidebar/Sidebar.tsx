@@ -31,7 +31,7 @@ function SidebarContent({ collapsed, onNavigate, onToggleCollapse, onClose }: Si
           collapsed && 'justify-center px-2',
         )}
       >
-        <BaluarteMark size={32} tone="inverse" />
+        <BaluarteMark size={32} />
         {!collapsed && <Wordmark className="text-white" tagline="Cibersegurança" />}
         {onClose && (
           <button

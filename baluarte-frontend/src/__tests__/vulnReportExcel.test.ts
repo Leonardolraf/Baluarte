@@ -90,6 +90,41 @@ describe('realApi: filtro por ativo e relatório em Excel', () => {
     expect(report.filename).toBe(vulnerabilityReportFilename(new Date(), 'xlsx'));
   });
 
+  it('DT36: as recusas 422 e 429 chegam do envelope dentro do blob', async () => {
+    // O servidor recusa antes de gerar, e o erro vem no envelope de sempre, dentro do Blob.
+    // A tela exibe a `mensagem` como veio: o teto e a contagem são do backend, e repetir o
+    // número aqui criaria uma segunda fonte para a mesma regra.
+    const envelope = (mensagem: string, codigoErro: string) =>
+      new Blob([JSON.stringify({ status: 'erro', mensagem, codigoErro })], {
+        type: 'application/json',
+      });
+
+    reply = () => ({
+      status: 422,
+      data: envelope(
+        'O relatório teria 62.500 achados (máximo 50.000). Filtre por severidade, status ou ativo para gerar um relatório menor.',
+        'RELATORIO_GRANDE_DEMAIS',
+      ),
+    });
+    await expect(realApi.exportVulnerabilityReportExcel()).rejects.toMatchObject({
+      status: 422,
+      code: 'RELATORIO_GRANDE_DEMAIS',
+      message: expect.stringContaining('máximo 50.000'),
+    });
+
+    reply = () => ({
+      status: 429,
+      data: envelope(
+        'Já há uma exportação de relatório em andamento. Tente de novo em instantes.',
+        'EXPORTACAO_EM_ANDAMENTO',
+      ),
+    });
+    await expect(realApi.exportVulnerabilityReportExcel()).rejects.toMatchObject({
+      status: 429,
+      code: 'EXPORTACAO_EM_ANDAMENTO',
+    });
+  });
+
   it('erro na planilha: lê o envelope JSON de dentro do blob (ex.: ativo inexistente)', async () => {
     reply = () => ({
       status: 404,
