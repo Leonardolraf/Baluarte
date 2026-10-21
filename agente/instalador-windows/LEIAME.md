@@ -96,10 +96,10 @@ armadilha da tela que ele deveria consertar.
 
 ### Três caminhos, e o que falta medir antes de escolher
 
-1. **Ligar `filesystem` no `osquery.flags.modelo`** (`--logger_plugin=tls,filesystem`). Simples,
-   mas o modelo é o que **toda** estação usa em produção: liga log de status em disco em todas,
-   para sempre, com o custo de espaço e rotação que isso traz — para um benefício que só importa
-   nos segundos da instalação.
+1. ~~**Ligar `filesystem` no `osquery.flags.modelo`**~~ — **descartada pelo Backend em 21/10/2026.**
+   O modelo é o que **toda** estação usa em produção: ligaria log de status em disco em todas, para
+   sempre, por um benefício que só existe nos segundos da instalação. O flags permanente segue
+   `tls` apenas, e a restrição é: **nada de pegada permanente**. Não repropor.
 2. **Flags efêmeras só durante a instalação**: subir o serviço uma vez com um arquivo temporário
    que inclui `filesystem`, observar, e depois gravar as flags permanentes e reiniciar. Não deixa
    rastro no permanente, mas põe um para-e-sobe a mais no caminho da instalação.
@@ -122,7 +122,10 @@ armadilha da tela que ele deveria consertar.
      que o serviço não aceite, ele não abre — e a falha apareceria longe da causa. **Conferir isso
      na medição**, não depois.
 
-**O que impede escolher agora:** os três dependem de reconhecer o **sucesso**, e só a falha está
+A escolha entre 2 e 3 é do instalador, não do servidor — as duas respeitam "nada permanente". O
+endpoint vem na branch `feat/vinculo-agente` do Backend.
+
+**O que impede escolher agora:** as duas dependem de reconhecer o **sucesso**, e só a falha está
 medida. Não se sabe o que o osquery escreve quando a inscrição dá certo — e tratar "não apareceu a
 linha de falha" como sucesso é a mesma troca que este documento inteiro critica: ausência de dado
 lida como ausência de risco. A medição do caso de sucesso exige o servidor de pé com o endpoint do
