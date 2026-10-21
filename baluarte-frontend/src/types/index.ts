@@ -187,7 +187,12 @@ export interface Vulnerability {
   assetName: string;
   assetHost: string;
   /** Componente afetado, ex.: log4j-core */
-  affectedComponent: string;
+  /**
+   * Programa afetado, quando o servidor sabe qual é: achado de estação (B14) traz o programa
+   * instalado. O scanner OWASP não identifica componente, então ali é `null` — e a tela mostra
+   * "—", nunca a categoria OWASP no lugar (DT33).
+   */
+  affectedComponent: string | null;
   affectedVersion?: string | null;
   fixedVersion?: string | null;
   /** Hash SHA-256 do artefato afetado, quando aplicável. */

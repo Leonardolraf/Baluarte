@@ -282,7 +282,8 @@ function VulnRow({ vuln, onClick }: VulnRowProps) {
           </Link>
         </div>
         <div className="mt-0.5 font-mono text-xs text-slate-500 dark:text-slate-400">
-          {vuln.cve ?? vuln.affectedComponent}
+          {/* Sem CVE e sem programa, nada identifica o achado aqui: a descrição acima já diz. */}
+          {vuln.cve ?? vuln.affectedComponent ?? '—'}
         </div>
       </Td>
       <Td>
