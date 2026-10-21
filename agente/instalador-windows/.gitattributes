@@ -1,0 +1,6 @@
+# O Inno Setup espera CRLF: o .iss e, principalmente, o arquivo da licenca, que ele renderiza
+# num controle de texto do Windows. Normalizado para LF, o texto dos termos sai errado na tela.
+# O BOM UTF-8 desses dois arquivos tambem e exigido pelo Inno e nao deve ser removido.
+*.iss text eol=crlf
+*.txt text eol=crlf
+*.ps1 text eol=crlf
