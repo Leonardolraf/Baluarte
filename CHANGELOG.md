@@ -959,6 +959,30 @@ Medido em 19/10/2026 sobre a `main` `27b39b7` (imagem da API, Node 20, heap padr
 - **Testes:** `tests/unidade/ciencia-aviso.test.ts` (introspecção do router) passa a exigir as 5 exceções, inclusive `GET /me`. Em `tests/ciencia-aviso-gate.test.ts`, sem ciência: `/me` responde 200 com `true` e as outras rotas protegidas 403 (os três perfis, e toda rota `exigeToken` do router); com ciência da versão atual: 200 com `false`; com ciência só de versão antiga: `true`. Os testes de convite (`conta.test.ts`, `seguranca/conta-forca-bruta.test.ts`) passam a conferir o 403 no `/dashboard` e o campo no `/me`.
 - **Verificação:** `tsc` limpo; backend 991 (310 unidade + 16 banco + 508 integração + 157 pentest), todos passam; na rodada completa, `reserva-heartbeat.test.ts` falhou uma vez por tempo (408 `ENVIO_TEMPO_MAXIMO`, disputa de CPU/Postgres) e passou de novo sozinho, junto com `exposicao-infra.test.ts`. Newman 35/70 sem falhas; `migrate diff` sem drift. Nenhuma migration nem mudança de schema; `baluarte-frontend/` intocado.
 
+## 2026-10-22 — Release 2026-11-04 do backend (lote coordenado, off `main`)
+
+Branch de integração `release/2026-11-04-backend` montada off `origin/main` (`d284828`) para a demo de
+04/11. **7 merges `--no-ff`** (não squash, para permitir `git revert -m` por branch) nesta ordem:
+`fix/heartbeat-instavel` → `fix/dt32-senha-demo` → `fix/dt26-marcador-html` → `fix/dt36-relatorio` →
+`fix/campanha-enviados` → `fix/dt27-rotulo` → `feat/ciencia-aviso-gate`. As seções de cada um estão acima.
+
+- **O gate de ciência substitui o de termos.** O `03f100d` (gate `TERMOS_NAO_ACEITOS`) já estava na `main`;
+  a `feat/ciencia-aviso-gate` o remove (arquivos `termos.*` apagados, `exigeTermosAceitos` → `exigeCienciaAviso`,
+  `403 CIENCIA_AVISO_PENDENTE`). No resultado, `git grep TERMOS_NAO_ACEITOS backend/src` = **0**. A coluna
+  `User.termosAceitosEm` fica como dado morto (nullable, sem drop). Merge semântico no `seed-demo.ts`: senha
+  aleatória por conta (DT32) + ciência nas contas (as nomeadas inline, os colaboradores por `createMany`).
+- **Flag de allowlist obrigatório (cherry-pick `e244f30`):** `CAMPANHA_SEM_TRAVA_DOMINIO` no código
+  (`dominio.model.ts#travaDeDominioDesligada`) **e** no `docker-compose.servidor.yml` (`environment:`). Não está
+  na `main`; sem ele o deploy off `main` apagaria o flag que roda na VM e o envio para gmail voltaria a dar 422.
+  Cherry-pick (não ancestral por design); provado pelo grep do flag.
+- **#9 (vínculo do agente) fica FORA** deste release (vai num trem seguinte, para não inchar o evento da VM).
+- **Verificação (uma rodada):** suíte 1056/1057 — a única falha é `limite-rajada-analise.test.ts` (limitador de
+  2 análises simultâneas), flaky sob a carga da suíte paralela: passa 3/3 sozinha e a suíte de segurança isolada
+  dá 158/158. `tsc` limpo; Newman 35/70 sem falhas; `migrate diff` sem drift (nenhuma migration nova). As
+  aceitações reais do clamd (dt26/dt36) precisam do perfil `antivirus` no ar (os dois fixes já são cobertos pelos
+  testes de unidade + integração com clamd falso, que passaram). Contagem: 351 unidade + 16 banco + 532 integração
+  + 158 pentest = 1057. Conflitos de doc (CHANGELOG/CLAUDE/README) resolvidos localmente.
+
 ## Resumo por área (estado atual)
 
 | Área | O que existe | Desde |
