@@ -68,7 +68,13 @@ import type {
 import { SEVERITIES, VULN_PAGE_SIZE } from '@/types';
 import { HttpError } from '@/lib/errors';
 import { ACK_REQUIRED_EVENT, dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
-import { fileScanVerdict, isOwnRule, MAX_ATTACHMENTS_PER_CAMPAIGN, MAX_FILE_SIZE_BYTES } from '@/lib/files';
+import {
+  fileScanVerdict,
+  isOwnRule,
+  MAX_ATTACHMENTS_PER_CAMPAIGN,
+  MAX_FILE_SIZE_BYTES,
+  MAX_FILE_SIZE_LABEL,
+} from '@/lib/files';
 import { SCAN_DURATION_MS, scanProgressByTime } from './scanProgress';
 import { vulnerabilityReportFilename } from '@/lib/download';
 import { formatDate, formatDateTime, localDayRange } from '@/lib/format';
@@ -1969,7 +1975,11 @@ export const mockApi: BaluarteApi = {
     const user = requireUser();
     if (!file) throw new HttpError(400, 'ARQUIVO_OBRIGATORIO', 'Arquivo é obrigatório');
     if (file.size > MAX_FILE_SIZE_BYTES)
-      throw new HttpError(413, 'ARQUIVO_MUITO_GRANDE', 'Arquivo excede o limite de 10 MB');
+      throw new HttpError(
+        413,
+        'ARQUIVO_MUITO_GRANDE',
+        `Arquivo maior que o limite de ${MAX_FILE_SIZE_LABEL}`,
+      );
     const now = Date.now();
     const recent = (state.fileScanTimes.get(user.id) ?? []).filter((t) => now - t < HOUR_MS);
     if (recent.length >= MOCK_FILE_SCANS_PER_HOUR)
