@@ -976,12 +976,24 @@ Branch de integração `release/2026-11-04-backend` montada off `origin/main` (`
   na `main`; sem ele o deploy off `main` apagaria o flag que roda na VM e o envio para gmail voltaria a dar 422.
   Cherry-pick (não ancestral por design); provado pelo grep do flag.
 - **#9 (vínculo do agente) fica FORA** deste release (vai num trem seguinte, para não inchar o evento da VM).
-- **Verificação (uma rodada):** suíte 1056/1057 — a única falha é `limite-rajada-analise.test.ts` (limitador de
-  2 análises simultâneas), flaky sob a carga da suíte paralela: passa 3/3 sozinha e a suíte de segurança isolada
-  dá 158/158. `tsc` limpo; Newman 35/70 sem falhas; `migrate diff` sem drift (nenhuma migration nova). As
-  aceitações reais do clamd (dt26/dt36) precisam do perfil `antivirus` no ar (os dois fixes já são cobertos pelos
-  testes de unidade + integração com clamd falso, que passaram). Contagem: 351 unidade + 16 banco + 532 integração
-  + 158 pentest = 1057. Conflitos de doc (CHANGELOG/CLAUDE/README) resolvidos localmente.
+- **Teste endurecido (não era defeito de produto):** na primeira rodada da suíte, `limite-rajada-analise.test.ts`
+  falhou (`s201==2` virou 4, depois 2/5 rodadas sob carga). Investigado como defeito, não como ruído. Diagnóstico
+  determinístico (clamd falso medindo o PICO de análises EM VOO): em 20 rodadas, o pico de simultâneas NUNCA passou
+  de `LIMITE_ANALISES_SIMULTANEAS` (2), mesmo com o total aceito em 6 — o produto está correto. A regra é de
+  CONCORRÊNCIA ("2 em andamento ao mesmo tempo", defesa de slowloris; a mensagem do 429 e o model dizem "em
+  andamento"), não de RAJADA ("N aceita só 2"). A asserção antiga media o total aceito, não a simultaneidade: sob a
+  carga da suíte (o release tem mais testes que a `main`), as 2 primeiras completavam e a vaga reciclava antes de as
+  últimas serem contadas → `s201>2`, sem jamais haver >2 ao mesmo tempo. **Produto intocado.** O teste passou a
+  afirmar o invariante real, em dois casos: (a) barreira determinística (os 25 sobrepostos → 2 aceitos, 3ª recusada,
+  pico==2); (b) sob carga, clamd rápido, vaga reciclando → pico de simultâneas ≤ 2 obrigatório (pega regressão de
+  concorrência). A main `d284828` e `main+heartbeat` foram medidas no caminho; a conclusão (concorrência correta)
+  independe delas.
+- **Verificação:** suíte **1058/1058, 5× seguidas** (verde estável com o teste endurecido); `tsc` limpo; Newman 35
+  req / 70 asserções, 0 falhas; `migrate diff` sem drift (nenhuma migration nova). **Aceitações reais do clamd**
+  (perfil `antivirus`, clamav 1.5): **20/20** — dt26 (marcador YARA em HTML cru: texto, comentário, atributo,
+  `<script>`, `<style>`, entidades, e-mail base64), #18 (30/200 MB e 45 MB smuggling), DT27 (formas de Zip64). dt36:
+  o clamd sobe sem erro de opção e `ConcurrentDatabaseReload no` está no `clamd.conf` efetivo. Contagem: 351 unidade
+  + 16 banco + 532 integração + 159 pentest = 1058. Conflitos de doc (CHANGELOG/CLAUDE/README) resolvidos localmente.
 
 ## Resumo por área (estado atual)
 
