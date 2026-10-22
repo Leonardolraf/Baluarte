@@ -179,7 +179,7 @@ export const AMEACA_ZIP64 = 'Baluarte.Zip64.NaoAnalisavel';
 /** A busca pela forma nao lida nao chegou ao fim (teto de descompressao ou de aninhamento). */
 export const AMEACA_ZIP64_INCOMPLETA = 'Baluarte.Zip64.VerificacaoIncompleta';
 
-export const ROTULO_ZIP64 = 'formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução';
+export const ROTULO_ZIP64 = 'variante de Zip64 que o antivírus não lê; tratado como ameaça por precaução';
 export const ROTULO_ZIP64_INCOMPLETA =
   'a busca por Zip64 passou do limite de descompressão ou de aninhamento; tratado como ameaça por precaução';
 
