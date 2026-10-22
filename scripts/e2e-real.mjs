@@ -23,7 +23,7 @@
 //   E2E_KEEP_DB=1 mantém o banco no fim (para investigar).
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -57,6 +57,10 @@ const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const filhos = new Map(); // nome -> ChildProcess
 let pararBases = null;
 let bancoCriado = false;
+// DT32: o seed:demo grava as senhas aleatórias da demonstração fora do repositório. Os specs não
+// entram com conta de demonstração (só a usam como destinatário), então o arquivo é um temporário
+// do próprio orquestrador, apagado no fim.
+let pastaSenhasDemo = null;
 const servicosDocker = []; // serviços do Compose que este script subiu
 let urlBanco = '';
 
@@ -120,9 +124,10 @@ function prepararBanco() {
     env: envBanco(),
   });
   rodar('seed de contrato', ['--import', 'tsx', 'prisma/seed.ts'], { cwd: BACKEND, env: envBanco() });
+  pastaSenhasDemo = mkdtempSync(join(tmpdir(), 'baluarte-e2e-senhas-'));
   rodar('seed de demonstração', ['--import', 'tsx', 'prisma/seed-demo.ts'], {
     cwd: BACKEND,
-    env: envBanco(),
+    env: { ...envBanco(), SENHAS_DEMO_ARQUIVO: join(pastaSenhasDemo, 'senhas-demo.txt') },
   });
 }
 
@@ -370,6 +375,10 @@ async function limpar() {
     log('bases falsas paradas');
   }
   if (urlBanco) apagarBanco();
+  if (pastaSenhasDemo) {
+    rmSync(pastaSenhasDemo, { recursive: true, force: true });
+    pastaSenhasDemo = null;
+  }
   for (const { servico, perfil } of servicosDocker.splice(0).reverse()) {
     docker([...(perfil ? ['--profile', perfil] : []), 'stop', servico]);
     log(`serviço ${servico} do Compose parado`);

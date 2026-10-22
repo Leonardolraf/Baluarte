@@ -76,7 +76,8 @@ services:
       # ela recusa subir sem um DOMINIO_INTERNO próprio. Escrever @empresa.com aqui faria
       # qualquer produção montada só com este arquivo herdar o domínio de um terceiro.
       - DOMINIO_INTERNO=${DOMINIO_INTERNO:-}
-    # /data guarda só o JWT_SECRET gerado e os marcadores dos seeds (os dados ficam no Postgres).
+    # /data guarda só o JWT_SECRET gerado, os marcadores dos seeds e as senhas do seed:demo
+    # (senhas-demo.txt, DT32; os dados ficam no Postgres). Backup do banco (pg_dump) não leva o /data.
     volumes:
       - backend-data:/data
     depends_on:

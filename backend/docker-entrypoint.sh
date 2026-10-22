@@ -8,7 +8,8 @@
 #      SEED_CONTRATO=1 -> `seed` (admin/analista/colaborador com as senhas públicas do README,
 #                         ativos e departamentos do contrato da N2 AT1; Newman/Robot precisam dele);
 #      SEED_DEMO=1     -> `seed:demo` (dados de demonstração; faz deleteMany e recria contas
-#                         com a senha pública do README).
+#                         com senhas aleatórias novas, gravadas em $DATA_DIR/senhas-demo.txt,
+#                         ao lado do jwt.secret: nada de senha fixa na imagem, DT32).
 #  - SEMEAR_PROIBIDO=1 ou NODE_ENV=production com qualquer SEED_*=1: recusa subir (exit 1).
 set -e
 
@@ -30,7 +31,7 @@ SEED_DEMO="${SEED_DEMO:-0}"
 # (docker-compose.servidor.yml), igual ao compose local. Por isso a trava é explícita.
 if [ "$SEED_CONTRATO" = "1" ] || [ "$SEED_DEMO" = "1" ]; then
   if [ "${SEMEAR_PROIBIDO:-0}" = "1" ] || [ "${NODE_ENV:-}" = "production" ]; then
-    echo "[entrypoint] seed recusado: SEED_CONTRATO=$SEED_CONTRATO SEED_DEMO=$SEED_DEMO com SEMEAR_PROIBIDO=${SEMEAR_PROIBIDO:-0} NODE_ENV=${NODE_ENV:-}. Os seeds criam contas com as senhas públicas do README; neste ambiente use SEED_CONTRATO=0 e SEED_DEMO=0" >&2
+    echo "[entrypoint] seed recusado: SEED_CONTRATO=$SEED_CONTRATO SEED_DEMO=$SEED_DEMO com SEMEAR_PROIBIDO=${SEMEAR_PROIBIDO:-0} NODE_ENV=${NODE_ENV:-}. O seed de contrato cria contas com as senhas públicas do README e o seed:demo apaga e recria dados; neste ambiente use SEED_CONTRATO=0 e SEED_DEMO=0" >&2
     exit 1
   fi
 fi
@@ -61,7 +62,8 @@ fi
 
 MARCADOR="$DATA_DIR/.seed-demo-ok"
 if [ "$SEED_DEMO" = "1" ] && [ ! -f "$MARCADOR" ]; then
-  npm run --silent seed:demo && touch "$MARCADOR"
+  # DT32: as senhas da demonstração vão para o volume, nunca para a imagem nem para o log.
+  SENHAS_DEMO_ARQUIVO="$DATA_DIR/senhas-demo.txt" npm run --silent seed:demo && touch "$MARCADOR"
 fi
 
 exec npx tsx src/server.ts

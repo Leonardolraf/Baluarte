@@ -15,7 +15,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://baluarte:${POSTGRES_PASSWORD}@db:5432/baluarte?schema=public   # plano B: ${SUPABASE_DATABASE_URL}
       - DIRECT_URL=postgresql://baluarte:${POSTGRES_PASSWORD}@db:5432/baluarte?schema=public     # plano B: ${SUPABASE_DIRECT_URL}
-      - SEED_DEMO=0       # o seed-demo faz deleteMany e recria as contas com a senha pública do README
+      - SEED_DEMO=0       # o seed-demo faz deleteMany e recria as contas de demonstração (senhas aleatórias em /data, DT32)
       - SEED_CONTRATO=0   # criaria contas com as senhas públicas do README
       # DT28: trava. Com SEMEAR_PROIBIDO=1, qualquer SEED_*=1 (vindo de onde for) faz o entrypoint
       # recusar subir (exit 1) em vez de semear. Não dá para travar pelo host do DATABASE_URL:
