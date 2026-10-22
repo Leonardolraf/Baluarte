@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { httpClient, realApi, vulnerabilitySortParams } from '@/services/api';
 import type { BackendCampaign, BackendFinding, BackendTraining, BackendUser } from '@/services/adapters';
 import { HttpError } from '@/lib/errors';
-import { FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { ACK_REQUIRED_EVENT, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
 import { buildMockToken } from '@/lib/jwt';
 import { tokenStorage } from '@/lib/storage';
 
@@ -139,7 +139,26 @@ describe('realApi — interceptadores HTTP', () => {
     on('GET /me', ok(backendUser({ perfil: 'Administrador' })));
     const me = await realApi.me();
     expect(authHeader(0)).toBe('Bearer tok-123');
-    expect(me).toEqual({ id: 'u-1', name: 'Ana Souza', email: 'ana@empresa.com', role: 'admin' });
+    // `noticePending` null: a resposta deste teste nao traz `cienciaAvisoPendente`, e campo
+    // ausente e DESCONHECIDO — nunca "nada pendente" (quem decide, ai, e o 403 das outras rotas).
+    expect(me).toEqual({
+      id: 'u-1',
+      name: 'Ana Souza',
+      email: 'ana@empresa.com',
+      role: 'admin',
+      noticePending: null,
+    });
+  });
+
+  it('`cienciaAvisoPendente` do /me vira noticePending; ausente é null, não false', async () => {
+    // Campo aditivo de 19/10/2026, com o /me fora do gate de ciência.
+    tokenStorage.set('tok-123');
+    on('GET /me', ok(backendUser({ cienciaAvisoPendente: true })));
+    expect((await realApi.me()).noticePending).toBe(true);
+    on('GET /me', ok(backendUser({ cienciaAvisoPendente: false })));
+    expect((await realApi.me()).noticePending).toBe(false);
+    on('GET /me', ok(backendUser()));
+    expect((await realApi.me()).noticePending).toBeNull();
   });
 
   it('não envia Authorization sem sessão e aceita corpo sem envelope', async () => {
@@ -171,6 +190,22 @@ describe('realApi — interceptadores HTTP', () => {
     expect((spy.mock.calls[0]?.[0] as CustomEvent).type).toBe(FORBIDDEN_EVENT);
   });
 
+  it('403 CIENCIA_AVISO_PENDENTE dispara o evento do aviso, não o de permissão', async () => {
+    // Gate do servidor ("opção C", 19/10/2026): falta a ciência do aviso de monitoramento na
+    // versão em vigor. Tem saída (a tela do aviso), então não pode virar "acesso negado".
+    const spy = vi.spyOn(window, 'dispatchEvent');
+    on(
+      'GET /dashboard',
+      fail(403, 'CIENCIA_AVISO_PENDENTE', 'Confirme que leu o aviso de monitoramento para usar o Baluarte'),
+    );
+    const err = await rejection(realApi.getDashboard());
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('CIENCIA_AVISO_PENDENTE');
+    const event = spy.mock.calls[0]?.[0] as CustomEvent;
+    expect(event.type).toBe(ACK_REQUIRED_EVENT);
+    expect(event.type).not.toBe(FORBIDDEN_EVENT);
+  });
+
   it('usa código e mensagem genéricos quando o corpo do erro vem vazio', async () => {
     on('GET /scans', { status: 500 });
     expect(await rejection(realApi.listScans())).toMatchObject({
@@ -200,7 +235,13 @@ describe('realApi — autenticação e conta', () => {
     expect(authHeader(1)).toBe('Bearer jwt-novo');
     expect(result).toEqual({
       token: 'jwt-novo',
-      user: { id: 'u-1', name: 'Ana Souza', email: 'ana@empresa.com', role: 'analyst' },
+      user: {
+        id: 'u-1',
+        name: 'Ana Souza',
+        email: 'ana@empresa.com',
+        role: 'analyst',
+        noticePending: null,
+      },
     });
     expect(tokenStorage.get()).toBeNull();
   });

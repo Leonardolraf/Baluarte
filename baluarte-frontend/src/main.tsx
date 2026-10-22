@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import App from '@/App';
 import { AuthProvider } from '@/contexts/AuthContext';
 // Fontes servidas do próprio bundle (sem chamadas ao Google Fonts): ver DESIGN.md.
@@ -20,6 +21,8 @@ ReactDOM.createRoot(container).render(
     <BrowserRouter>
       <AuthProvider>
         <App />
+        {/* Vercel Web Analytics: cookieless (sem banner LGPD); rastreia rota no SPA sozinho. */}
+        <Analytics />
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

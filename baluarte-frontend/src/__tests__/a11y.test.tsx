@@ -80,8 +80,8 @@ const PAGES: Array<{ path: string; role: RBACRole | null; ready: string | RegExp
   // Aviso de monitoramento da estação (B18): o colaborador antes da ciência e o administrador com a lista.
   { path: '/monitoring', role: 'collaborator', ready: 'Li e estou ciente' },
   { path: '/monitoring', role: 'admin', ready: 'Ciências registradas' },
-  // Banner do aviso pendente sobre outra página (analista sem ciência no seed do mock).
-  { path: '/scans', role: 'analyst', ready: 'Ler o aviso de monitoramento' },
+  // Varreduras (B21/B26): tela com atualizacao periodica, conferida com o analista.
+  { path: '/scans', role: 'analyst', ready: 'Varreduras' },
 ];
 
 describe('acessibilidade (axe-core)', () => {

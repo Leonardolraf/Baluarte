@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AuthUser, LoginCredentials, RBACRole } from '@/types';
 import { api } from '@/services/api';
-import { FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { ACK_REQUIRED_EVENT, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT, dispatchAuthEvent } from '@/lib/events';
 import { isTokenExpired, userFromToken } from '@/lib/jwt';
 import { clearSession, tokenStorage, userStorage } from '@/lib/storage';
 import { hasAnyRole } from '@/lib/roles';
@@ -98,10 +98,23 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
     let cancelled = false;
     api
       .me()
-      .then((user) => {
+      .then((atual) => {
         if (cancelled) return;
+        // A pendência e transitoria: guardar envelheceria (a pessoa registra a ciencia e o valor
+        // guardado continuaria dizendo que falta).
+        const { noticePending, ...user } = atual;
         userStorage.set(user);
         setSession((current) => (current.status === 'authenticated' ? { ...current, user } : current));
+        // `GET /me` esta fora do gate e diz se a ciencia falta (19/10/2026). Com isso a tela leva
+        // a pessoa ao aviso ANTES de disparar requisicao condenada, em vez de esperar o 403 de
+        // outra rota — o que fazia o dashboard piscar antes do redirecionamento. Só `true`
+        // roteia: `null` e desconhecido, e ai quem decide continua sendo o 403.
+        if (noticePending === true)
+          dispatchAuthEvent(ACK_REQUIRED_EVENT, {
+            status: 403,
+            code: 'CIENCIA_AVISO_PENDENTE',
+            message: 'Confirme que leu o aviso de monitoramento para usar o Baluarte',
+          });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -109,6 +122,16 @@ export function AuthProvider({ children, initialSession, revalidateOnMount = tru
           typeof error === 'object' && error && 'status' in error
             ? Number((error as { status: number }).status)
             : 0;
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code: unknown }).code)
+            : '';
+        // Ciencia pendente do aviso de monitoramento NAO e sessao invalida: o gate do servidor
+        // responde 403 em toda rota autenticada, /me inclusive. Derrubar a sessao aqui criava
+        // um laco sem saida — login, 403 no /me, "sua sessao expirou", login de novo — e a
+        // pessoa nunca alcancava a tela que registra a ciencia, que exige estar logada. Quem
+        // reage a esse 403 e o AppLayout, levando ao aviso.
+        if (code === 'CIENCIA_AVISO_PENDENTE') return;
         if (status === 401 || status === 403) logout('Sua sessão expirou. Faça login novamente.');
       });
     return () => {

@@ -86,7 +86,7 @@ describe('FileAnalysisPage (B05)', () => {
     expect(within(await historyTable()).getByText('Ameaça: Eicar-Signature')).toBeInTheDocument();
   });
 
-  it('arquivo acima de 10 MB é barrado antes de enviar', async () => {
+  it('arquivo acima de 100 MB é barrado antes de enviar', async () => {
     const spy = vi.spyOn(mockApi, 'analyzeFile');
     renderAs('analyst');
     await historyTable();
@@ -95,7 +95,7 @@ describe('FileAnalysisPage (B05)', () => {
     Object.defineProperty(big, 'size', { value: MAX_FILE_SIZE_BYTES + 1 });
     choose(big);
 
-    expect(await screen.findByTestId('form-error')).toHaveTextContent('O arquivo passa do limite de 10 MB');
+    expect(await screen.findByTestId('form-error')).toHaveTextContent('O arquivo passa do limite de 100 MB');
     expect(screen.getByTestId('form-error')).toHaveTextContent('backup.iso');
     expect(spy).not.toHaveBeenCalled();
     expect(screen.queryByTestId('file-verdict')).not.toBeInTheDocument();
@@ -217,7 +217,7 @@ describe('FileAnalysisPage (B05)', () => {
     const click = vi.spyOn(fileInput(), 'click');
 
     const zone = screen.getByRole('button', { name: /Escolher arquivo para análise/ });
-    expect(zone).toHaveAccessibleDescription(/até 10 MB/);
+    expect(zone).toHaveAccessibleDescription(/até 100 MB/);
     await user.tab();
     while (document.activeElement !== zone) await user.tab();
     await user.keyboard('{Enter}');

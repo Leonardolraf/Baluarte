@@ -61,8 +61,8 @@ import type {
 } from '@/types';
 import { VULN_PAGE_SIZE } from '@/types';
 import { HttpError, isHttpError } from '@/lib/errors';
-import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
-import { fileScanVerdict } from '@/lib/files';
+import { ACK_REQUIRED_EVENT, dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import { fileScanVerdict, watchUpload, type UploadAbortReason } from '@/lib/files';
 import { localDayRange } from '@/lib/format';
 import { filenameFromDisposition, vulnerabilityReportFilename } from '@/lib/download';
 import { userFromToken } from '@/lib/jwt';
@@ -145,7 +145,7 @@ import {
 // mocks (dados fictícios e credenciais de demonstração) do bundle.
 // -----------------------------------------------------------------------------
 
-export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT };
+export { UNAUTHORIZED_EVENT, FORBIDDEN_EVENT, ACK_REQUIRED_EVENT };
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -260,7 +260,13 @@ httpClient.interceptors.response.use(
       // Só derruba a sessão se havia uma sessão guardada (um 401 durante o próprio login não conta).
       if (status === 401 && tokenStorage.get())
         dispatchAuthEvent(UNAUTHORIZED_EVENT, { status, code, message });
-      if (status === 403) dispatchAuthEvent(FORBIDDEN_EVENT, { status, code, message });
+      // Ciência pendente do aviso (gate do servidor) tem tela de saída; o resto do 403 não.
+      if (status === 403)
+        dispatchAuthEvent(code === 'CIENCIA_AVISO_PENDENTE' ? ACK_REQUIRED_EVENT : FORBIDDEN_EVENT, {
+          status,
+          code,
+          message,
+        });
       return Promise.reject(new HttpError(status, code, message));
     }
     // Sem resposta: ou o tempo esgotou, ou não houve conexão. Uma retentativa resolve a
@@ -829,6 +835,13 @@ export const realApi: BaluarteApi = {
   async analyzeFile(file: File, options: AnalyzeFileOptions = {}): Promise<FileScanOutcome> {
     const form = new FormData();
     form.append('arquivo', file, file.name);
+    // Sem prazo total: o vigia aborta por ociosidade no envio ou pela demora da resposta.
+    const controller = new AbortController();
+    let expired: UploadAbortReason | null = null;
+    const watchdog = watchUpload((reason) => {
+      expired = reason;
+      controller.abort();
+    });
     try {
       const response = await httpClient.request<ApiEnvelope<BackendFileScan>>({
         method: 'POST',
@@ -837,9 +850,11 @@ export const realApi: BaluarteApi = {
         params: options.campaignEventId ? { eventoCampanha: options.campaignEventId } : undefined,
         data: form,
         headers: { 'Content-Type': 'multipart/form-data' },
-        // A varredura do ClamAV leva mais que uma requisição comum.
-        timeout: 60_000,
+        // Envio de até 100 MB numa conexão lenta pode levar o tempo que for (lib/files.ts).
+        timeout: 0,
+        signal: controller.signal,
         onUploadProgress: (event) => {
+          watchdog.progress(event.loaded, event.total);
           if (options.onProgress && event.total) {
             options.onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
           }
@@ -851,7 +866,12 @@ export const realApi: BaluarteApi = {
         message: response.data.mensagem || fileScanVerdict(scan),
       };
     } catch (error) {
+      if (expired === 'idle') throw new HttpError(0, 'ENVIO_SEM_PROGRESSO', 'O envio parou de avançar.');
+      if (expired === 'response')
+        throw new HttpError(0, 'ANALISE_SEM_RESPOSTA', 'A análise não respondeu a tempo.');
       rethrowAsNotImplemented(error);
+    } finally {
+      watchdog.stop();
     }
   },
 

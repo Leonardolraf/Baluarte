@@ -10,7 +10,14 @@ export const UNAUTHORIZED_EVENT = 'baluarte:unauthorized';
 /** A API respondeu 403: o perfil em memória pode estar desatualizado. */
 export const FORBIDDEN_EVENT = 'baluarte:forbidden';
 
-export type AuthEventName = typeof UNAUTHORIZED_EVENT | typeof FORBIDDEN_EVENT;
+/**
+ * A API respondeu 403 CIENCIA_AVISO_PENDENTE: falta a ciência do aviso de monitoramento na
+ * versão em vigor. NÃO é falta de permissão — tem saída, e a saída é a tela do aviso. Tratar
+ * como FORBIDDEN mostraria "acesso negado" numa situação que a pessoa resolve num clique.
+ */
+export const ACK_REQUIRED_EVENT = 'baluarte:monitoring-ack-required';
+
+export type AuthEventName = typeof UNAUTHORIZED_EVENT | typeof FORBIDDEN_EVENT | typeof ACK_REQUIRED_EVENT;
 
 /** O usuário registrou a ciência do aviso de monitoramento da estação (B18): o banner some. */
 export const MONITORING_ACK_EVENT = 'baluarte:monitoring-ack';

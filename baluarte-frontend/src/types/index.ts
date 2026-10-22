@@ -24,7 +24,17 @@ export interface User {
   lastLoginAt?: string | null;
 }
 
-export type AuthUser = Pick<User, 'id' | 'name' | 'email' | 'role'>;
+export type AuthUser = Pick<User, 'id' | 'name' | 'email' | 'role'> & {
+  /**
+   * Ciência do aviso de monitoramento pendente, de `GET /me` (`cienciaAvisoPendente`, 19/10/2026).
+   * `null` quando a API não manda o campo — **desconhecido, nunca "nada pendente"**: concluir
+   * `false` por ausência erraria para o lado tranquilizador, e nesse caso quem decide é o 403.
+   *
+   * Transitório: usado na revalidação e **nunca guardado**, porque envelheceria — a pessoa
+   * registra a ciência e o valor guardado continuaria dizendo que falta.
+   */
+  noticePending?: boolean | null;
+};
 
 export interface UserInput {
   name: string;

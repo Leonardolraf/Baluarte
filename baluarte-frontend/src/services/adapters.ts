@@ -87,6 +87,8 @@ export interface BackendUser {
   criadoEm?: string;
   /** Nome do departamento (ou null quando sem departamento). */
   departamento?: string | null;
+  /** `GET /me` (19/10/2026): ciência do aviso de monitoramento pendente. Aditivo. */
+  cienciaAvisoPendente?: boolean;
 }
 
 export interface BackendAsset {
@@ -472,7 +474,14 @@ function vulnStatusFromLabel(label: string | null | undefined): VulnerabilitySta
 // ---- Backend -> domínio -----------------------------------------------------
 
 export function toAuthUser(raw: BackendUser): AuthUser {
-  return { id: raw.id, name: raw.nome, email: raw.email, role: roleFromLabel(raw.perfil) };
+  return {
+    id: raw.id,
+    name: raw.nome,
+    email: raw.email,
+    role: roleFromLabel(raw.perfil),
+    // Campo ausente (API anterior) fica `null`: desconhecido, e não "nada pendente".
+    noticePending: typeof raw.cienciaAvisoPendente === 'boolean' ? raw.cienciaAvisoPendente : null,
+  };
 }
 
 export function toAuthUserFromLogin(raw: BackendLogin): AuthUser {

@@ -67,8 +67,14 @@ import type {
 } from '@/types';
 import { SEVERITIES, VULN_PAGE_SIZE } from '@/types';
 import { HttpError } from '@/lib/errors';
-import { dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
-import { fileScanVerdict, isOwnRule, MAX_ATTACHMENTS_PER_CAMPAIGN, MAX_FILE_SIZE_BYTES } from '@/lib/files';
+import { ACK_REQUIRED_EVENT, dispatchAuthEvent, FORBIDDEN_EVENT, UNAUTHORIZED_EVENT } from '@/lib/events';
+import {
+  fileScanVerdict,
+  isOwnRule,
+  MAX_ATTACHMENTS_PER_CAMPAIGN,
+  MAX_FILE_SIZE_BYTES,
+  MAX_FILE_SIZE_LABEL,
+} from '@/lib/files';
 import { SCAN_DURATION_MS, scanProgressByTime } from './scanProgress';
 import { vulnerabilityReportFilename } from '@/lib/download';
 import { formatDate, formatDateTime, localDayRange } from '@/lib/format';
@@ -297,7 +303,16 @@ function pushAudit(
 
 function deny(status: 401 | 403, code: string, message: string): never {
   const error = new HttpError(status, code, message);
-  dispatchAuthEvent(status === 401 ? UNAUTHORIZED_EVENT : FORBIDDEN_EVENT, error);
+  // Mesma separacao do cliente real (services/api.ts): ciencia pendente do aviso tem tela de
+  // saida, o resto do 403 nao. Se o mock mandasse tudo como FORBIDDEN, a camada simulada
+  // mostraria "acesso negado" onde o servidor de verdade leva ao aviso.
+  const evento =
+    status === 401
+      ? UNAUTHORIZED_EVENT
+      : code === 'CIENCIA_AVISO_PENDENTE'
+        ? ACK_REQUIRED_EVENT
+        : FORBIDDEN_EVENT;
+  dispatchAuthEvent(evento, error);
   throw error;
 }
 
@@ -994,6 +1009,12 @@ export const mockApi: BaluarteApi = {
     return simulate(
       () => {
         const u = requireUser();
+        // `noticePending` fica de FORA de proposito, e isso nao e esquecimento: a camada mock
+        // nao implementa o gate de ciencia (ligar o gate aqui trancaria a demonstracao offline
+        // e toda a suite do Playwright). Informar a pendencia pelo /me teria o mesmo efeito do
+        // gate, porque a tela roteia com o campo: medido em 19/10/2026, quebrou 32 specs de
+        // uma vez. Campo ausente = DESCONHECIDO, e no mock quem sabe do aceite e a tela do
+        // aviso (`getMonitoringNotice`), que segue mostrando o estado real de cada conta.
         return { id: u.id, name: u.name, email: u.email, role: u.role };
       },
       { canFail: false },
@@ -1954,7 +1975,11 @@ export const mockApi: BaluarteApi = {
     const user = requireUser();
     if (!file) throw new HttpError(400, 'ARQUIVO_OBRIGATORIO', 'Arquivo é obrigatório');
     if (file.size > MAX_FILE_SIZE_BYTES)
-      throw new HttpError(413, 'ARQUIVO_MUITO_GRANDE', 'Arquivo excede o limite de 10 MB');
+      throw new HttpError(
+        413,
+        'ARQUIVO_MUITO_GRANDE',
+        `Arquivo maior que o limite de ${MAX_FILE_SIZE_LABEL}`,
+      );
     const now = Date.now();
     const recent = (state.fileScanTimes.get(user.id) ?? []).filter((t) => now - t < HOUR_MS);
     if (recent.length >= MOCK_FILE_SCANS_PER_HOUR)
