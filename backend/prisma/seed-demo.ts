@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/db.js';
+import { VERSAO_AVISO } from '../src/models/avisoMonitoramento.model.js';
 import { dadosAchado, type ChaveAchado } from '../src/models/catalogoAchado.model.js';
 import { gerarTokenLink, hashToken } from '../src/utils/tokens.js';
 import { gerarSenha, montarConteudo, prepararGravacao, resolverArquivoSenhas, type ContaDemo } from './arquivoSenhasDemo.js';
@@ -111,9 +112,14 @@ async function main() {
   const hashDe = async (email: string) => bcrypt.hash(senhaDe.get(email)!, 10);
   const gravacao = prepararGravacao(arquivoSenhas, montarConteudo(contas));
   try {
-    // Melhorias #5: contas de demonstracao ja com os termos de uso aceitos.
+    // Gate de ciencia: as contas nomeadas ja nascem com a ciencia da VERSAO_AVISO em vigor (so
+    // aceitavel por serem contas ficticias de teste/demonstracao, senha fora do repo, nunca em
+    // producao; uma pessoa de verdade registra a propria ciencia pela tela). Os colaboradores em
+    // massa recebem a ciencia logo abaixo, por createMany. termosAceitosEm fica como dado morto: o
+    // gate de termos foi SUBSTITUIDO pelo de ciencia, mas a coluna segue no schema (sem drop).
     const termosAceitosEm = new Date();
-    for (const u of usuarios) await prisma.user.create({ data: { ...u, senhaHash: await hashDe(u.email), termosAceitosEm } });
+    for (const u of usuarios)
+      await prisma.user.create({ data: { ...u, senhaHash: await hashDe(u.email), termosAceitosEm, ciencias: { create: { versao: VERSAO_AVISO } } } });
     const dadosColabs = [];
     for (const c of colaboradores) dadosColabs.push({ ...c, senhaHash: await hashDe(c.email), termosAceitosEm });
     await prisma.user.createMany({ data: dadosColabs });
@@ -127,6 +133,11 @@ async function main() {
     console.warn('[seed:demo] aviso: não consegui restringir o acesso ao arquivo no Windows (icacls); ele ficou com as permissões herdadas da pasta');
   const colabs = await prisma.user.findMany({ where: { email: { startsWith: 'colab', endsWith: '@empresa.com' }, perfil: 'Colaborador', id: { not: 'u-002' } } });
   const idPorEmail = new Map(colabs.map((u) => [u.email, u.id]));
+  // Mesma ciencia das contas acima (so aceitavel por serem contas ficticias de demonstracao).
+  await prisma.monitoringAcknowledgement.createMany({
+    data: colabs.map((u) => ({ userId: u.id, versao: VERSAO_AVISO })),
+    skipDuplicates: true,
+  });
 
   // ---- Campanhas + eventos (funil) ----
   async function campanha(nome: string, template: string, status: string, total: number, abertos: number, clicados: number, submeteram: number, reportaram: number) {

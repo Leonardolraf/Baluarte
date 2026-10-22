@@ -258,7 +258,8 @@ describe('nenhuma resposta vaza segredo ou dado sensivel', () => {
     const analista = await login(ANALISTA.email, ANALISTA.senha);
     const r = await chamar('GET', '/me', { token: analista });
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.body.dados).sort(), ['departamento', 'email', 'id', 'nome', 'perfil', 'status']);
+    // Lista fechada: só dados do próprio usuário + o aditivo cienciaAvisoPendente (19/10/2026).
+    assert.deepEqual(Object.keys(r.body.dados).sort(), ['cienciaAvisoPendente', 'departamento', 'email', 'id', 'nome', 'perfil', 'status']);
     semSegredos(r.body, 'GET /me');
   });
 

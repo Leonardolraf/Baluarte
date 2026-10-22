@@ -1,4 +1,4 @@
-// Migrations das Melhorias de 14/10/2026, conferidas no banco: #5 (User.termosAceitosEm) e
+// Migrations das Melhorias de 14/10/2026, conferidas no banco: #5 (User.termosAceitosEm, hoje parada) e
 // #6 (CampaignLinkHit: CHECK de tamanho, cascata, RLS, fechamento DT13 e o expurgo LGPD que
 // anula ip/userAgent sem apagar a abertura). Banco isolado — ver helpers.ts.
 import { after, before, describe, it } from 'node:test';
@@ -26,19 +26,15 @@ async function recusadaPorCheck(escrita: Promise<unknown>, motivo: string) {
   }, motivo);
 }
 
-describe('#5 aceite de termos (User.termosAceitosEm)', () => {
-  it('nasce nulo para quem já existe e para conta nova, e guarda o instante do aceite', async () => {
-    // As contas do seed de contrato (u-000/u-001/u-002) nascem com o aceite de propósito (#5,
-    // prisma/seed.ts); fora delas, a migration não pode marcar ninguém como tendo aceitado.
-    const existentes = await prisma.user.count({ where: { termosAceitosEm: { not: null }, id: { notIn: ['u-000', 'u-001', 'u-002'] } } });
-    assert.equal(existentes, 0, 'a migration não pode marcar ninguém como tendo aceitado');
-
+describe('#5 aposentado: coluna User.termosAceitosEm parada (sem uso no src)', () => {
+  // O #5 (termos de uso) foi aposentado em 19/10/2026: o gate passou a ser a ciência do aviso de
+  // monitoramento. A coluna da migration de 14/10 fica no schema, sem uso, até uma migration
+  // posterior a 25/11 a remover (ver CHANGELOG). Aqui só se confere que ela ainda existe, que
+  // nasce nula e que nem o seed de contrato a preenche mais.
+  it('existe, nasce nula e nenhum seed a preenche', async () => {
+    assert.equal(await prisma.user.count({ where: { termosAceitosEm: { not: null } } }), 0);
     const u = await prisma.user.create({ data: { nome: 'Termos', email: `termos.${Date.now()}@empresa.com`, senhaHash: 'x' } });
     assert.equal(u.termosAceitosEm, null);
-
-    const agora = new Date();
-    const aceito = await prisma.user.update({ where: { id: u.id }, data: { termosAceitosEm: agora } });
-    assert.equal(aceito.termosAceitosEm?.getTime(), agora.getTime());
   });
 });
 

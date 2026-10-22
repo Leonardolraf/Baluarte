@@ -5,7 +5,8 @@ import { wrap } from '../utils/resposta.js';
 
 // Rotas de autenticacao e conta: login (contrato N2 AT1), troca e redefinicao de senha,
 // verificacao do link, logout, renovacao da sessao e a politica de seguranca publicada.
-// Logout e renovacao usam exigeSessao: valem tambem para quem ainda nao aceitou os termos (#5).
+// Logout e renovacao usam exigeSessao: valem tambem para quem ainda nao deu ciencia do aviso de
+// monitoramento (gate exigeCienciaAviso, ver middlewares/auth.middleware.ts).
 export function rotasAuth(r: Router) {
   r.post('/login', wrap(authController.login));
   r.post('/auth/change-password', exigeToken, wrap(authController.trocarSenha));

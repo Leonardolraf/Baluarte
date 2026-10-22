@@ -275,8 +275,10 @@ describe('perfil defasado no token e ciclo de sessão', () => {
     esperaErro(await chamar('GET', '/usuarios', { token: token2 }), 403, 'PERFIL_SEM_PERMISSAO');
     esperaErro(await chamar('DELETE', `/users/${contaColab.id}`, { token: token2 }), 403, 'PERFIL_SEM_PERMISSAO');
 
-    // Limpa: remove o segundo (já Analista) para manter u-000 como único admin.
-    assert.equal((await chamar('DELETE', `/users/${conta2.id}`, { token: admin })).status, 200);
+    // Limpa: o segundo usou o Baluarte (deu ciência do aviso), então não é excluível
+    // (USUARIO_COM_CIENCIA); inativá-lo mantém u-000 como único admin ativo.
+    esperaErro(await chamar('DELETE', `/users/${conta2.id}`, { token: admin }), 409, 'USUARIO_COM_CIENCIA');
+    assert.equal((await chamar('PATCH', `/users/${conta2.id}`, { token: admin, body: { status: 'Inativo' } })).status, 200);
   });
 
   it('conta inativada perde acesso na hora (401 USUARIO_INATIVO) e o login é recusado (403)', async () => {
@@ -292,14 +294,15 @@ describe('perfil defasado no token e ciclo de sessão', () => {
   });
 
   it('conta excluída invalida o token na hora → 401 USUARIO_REMOVIDO', async () => {
-    const conta = await criarUsuario(admin, 'Colaborador', 'authz-removido');
+    // Sem ciência do aviso (só assim a conta é excluível): o token vale nas exceções do gate.
+    const conta = await criarUsuario(admin, 'Colaborador', 'authz-removido', { cienciaAviso: false });
     const token = await login(conta.email, SENHA_CONTA);
-    assert.equal((await chamar('GET', '/me', { token })).status, 200);
+    assert.equal((await chamar('GET', '/monitoramento/aviso', { token })).status, 200);
 
     assert.equal((await chamar('DELETE', `/users/${conta.id}`, { token: admin })).status, 200);
 
     esperaErro(await chamar('GET', '/me', { token }), 401, 'USUARIO_REMOVIDO');
-    esperaErro(await chamar('GET', '/configuracoes/notificacoes', { token }), 401, 'USUARIO_REMOVIDO');
+    esperaErro(await chamar('GET', '/monitoramento/aviso', { token }), 401, 'USUARIO_REMOVIDO');
   });
 
   it('redefinição de senha encerra as sessões abertas antes → 401 SENHA_REDEFINIDA', async () => {

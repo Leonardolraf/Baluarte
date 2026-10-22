@@ -1,4 +1,4 @@
-import type { AlteracaoUsuario, Ator, CadastroUsuario, UsuarioAtual } from '../models/usuario.model.js';
+import type { AlteracaoUsuario, Ator, CadastroUsuario, PerfilProprio, UsuarioAtual } from '../models/usuario.model.js';
 import { nomeDoDepartamento, resolverDepartamento } from '../repositories/departamento.repository.js';
 import * as repo from '../repositories/usuario.repository.js';
 import { falhar } from '../utils/resposta.js';
@@ -51,9 +51,23 @@ export async function listar() {
   return { usuarios, resumo };
 }
 
-/** Dados do usuario logado (GET /me). */
-export async function perfilDe(u: UsuarioAtual) {
-  return { id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, status: u.status, departamento: await nomeDoDepartamento(u.departmentId) };
+/**
+ * Dados do usuario logado (GET /me, so exigeSessao: responde tambem a quem ainda nao deu
+ * ciencia do aviso). `cienciaAvisoPendente` sai da ciencia ja carregada por exigeSessao
+ * (`cienciaAvisoEm`, mesma consulta do usuario), sem consulta extra. O campo so orienta o
+ * cliente (rotear para a tela do aviso e explicar); quem decide acesso e o 403
+ * CIENCIA_AVISO_PENDENTE do gate exigeCienciaAviso nas demais rotas, nunca este campo.
+ */
+export async function perfilDe(u: UsuarioAtual): Promise<PerfilProprio> {
+  return {
+    id: u.id,
+    nome: u.nome,
+    email: u.email,
+    perfil: u.perfil,
+    status: u.status,
+    departamento: await nomeDoDepartamento(u.departmentId),
+    cienciaAvisoPendente: u.cienciaAvisoEm === null,
+  };
 }
 
 /** Edicao pelo Administrador. `dados` ja vem validado no formato; `departamento` vem pelo nome. */

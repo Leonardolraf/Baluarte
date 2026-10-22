@@ -99,6 +99,10 @@ export const QUERIES: Record<string, QueryAgendada> = {
 /**
  * Intervalo-base das queries (o dos programas): 1 h em producao, 5 min fora dela.
  * OSQUERY_INTERVALO_S muda. As outras categorias derivam dele (FATOR_INTERVALO).
+ * ATENCAO: o aviso de monitoramento (models/avisoMonitoramento.model.ts) escreve a frequencia
+ * de producao a partir deste valor e de FATOR_INTERVALO. Mudar o agendamento de producao muda o
+ * TEXTO do aviso e exige VERSAO_AVISO nova e HASH_TEXTO_AVISO novo (a ciencia e por versao);
+ * tests/unidade/hash-aviso.test.ts falha ate isso ser feito.
  */
 export const INTERVALO_PRODUCAO_S = 3600;
 export const INTERVALO_DEV_S = 300;
@@ -112,6 +116,8 @@ export const INTERVALO_MAX_S = 86400;
  *  - programas: muda pouco e a lista e grande (Windows: registro; Linux: dpkg/rpm) -> o base (1 h);
  *  - sistema: so muda com atualizacao do SO, e a inscricao ja manda a versao -> 6x o base (6 h).
  * O resultado fica entre INTERVALO_MIN_S e INTERVALO_MAX_S (o SO e lido ao menos 1x por dia).
+ * ATENCAO: mudar um fator muda a frequencia escrita no aviso de monitoramento, logo o texto, e
+ * exige VERSAO_AVISO e HASH_TEXTO_AVISO novos (ver INTERVALO_PRODUCAO_S).
  */
 export const FATOR_INTERVALO: Record<CategoriaQuery, number> = { portas: 0.25, programas: 1, sistema: 6 };
 
@@ -125,7 +131,11 @@ export function intervaloDaCategoriaNoBase(categoria: CategoriaQuery, base: numb
   return Math.min(INTERVALO_MAX_S, Math.max(INTERVALO_MIN_S, s));
 }
 
-/** Espalha cada execucao em ate +-10% do intervalo, para as estacoes nao coletarem juntas. */
+/**
+ * Espalha cada execucao em ate +-10% do intervalo, para as estacoes nao coletarem juntas.
+ * ATENCAO: o aviso de monitoramento escreve este percentual ("em ate cerca de 10%"); mudar o
+ * valor muda o texto do aviso e exige VERSAO_AVISO e HASH_TEXTO_AVISO novos.
+ */
 export const SPLAY_PERCENTUAL = 10;
 
 // ---- Formato dos dados recebidos ------------------------------------------------

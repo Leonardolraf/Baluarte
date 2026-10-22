@@ -18,8 +18,26 @@ export interface UsuarioAtual {
   senhaHash: string;
   senhaAlteradaEm: Date | null;
   sessaoEncerradaEm: Date | null;
-  termosAceitosEm: Date | null;
+  /** Ciencia do aviso de monitoramento na VERSAO_AVISO em vigor (null = pendente). Ver exigeCienciaAviso. */
+  cienciaAvisoEm: Date | null;
   departmentId: string | null;
+}
+
+/**
+ * Resposta de GET /me: so os dados do proprio usuario logado, nenhum dado de recurso.
+ * `cienciaAvisoPendente` (aditivo, 19/10/2026) e true quando o usuario nao tem ciencia da
+ * VERSAO_AVISO em vigor (nenhuma, ou so de versao antiga). Serve SO para o cliente rotear e
+ * explicar (mandar para a tela do aviso); NUNCA decide acesso: a autoridade continua sendo o
+ * 403 CIENCIA_AVISO_PENDENTE de exigeCienciaAviso em todas as outras rotas autenticadas.
+ */
+export interface PerfilProprio {
+  id: string;
+  nome: string;
+  email: string;
+  perfil: string;
+  status: string;
+  departamento: string | null;
+  cienciaAvisoPendente: boolean;
 }
 
 /** Quem executa a acao (para RBAC fino e auditoria). */
