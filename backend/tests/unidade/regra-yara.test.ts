@@ -128,3 +128,38 @@ describe('arquivos de antivirus/regras respeitam os limites do ClamAV 1.5 (B23)'
     });
   }
 });
+
+// DT26: em HTML o ClamAV pula a varredura crua (DOCUMENT/HTMLSKIPRAW, bit 0x10, ligado por
+// padrao) e o YARA so ve o HTML normalizado (minusculas, entidades decodificadas, comentarios
+// apagados). O conserto tem duas pecas, conferidas aqui sem ClamAV; o comportamento no clamd de
+// verdade esta em tests/aceitacao-clamd-real.test.ts (marcador em HTML e em e-mail com HTML).
+describe('marcador em HTML: regra case-insensitive e varredura crua religada (DT26)', () => {
+  const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+  const pasta = join(raiz, 'antivirus', 'regras');
+  const semComentario = (t: string) => t.replace(/^\s*(\/\/|#).*$/gm, '');
+
+  it('o marcador tem `nocase`: a forma normalizada é toda em minúsculas', () => {
+    const texto = semComentario(readFileSync(join(pasta, 'baluarte_teste.yar'), 'utf8'));
+    assert.match(texto, /\$marcador\s*=\s*"BALUARTE-TESTE-AMEACA-0001-ARQUIVO-INOFENSIVO"\s+nocase\s*$/m);
+  });
+
+  it('baluarte_html_cru.cfg: uma linha DOCUMENT que desliga só o HTMLSKIPRAW (0x10) e mantém o resto ligado', () => {
+    const linhas = semComentario(readFileSync(join(pasta, 'baluarte_html_cru.cfg'), 'utf8')).split(/\r?\n/).filter((l) => l.trim());
+    assert.equal(linhas.length, 1, 'uma linha só, para nenhuma outra sobrescrever a configuração oficial');
+    const m = /^DOCUMENT:0x([0-9a-f]+):(\d+)$/i.exec(linhas[0].trim());
+    assert.ok(m, `formato MODULO:0xMASCARA:nivel_minimo (sem nível máximo): ${linhas[0]}`);
+    const mascara = parseInt(m[1], 16);
+    assert.equal(mascara & 0x10, 0, 'HTMLSKIPRAW desligado: o HTML também é varrido cru');
+    // HTML, RTF, PDF, SCRIPT, JSNORM, SWF, MSXML, OOXML, HWP, ONENOTE: nenhum submódulo existente desligado.
+    for (const bit of [0x1, 0x2, 0x4, 0x8, 0x20, 0x40, 0x80, 0x100, 0x200, 0x400]) {
+      assert.notEqual(mascara & bit, 0, `submódulo 0x${bit.toString(16)} de DOCUMENT continua ligado`);
+    }
+    assert.equal(Number(m[2]), 0, 'vale em qualquer nível de funcionalidade');
+  });
+
+  it('o compose copia também os baluarte_*.cfg para o diretório de banco do clamd', () => {
+    const compose = readFileSync(join(raiz, 'docker-compose.yml'), 'utf8');
+    assert.match(compose, /rm -f [^\n]*\/var\/lib\/clamav\/baluarte_\*\.cfg/);
+    assert.match(compose, /for regra in [^\n]*\/regras-baluarte\/baluarte_\*\.cfg/);
+  });
+});

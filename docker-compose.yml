@@ -117,6 +117,11 @@ services:
   # sai do repositório sai do volume (apaga baluarte_*.yar e copia de novo). O freshclam só
   # mexe nos bancos oficiais (main, daily, bytecode) e não apaga arquivos extras. Regra nova:
   # `docker compose --profile antivirus restart clamav` (ver README, "Regras YARA").
+  # DT26: vai junto o baluarte_html_cru.cfg (configuração dinamica, DCONF). Sem ele o ClamAV NÃO
+  # varre o HTML cru (submódulo DOCUMENT/HTMLSKIPRAW, ligado por padrão): as regras YARA só veem o
+  # HTML normalizado (minúsculas, entidades decodificadas, comentários apagados) e o marcador em
+  # comentário, ou qualquer string com maiúscula sem `nocase`, não dispara. O log da subida diz
+  # "Configuracao dinamica do Baluarte: 1".
   #
   # Limites do clamd (Melhorias #18, medidos em 13 e 14/10/2026 no ClamAV 1.5.4 com as assinaturas
   # e as regras do Baluarte). O /init da imagem oficial grava cada CLAMD_CONF_<Opção>=<valor> no
@@ -178,11 +183,12 @@ services:
       - /bin/sh
       - -c
       - |
-        rm -f /var/lib/clamav/baluarte_*.yar /var/lib/clamav/baluarte_*.yara
-        for regra in /regras-baluarte/baluarte_*.yar /regras-baluarte/baluarte_*.yara; do
+        rm -f /var/lib/clamav/baluarte_*.yar /var/lib/clamav/baluarte_*.yara /var/lib/clamav/baluarte_*.cfg
+        for regra in /regras-baluarte/baluarte_*.yar /regras-baluarte/baluarte_*.yara /regras-baluarte/baluarte_*.cfg; do
           [ -f "$$regra" ] && cp "$$regra" /var/lib/clamav/ && chmod 0644 "/var/lib/clamav/$${regra##*/}"
         done
-        echo "Regras YARA do Baluarte: $$(ls /var/lib/clamav | grep -c '^baluarte_')"
+        echo "Regras YARA do Baluarte: $$(ls /var/lib/clamav | grep -cE '^baluarte_.*\.yara?$$')"
+        echo "Configuracao dinamica do Baluarte: $$(ls /var/lib/clamav | grep -c '^baluarte_.*\.cfg$$')"
         exec /init
     volumes:
       - clamav-db:/var/lib/clamav

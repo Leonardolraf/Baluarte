@@ -72,8 +72,10 @@ export function lerInstream(socket: Socket, aoFim: (amostra: Buffer, total: numb
  * Envia `tamanho` bytes iguais a `byte` como o campo `arquivo` de um multipart/form-data, com
  * Content-Length (como o navegador), gerados em blocos de 1 MB reaproveitados. Com `cauda`, os
  * ultimos `cauda.length` bytes do arquivo sao ela (o total continua `tamanho`): e assim que o
- * teste de aceitacao poe o marcador no fim do arquivo sem montar o arquivo inteiro. Devolve o
- * status e o corpo JSON da resposta.
+ * teste de aceitacao poe o marcador no fim do arquivo sem montar o arquivo inteiro. Com
+ * `cabeca`, os primeiros bytes sao ela; com `bloco`, o preenchimento repete esse bloco (no lugar
+ * de `byte`), o que deixa gerar um HTML grande em fluxo (DT26). Devolve o status e o corpo JSON
+ * da resposta.
  */
 export function enviarArquivoEmFluxo(opcoes: {
   token: string;
@@ -82,20 +84,23 @@ export function enviarArquivoEmFluxo(opcoes: {
   nome?: string;
   byte?: number;
   cauda?: Buffer;
+  cabeca?: Buffer;
+  bloco?: Buffer;
 }): Promise<{ status: number; body: any }> {
-  const { token, tamanho, query = '', nome = 'grande.bin', byte = 65, cauda = Buffer.alloc(0) } = opcoes;
-  if (cauda.length > tamanho) throw new Error('a cauda é maior que o arquivo');
+  const { token, tamanho, query = '', nome = 'grande.bin', byte = 65, cauda = Buffer.alloc(0), cabeca = Buffer.alloc(0) } = opcoes;
+  if (cabeca.length + cauda.length > tamanho) throw new Error('a cabeça e a cauda são maiores que o arquivo');
   const fronteira = `----baluarte${randomBytes(12).toString('hex')}`;
   const inicio = Buffer.from(
     `--${fronteira}\r\nContent-Disposition: form-data; name="arquivo"; filename="${nome}"\r\n` +
       'Content-Type: application/octet-stream\r\n\r\n',
   );
   const fim = Buffer.from(`\r\n--${fronteira}--\r\n`);
-  const bloco = Buffer.alloc(1024 * 1024, byte);
+  const bloco = opcoes.bloco ?? Buffer.alloc(1024 * 1024, byte);
 
   function* corpo() {
     yield inicio;
-    let falta = tamanho - cauda.length;
+    if (cabeca.length) yield cabeca;
+    let falta = tamanho - cabeca.length - cauda.length;
     while (falta > 0) {
       const n = Math.min(falta, bloco.length);
       yield n === bloco.length ? bloco : bloco.subarray(0, n);
