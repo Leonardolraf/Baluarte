@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { ErroNegocio, falhar, wrap } from '../../src/utils/resposta.js';
 import { funilDe, mapCampaign, riscoHumano, totais } from '../../src/services/campanhaMetricas.service.js';
 import { dadosTreinamento, podeVerTreinamento } from '../../src/models/treinamento.model.js';
-import { MAX_DEPARTAMENTOS_FILTRO, MINIMO_ELEGIVEIS_REGRA_TODOS, elegivelParaCampanha, exigeConfirmacao, filtroDestinatarios, limiteSemConfirmacao, statusRecebeCampanha } from '../../src/models/campanha.model.js';
+import { MAX_DEPARTAMENTOS_FILTRO, MINIMO_ELEGIVEIS_REGRA_TODOS, elegivelParaCampanha, exigeConfirmacao, filtroDestinatarios, limiteSemConfirmacao, statusEfetivo, statusRecebeCampanha } from '../../src/models/campanha.model.js';
 import { OPERADORES, PERFIS, PESO_RISCO_HUMANO, STATUS_FINDING, STATUS_FINDING_ENCERRADO, destinatarioInterno, destinatariosInternos, dominioInterno } from '../../src/models/dominio.model.js';
 
 function resposta(jaEnviada = false) {
@@ -101,7 +101,26 @@ describe('métricas de campanha', () => {
       eventos: [ev({ enviadoEm: d, clicadoEm: d }), ev({ enviadoEm: d }), ev({ enviadoEm: d }), ev({})],
     });
     assert.equal(c.destinatarios, 4);
+    assert.equal(c.enviados, 3);
     assert.equal(c.taxaClique, 33);
+  });
+
+  it('statusEfetivo (DT34): sem envio AGENDADA, com envio ATIVA, ENCERRADA gravada respeitada', () => {
+    assert.equal(statusEfetivo('AGENDADA', []), 'AGENDADA');
+    assert.equal(statusEfetivo('AGENDADA', [ev({}), ev({})]), 'AGENDADA', 'evento sem enviadoEm não ativa');
+    assert.equal(statusEfetivo('AGENDADA', [ev({}), ev({ enviadoEm: d })]), 'ATIVA', 'basta um envio');
+    // O gravado ATIVA (seed-demo) sem envio nenhum volta a AGENDADA: o status é dos envios.
+    assert.equal(statusEfetivo('ATIVA', [ev({})]), 'AGENDADA');
+    assert.equal(statusEfetivo('ATIVA', [ev({ enviadoEm: d })]), 'ATIVA');
+    assert.equal(statusEfetivo('ENCERRADA', [ev({ enviadoEm: d })]), 'ENCERRADA');
+    assert.equal(statusEfetivo('ENCERRADA', []), 'ENCERRADA');
+  });
+
+  it('mapCampaign expõe o status efetivo, não o gravado', () => {
+    const base = { id: 'c1', nome: 'T', template: 'urgencia', criadoEm: d };
+    assert.equal(mapCampaign({ ...base, status: 'AGENDADA', eventos: [ev({})] }).status, 'AGENDADA');
+    assert.equal(mapCampaign({ ...base, status: 'AGENDADA', eventos: [ev({ enviadoEm: d })] }).status, 'ATIVA');
+    assert.equal(mapCampaign({ ...base, status: 'ENCERRADA', eventos: [ev({ enviadoEm: d })] }).status, 'ENCERRADA');
   });
 
   it('totais soma enviados e clicados de todas as campanhas', () => {
