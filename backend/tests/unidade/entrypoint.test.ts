@@ -39,7 +39,14 @@ before(() => {
   mkdirSync(stubs);
   // `npx`/`npm` falsos: registram a linha de comando; `npm` falha se FALHAR_NPM=1.
   writeFileSync(join(stubs, 'npx'), '#!/bin/sh\necho "npx $*" >> "$REGISTRO"\n', { mode: 0o755 });
-  writeFileSync(join(stubs, 'npm'), '#!/bin/sh\necho "npm $*" >> "$REGISTRO"\n[ "${FALHAR_NPM:-0}" = "1" ] && exit 7\nexit 0\n', { mode: 0o755 });
+  // Com REGISTRO_AMBIENTE, o `npm` falso também registra o SENHAS_DEMO_ARQUIVO que recebeu (DT32).
+  writeFileSync(
+    join(stubs, 'npm'),
+    '#!/bin/sh\necho "npm $*" >> "$REGISTRO"\n' +
+      'if [ -n "${REGISTRO_AMBIENTE:-}" ]; then echo "$* SENHAS_DEMO_ARQUIVO=${SENHAS_DEMO_ARQUIVO:-}" >> "$REGISTRO_AMBIENTE"; fi\n' +
+      '[ "${FALHAR_NPM:-0}" = "1" ] && exit 7\nexit 0\n',
+    { mode: 0o755 },
+  );
 });
 after(() => { if (raiz) rmSync(raiz, { recursive: true, force: true }); });
 
@@ -96,6 +103,20 @@ describe('docker-entrypoint.sh: seeds (DT28)', { skip: SH ? false : 'sh não enc
     const data = novoData();
     assert.deepEqual(seeds(subir(data, { SEED_DEMO: '1' })), ['npm run --silent seed:demo']);
     assert.deepEqual(seeds(subir(data, { SEED_DEMO: '1' })), []);
+  });
+
+  it('SEED_DEMO=1 grava as senhas da demonstração no volume, ao lado do jwt.secret (DT32)', () => {
+    const data = novoData();
+    const ambiente = join(raiz, `ambiente-${++contador}.txt`);
+    const s = subir(data, { SEED_CONTRATO: '1', SEED_DEMO: '1', REGISTRO_AMBIENTE: barra(ambiente), SENHAS_DEMO_ARQUIVO: '/app/senhas.txt' });
+    assert.equal(s.status, 0, s.stderr);
+    const linhas = readFileSync(ambiente, 'utf8').split('\n').filter(Boolean);
+    // Só o seed:demo recebe o caminho do volume, e um valor herdado do ambiente não vale para ele.
+    assert.deepEqual(linhas, [
+      'run --silent seed SENHAS_DEMO_ARQUIVO=/app/senhas.txt',
+      `run --silent seed:demo SENHAS_DEMO_ARQUIVO=${barra(data)}/senhas-demo.txt`,
+    ]);
+    assert.ok(existsSync(join(data, 'jwt.secret')), 'o jwt.secret fica na mesma pasta');
   });
 
   it('seed de contrato que falha derruba a subida e não grava o marcador', () => {

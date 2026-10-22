@@ -8,6 +8,12 @@
 //   BALUARTE-TESTE-AMEACA-0001-ARQUIVO-INOFENSIVO
 // e envie na tela /files.
 //
+// DT26: em HTML (inclusive a parte HTML de um e-mail) o ClamAV pula a varredura crua e o YARA
+// so ve o HTML NORMALIZADO: minusculas, entidades decodificadas, comentarios apagados. Por isso
+// o `nocase` (a forma normalizada e "baluarte-teste-ameaca-..."; com entidades, so ela tem o
+// marcador legivel) e o baluarte_html_cru.cfg, que religa a varredura crua (marcador dentro de
+// comentario HTML so existe no cru). Medido no ClamAV 1.5.4 com clamscan --debug.
+//
 // Limites do ClamAV (docs.clamav.net, "YARA Rules"): sem modulos (import), sem regras
 // globais, sem variaveis externas, no maximo 64 strings por regra, cada string com pelo menos
 // 2 bytes e pelo menos uma string por regra (a condicao e disparada por casamento de string).
@@ -23,7 +29,7 @@ rule BaluarteMarcadorTeste
         descricao = "Marcador de teste do Baluarte (inofensivo, para demonstracao)"
 
     strings:
-        $marcador = "BALUARTE-TESTE-AMEACA-0001-ARQUIVO-INOFENSIVO"
+        $marcador = "BALUARTE-TESTE-AMEACA-0001-ARQUIVO-INOFENSIVO" nocase
 
     condition:
         $marcador

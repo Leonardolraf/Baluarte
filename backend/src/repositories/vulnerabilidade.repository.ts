@@ -78,9 +78,22 @@ export async function listarPagina(f: FiltrosVulnerabilidade, o: OrdemVulnerabil
   };
 }
 
-/** Todos os achados do filtro, sem paginar (o relatorio, em PDF ou Excel, exporta o filtro inteiro). */
-export async function listarFiltrados(f: FiltrosVulnerabilidade): Promise<FindingComScan[]> {
-  return prisma.finding.findMany({ where: filtro(f), include: COM_ATIVO, orderBy: ordem({ campo: 'detectadoEm', direcao: 'desc' }) });
+/**
+ * Achados do filtro, sem paginar (o relatorio, em PDF ou Excel, exporta o filtro inteiro). `limite`
+ * corta a leitura (DT36: o service pede teto + 1, para saber se passou do teto sem carregar tudo).
+ */
+export async function listarFiltrados(f: FiltrosVulnerabilidade, limite?: number): Promise<FindingComScan[]> {
+  return prisma.finding.findMany({
+    where: filtro(f),
+    include: COM_ATIVO,
+    orderBy: ordem({ campo: 'detectadoEm', direcao: 'desc' }),
+    ...(limite === undefined ? {} : { take: limite }),
+  });
+}
+
+/** Quantos achados o filtro tem: o MESMO `where` do `listarFiltrados` (DT36, teto do relatorio). */
+export function contarFiltrados(f: FiltrosVulnerabilidade): Promise<number> {
+  return prisma.finding.count({ where: filtro(f) });
 }
 
 /** Achado em aberto: fora de "Resolvida" e "Risco aceito" (a regra dos KPIs). */

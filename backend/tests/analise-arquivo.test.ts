@@ -256,7 +256,7 @@ describe('POST /arquivos/analise: o Zip64 que o clamd não lê vira ameaça por 
     assert.equal(r.body.dados.ameaca, 'Baluarte.Zip64.NaoAnalisavel');
     assert.equal(
       r.body.mensagem,
-      'Ameaça encontrada: Baluarte.Zip64.NaoAnalisavel (formato Zip64, que o antivírus não analisa; tratado como ameaça por precaução)',
+      'Ameaça encontrada: Baluarte.Zip64.NaoAnalisavel (variante de Zip64 que o antivírus não lê; tratado como ameaça por precaução)',
     );
     assert.equal(r.body.dados.regraPropria, false);
     assert.equal(recebidoPeloClamd, zip.length, 'o antivírus continua recebendo o arquivo inteiro');

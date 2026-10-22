@@ -15,6 +15,24 @@ export type EventoCampanha = CampaignEvent;
 /** Datas do funil de um evento (enviado -> aberto -> clicado -> submeteu; reporte a parte). */
 export type EventoFunil = { enviadoEm: Date | null; abertoEm: Date | null; clicadoEm: Date | null; submeteuEm: Date | null; reportouEm: Date | null };
 
+// ---- Status da campanha (DT34) ---------------------------------------------------
+// O banco aceita AGENDADA, ATIVA e ENCERRADA (CHECK), mas a API so grava AGENDADA na criacao
+// (campanha.repository.ts) e nenhum caminho dela muda o status depois: ENCERRADA hoje so e
+// gravada pelo seed-demo, e nenhuma rota encerra campanha (o ciclo completo fica para depois).
+// Por isso o status exposto e DERIVADO na leitura, sem gravar nada: quem le ou compara status
+// (lista, detalhe, resumo `ativas` e dashboard) usa `statusEfetivo`, nunca `campanha.status`.
+
+export type StatusCampanha = 'AGENDADA' | 'ATIVA' | 'ENCERRADA';
+
+/**
+ * Status efetivo da campanha: ENCERRADA gravada e respeitada; senao, com pelo menos um evento
+ * com `enviadoEm` (e-mail que saiu de fato) e ATIVA; sem nenhum envio, AGENDADA.
+ */
+export function statusEfetivo(gravado: string, eventos: { enviadoEm: Date | null }[]): StatusCampanha {
+  if (gravado === 'ENCERRADA') return 'ENCERRADA';
+  return eventos.some((e) => e.enviadoEm) ? 'ATIVA' : 'AGENDADA';
+}
+
 /** Entrada da criacao (POST /campaigns), com os destinatarios ja validados no formato e no dominio. */
 export interface CadastroCampanha {
   nome: string;

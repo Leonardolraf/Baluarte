@@ -36,6 +36,7 @@ subida mostra os mesmos números:
 
 ```
 Regras YARA do Baluarte: 4
+Configuracao dinamica do Baluarte: 1
 Limits: Global time limit set to 240000 milliseconds.
 Limits: Global size limit set to 1048576000 bytes.
 Limits: File size limit set to 1049624576 bytes.
@@ -52,8 +53,11 @@ Sinal de que a configuração NÃO entrou (é o estado da `main` antes do #18): 
 nada (no arquivo só existe o comentário `#StreamMaxLength 25M` do exemplo), e o log diz
 `Global time limit set to 120000`, `Global size limit set to 419430400`, `File size limit set to
 104857600` e `AlertExceedsMax heuristic detection disabled`. Nesse estado o limite efetivo do
-fluxo é o padrão compilado de 100 MB, não os 25 MB do comentário: 30 MB passam, 200 MB não
-(tabela abaixo).
+fluxo é o padrão compilado de 100 MiB, não os 25 MB do comentário: 30 MB passam, 200 MB não
+(tabela abaixo). Medido em 19/10/2026 (DT26) num clamd 1.5.4 isolado (projeto `dt26`) sem os
+`CLAMD_CONF_*`: `grep StreamMaxLength /etc/clamav/clamd.conf` devolve só `#StreamMaxLength 25M`
+e o `clamconf` diz `StreamMaxLength = "104857600"` (100 MiB); o log da subida, `MaxHTMLNormalize
+limit set to 41943040 bytes` (40 MiB) e `MaxScriptNormalize limit set to 20971520 bytes`.
 
 Mudou um `CLAMD_CONF_*`: `up -d --force-recreate clamav` (o `restart` não relê o ambiente).
 
@@ -75,6 +79,9 @@ docker compose -p m18c -f docker-compose.yml -f m18c-portas.yml --profile antivi
 cd backend
 CLAMAV_HOST=127.0.0.1 CLAMAV_PORT=13127 TEST_DB_PREFIXO=m18c_ node --import tsx --test tests/aceitacao-clamd-real.test.ts
 ```
+
+A suíte tem também o marcador dentro de HTML e de e-mail com HTML (DT26) e o teste de
+comportamento do `MaxHTMLNormalize` (item 5).
 
 Para o "antes", o mesmo comando com o `docker-compose.yml` da `main` (`git show
 origin/main:docker-compose.yml`), que não tem os `CLAMD_CONF_*`.
@@ -146,3 +153,76 @@ A última linha é o motivo de o detector não exigir o campo extra: sem ele o c
 jeito. Medido à parte, fora do teste: com `0xFFFFFFFF` **só** no tamanho original (o comprimido
 real), o clamd lê e detecta; o critério aprovado cobre "comprimido **ou** original", então essa
 forma (que nenhuma ferramenta conhecida grava sozinha) cai por precaução no detector.
+
+## 5. HTML: o que o YARA vê, e o `MaxHTMLNormalize` (DT26)
+
+**Causa do DT26 (classe, não pontual).** Num arquivo que o ClamAV reconhece como HTML (pelo
+conteúdo; vale para a parte HTML de um e-mail, inclusive em base64), ele pula a varredura do
+arquivo cru: o submódulo `DOCUMENT/HTMLSKIPRAW` da configuração dinâmica (DCONF) vem ligado por
+padrão e o `daily.cfg` não o desliga. As assinaturas, inclusive as regras YARA, só correm sobre as
+cópias normalizadas `nocomment.html` (minúsculas, entidades decodificadas, espaços fora do texto
+retirados, comentários apagados; limitada pelo `MaxHTMLNormalize`) e `notags.html` (só o texto,
+limitada pelo `MaxHTMLNoTags`, 8 MiB), mais a cópia `javascript` dos `<script>`. Evidência com
+`clamscan --debug --leave-temps` num contêiner descartável com as mesmas regras: no `.txt` aparece
+`Performing raw scan` e o `matcher_run` corre sobre os bytes do arquivo; no `.html` aparece
+`in cli_scanhtml()` e o `matcher_run` corre só sobre os 947 e os 721 bytes das duas cópias (o
+original tinha 994; "Data scanned 1.63 KiB"), com o marcador escrito
+`baluarte-teste-ameaca-0001-arquivo-inofensivo`. O marcador em maiúsculas, sem `nocase`, nunca
+casava; em comentário, ele nem chega às cópias. Com `--scan-html=no` o HTML volta a ser varrido cru
+e o marcador dispara (mas desligar o ScanHTML tira as 10 mil assinaturas de HTML do banco oficial:
+não é conserto).
+
+**Conserto:** `nocase` no marcador e `antivirus/regras/baluarte_html_cru.cfg`
+(`DOCUMENT:0xffffffef:0`: todos os submódulos de DOCUMENT ligados, menos o `HTMLSKIPRAW`), copiado
+pelo entrypoint. O ClamAV carrega o `daily` (e o `daily.cfg`) antes dos arquivos locais, então a
+linha prevalece; o `clamscan --debug` passa a listar `Submodule HTMLSKIPRAW: ** Off **` e os outros
+submódulos de DOCUMENT `On`, e o HTML é varrido cru e normalizado. Sem nenhuma das duas peças
+(tabela de `clamscan` só com as regras do Baluarte, HTML com o marcador no meio; 1 KB, 100 KB e
+1 MiB deram o mesmo resultado):
+
+| Onde está o marcador | `main` | só `nocase` | `nocase` + `.cfg` |
+|---|---|---|---|
+| `.txt`, `.js`, `.vbs` soltos | AMEAÇA | AMEAÇA | AMEAÇA |
+| HTML: texto visível, atributo, `<script>`, `<style>` | LIMPO | AMEAÇA | AMEAÇA |
+| HTML: os mesmos com entidades `&#66;` ou `&#x42;` | LIMPO | AMEAÇA | AMEAÇA |
+| HTML: comentário | LIMPO | LIMPO | AMEAÇA |
+| HTML: comentário com entidades (nenhum leitor decodifica) | LIMPO | LIMPO | LIMPO |
+| `.eml` com a parte HTML em texto puro, sem entidades | AMEAÇA | AMEAÇA | AMEAÇA |
+| `.eml` com a parte HTML em texto puro, com entidades | LIMPO | AMEAÇA | AMEAÇA |
+| `.eml` com a parte HTML em base64: visível, `<script>` | LIMPO | AMEAÇA | AMEAÇA |
+| `.eml` com a parte HTML em base64: comentário | LIMPO | LIMPO | AMEAÇA |
+
+O `.eml` em texto puro saía AMEAÇA porque a mensagem inteira é varrida crua antes de o ClamAV
+extrair a parte HTML; em base64 o marcador só existe na parte extraída, que é HTML. No clamd de
+verdade (projeto isolado `dt26`, assinaturas oficiais, daily 28158) e pela rota da API, a suíte de
+aceitação com as regras da `main` deu LIMPO nos 8 casos de HTML e de e-mail; com o conserto, os 8
+saem AMEAÇA.
+
+**Teste de comportamento do `MaxHTMLNormalize`** (`tests/aceitacao-clamd-real.test.ts`): um HTML
+de 45 MB, gerado em fluxo (sem fixture), com HTML smuggling inofensivo no fim escrito de modo que
+só a forma normalizada case a regra `BaluarteHtmlPayloadBase64` (`at&#111;b(` num atributo de
+evento, sem `new Blob`; o próprio teste confere que o cru não tem nenhuma string de remontagem). A
+varredura crua religada não o acha; quem acha é a normalização. Medido em 19/10/2026:
+
+| Configuração | HTML de 45 MB, smuggling normalizado no fim |
+|---|---|
+| #18 (`MaxHTMLNormalize 1001M`) | 201 AMEAÇA `YARA.BaluarteHtmlPayloadBase64.UNOFFICIAL` (6,7 s) |
+| antiga, sem os `CLAMD_CONF_*` (`MaxHTMLNormalize` 40 MiB) | **201 LIMPO** (6,3 s) |
+
+Na configuração antiga, o mesmo HTML com 30 MB sai AMEAÇA e, com 45 MB, sai LIMPO também com a
+amostra no meio do arquivo: acima do limite, o ClamAV não normaliza o HTML, não só a cauda. A forma
+crua (`atob(` e `new Blob` legíveis) sai AMEAÇA nas duas configurações, porque a varredura crua a
+pega; por isso o teste usa a forma que depende da normalização.
+
+```sh
+# configuração antiga: override sem os CLAMD_CONF_* (fora do repositório)
+#   services: { clamav: { environment: !reset [] } }
+POSTGRES_PASSWORD=x docker compose -p dt26 -f docker-compose.yml -f dt26-portas.yml -f dt26-antiga.yml --profile antivirus up -d --no-deps --force-recreate clamav
+docker compose -p dt26 ... exec clamav sh -c 'grep StreamMaxLength /etc/clamav/clamd.conf; clamconf | grep -i StreamMaxLength'
+cd backend
+CLAMAV_HOST=127.0.0.1 CLAMAV_PORT=13126 TEST_DB_PREFIXO=dt26_ node --import tsx --test tests/aceitacao-clamd-real.test.ts
+```
+
+Na configuração antiga a suíte falha em dois testes, de propósito: 200 MB (503, `StreamMaxLength`)
+e o HTML de 45 MB (LIMPO). Com o #18, 14/14.
+

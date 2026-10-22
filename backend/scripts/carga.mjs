@@ -20,7 +20,7 @@
 import autocannon from 'autocannon';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { cpus, release, tmpdir, totalmem, type as tipoSo } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -52,6 +52,26 @@ const falhar = (msg) => {
 let api = null;
 let urlBanco = '';
 let bancoCriado = false;
+// DT32: o seed:demo gera uma senha aleatória por conta e grava fora do repositório. A carga usa um
+// temporário próprio, lê as senhas dele para os logins e o apaga no fim (nunca imprime nenhuma).
+let pastaSenhasDemo = null;
+let senhasDemo = new Map();
+
+function lerSenhasDemo(arquivo) {
+  const senhas = new Map();
+  for (const linha of readFileSync(arquivo, 'utf8').split(/\r?\n/)) {
+    if (!linha || linha.startsWith('#')) continue;
+    const [email, , senha] = linha.split('\t');
+    if (email && senha) senhas.set(email, senha);
+  }
+  return senhas;
+}
+
+function senhaDemo(email) {
+  const senha = senhasDemo.get(email);
+  if (!senha) falhar(`conta de demonstração sem senha no arquivo do seed:demo: ${email}`);
+  return senha;
+}
 
 // ---- Banco ------------------------------------------------------------------------------
 
@@ -81,7 +101,12 @@ function montarUrlBanco() {
   return url.toString();
 }
 
-const envBanco = () => ({ ...env, DATABASE_URL: urlBanco, DIRECT_URL: urlBanco });
+const envBanco = () => ({
+  ...env,
+  DATABASE_URL: urlBanco,
+  DIRECT_URL: urlBanco,
+  ...(pastaSenhasDemo ? { SENHAS_DEMO_ARQUIVO: join(pastaSenhasDemo, 'senhas-demo.txt') } : {}),
+});
 const PRISMA = join(BACKEND, 'node_modules', 'prisma', 'build', 'index.js');
 
 function rodar(nome, args) {
@@ -94,7 +119,9 @@ function prepararBanco() {
   bancoCriado = true;
   rodar(`banco ${DB_NAME}: migrations do zero`, [PRISMA, 'migrate', 'reset', '--force', '--skip-seed']);
   rodar('seed de contrato', ['--import', 'tsx', 'prisma/seed.ts']);
+  pastaSenhasDemo = mkdtempSync(join(tmpdir(), 'baluarte-carga-senhas-'));
   rodar('seed de demonstração', ['--import', 'tsx', 'prisma/seed-demo.ts']);
+  senhasDemo = lerSenhasDemo(join(pastaSenhasDemo, 'senhas-demo.txt'));
   rodar('massa de carga', ['--import', 'tsx', 'prisma/seed-carga.ts']);
 }
 
@@ -428,7 +455,7 @@ async function principal() {
   const tokens = [
     await entrar('admin@empresa.com', 'Admin@123'),
     await entrar('analista@empresa.com', 'Senha@123'),
-    await entrar('edson@empresa.com', 'Mudar@123'),
+    await entrar('edson@empresa.com', senhaDemo('edson@empresa.com')),
   ];
   const resumo = await (
     await fetch(`${BASE}/api/vulnerabilidades?tamanho=1`, { headers: { authorization: `Bearer ${tokens[0]}` } })
@@ -492,7 +519,8 @@ async function principal() {
     })),
   });
 
-  // Login com senha certa, revezando as contas da massa de demonstração (senha Mudar@123).
+  // Login com senha certa, revezando as contas da massa de demonstração (cada uma com a sua senha,
+  // lida do arquivo gerado pelo seed:demo; DT32).
   const contas = ['edson@empresa.com', 'ana.souza@empresa.com', 'bruno.lima@empresa.com'].concat(
     Array.from({ length: 203 }, (_, i) => `colab${i}@empresa.com`),
   );
@@ -502,7 +530,10 @@ async function principal() {
     path: '/api/login',
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: contas[n++ % contas.length], senha: 'Mudar@123' }),
+    body: (() => {
+      const email = contas[n++ % contas.length];
+      return JSON.stringify({ email, senha: senhaDemo(email) });
+    })(),
   });
   log(`cenário: login (${CONEXOES_LOGIN} conexões, ${DURACAO} s)`);
   cenarios.push({
@@ -515,7 +546,7 @@ async function principal() {
   });
 
   log('limite de tentativas de login');
-  const limite = await limiteDeLogin('ana.souza@empresa.com', 'Mudar@123', 20);
+  const limite = await limiteDeLogin('ana.souza@empresa.com', senhaDemo('ana.souza@empresa.com'), 20);
   limite.contasLogin = contas.length;
   limite.status429NoLogin = cenarios.at(-1).status[429] ?? 0;
 
@@ -575,6 +606,7 @@ async function encerrar(codigo) {
   try {
     await pararApi();
     if (urlBanco) apagarBanco();
+    if (pastaSenhasDemo) rmSync(pastaSenhasDemo, { recursive: true, force: true });
   } finally {
     process.exit(codigo);
   }

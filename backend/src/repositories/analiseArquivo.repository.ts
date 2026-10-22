@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { hashToken } from '../utils/tokens.js';
 import type { ResultadoAnalise } from '../models/analiseArquivo.model.js';
@@ -20,52 +20,72 @@ import type { SegundaOpiniaoGravada } from '../models/segundaOpiniao.model.js';
 export type ReservaAnalise = { id: string | null; naHora: number; emCurso: number; noEvento: number };
 
 /**
+ * Relogio da reserva: o instante do BANCO, lido na propria instrucao (`clock_timestamp()`, nao
+ * `now()`, que e o inicio da transacao), em UTC e no tipo da coluna (timestamp(3)), sem depender
+ * do fuso da sessao. Toda escrita e toda comparacao do `criadoEm` de FileScanReserva usam esta
+ * mesma origem: a gravacao da reserva (depois da trava), o heartbeat, a poda e as contagens.
+ *
+ * Antes a data vinha da aplicacao, lida ANTES da trava e da fila de conexoes: a reserva que
+ * esperava (trava de outro envio do mesmo usuario, banco lento) nascia com a idade da espera e,
+ * se a espera passasse da validade, nascia vencida, sem contar no limite e podavel antes do
+ * primeiro heartbeat (mesma familia do DT10: instante lido antes da trava).
+ */
+const AGORA_UTC = Prisma.sql`(clock_timestamp() AT TIME ZONE 'UTC')::timestamp(3)`;
+
+/** Corte da validade (`validadeMs` antes de agora, pelo mesmo relogio): reserva anterior a ele nao conta. */
+export function reservaValidaDesde(validadeMs: number) {
+  return Prisma.sql`(${AGORA_UTC} - ${Math.round(validadeMs)}::int * interval '1 millisecond')`;
+}
+
+/**
  * Reserva a vaga de uma analise: grava a linha so se o usuario tem menos de `maximoHora`
  * analises (FileScan desde `desde` + reservas validas), menos de `maximoSimultaneas` analises
  * em andamento (reservas validas) e, com `eventoId`, o evento tem menos de `maximoEvento` anexos
  * (FileScan + reservas validas). Devolve o id da reserva (null quando algum limite ja estava
- * cheio) e as contagens que havia antes. Reservas anteriores a `validaDesde` (sem heartbeat em
- * dia) nao contam e sao podadas. Cada reserva e uma linha so: renovada ou nao, conta uma vez, e
+ * cheio) e as contagens que havia antes. Reservas sem heartbeat em dia (mais velhas que
+ * `validadeMs`) nao contam e sao podadas. A reserva nova nasce com o instante do banco lido
+ * depois da trava (`AGORA_UTC`). Cada reserva e uma linha so: renovada ou nao, conta uma vez, e
  * deixa de contar na mesma transacao que grava o FileScan (`criar`).
  */
 export async function reservarVaga(p: {
   userId: string;
   eventoId: string | null;
   desde: Date;
-  validaDesde: Date;
+  validadeMs: number;
   maximoHora: number;
   maximoSimultaneas: number;
   maximoEvento: number;
 }): Promise<ReservaAnalise> {
   const id = randomUUID();
-  // Datas como texto UTC -> timestamp(3), como o Prisma grava (o default do banco dependeria
-  // do fuso da sessao).
-  const agora = new Date().toISOString();
+  // A janela de 1 h compara com FileScan.criadoEm, gravado pelo Prisma com a data da aplicacao:
+  // segue em texto UTC -> timestamp(3). So o relogio da reserva e o do banco.
   const desde = p.desde.toISOString();
-  const validaDesde = p.validaDesde.toISOString();
+  const validaDesde = reservaValidaDesde(p.validadeMs);
   const [, , linhas] = await prisma.$transaction([
     // Duas chaves de 32 bits: espaco proprio, sem cruzar com as travas do login e da auditoria.
     prisma.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('baluarte.FileScanReserva'), hashtext(${p.userId}))`,
-    prisma.$executeRaw`DELETE FROM "FileScanReserva" WHERE "userId" = ${p.userId} AND "criadoEm" < ${validaDesde}::timestamp(3)`,
+    prisma.$executeRaw`DELETE FROM "FileScanReserva" WHERE "userId" = ${p.userId} AND "criadoEm" < ${validaDesde}`,
     // Instrucao separada da trava: em READ COMMITTED ela le o que foi gravado ate a trava sair.
     prisma.$queryRaw<Array<{ naHora: number; emCurso: number; noEvento: number; id: string | null }>>`
-      WITH emcurso AS (
+      WITH relogio AS (
+        SELECT ${AGORA_UTC} AS agora, ${validaDesde} AS valida
+      ), emcurso AS (
         SELECT count(*) AS n FROM "FileScanReserva"
-         WHERE "userId" = ${p.userId} AND "criadoEm" >= ${validaDesde}::timestamp(3)
+         WHERE "userId" = ${p.userId} AND "criadoEm" >= (SELECT valida FROM relogio)
       ), hora AS (
         SELECT (SELECT count(*) FROM "FileScan"
                  WHERE "userId" = ${p.userId} AND "criadoEm" >= ${desde}::timestamp(3))
              + (SELECT count(*) FROM "FileScanReserva"
-                 WHERE "userId" = ${p.userId} AND "criadoEm" >= ${validaDesde}::timestamp(3)) AS n
+                 WHERE "userId" = ${p.userId} AND "criadoEm" >= (SELECT valida FROM relogio)) AS n
       ), evento AS (
         SELECT CASE WHEN ${p.eventoId}::text IS NULL THEN 0 ELSE
                  (SELECT count(*) FROM "FileScan" WHERE "campaignEventId" = ${p.eventoId}::text)
                + (SELECT count(*) FROM "FileScanReserva"
-                   WHERE "campaignEventId" = ${p.eventoId}::text AND "criadoEm" >= ${validaDesde}::timestamp(3))
+                   WHERE "campaignEventId" = ${p.eventoId}::text AND "criadoEm" >= (SELECT valida FROM relogio))
                END AS n
       ), nova AS (
         INSERT INTO "FileScanReserva" ("id", "userId", "campaignEventId", "criadoEm")
-        SELECT ${id}, ${p.userId}, ${p.eventoId}::text, ${agora}::timestamp(3) FROM hora, emcurso, evento
+        SELECT ${id}, ${p.userId}, ${p.eventoId}::text, relogio.agora FROM relogio, hora, emcurso, evento
          WHERE hora.n < ${p.maximoHora} AND emcurso.n < ${p.maximoSimultaneas} AND evento.n < ${p.maximoEvento}
         RETURNING "id"
       )
@@ -78,14 +98,12 @@ export async function reservarVaga(p: {
 }
 
 /**
- * Heartbeat da reserva: poe o `criadoEm` em `agora`. Mesma origem de tempo da reserva e das
- * comparacoes de `reservarVaga` (a data da aplicacao, em texto UTC, como timestamp(3)); nunca
- * now()/CURRENT_TIMESTAMP do banco, que com fuso ou relogio diferente deslocaria a validade
- * (mesma familia do DT10). So a propria linha; se ela ja virou FileScan ou foi devolvida, nao
- * acha nada e nao faz nada.
+ * Heartbeat da reserva: poe o `criadoEm` no instante do banco (`AGORA_UTC`), a mesma origem da
+ * gravacao e das comparacoes de `reservarVaga`. So a propria linha; se ela ja virou FileScan ou
+ * foi devolvida, nao acha nada e nao faz nada.
  */
-export function renovarReserva(id: string, agora: Date) {
-  return prisma.$executeRaw`UPDATE "FileScanReserva" SET "criadoEm" = ${agora.toISOString()}::timestamp(3) WHERE "id" = ${id}`;
+export function renovarReserva(id: string) {
+  return prisma.$executeRaw`UPDATE "FileScanReserva" SET "criadoEm" = ${AGORA_UTC} WHERE "id" = ${id}`;
 }
 
 /** Devolve a vaga de uma analise que nao chegou ao fim (antivirus fora, arquivo grande, sem arquivo). */
@@ -120,13 +138,14 @@ const INCLUI_CAMPANHA = {
 
 /**
  * Quantas analises contam no limite por hora do usuario: as feitas desde `desde` mais as vagas
- * reservadas em curso (validas desde `validaDesde`). So leitura: quem vai mesmo analisar usa
- * `reservarVaga`.
+ * reservadas em curso (com heartbeat em dia, pelo relogio do banco). So leitura: quem vai mesmo
+ * analisar usa `reservarVaga`.
  */
-export async function contarNaHora(userId: string, desde: Date, validaDesde: Date) {
-  const [feitas, emCurso] = await prisma.$transaction([
+export async function contarNaHora(userId: string, desde: Date, validadeMs: number) {
+  const [feitas, [{ n: emCurso }]] = await prisma.$transaction([
     prisma.fileScan.count({ where: { userId, criadoEm: { gte: desde } } }),
-    prisma.fileScanReserva.count({ where: { userId, criadoEm: { gte: validaDesde } } }),
+    prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT count(*)::int AS n FROM "FileScanReserva" WHERE "userId" = ${userId} AND "criadoEm" >= ${reservaValidaDesde(validadeMs)}`,
   ]);
   return feitas + emCurso;
 }

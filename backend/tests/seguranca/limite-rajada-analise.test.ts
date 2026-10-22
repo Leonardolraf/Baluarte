@@ -27,15 +27,32 @@ const MSG_HORA = 'Limite de análises por hora atingido. Tente novamente mais ta
 const MSG_ANEXOS = `Limite de ${LIMITE_ANEXOS_POR_CAMPANHA} anexos por campanha atingido`;
 /** O clamd falso segura o veredito: todas as requisicoes da rajada passam pelo limite antes. */
 const DEMORA_CLAMD_MS = 300;
+let demoraClamdMs = DEMORA_CLAMD_MS; // ajustavel por teste; restaurado no finally
 
 let clamd: Server;
 let pedidosAoClamd = 0;
+// Invariante de concorrencia (#18): o limite e de SIMULTANEIDADE (<= LIMITE_ANALISES_SIMULTANEAS
+// analises EM ANDAMENTO ao mesmo tempo), nao de total por rajada. Duas terminam e a vaga recicla,
+// entao o TOTAL aceito numa rajada pode passar de 2, mas nunca ha >2 ao mesmo tempo. `maxEmVoo`
+// e o pico de analises em voo de fato no clamd: a medida certa do invariante (ver a sessao #18).
+let emVoo = 0;
+let maxEmVoo = 0;
+// Barreira opcional (caso determinístico): quando setada, o clamd falso SEGURA todo veredito ate o
+// teste resolver, garantindo que os aceitos fiquem em voo enquanto os recusados assentam.
+let barreira: Promise<void> | null = null;
 
-/** clamd falso (protocolo INSTREAM), lento de proposito; tudo e "stream: OK". */
+/** clamd falso (protocolo INSTREAM); gaugeia a concorrencia; tudo e "stream: OK". */
 function falsoClamd(socket: Socket) {
+  emVoo += 1;
+  if (emVoo > maxEmVoo) maxEmVoo = emVoo;
   lerInstream(socket, () => {
     pedidosAoClamd += 1;
-    setTimeout(() => socket.end('stream: OK\0'), DEMORA_CLAMD_MS);
+    const fim = () => {
+      emVoo -= 1;
+      socket.end('stream: OK\0');
+    };
+    if (barreira) void barreira.then(fim);
+    else setTimeout(fim, demoraClamdMs);
   });
 }
 
@@ -147,20 +164,65 @@ describe('DT09: limite de análises por hora sob rajada paralela', () => {
 });
 
 // =============================================================================
-describe('Melhorias #18: no máximo 2 análises simultâneas por usuário (contra o slowloris autenticado)', () => {
-  it(`${RAJADA_HORA} envios simultâneos de um usuário novo: só ${LIMITE_ANALISES_SIMULTANEAS} chegam ao antivírus, o resto é 429 ANALISES_SIMULTANEAS`, async (t) => {
-    const c = await novoColaborador('rajada.simultanea');
+describe('Melhorias #18: no máximo 2 análises EM ANDAMENTO ao mesmo tempo por usuário (slowloris)', () => {
+  // (a) DETERMINÍSTICO: a barreira segura os vereditos ate as 23 recusas assentarem e os 2 aceitos
+  // estarem em voo. Garante a sobreposição sob QUALQUER carga, entao a 3ª simultânea é recusada:
+  // s201==2, s429==23, pico de simultâneas==2. Isto testa "a 3ª EM ANDAMENTO é recusada".
+  it('com os 25 realmente sobrepostos (barreira), só 2 ficam em andamento e o resto é 429 ANALISES_SIMULTANEAS', async (t) => {
+    const c = await novoColaborador('rajada.simultanea.barreira');
+    maxEmVoo = 0;
     const antes = pedidosAoClamd;
-    const respostas = await rajada(RAJADA_HORA, (i) => enviar(c.token, `simultanea ${i}`));
-    conferirRecusas(respostas, 'ANALISES_SIMULTANEAS', `Já há ${LIMITE_ANALISES_SIMULTANEAS} análises suas em andamento. Aguarde uma terminar.`);
-    const { s201, s429 } = separar(respostas);
-    assert.equal(s201.length, LIMITE_ANALISES_SIMULTANEAS);
-    assert.equal(s429.length, RAJADA_HORA - LIMITE_ANALISES_SIMULTANEAS);
-    assert.equal(pedidosAoClamd - antes, LIMITE_ANALISES_SIMULTANEAS, 'o resto nem chega ao antivírus');
+    const ESPERADO_EM_VOO = LIMITE_ANALISES_SIMULTANEAS;
+    const ESPERADO_RECUSAS = RAJADA_HORA - LIMITE_ANALISES_SIMULTANEAS;
+    let liberar!: () => void;
+    barreira = new Promise<void>((res) => { liberar = res; });
+    try {
+      const pendentes = Array.from({ length: RAJADA_HORA }, () => enviar(c.token, 'simultanea'));
+      const recusas: Envio[] = [];
+      for (const p of pendentes) void p.then((r) => { if (r.status === 429) recusas.push(r); });
+      // Espera as recusas assentarem E os aceitos chegarem ao clamd (ficam presos na barreira).
+      const t0 = Date.now();
+      while ((recusas.length < ESPERADO_RECUSAS || pedidosAoClamd - antes < ESPERADO_EM_VOO) && Date.now() - t0 < 10_000)
+        await new Promise((r) => setTimeout(r, 20));
+      // Neste ponto os 2 aceitos estão EM VOO e os 23 já foram recusados: o pico é exatamente 2.
+      assert.equal(maxEmVoo, ESPERADO_EM_VOO, `pico de simultâneas = ${maxEmVoo} (esperado ${ESPERADO_EM_VOO})`);
+      assert.equal(recusas.length, ESPERADO_RECUSAS, `${recusas.length} recusas (esperado ${ESPERADO_RECUSAS})`);
+      liberar();
+      const respostas = await Promise.all(pendentes);
+      conferirRecusas(respostas, 'ANALISES_SIMULTANEAS', `Já há ${LIMITE_ANALISES_SIMULTANEAS} análises suas em andamento. Aguarde uma terminar.`);
+      const { s201, s429 } = separar(respostas);
+      assert.equal(s201.length, LIMITE_ANALISES_SIMULTANEAS);
+      assert.equal(s429.length, ESPERADO_RECUSAS);
+      assert.equal(pedidosAoClamd - antes, ESPERADO_EM_VOO, 'o resto nem chega ao antivírus');
+      t.diagnostic(`barreira: s201=${s201.length} s429=${s429.length} pico=${maxEmVoo}`);
+    } finally {
+      barreira = null;
+    }
     // O limite é por usuário: outro usuário na mesma hora segue livre.
     const outro = await novoColaborador('rajada.simultanea.outro');
     assert.equal((await enviar(outro.token, 'de outra pessoa')).status, 201);
-    t.diagnostic(`simultâneas: ${s201.length} x 201, ${s429.length} x 429`);
+  });
+
+  // (b) O INVARIANTE SOB CARGA: sem barreira e com clamd rápido, a vaga recicla e o TOTAL aceito na
+  // rajada pode passar de 2 (semântica pretendida — é limite de SIMULTANEIDADE, não de rajada), mas
+  // o pico de análises EM VOO ao mesmo tempo NUNCA pode passar de LIMITE_ANALISES_SIMULTANEAS. Roda
+  // dentro da suíte, entao o invariante é checado sob a carga paralela real: é o que pegaria uma
+  // regressão de concorrência (ex.: contagem não atômica na reservarVaga deixando passar a 3ª).
+  it('o pico de simultâneas nunca passa do limite, mesmo quando a vaga recicla sob carga', async (t) => {
+    const c = await novoColaborador('rajada.simultanea.recycling');
+    maxEmVoo = 0;
+    demoraClamdMs = 5; // a vaga recicla rápido: o total aceito sobe; a simultaneidade não pode
+    try {
+      const respostas = await rajada(RAJADA_HORA, () => enviar(c.token, 'recycling'));
+      const { s201, s429 } = separar(respostas);
+      assert.equal(s201.length + s429.length, RAJADA_HORA, 'toda resposta é 201 ou 429');
+      for (const r of s429) assert.ok(['ANALISES_SIMULTANEAS', 'MUITAS_ANALISES'].includes(r.body.codigoErro), JSON.stringify(r.body));
+      // A INVARIANTE: nunca mais de LIMITE_ANALISES_SIMULTANEAS análises ao mesmo tempo no clamd.
+      assert.ok(maxEmVoo <= LIMITE_ANALISES_SIMULTANEAS, `pico de simultâneas = ${maxEmVoo} > ${LIMITE_ANALISES_SIMULTANEAS}: BYPASS do limitador de concorrência`);
+      t.diagnostic(`recycling: s201=${s201.length} s429=${s429.length} pico=${maxEmVoo} (total aceito pode passar de 2; simultâneas não)`);
+    } finally {
+      demoraClamdMs = DEMORA_CLAMD_MS;
+    }
   });
 });
 

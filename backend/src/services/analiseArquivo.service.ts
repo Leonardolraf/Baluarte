@@ -58,14 +58,14 @@ function limiteDaHora(): never {
 export async function verificarAntesDeReceber(userId: string, eventoCampanha?: string): Promise<VagaAnalise> {
   if (!antivirusConfigurado()) falhar(503, MSG_INDISPONIVEL, 'ANTIVIRUS_INDISPONIVEL');
   const desde = new Date(Date.now() - UMA_HORA_MS);
-  const validaDesde = new Date(Date.now() - validadeReservaAnaliseMs());
+  const validadeMs = validadeReservaAnaliseMs();
   let origem: OrigemCampanha | null = null;
   if (eventoCampanha) {
     const evento = await repo.eventoDoUsuario(eventoCampanha, userId);
     if (!evento?.enviadoEm) {
       // Origem recusada: nada segue para o antivirus, entao basta contar, sem reservar (so
       // decide entre o 429 da hora, que vem primeiro, e o 404).
-      if ((await repo.contarNaHora(userId, desde, validaDesde)) >= LIMITE_ANALISES_POR_HORA) limiteDaHora();
+      if ((await repo.contarNaHora(userId, desde, validadeMs)) >= LIMITE_ANALISES_POR_HORA) limiteDaHora();
       falhar(404, 'Campanha não encontrada entre as que você recebeu', 'CAMPANHA_NAO_RECEBIDA');
     }
     origem = { eventoId: evento.id, campanha: evento.campaign };
@@ -74,7 +74,7 @@ export async function verificarAntesDeReceber(userId: string, eventoCampanha?: s
     userId,
     eventoId: origem?.eventoId ?? null,
     desde,
-    validaDesde,
+    validadeMs,
     maximoHora: LIMITE_ANALISES_POR_HORA,
     maximoSimultaneas: LIMITE_ANALISES_SIMULTANEAS,
     maximoEvento: LIMITE_ANEXOS_POR_CAMPANHA,
@@ -111,7 +111,7 @@ export function manterVagaViva(vaga: VagaAnalise): RenovacaoDaVaga {
   let emAndamento: Promise<unknown> = Promise.resolve();
   const temporizador = setInterval(() => {
     if (parado) return;
-    emAndamento = repo.renovarReserva(vaga.reservaId, new Date()).catch((e) => {
+    emAndamento = repo.renovarReserva(vaga.reservaId).catch((e) => {
       console.error('[analise] reserva não renovada (o envio segue):', e instanceof Error ? e.message : e);
     });
   }, intervaloRenovacaoReservaMs());

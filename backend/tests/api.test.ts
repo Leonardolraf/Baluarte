@@ -455,7 +455,8 @@ describe('PATCH/DELETE /users/:id (Administrador)', () => {
   before(async () => {
     admin = await login(ADMIN.email, ADMIN.senha);
     analista = await login(ANALISTA.email, ANALISTA.senha);
-    alvo = await criarUsuario(admin, 'Colaborador', 'alvo');
+    // Sem ciência do aviso: só assim a conta continua excluível pela API (USUARIO_COM_CIENCIA).
+    alvo = await criarUsuario(admin, 'Colaborador', 'alvo', { cienciaAviso: false });
   });
 
   it('analista não pode editar nem excluir (403 PERFIL_SEM_PERMISSAO)', async () => {
@@ -504,12 +505,17 @@ describe('PATCH/DELETE /users/:id (Administrador)', () => {
     const tokenSegundo = await login(segundo.email, SENHA_CONTA);
     assert.equal((await chamar('PATCH', '/users/u-000', { token: tokenSegundo, body: { perfil: 'Administrador' } })).status, 200);
     admin = await login(ADMIN.email, ADMIN.senha);
-    assert.equal((await chamar('DELETE', `/users/${segundo.id}`, { token: admin })).status, 200);
+    // O segundo usou o Baluarte (deu ciência do aviso): não é excluível, só inativável.
+    esperaErro(await chamar('DELETE', `/users/${segundo.id}`, { token: admin }), 409, 'USUARIO_COM_CIENCIA');
+    assert.equal((await chamar('PATCH', `/users/${segundo.id}`, { token: admin, body: { status: 'Inativo' } })).status, 200);
   });
 
   it('exclui usuário (com preferências em cascata) e some da listagem', async () => {
     const tokenAlvo = await login(alvo.email, SENHA_CONTA);
-    assert.equal((await chamar('GET', '/configuracoes/notificacoes', { token: tokenAlvo })).status, 200);
+    // A conta não deu ciência do aviso (só assim é excluível): o token vale nas exceções do gate,
+    // e as preferências entram direto no banco, porque a rota delas exige a ciência.
+    assert.equal((await chamar('GET', '/monitoramento/aviso', { token: tokenAlvo })).status, 200);
+    await prisma.notificationPreference.create({ data: { userId: alvo.id } });
     const r = await chamar('DELETE', `/users/${alvo.id}`, { token: admin });
     assert.equal(r.status, 200);
     assert.equal(r.body.mensagem, 'Usuário excluído');
@@ -518,7 +524,8 @@ describe('PATCH/DELETE /users/:id (Administrador)', () => {
     esperaErro(await chamar('DELETE', `/users/${alvo.id}`, { token: admin }), 404, 'USUARIO_NAO_ENCONTRADO');
     // Token de um usuário excluído deixa de valer.
     esperaErro(await chamar('GET', '/me', { token: tokenAlvo }), 401, 'USUARIO_REMOVIDO');
-    esperaErro(await chamar('GET', '/configuracoes/notificacoes', { token: tokenAlvo }), 401, 'USUARIO_REMOVIDO');
+    esperaErro(await chamar('GET', '/monitoramento/aviso', { token: tokenAlvo }), 401, 'USUARIO_REMOVIDO');
+    assert.equal(await prisma.notificationPreference.count({ where: { userId: alvo.id } }), 0, 'preferências em cascata');
   });
 });
 

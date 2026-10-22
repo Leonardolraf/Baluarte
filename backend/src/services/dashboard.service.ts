@@ -3,6 +3,7 @@ import { avancarVarreduras } from './cicloVarredura.service.js';
 import { contar as contarAtivos } from '../repositories/ativo.repository.js';
 import { listarComEventos } from '../repositories/campanha.repository.js';
 import { contarArquivosMaliciosos } from './analiseArquivo.service.js';
+import { statusEfetivo } from '../models/campanha.model.js';
 import { colaboradoresTreinados, funilDe, mapCampaign, riscoHumano, totais } from './campanhaMetricas.service.js';
 import { evolucaoRisco } from './evolucaoRisco.service.js';
 import { indiceRiscoTecnico } from './indiceRisco.service.js';
@@ -94,7 +95,8 @@ export async function painel(perfil: string) {
   sev['Crítico'] += arquivosMaliciosos;
 
   const ativos = await contarAtivos();
-  const ativa = campanhas.find((c) => c.status === 'ATIVA') || campanhas[0];
+  // Status derivado dos envios (DT34); sem campanha ativa, a primeira da lista.
+  const ativa = campanhas.find((c) => statusEfetivo(c.status, c.eventos) === 'ATIVA') || campanhas[0];
 
   return {
     kpis: {

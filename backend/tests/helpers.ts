@@ -55,6 +55,12 @@ export function configurarBancoDeTeste(testFileUrl: string): string {
   // TEST_DB_PREFIXO separa execucoes simultaneas (ex.: dois worktrees rodando a suite ao mesmo tempo).
   const prefixo = (process.env.TEST_DB_PREFIXO ?? '').replace(/[^a-z0-9_]/gi, '').toLowerCase();
   url.pathname = `/baluarte_test_${prefixo}${nome}`;
+  // `localhost` no Windows resolve primeiro para ::1, e o Postgres do Compose escuta so em
+  // 127.0.0.1: cada conexao NOVA esperava ~2 s pela volta ao IPv4 (medido: 2.044 ms de mediana
+  // contra 14 ms com 127.0.0.1). Com o pool do Prisma abrindo conexoes sob demanda, a consulta
+  // que precisava de uma conexao nova parava 2 s no meio do teste (o heartbeat de 200 ms do
+  // reserva-heartbeat.test.ts perdia a validade de 1 s e a reserva era podada: o 400 no lugar do 429).
+  if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
   process.env.DATABASE_URL = url.toString();
   process.env.DIRECT_URL = url.toString();
   process.env.JWT_SECRET = 'segredo-somente-para-testes';
@@ -75,6 +81,11 @@ export function configurarBancoDeTeste(testFileUrl: string): string {
   process.env.NVD_API_URL = 'http://127.0.0.1:9';
   delete process.env.NVD_API_KEY;
   delete process.env.CRUZAMENTO_AUTOMATICO;
+  // DT36: teto de producao do relatorio; quem testa o teto baixa a variavel no proprio teste.
+  delete process.env.RELATORIO_TETO_ACHADOS;
+  // Allowlist OFF por padrao nos testes: a trava de dominio da campanha vale (contrato N2 AT1);
+  // quem testa o flag (campanha-allowlist.test.ts) o liga/desliga por conta.
+  delete process.env.CAMPANHA_SEM_TRAVA_DOMINIO;
   return url.toString();
 }
 
@@ -179,28 +190,32 @@ export async function criarUsuarioPendente(
 }
 
 /**
- * Marca os termos de uso (Melhorias #5) como aceitos direto no banco, sem passar pela rota:
- * nao gera LOGIN nem ACEITAR_TERMOS na trilha de auditoria dos outros testes.
+ * Registra a ciencia do aviso de monitoramento (VERSAO_AVISO em vigor) direto no banco, sem
+ * passar pela rota: nao gera LOGIN nem REGISTRAR_CIENCIA_MONITORAMENTO na trilha de auditoria
+ * dos outros testes. Sem ela, o gate exigeCienciaAviso responde 403 CIENCIA_AVISO_PENDENTE.
  */
-export async function aceitarTermosNoBanco(id: string): Promise<void> {
+export async function registrarCienciaNoBanco(id: string): Promise<void> {
   const { prisma } = await import('../src/config/db.js');
-  await prisma.user.update({ where: { id }, data: { termosAceitosEm: new Date() } });
+  const { VERSAO_AVISO } = await import('../src/models/avisoMonitoramento.model.js');
+  await prisma.monitoringAcknowledgement.createMany({ data: [{ userId: id, versao: VERSAO_AVISO }], skipDuplicates: true });
 }
 
 /**
  * Cria um usuario pelo contrato e aceita o convite com SENHA_CONTA (status Ativo). Por padrao
- * a conta ja sai com os termos de uso aceitos (#5); `{ aceitarTermos: false }` deixa sem aceite.
+ * a conta ja sai com a ciencia do aviso de monitoramento em vigor (gate exigeCienciaAviso);
+ * `{ cienciaAviso: false }` deixa sem ciencia. Lembrete: conta com ciencia nao e excluida pela
+ * API (409 USUARIO_COM_CIENCIA); teste que precisa excluir usa `{ cienciaAviso: false }`.
  */
 export async function criarUsuario(
   token: string,
   perfil: Perfil,
   prefixo = 'teste',
-  opcoes: { aceitarTermos?: boolean } = {},
+  opcoes: { cienciaAviso?: boolean } = {},
 ): Promise<{ id: string; email: string }> {
   const { id, email, convite } = await criarUsuarioPendente(token, perfil, prefixo);
   const r = await chamar('POST', '/auth/reset-password/confirm', { body: { token: convite, novaSenha: SENHA_CONTA } });
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  if (opcoes.aceitarTermos !== false) await aceitarTermosNoBanco(id);
+  if (opcoes.cienciaAviso !== false) await registrarCienciaNoBanco(id);
   return { id, email };
 }
 

@@ -1,11 +1,16 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/db.js';
+import { VERSAO_AVISO } from '../src/models/avisoMonitoramento.model.js';
 import { dadosAchado, type ChaveAchado } from '../src/models/catalogoAchado.model.js';
 import { gerarTokenLink, hashToken } from '../src/utils/tokens.js';
+import { gerarSenha, montarConteudo, prepararGravacao, resolverArquivoSenhas, type ContaDemo } from './arquivoSenhasDemo.js';
 
 // Popula o banco com dados de DEMONSTRACAO para o frontend ter conteudo realista.
 // Roda DEPOIS do seed de contrato. NAO deve rodar antes do Newman (use db:reset + seed).
+// DT32: cada execucao gera uma senha aleatoria por conta de demonstracao e grava em
+// SENHAS_DEMO_ARQUIVO (padrao ~/.baluarte/senhas-demo.txt; no Docker /data/senhas-demo.txt),
+// sempre FORA do repositorio. Nenhuma senha sai no log: so o caminho do arquivo.
 
 /** Instante de `dias` dias atras (mesma hora de agora). */
 function diasAtras(dias: number): Date {
@@ -13,6 +18,9 @@ function diasAtras(dias: number): Date {
 }
 
 async function main() {
+  // Antes de tocar no banco: caminho fora do repositorio (senao, lanca e nada e apagado).
+  const arquivoSenhas = resolverArquivoSenhas();
+
   // limpa dados gerados (mantem usuarios/ativos de contrato u-000/u-001/u-002/ativo-001/ativo-002)
   await prisma.finding.deleteMany();
   await prisma.scan.deleteMany();
@@ -71,7 +79,6 @@ async function main() {
   }
 
   // ---- Usuarios extras (RBAC) ----
-  const senha = await bcrypt.hash('Mudar@123', 10);
   // Departamentos vem do seed de contrato (rodado antes deste).
   const deps = new Map((await prisma.department.findMany()).map((d) => [d.name, d.id]));
   const dep = (nome: string) => {
@@ -85,27 +92,52 @@ async function main() {
     { nome: 'Bruno Lima', email: 'bruno.lima@empresa.com', perfil: 'Colaborador', status: 'Ativo', departmentId: dep('Comercial') },
     { nome: 'Carla Dias', email: 'carla.dias@empresa.com', perfil: 'Colaborador', status: 'Inativo', departmentId: dep('RH') },
   ];
-  // Melhorias #5: contas de demonstracao ja com os termos de uso aceitos.
-  const termosAceitosEm = new Date();
-  for (const u of usuarios) await prisma.user.create({ data: { ...u, senhaHash: senha, termosAceitosEm } });
-
   // ---- Colaboradores-alvo das campanhas (campanha so aceita usuario cadastrado) ----
   const TOTAL_COLABS = 203; // maior campanha abaixo
   // Distribuicao realista: mais gente em Comercial/Operacoes, pouca na Diretoria.
   const ROTACAO = ['Comercial', 'Operações', 'Comercial', 'Financeiro', 'Operações', 'TI', 'RH', 'Comercial', 'Operações', 'Diretoria'];
-  await prisma.user.createMany({
-    data: Array.from({ length: TOTAL_COLABS }, (_, i) => ({
-      nome: `Colaborador ${i + 1}`,
-      email: `colab${i}@empresa.com`,
-      perfil: 'Colaborador',
-      status: 'Ativo',
-      senhaHash: senha,
-      termosAceitosEm,
-      departmentId: dep(ROTACAO[i % ROTACAO.length]),
-    })),
-  });
+  const colaboradores = Array.from({ length: TOTAL_COLABS }, (_, i) => ({
+    nome: `Colaborador ${i + 1}`,
+    email: `colab${i}@empresa.com`,
+    perfil: 'Colaborador',
+    status: 'Ativo',
+    departmentId: dep(ROTACAO[i % ROTACAO.length]),
+  }));
+
+  // DT32: uma senha aleatoria POR CONTA (crypto.randomBytes), nova a cada execucao. Ficam so na
+  // memoria e no arquivo; o banco recebe o hash. O temporario e gravado antes das contas (destino
+  // sem permissao falha cedo) e so vira o arquivo definitivo depois que o banco foi gravado.
+  const contas: ContaDemo[] = [...usuarios, ...colaboradores].map((u) => ({ email: u.email, perfil: u.perfil, senha: gerarSenha() }));
+  const senhaDe = new Map(contas.map((c) => [c.email, c.senha]));
+  const hashDe = async (email: string) => bcrypt.hash(senhaDe.get(email)!, 10);
+  const gravacao = prepararGravacao(arquivoSenhas, montarConteudo(contas));
+  try {
+    // Gate de ciencia: as contas nomeadas ja nascem com a ciencia da VERSAO_AVISO em vigor (so
+    // aceitavel por serem contas ficticias de teste/demonstracao, senha fora do repo, nunca em
+    // producao; uma pessoa de verdade registra a propria ciencia pela tela). Os colaboradores em
+    // massa recebem a ciencia logo abaixo, por createMany. termosAceitosEm fica como dado morto: o
+    // gate de termos foi SUBSTITUIDO pelo de ciencia, mas a coluna segue no schema (sem drop).
+    const termosAceitosEm = new Date();
+    for (const u of usuarios)
+      await prisma.user.create({ data: { ...u, senhaHash: await hashDe(u.email), termosAceitosEm, ciencias: { create: { versao: VERSAO_AVISO } } } });
+    const dadosColabs = [];
+    for (const c of colaboradores) dadosColabs.push({ ...c, senhaHash: await hashDe(c.email), termosAceitosEm });
+    await prisma.user.createMany({ data: dadosColabs });
+  } catch (e) {
+    gravacao.descartar();
+    throw e;
+  }
+  gravacao.confirmar();
+  console.log(`[seed:demo] senhas da demonstração gravadas em ${arquivoSenhas}`);
+  if (gravacao.avisoPermissao)
+    console.warn('[seed:demo] aviso: não consegui restringir o acesso ao arquivo no Windows (icacls); ele ficou com as permissões herdadas da pasta');
   const colabs = await prisma.user.findMany({ where: { email: { startsWith: 'colab', endsWith: '@empresa.com' }, perfil: 'Colaborador', id: { not: 'u-002' } } });
   const idPorEmail = new Map(colabs.map((u) => [u.email, u.id]));
+  // Mesma ciencia das contas acima (so aceitavel por serem contas ficticias de demonstracao).
+  await prisma.monitoringAcknowledgement.createMany({
+    data: colabs.map((u) => ({ userId: u.id, versao: VERSAO_AVISO })),
+    skipDuplicates: true,
+  });
 
   // ---- Campanhas + eventos (funil) ----
   async function campanha(nome: string, template: string, status: string, total: number, abertos: number, clicados: number, submeteram: number, reportaram: number) {

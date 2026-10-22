@@ -15,9 +15,13 @@ RUN npx prisma generate
 RUN sed -i 's/\r$//' docker-entrypoint.sh
 
 # Os dados ficam no PostgreSQL (serviço db do compose; DATABASE_URL vem do ambiente).
-# /data (volume) guarda só o JWT_SECRET gerado e os marcadores dos seeds (DT28).
+# /data (volume) guarda só o JWT_SECRET gerado, os marcadores dos seeds (DT28) e as senhas
+# geradas pelo seed:demo (DT32). O backup da VM é pg_dump do banco: não leva o /data.
 # NODE_ENV vem do compose (development por padrão).
 ENV PORT=8080
+# DT32: o seed:demo grava as senhas aleatórias da demonstração no volume, ao lado do jwt.secret
+# (vale também para `docker compose exec backend npm run seed:demo`). É só o caminho, não segredo.
+ENV SENHAS_DEMO_ARQUIVO=/data/senhas-demo.txt
 
 # A API não precisa de root. /data já nasce do usuário `node` para que o volume
 # nomeado herde o dono na primeira montagem (volume antigo criado como root:

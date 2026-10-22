@@ -24,7 +24,7 @@ import {
   esperaErro,
   emailUnico,
   tokenDoEmail,
-  aceitarTermosNoBanco,
+  registrarCienciaNoBanco,
   ADMIN,
   ANALISTA,
   SENHA_CONTA,
@@ -81,8 +81,8 @@ async function contaComNome(nome: string, perfil: string, departamento?: string)
   const aceite = await chamar('POST', '/auth/reset-password/confirm', { body: { token: convite, novaSenha: SENHA_CONTA } });
   assert.equal(aceite.status, 200, JSON.stringify(aceite.body));
   const id = r.body.dados.idUsuario as string;
-  // Conta criada pelo convite nasce sem o aceite dos termos (Melhorias #5): aceita direto no banco.
-  await aceitarTermosNoBanco(id);
+  // Conta criada pelo convite nasce sem ciência do aviso de monitoramento: registra direto no banco.
+  await registrarCienciaNoBanco(id);
   return { id, email, token: await login(email, SENHA_CONTA) };
 }
 

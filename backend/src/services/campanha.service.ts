@@ -1,4 +1,4 @@
-import { cobreTodosOsElegiveis, elegivelParaCampanha, exigeConfirmacao, statusRecebeCampanha, type CadastroCampanha, type DestinatarioElegivel } from '../models/campanha.model.js';
+import { cobreTodosOsElegiveis, elegivelParaCampanha, exigeConfirmacao, statusEfetivo, statusRecebeCampanha, type CadastroCampanha, type DestinatarioElegivel } from '../models/campanha.model.js';
 import { falhar } from '../utils/resposta.js';
 import { gerarTokenLink, hashToken } from '../utils/tokens.js';
 import { SEM_DEPARTAMENTO } from '../models/dominio.model.js';
@@ -101,7 +101,7 @@ export async function listar() {
   return {
     lista: campanhas.map(mapCampaign),
     resumo: {
-      ativas: campanhas.filter((c) => c.status === 'ATIVA').length,
+      ativas: campanhas.filter((c) => statusEfetivo(c.status, c.eventos) === 'ATIVA').length,
       taxaMediaClique: enviados ? Math.round((clicados / enviados) * 100) : 0,
       colaboradoresAlcancados: campanhas.reduce((a, c) => a + c.eventos.length, 0),
       resilienciaMedia: enviados ? Math.round((1 - clicados / enviados) * 100) : 0,
@@ -124,7 +124,7 @@ export async function relatorio(id: string) {
     grupos.set(depDe(e), g);
   }
   return {
-    id: c.id, nome: c.nome, template: c.template, status: c.status, criadoEm: c.criadoEm,
+    id: c.id, nome: c.nome, template: c.template, status: statusEfetivo(c.status, c.eventos), criadoEm: c.criadoEm,
     destinatarios: c.eventos.length,
     funil: funilDe(c.eventos),
     // Resumo das aberturas do link do e-mail (Melhorias #6): o total conta toda abertura, nao pessoas.
@@ -163,7 +163,7 @@ export async function excluir(atorId: string, id: string): Promise<void> {
   // eventos e a analise perderia a origem em silencio (FK SET NULL). Mesmo espirito do
   // USUARIO_COM_HISTORICO: a campanha com evidencia fica.
   // Reserva com heartbeat em dia = analise em curso (o envio pode durar ate o teto de 30 min).
-  if ((await repo.contarAnalisesDaCampanha(campanha.id, new Date(Date.now() - validadeReservaAnaliseMs()))) > 0)
+  if ((await repo.contarAnalisesDaCampanha(campanha.id, validadeReservaAnaliseMs())) > 0)
     falhar(409, 'Campanha com anexos analisados não pode ser excluída', 'CAMPANHA_COM_ANALISES');
   await repo.excluir(campanha.id);
   await registrarAuditoria(atorId, 'EXCLUIR_CAMPANHA', `${campanha.id} (${campanha.nome})`);
