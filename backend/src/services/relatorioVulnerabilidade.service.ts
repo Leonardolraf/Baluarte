@@ -19,6 +19,17 @@ function umaCasa(valor: number): number {
   return Math.round(valor * 10) / 10;
 }
 
+/**
+ * Maior valor da lista, num laco (DT36). `Math.max(...lista)` passa cada item como argumento e
+ * estoura a pilha do V8 acima de ~123 mil itens (RangeError, medido em 19/10/2026 pela rota do
+ * relatorio): o PDF e o Excel caiam em 500. Lista vazia devolve null.
+ */
+export function maximo(valores: readonly number[]): number | null {
+  let maior: number | null = null;
+  for (const v of valores) if (maior === null || v > maior) maior = v;
+  return maior;
+}
+
 function contar(rotulos: readonly string[], valores: string[]): Contagem[] {
   return rotulos.map((rotulo) => ({ rotulo, total: valores.filter((v) => v === rotulo).length }));
 }
@@ -52,6 +63,7 @@ export function montarRelatorio(
     }))
     .sort((a, b) => b.cvss - a.cvss || b.detectadoEm.getTime() - a.detectadoEm.getTime());
   const notas = achados.map((a) => a.cvss);
+  const notaMaxima = maximo(notas);
   return {
     geradoEm,
     autor: { nome: autor.nome, email: autor.email, perfil: autor.perfil },
@@ -63,7 +75,7 @@ export function montarRelatorio(
       porSeveridade: contar(SEVERIDADES, achados.map((a) => a.severidade)),
       porStatus: contar(STATUS_FINDING, achados.map((a) => a.status)),
       cvssMedio: notas.length ? umaCasa(notas.reduce((s, n) => s + n, 0) / notas.length) : null,
-      cvssMaximo: notas.length ? umaCasa(Math.max(...notas)) : null,
+      cvssMaximo: notaMaxima === null ? null : umaCasa(notaMaxima),
     },
     achados,
   };

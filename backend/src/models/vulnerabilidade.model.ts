@@ -88,6 +88,48 @@ export const FUSO_RELATORIO = 'America/Sao_Paulo';
 export const BUSCA_MAXIMA = 100;
 
 /**
+ * Teto de achados por exportacao do relatorio, PDF ou Excel (DT36). O relatorio e montado
+ * inteiro em memoria (os achados do Prisma, o modelo e o desenho do exceljs/pdfkit) e o desenho
+ * e sincrono. Medido em 19/10/2026 na imagem da API (Node 20, heap padrao de 2.096 MB com os
+ * 7,8 GiB da VM), pela rota do xlsx: 50 mil achados levam ~18 s, com RSS de ~1,1 GB e heap de
+ * ~0,9 GB; 100 mil levam ~36 s, com RSS de 2,1 GB, e travam o laco de eventos (o /health chegou
+ * a 23,8 s); 200 mil estouram o heap e derrubam o processo para todo mundo. Com 50 mil sobra
+ * heap para o resto da API durante a exportacao, e o bloqueio do laco fica na casa de 10 s.
+ * Acima do teto: 422 RELATORIO_GRANDE_DEMAIS com o total, nunca um relatorio cortado (que
+ * pareceria completo: ausencia de dado nao e ausencia de risco).
+ */
+export const TETO_ACHADOS_RELATORIO = 50_000;
+
+/**
+ * Teto em vigor. `RELATORIO_TETO_ACHADOS` so pode BAIXAR o teto (os testes usam um teto pequeno
+ * para nao semear 50 mil achados a cada teste); valor maior que a constante, vazio ou invalido
+ * fica na constante, entao o ambiente nunca afrouxa o limite de producao.
+ */
+export function tetoAchadosRelatorio(): number {
+  const valor = Number(process.env.RELATORIO_TETO_ACHADOS);
+  return Number.isInteger(valor) && valor > 0 ? Math.min(valor, TETO_ACHADOS_RELATORIO) : TETO_ACHADOS_RELATORIO;
+}
+
+const MILHAR = new Intl.NumberFormat('pt-BR');
+
+/** Mensagem do 422: diz quanto deu, qual o maximo e o que fazer (filtrar). */
+export function mensagemRelatorioGrande(total: number, teto: number): string {
+  return `O relatório teria ${MILHAR.format(total)} achados (máximo ${MILHAR.format(teto)}). Filtre por severidade, status ou ativo para gerar um relatório menor.`;
+}
+
+/** Mensagem do 429: outra exportacao ocupa a vaga (uma por vez no processo). */
+export const MENSAGEM_EXPORTACAO_EM_ANDAMENTO =
+  'Já há uma exportação de relatório em andamento. Tente de novo em instantes.';
+
+/**
+ * Exportacao recusada (DT36) vai para a auditoria com acao propria, nao com a de sucesso: a
+ * `EXPORTAR_RELATORIO_VULNERABILIDADES` quer dizer "um arquivo com N achados saiu do sistema", e
+ * quem filtra a trilha por ela (a tela de auditoria, os testes) contaria recusas como
+ * exportacoes. O motivo (o codigo da resposta) vai no detalhe, com os filtros e o formato.
+ */
+export const ACAO_EXPORTACAO_RECUSADA = 'EXPORTAR_RELATORIO_VULNERABILIDADES_RECUSADA';
+
+/**
  * Regras da query de GET /vulnerabilidades/relatorio.pdf e .xlsx (e da lista): os filtros
  * validados (valor desconhecido, repetido ou objeto/array dá 400, para nunca entregar um
  * relatorio que parece filtrado sem estar). Maiusculas nao importam na severidade e no status.

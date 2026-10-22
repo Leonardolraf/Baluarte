@@ -179,6 +179,9 @@ services:
       - CLAMD_CONF_PCREMaxFileSize=1001M
       - CLAMD_CONF_AlertExceedsMax=yes
       - CLAMD_CONF_MaxScanTime=240000
+      # DT36: recarga das assinaturas sem segunda cópia em memória (pico de ~+1 GiB); bloqueia as
+      # varreduras por segundos durante a recarga em vez de arriscar o mem_limit do clamav na VM.
+      - CLAMD_CONF_ConcurrentDatabaseReload=no
     entrypoint:
       - /bin/sh
       - -c

@@ -12,7 +12,11 @@ import { buscarPorId as buscarAtivo } from '../repositories/ativo.repository.js'
 import { usuariosPorIds } from '../repositories/auditoria.repository.js';
 import { origemDaAutoria } from '../models/auditoria.model.js';
 import {
+  ACAO_EXPORTACAO_RECUSADA,
+  MENSAGEM_EXPORTACAO_EM_ANDAMENTO,
+  mensagemRelatorioGrande,
   TIPO_ARQUIVO,
+  tetoAchadosRelatorio,
   type AlteracaoStatus,
   type AtivoFiltrado,
   type AutorRelatorio,
@@ -108,36 +112,89 @@ export async function listar(c: ConsultaVulnerabilidades) {
   };
 }
 
-/** Desenho de cada formato a partir do mesmo modelo de relatorio. */
-const DESENHAR = { PDF: desenharRelatorioPdf, XLSX: desenharRelatorioExcel } as const;
+/**
+ * Desenho de cada formato a partir do mesmo modelo de relatorio. Exportado so para os testes
+ * trocarem um desenho (`mock.method`) por um lento ou que falha (DT36: a vaga da exportacao).
+ */
+export const DESENHAR = { PDF: desenharRelatorioPdf, XLSX: desenharRelatorioExcel };
+
+/**
+ * Vaga unica de exportacao do relatorio (DT36). Montar e desenhar o relatorio pesa no heap e
+ * trava o laco de eventos (medido em 19/10/2026: tres exportacoes simultaneas de 100 mil achados
+ * derrubaram a API por falta de heap), entao so uma roda por vez; a segunda leva 429
+ * EXPORTACAO_EM_ANDAMENTO. E um semaforo EM PROCESSO: vale para a API na VM, que e uma instancia
+ * so. Com varias instancias (varios conteineres, ou a funcao serverless da Vercel, que abre uma
+ * instancia por pedido simultaneo) cada uma tem a sua vaga, e o limite vira "uma por instancia";
+ * para valer no conjunto, a vaga teria de ir para o banco (como a FileScanReserva do DT09).
+ */
+let exportacaoEmAndamento = false;
+
+/** Formato e filtros de uma exportacao recusada, para o detalhe da auditoria. */
+function detalheRecusa(motivo: string, filtros: FiltrosVulnerabilidade, ativo: AtivoFiltrado | null, formato: FormatoRelatorio, extra = '') {
+  // Sem o ativo carregado (429, antes de ler o banco), o filtro vai pelo id: sem ele, o registro
+  // pareceria de um relatorio sem filtro de ativo.
+  const semAtivo = !ativo && filtros.ativoId ? `; ativoId: [${filtros.ativoId}]` : '';
+  return `motivo: ${motivo}${extra}; ${descreverFiltros(filtros, ativo, true)}${semAtivo}; formato: ${formato}`;
+}
 
 /**
  * Relatorio em PDF (B24, US-011) ou Excel (Melhorias #17): TODOS os achados que a lista mostra
  * com esses filtros (o relatorio nao pagina), resumidos e ordenados por CVSS, montados uma vez
  * (`montarRelatorio`) e desenhados no formato pedido. A exportacao vai para a auditoria (com
  * quantidade, filtros e formato) depois que o arquivo ficou pronto.
+ *
+ * Limites (DT36), iguais no PDF e no Excel: uma exportacao por vez (429) e no maximo
+ * `tetoAchadosRelatorio()` achados (422, contado com o mesmo filtro ANTES de carregar os achados).
+ * As duas recusas tambem vao para a auditoria, com a acao `ACAO_EXPORTACAO_RECUSADA`.
  */
 export async function exportarRelatorio(
   autor: AutorRelatorio & { id: string },
   filtros: FiltrosVulnerabilidade,
   formato: FormatoRelatorio = 'PDF',
 ) {
-  const ativo = await ativoDoFiltro(filtros);
-  await avancarVarreduras();
-  const relatorio = montarRelatorio(await repo.listarFiltrados(filtros), filtros, autor, new Date(), ativo);
-  const arquivo = await DESENHAR[formato](relatorio);
-  const total = relatorio.resumo.total;
-  await registrarAuditoria(
-    autor.id,
-    'EXPORTAR_RELATORIO_VULNERABILIDADES',
-    `${total} ${total === 1 ? 'achado' : 'achados'}; ${descreverFiltros(filtros, ativo, true)}; formato: ${formato}`,
-  );
-  return {
-    arquivo,
-    tipo: TIPO_ARQUIVO[formato],
-    nomeArquivo: nomeDoArquivo(relatorio.geradoEm, formato === 'XLSX' ? 'xlsx' : 'pdf'),
-    total,
-  };
+  // Conferir e ocupar a vaga sem `await` no meio: dois pedidos nunca passam juntos.
+  if (exportacaoEmAndamento) {
+    await registrarAuditoria(autor.id, ACAO_EXPORTACAO_RECUSADA, detalheRecusa('EXPORTACAO_EM_ANDAMENTO', filtros, null, formato));
+    falhar(429, MENSAGEM_EXPORTACAO_EM_ANDAMENTO, 'EXPORTACAO_EM_ANDAMENTO');
+  }
+  exportacaoEmAndamento = true;
+  // A vaga volta em todo desfecho: sucesso, erro de regra (404, 422), erro interno. Se o cliente
+  // desistir no meio, a montagem segue ate o fim (a memoria continua ocupada) e so entao libera.
+  try {
+    const ativo = await ativoDoFiltro(filtros);
+    await avancarVarreduras();
+    const teto = tetoAchadosRelatorio();
+    const recusarPorTamanho = async (total: number) => {
+      await registrarAuditoria(
+        autor.id,
+        ACAO_EXPORTACAO_RECUSADA,
+        detalheRecusa('RELATORIO_GRANDE_DEMAIS', filtros, ativo, formato, `; ${total} achados (máximo ${teto})`),
+      );
+      falhar(422, mensagemRelatorioGrande(total, teto), 'RELATORIO_GRANDE_DEMAIS');
+    };
+    const contados = await repo.contarFiltrados(filtros);
+    if (contados > teto) await recusarPorTamanho(contados);
+    // Teto + 1: se uma varredura terminar entre a contagem e a leitura e passar do teto, o
+    // relatorio e recusado do mesmo jeito, nunca cortado (pareceria completo).
+    const findings = await repo.listarFiltrados(filtros, teto + 1);
+    if (findings.length > teto) await recusarPorTamanho(await repo.contarFiltrados(filtros));
+    const relatorio = montarRelatorio(findings, filtros, autor, new Date(), ativo);
+    const arquivo = await DESENHAR[formato](relatorio);
+    const total = relatorio.resumo.total;
+    await registrarAuditoria(
+      autor.id,
+      'EXPORTAR_RELATORIO_VULNERABILIDADES',
+      `${total} ${total === 1 ? 'achado' : 'achados'}; ${descreverFiltros(filtros, ativo, true)}; formato: ${formato}`,
+    );
+    return {
+      arquivo,
+      tipo: TIPO_ARQUIVO[formato],
+      nomeArquivo: nomeDoArquivo(relatorio.geradoEm, formato === 'XLSX' ? 'xlsx' : 'pdf'),
+      total,
+    };
+  } finally {
+    exportacaoEmAndamento = false;
+  }
 }
 
 // ---- Historico do achado (B25b, tabela FindingStatusChange) ---------------------------
