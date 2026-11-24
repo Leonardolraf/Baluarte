@@ -14,6 +14,14 @@
 // ou Supabase).
 //
 // Uso: cd backend && npm run carga
+// Modos (mesma preparação de banco e API, mesma limpeza no fim):
+//   npm run carga            → cenários no autocannon, relatório em testes/carga/RELATORIO.md;
+//   npm run carga:jmeter     → os mesmos cenários no Apache JMeter (plano testes/carga/jmeter/
+//                              baluarte-carga.jmx, modo sem interface), relatório HTML do JMeter em
+//                              testes/carga/jmeter/relatorio-html/ e resumo em testes/carga/jmeter/
+//                              RELATORIO.md. Precisa de JMETER_HOME (pasta do JMeter 5.6.3);
+//   npm run carga:ambiente   → só sobe banco e API e espera Ctrl+C (para abrir o .jmx na interface
+//                              do JMeter); mostra as propriedades -J a usar.
 // Variáveis (padrões entre parênteses): CARGA_DB_NAME (baluarte_carga, precisa começar assim)
 //   CARGA_API_PORT (8100)  CARGA_CONEXOES (200)  CARGA_DURACAO (30, em segundos, por cenário)
 //   CARGA_CONEXOES_LOGIN (50)  CARGA_KEEP_DB=1 mantém o banco no fim (para investigar).
@@ -42,6 +50,25 @@ const DURACAO = Number(env.CARGA_DURACAO ?? 30);
 const CONEXOES_LOGIN = Number(env.CARGA_CONEXOES_LOGIN ?? 50);
 const PORTAS_PROIBIDAS = new Set([8080, 5173]);
 const BASE = `http://127.0.0.1:${API_PORT}`;
+const MODO = process.argv.includes('--jmeter') ? 'jmeter' : process.argv.includes('--ambiente') ? 'ambiente' : 'autocannon';
+// PDF com 1 usuário: desde o DT36 a exportação tem vaga única (a segunda simultânea leva 429
+// EXPORTACAO_EM_ANDAMENTO). Com 10 conexões, 98% das respostas eram 429 rápidos e o p95 saía
+// "atende" (falso verde achado em 24/11/2026). A regra da vaga única é conferida à parte
+// (EXPORTACOES_SIMULTANEAS pedidos ao mesmo tempo: exatamente 1 × 200 e o resto 429).
+const CONEXOES_PDF = 1;
+const EXPORTACOES_SIMULTANEAS = 3;
+const TENTATIVAS_LIMITE = 20;
+const EMAIL_LIMITE = 'ana.souza@empresa.com';
+// Contas cujos tokens se revezam nas rotas autenticadas (null = senha do seed:demo, DT32).
+const CONTAS_TOKEN = [
+  ['admin@empresa.com', 'Admin@123'],
+  ['analista@empresa.com', 'Senha@123'],
+  ['edson@empresa.com', null],
+];
+// Contas do cenário de login com senha certa (todas da massa de demonstração).
+const CONTAS_LOGIN = ['edson@empresa.com', 'ana.souza@empresa.com', 'bruno.lima@empresa.com'].concat(
+  Array.from({ length: 203 }, (_, i) => `colab${i}@empresa.com`),
+);
 
 const log = (msg) => console.log(`[carga] ${msg}`);
 const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -232,7 +259,8 @@ function percentil(ordenados, p) {
  */
 function medir({ conexoes, duracao, requisicao, metodo = 'GET', corpo, timeout = 30 }) {
   return new Promise((ok, erro) => {
-    const latencias = [];
+    const latencias = []; // só das respostas 2xx
+    let naoDoisCont = 0;
     const status = {};
     const instancia = autocannon(
       {
@@ -247,11 +275,10 @@ function medir({ conexoes, duracao, requisicao, metodo = 'GET', corpo, timeout =
       },
       (falha, r) => {
         if (falha) return erro(falha);
+        // Percentis só das respostas 2xx: uma recusa rápida (429) nunca conta a favor da meta.
         latencias.sort((a, b) => a - b);
-        const total = latencias.length;
-        const ok2xx = Object.entries(status)
-          .filter(([codigo]) => codigo.startsWith('2'))
-          .reduce((s, [, n]) => s + n, 0);
+        const ok2xx = latencias.length;
+        const total = ok2xx + naoDoisCont;
         ok({
           conexoes,
           duracaoS: duracao,
@@ -261,16 +288,18 @@ function medir({ conexoes, duracao, requisicao, metodo = 'GET', corpo, timeout =
           p90: percentil(latencias, 90),
           p95: percentil(latencias, 95),
           p99: percentil(latencias, 99),
-          max: total ? latencias[total - 1] : null,
+          max: ok2xx ? latencias[ok2xx - 1] : null,
+          ok2xx,
           status,
           erros: r.errors,
           timeouts: r.timeouts,
-          naoDois: total - ok2xx,
+          naoDois: naoDoisCont,
         });
       },
     );
     instancia.on('response', (_cliente, codigo, _bytes, tempo) => {
-      latencias.push(tempo);
+      if (codigo >= 200 && codigo < 300) latencias.push(tempo);
+      else naoDoisCont++;
       status[codigo] = (status[codigo] ?? 0) + 1;
     });
   });
@@ -345,6 +374,38 @@ async function limiteDeLogin(email, senhaCerta, tentativas) {
   return { email, tentativas, duracaoMs, contagem, senhaCertaDepois: depois };
 }
 
+/**
+ * Vaga única de exportação (DT36): N pedidos do PDF ao MESMO tempo. Esperado: exatamente um 200
+ * (o PDF) e os outros 429 EXPORTACAO_EM_ANDAMENTO. Sai do cenário de carga do PDF (que agora tem
+ * 1 conexão) para a regra continuar verificada.
+ */
+async function exportacoesSimultaneas(token, pedidos) {
+  const pedir = async () => {
+    const r = await fetch(`${BASE}/api/vulnerabilidades/relatorio.pdf`, { headers: { authorization: `Bearer ${token}` } });
+    const corpo = Buffer.from(await r.arrayBuffer());
+    const pdf = corpo.subarray(0, 5).toString('latin1') === '%PDF-';
+    let codigo = null;
+    if (!pdf) {
+      try {
+        codigo = JSON.parse(corpo.toString('utf8')).codigoErro ?? null;
+      } catch {
+        codigo = 'corpo não JSON';
+      }
+    }
+    return { status: r.status, pdf, codigo };
+  };
+  const respostas = await Promise.all(Array.from({ length: pedidos }, pedir));
+  const pdfs = respostas.filter((r) => r.status === 200 && r.pdf).length;
+  const recusas = respostas.filter((r) => r.status === 429 && r.codigo === 'EXPORTACAO_EM_ANDAMENTO').length;
+  return { pedidos, pdfs, recusas, respostas, atende: pdfs === 1 && recusas === pedidos - 1 };
+}
+
+function textoExportacoes(e) {
+  const outras = e.respostas.length - e.pdfs - e.recusas;
+  const sobra = outras ? ` e ${outras} outra(s) resposta(s): ${JSON.stringify(e.respostas)}` : '';
+  return `${e.pedidos} pedidos do PDF disparados ao mesmo tempo: ${e.pdfs} × 200 com PDF e ${e.recusas} × 429 \`EXPORTACAO_EM_ANDAMENTO\`${sobra}. Esperado (DT36, vaga única): exatamente 1 PDF e ${e.pedidos - 1} recusas. **${e.atende ? 'Atende' : 'Não atende'}.**`;
+}
+
 // ---- Relatório ----------------------------------------------------------------------------
 
 const ms = (v) => (v === null ? '—' : `${Math.round(v).toLocaleString('pt-BR')} ms`);
@@ -364,8 +425,10 @@ function ambiente() {
   };
 }
 
-function veredito(valor, meta) {
+/** Atende só com a métrica dentro da meta E sem nenhuma resposta fora de 2xx (nem erro de conexão). */
+function veredito(valor, meta, c = {}) {
   if (meta === null) return 'informativo';
+  if ((c.naoDois ?? 0) > 0 || (c.erros ?? 0) > 0 || (c.timeouts ?? 0) > 0) return 'não atende';
   return valor !== null && valor <= meta ? 'atende' : 'não atende';
 }
 
@@ -390,10 +453,10 @@ ${linhas.join('\n')}
 `;
 }
 
-function gerarRelatorio({ amb, cenarios, limite, massa, antes }) {
+function gerarRelatorio({ amb, cenarios, exportacoes, limite, massa, antes }) {
   const linhas = cenarios.map(
     (c) =>
-      `| ${c.titulo} | ${ms(c.semCarga)} | ${c.conexoes} | ${num(c.requisicoes)} | ${c.rps.toLocaleString('pt-BR')} | ${ms(c.p50)} | ${ms(c.p90)} | ${ms(c.p95)} | ${ms(c.p99)} | ${ms(c.max)} | ${num(c.naoDois)} | ${num(c.erros)} / ${num(c.timeouts)} | ${c.metaTexto} | **${veredito(c[c.metrica], c.meta)}** |`,
+      `| ${c.titulo} | ${ms(c.semCarga)} | ${c.conexoes} | ${num(c.requisicoes)} | ${c.rps.toLocaleString('pt-BR')} | ${ms(c.p50)} | ${ms(c.p90)} | ${ms(c.p95)} | ${ms(c.p99)} | ${ms(c.max)} | ${num(c.naoDois)} | ${num(c.erros)} / ${num(c.timeouts)} | ${c.metaTexto} | **${veredito(c[c.metrica], c.meta, c)}** |`,
   );
   const contagem = Object.entries(limite.contagem)
     .map(([s, n]) => `${n} × ${s}`)
@@ -409,7 +472,7 @@ DRS v4: "Relatórios de varredura em até 60s para até 50 endpoints. Dashboard 
 ## Como foi medido
 
 - **Instância isolada:** banco descartável \`${DB_NAME}\` no Postgres local (migrations + \`seed\` + \`seed:demo\` + \`seed:carga\`: ${massa}), API em \`:${API_PORT}\` com \`NODE_ENV=production\`, um processo Node. Nada de produção (Vercel/Supabase), da \`8080\` ou do banco \`baluarte\`. No fim, a API é parada e o banco apagado.
-- **Ferramenta:** autocannon ${amb.autocannon} (versão fixa em \`backend/package.json\`). Cada cenário dura ${DURACAO} s depois de 3 s de aquecimento fora da medição; a latência de **cada** resposta é registrada para calcular p50/p90/p95/p99. "Sozinha" é a mediana de 5 requisições em sequência, sem carga. Entre um cenário e outro, o script espera a API esvaziar a fila (a rota voltar ao tempo de repouso), para um cenário não medir a sobra do anterior. "200 usuários simultâneos" = 200 conexões HTTP mantendo uma requisição em voo o tempo todo, sem pausa entre elas (mais duro que 200 pessoas, que leem a tela entre um clique e outro).
+- **Ferramenta:** autocannon ${amb.autocannon} (versão fixa em \`backend/package.json\`). Cada cenário dura ${DURACAO} s depois de 3 s de aquecimento fora da medição; a latência de **cada** resposta 2xx é registrada para calcular p50/p90/p95/p99 (as fora de 2xx são contadas à parte e reprovam o cenário). "Sozinha" é a mediana de 5 requisições em sequência, sem carga. Entre um cenário e outro, o script espera a API esvaziar a fila (a rota voltar ao tempo de repouso), para um cenário não medir a sobra do anterior. "200 usuários simultâneos" = 200 conexões HTTP mantendo uma requisição em voo o tempo todo, sem pausa entre elas (mais duro que 200 pessoas, que leem a tela entre um clique e outro).
 - **O que entra no tempo:** a resposta da API, que é a parte que cresce com a carga. A tela soma o JavaScript e o CSS, servidos pelo Nginx (Docker) ou pela CDN (Vercel) sem passar pela API: o dashboard faz uma requisição só à API (\`GET /api/dashboard\`).
 - **Sessões:** os tokens de Administrador, Analista e de um segundo Analista se revezam entre as requisições (o dashboard desses perfis é o mais pesado: o do Colaborador não calcula os indicadores técnicos).
 - **Máquina:** ${amb.cpu}, ${amb.memoriaGiB} GiB, ${amb.so}, Node ${amb.node}, banco ${amb.postgres}. Gerador de carga, API e banco dividem a mesma máquina, então os números são conservadores para a API e não valem como medida da demo pública.
@@ -420,6 +483,10 @@ DRS v4: "Relatórios de varredura em até 60s para até 50 endpoints. Dashboard 
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
 ${linhas.join('\n')}
 ${comparacao(antes, cenarios)}
+### Exportações simultâneas do relatório (vaga única, DT36)
+
+${textoExportacoes(exportacoes)} Por isso o cenário de carga do PDF usa 1 conexão: até 24/11/2026 ele usava 10, e 98% das respostas eram esse 429 rápido, contado no p95 como se fosse PDF pronto (falso verde). Agora os percentis são só das respostas 2xx, e qualquer resposta fora de 2xx num cenário com meta reprova.
+
 ### Limite de tentativas de login
 
 O limite é **por e-mail** (5 falhas em 15 min, tabela \`LoginFailure\`) e conta só falhas: login com a senha certa nunca bate nele. O cenário de login acima reveza ${num(limite.contasLogin)} contas válidas da massa de demonstração e recebeu ${num(limite.status429NoLogin)} respostas 429. Para exercitar o limite, ${limite.tentativas} tentativas com senha errada foram disparadas **ao mesmo tempo** para \`${limite.email}\` (${limite.duracaoMs} ms ao todo): ${contagem}. Logo depois, a senha **certa** recebeu \`${limite.senhaCertaDepois.status} ${limite.senhaCertaDepois.codigo ?? ''}\`.
@@ -451,12 +518,11 @@ async function principal() {
   prepararBanco();
   await iniciarApi();
   log(`API em ${BASE} (NODE_ENV=production)`);
+  if (MODO === 'ambiente') return esperarInterrupcao();
+  if (MODO === 'jmeter') return rodarJmeter();
 
-  const tokens = [
-    await entrar('admin@empresa.com', 'Admin@123'),
-    await entrar('analista@empresa.com', 'Senha@123'),
-    await entrar('edson@empresa.com', senhaDemo('edson@empresa.com')),
-  ];
+  const tokens = [];
+  for (const [email, senha] of CONTAS_TOKEN) tokens.push(await entrar(email, senha ?? senhaDemo(email)));
   const resumo = await (
     await fetch(`${BASE}/api/vulnerabilidades?tamanho=1`, { headers: { authorization: `Bearer ${tokens[0]}` } })
   ).json();
@@ -503,7 +569,7 @@ async function principal() {
 
   // PDF com todos os achados: é o "relatório" do RNF-004 (≤ 60 s em 95% das execuções). Poucas
   // conexões: gerar o PDF é ação pontual de quem opera, não de 200 pessoas ao mesmo tempo.
-  const conexoesPdf = 10;
+  const conexoesPdf = CONEXOES_PDF;
   log(`cenário: relatório em PDF (${conexoesPdf} conexões, ${DURACAO} s)`);
   cenarios.push({
     id: 'pdf',
@@ -519,11 +585,12 @@ async function principal() {
     })),
   });
 
+  log(`vaga única de exportação: ${EXPORTACOES_SIMULTANEAS} pedidos simultâneos do PDF`);
+  const exportacoes = await exportacoesSimultaneas(tokens[0], EXPORTACOES_SIMULTANEAS);
+
   // Login com senha certa, revezando as contas da massa de demonstração (cada uma com a sua senha,
   // lida do arquivo gerado pelo seed:demo; DT32).
-  const contas = ['edson@empresa.com', 'ana.souza@empresa.com', 'bruno.lima@empresa.com'].concat(
-    Array.from({ length: 203 }, (_, i) => `colab${i}@empresa.com`),
-  );
+  const contas = CONTAS_LOGIN;
   let n = 0;
   const login = (req) => ({
     ...req,
@@ -546,7 +613,7 @@ async function principal() {
   });
 
   log('limite de tentativas de login');
-  const limite = await limiteDeLogin('ana.souza@empresa.com', senhaDemo('ana.souza@empresa.com'), 20);
+  const limite = await limiteDeLogin(EMAIL_LIMITE, senhaDemo(EMAIL_LIMITE), TENTATIVAS_LIMITE);
   limite.contasLogin = contas.length;
   limite.status429NoLogin = cenarios.at(-1).status[429] ?? 0;
 
@@ -555,17 +622,258 @@ async function principal() {
 
   const amb = ambiente();
   mkdirSync(SAIDA, { recursive: true });
-  writeFileSync(join(SAIDA, 'resultados.json'), `${JSON.stringify({ ambiente: amb, massa, cenarios, limite }, null, 2)}\n`);
+  writeFileSync(join(SAIDA, 'resultados.json'), `${JSON.stringify({ ambiente: amb, massa, cenarios, exportacoes, limite }, null, 2)}\n`);
   const antes = existsSync(ANTES) ? JSON.parse(readFileSync(ANTES, 'utf8')) : null;
-  writeFileSync(join(SAIDA, 'RELATORIO.md'), gerarRelatorio({ amb, cenarios, limite, massa, antes }));
+  writeFileSync(join(SAIDA, 'RELATORIO.md'), gerarRelatorio({ amb, cenarios, exportacoes, limite, massa, antes }));
   log(`relatório em ${join(SAIDA, 'RELATORIO.md')}`);
   for (const c of cenarios)
     log(`${c.titulo}: ${c.requisicoes} req, p50 ${ms(c.p50)}, p90 ${ms(c.p90)}, p95 ${ms(c.p95)}, p99 ${ms(c.p99)}, não 2xx ${c.naoDois}, erros ${c.erros}`);
   log(`limite: ${JSON.stringify(limite.contagem)}; senha certa depois → ${limite.senhaCertaDepois.status}`);
 
-  const reprovado = cenarios.some((c) => c.meta !== null && veredito(c[c.metrica], c.meta) !== 'atende');
+  log(`exportações simultâneas: ${exportacoes.pdfs} PDF, ${exportacoes.recusas} × 429 EXPORTACAO_EM_ANDAMENTO (${exportacoes.atende ? 'atende' : 'NÃO atende'})`);
+
+  const reprovado = !exportacoes.atende || cenarios.some((c) => c.meta !== null && veredito(c[c.metrica], c.meta, c) !== 'atende');
   return reprovado ? 1 : 0;
 }
+
+// ---- Modos JMeter e ambiente --------------------------------------------------------------
+
+const PASTA_JMETER = join(SAIDA, 'jmeter');
+const PLANO_JMETER = join(PASTA_JMETER, 'baluarte-carga.jmx');
+
+/**
+ * Arquivos TSV (email<TAB>senha) que o plano do JMeter lê: contas do token, contas do login e a
+ * conta do limite. Ficam no temporário das senhas do seed:demo (fora do repositório), que é
+ * apagado no fim, como o resto (DT32). Devolve as propriedades -J do plano.
+ */
+function propriedadesJmeter() {
+  const tsv = (nome, contas) => {
+    const arquivo = join(pastaSenhasDemo, nome);
+    writeFileSync(arquivo, contas.map(([email, senha]) => `${email}\t${senha ?? senhaDemo(email)}`).join('\n') + '\n');
+    return arquivo;
+  };
+  return {
+    porta: API_PORT,
+    conexoes: CONEXOES,
+    duracao: DURACAO,
+    conexoesLogin: CONEXOES_LOGIN,
+    conexoesPdf: CONEXOES_PDF,
+    tentativasLimite: TENTATIVAS_LIMITE,
+    exportacoesSimultaneas: EXPORTACOES_SIMULTANEAS,
+    contasToken: tsv('contas-token.tsv', CONTAS_TOKEN),
+    contasLogin: tsv('contas-login.tsv', CONTAS_LOGIN.map((e) => [e, null])),
+    contaLimite: tsv('conta-limite.tsv', [[EMAIL_LIMITE, null]]),
+  };
+}
+
+/** `--ambiente`: banco e API no ar até Ctrl+C, para rodar o .jmx à mão (interface do JMeter). */
+async function esperarInterrupcao() {
+  const props = propriedadesJmeter();
+  log('ambiente pronto; Ctrl+C para parar a API e apagar o banco');
+  log(`abra ${PLANO_JMETER} no JMeter com estas propriedades (os arquivos somem no fim):`);
+  log(Object.entries(props).map(([k, v]) => `-J${k}=${v}`).join(' '));
+  return new Promise(() => {});
+}
+
+function executavelJmeter() {
+  const home = env.JMETER_HOME;
+  if (!home) falhar('defina JMETER_HOME com a pasta do Apache JMeter 5.6.3 (ex.: C:\\ferramentas\\apache-jmeter-5.6.3)');
+  const bin = join(home, 'bin', WIN ? 'jmeter.bat' : 'jmeter');
+  if (!existsSync(bin)) falhar(`não achei ${bin}`);
+  return bin;
+}
+
+/** Lê o .jtl em CSV (o JMeter põe entre aspas os campos com vírgula). */
+function lerJtl(arquivo) {
+  const linhas = readFileSync(arquivo, 'utf8').split(/\r?\n/).filter(Boolean);
+  const campos = (linha) => {
+    const saida = [];
+    let atual = '';
+    let aspas = false;
+    for (let i = 0; i < linha.length; i++) {
+      const ch = linha[i];
+      if (aspas) {
+        if (ch === '"' && linha[i + 1] === '"') (atual += '"'), i++;
+        else if (ch === '"') aspas = false;
+        else atual += ch;
+      } else if (ch === '"') aspas = true;
+      else if (ch === ',') saida.push(atual), (atual = '');
+      else atual += ch;
+    }
+    saida.push(atual);
+    return saida;
+  };
+  const cabecalho = campos(linhas[0]);
+  return linhas.slice(1).map((l) => Object.fromEntries(campos(l).map((v, i) => [cabecalho[i], v])));
+}
+
+// Cenários medidos (o rótulo do sampler no .jmx começa com o prefixo); aquecimento e preparação
+// ficam fora, como no autocannon.
+const CENARIOS_JMETER = [
+  { id: 'dashboard', prefixo: 'Dashboard - ', titulo: 'Dashboard (`GET /api/dashboard`)', meta: 3000, metrica: 'p90', metaTexto: 'p90 ≤ 3 s (RNF-004)' },
+  { id: 'vulnerabilidades', prefixo: 'Vulnerabilidades - ', titulo: 'Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=…&tamanho=20`)', meta: 3000, metrica: 'p90', metaTexto: 'p90 ≤ 3 s (US-003 / RNF-004)' },
+  { id: 'ativos', prefixo: 'Ativos - ', titulo: 'Ativos com nota de risco (`GET /api/assets`)', meta: 3000, metrica: 'p90', metaTexto: 'p90 ≤ 3 s (mesma régua do dashboard)' },
+  { id: 'pdf', prefixo: 'PDF - ', titulo: 'Relatório de vulnerabilidades em PDF (`GET /api/vulnerabilidades/relatorio.pdf`)', meta: 60_000, metrica: 'p95', metaTexto: 'p95 ≤ 60 s (RNF-004)' },
+  { id: 'login', prefixo: 'Login - ', titulo: 'Login com senha certa (`POST /api/login`, bcrypt custo 10)', meta: null, metrica: 'p90', metaTexto: 'sem meta no DRS' },
+];
+
+function resumirJtl(amostras) {
+  const cenarios = CENARIOS_JMETER.map((d) => {
+    const doCenario = amostras.filter((a) => a.label.startsWith(d.prefixo));
+    // Percentis só das respostas 2xx (as outras reprovam o cenário à parte, ver veredito).
+    const latencias = doCenario
+      .filter((a) => a.responseCode.startsWith('2'))
+      .map((a) => Number(a.elapsed))
+      .sort((x, y) => x - y);
+    const status = {};
+    for (const a of doCenario) status[a.responseCode] = (status[a.responseCode] ?? 0) + 1;
+    const inicio = Math.min(...doCenario.map((a) => Number(a.timeStamp)));
+    const fim = Math.max(...doCenario.map((a) => Number(a.timeStamp) + Number(a.elapsed)));
+    const duracaoS = doCenario.length ? (fim - inicio) / 1000 : 0;
+    const total = doCenario.length;
+    const ok2xx = latencias.length;
+    const naoHttp = doCenario.filter((a) => !/^\d{3}$/.test(a.responseCode)).length;
+    const naoDois = doCenario.filter((a) => !a.responseCode.startsWith('2')).length;
+    const reprovadasPorTempo = doCenario.filter((a) => /lasted too long/.test(a.failureMessage ?? '')).length;
+    return {
+      ...d,
+      conexoes: Number(doCenario[0]?.grpThreads ?? 0),
+      requisicoes: total,
+      duracaoS: Number(duracaoS.toFixed(1)),
+      rps: duracaoS ? Number((total / duracaoS).toFixed(1)) : 0,
+      p50: percentil(latencias, 50),
+      p90: percentil(latencias, 90),
+      p95: percentil(latencias, 95),
+      p99: percentil(latencias, 99),
+      max: ok2xx ? latencias[ok2xx - 1] : null,
+      ok2xx,
+      status,
+      naoDois,
+      erros: naoHttp,
+      acimaDoTempo: reprovadasPorTempo,
+    };
+  });
+  // Vaga única (DT36): o plano marca como sucesso só 200 com %PDF- ou 429 com EXPORTACAO_EM_ANDAMENTO.
+  const exp = amostras.filter((a) => a.label.startsWith('Exportação simultânea - '));
+  const expPdfs = exp.filter((a) => a.responseCode === '200' && a.success === 'true').length;
+  const expRecusas = exp.filter((a) => a.responseCode === '429' && a.success === 'true').length;
+  const exportacoes = {
+    pedidos: exp.length,
+    pdfs: expPdfs,
+    recusas: expRecusas,
+    respostas: exp.map((a) => ({ status: a.responseCode, ok: a.success === 'true', falha: a.failureMessage || undefined })),
+    atende: exp.length === EXPORTACOES_SIMULTANEAS && expPdfs === 1 && expRecusas === exp.length - 1,
+  };
+  const errada = amostras.filter((a) => a.label.startsWith('Limite - ') && a.label.includes('senha errada'));
+  const certa = amostras.find((a) => a.label.startsWith('Limite - ') && a.label.includes('senha certa'));
+  const contagem = {};
+  for (const a of errada) contagem[a.responseCode] = (contagem[a.responseCode] ?? 0) + 1;
+  const inicio = Math.min(...errada.map((a) => Number(a.timeStamp)));
+  const fim = Math.max(...errada.map((a) => Number(a.timeStamp) + Number(a.elapsed)));
+  const limite = {
+    email: EMAIL_LIMITE,
+    tentativas: errada.length,
+    duracaoMs: errada.length ? fim - inicio : null,
+    contagem,
+    senhaCertaDepois: { status: Number(certa?.responseCode) || certa?.responseCode || null },
+  };
+  return { cenarios, exportacoes, limite };
+}
+
+function relatorioJmeter({ amb, cenarios, exportacoes, limite, versaoJmeter, duracaoTotalS }) {
+  const linhas = cenarios.map(
+    (c) =>
+      `| ${c.titulo} | ${c.conexoes} | ${num(c.requisicoes)} | ${c.rps.toLocaleString('pt-BR')} | ${ms(c.p50)} | ${ms(c.p90)} | ${ms(c.p95)} | ${ms(c.p99)} | ${ms(c.max)} | ${num(c.naoDois)} | ${num(c.erros)} | ${c.meta === null ? '—' : num(c.acimaDoTempo)} | ${c.metaTexto} | **${veredito(c[c.metrica], c.meta, c)}** |`,
+  );
+  const contagem = Object.entries(limite.contagem).map(([s, n]) => `${n} × ${s}`).join(', ');
+  const avaliadas = limite.contagem[401] ?? 0;
+  return `# Teste de carga da API no Apache JMeter — RNF-004
+
+Gerado por \`npm run carga:jmeter\` (\`backend/scripts/carga.mjs --jmeter\`) em ${amb.data}. **Não edite à mão:** rode de novo.
+
+## O que foi rodado
+
+- **Ferramenta:** Apache JMeter ${versaoJmeter}, modo sem interface (\`jmeter -n -t baluarte-carga.jmx -l resultados.jtl -e -o relatorio-html\`), Java da máquina (${amb.java}).
+- **Plano:** [\`baluarte-carga.jmx\`](baluarte-carga.jmx). Um grupo de preparação faz **login real** de três contas (Administrador, Analista e um segundo Analista), **extrai o token** da resposta (\`JSON Extractor\` em \`$.dados.token\`) e o guarda numa propriedade; os grupos de carga mandam \`Authorization: Bearer <token>\` revezando as três sessões. O número de páginas da lista também é extraído da resposta (\`$.resumo.total\`). Os grupos rodam em sequência, cada cenário depois de 3 s de aquecimento fora da medição.
+- **Cenários:** dashboard, vulnerabilidades paginadas (todas as páginas em rodízio) e ativos com **${CONEXOES} usuários simultâneos** cada (${DURACAO} s, sem pausa entre requisições: cada usuário virtual mantém uma requisição em voo o tempo todo); PDF do relatório com ${CONEXOES_PDF} usuário (vaga única, DT36) e ${EXPORTACOES_SIMULTANEAS} pedidos simultâneos do PDF para conferir essa vaga; login com senha certa com ${CONEXOES_LOGIN}; e ${TENTATIVAS_LIMITE} senhas erradas **simultâneas** (Synchronizing Timer) para o mesmo e-mail, seguidas da senha certa.
+- **Asserções:** status 200 em todos os cenários; resposta do PDF começando com \`%PDF-\`; tempo por resposta (Duration Assertion) de 3 s no dashboard e na lista e de 60 s no PDF. A meta do RNF-004 é sobre o **percentil**, não sobre cada resposta: a coluna "acima do tempo" conta as respostas isoladas que passaram do limite, e o veredito usa o percentil.
+- **Ambiente:** o mesmo do \`npm run carga\`: banco descartável \`${DB_NAME}\` no Postgres local (migrations + \`seed\` + \`seed:demo\` + \`seed:carga\`), API em \`127.0.0.1:${API_PORT}\` com \`NODE_ENV=production\`, um processo Node; no fim, a API é parada e o banco apagado. O host do plano é fixo em \`127.0.0.1\`: nada de VM, Vercel ou Supabase.
+- **Máquina:** ${amb.cpu}, ${amb.memoriaGiB} GiB, ${amb.so}, Node ${amb.node}, banco ${amb.postgres}. JMeter, API e banco dividem a mesma máquina (o JMeter, em Java, disputa CPU com a API): os números são conservadores para a API e não valem como medida da demonstração pública.
+- **Duração total do plano:** ${duracaoTotalS} s.
+- **Limitação:** o JMeter 5.6.3 traz o Groovy 3.0.20, que não roda no Java 25 ("Unsupported class file major version 69"). Por isso o plano não tem nenhum script (JSR223): só elementos nativos e as funções \`__P\`, \`__setProperty\`, \`__jexl3\`, \`__counter\`, \`__threadNum\` e \`__logn\`.
+
+## Resultados
+
+Percentis calculados aqui sobre **todas as respostas 2xx** do \`resultados.jtl\`, pelo mesmo método do \`npm run carga\` (posto mais próximo); as respostas fora de 2xx são contadas à parte e reprovam o cenário, para uma recusa rápida (429) nunca contar a favor da meta. O relatório HTML do JMeter (\`relatorio-html/index.html\`) mostra as mesmas amostras com o estimador dele (interpolado), e pode diferir em poucos milissegundos.
+
+| Cenário | Usuários | Requisições | Req/s | p50 | p90 | p95 | p99 | máx. | não 2xx | erros de conexão | acima do tempo | Meta | Resultado |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+${linhas.join('\n')}
+
+### Exportações simultâneas do relatório (vaga única, DT36)
+
+${textoExportacoes(exportacoes)} No plano, ${EXPORTACOES_SIMULTANEAS} usuários virtuais pedem o PDF juntos (Synchronizing Timer) e a asserção só aceita 200 com corpo \`%PDF-\` ou 429 com \`EXPORTACAO_EM_ANDAMENTO\`. É por essa regra que o cenário de carga do PDF tem ${CONEXOES_PDF} usuário: com vários, quase todas as respostas seriam o 429 rápido.
+
+### Limite de tentativas de login
+
+${limite.tentativas} senhas erradas disparadas ao mesmo tempo para \`${limite.email}\` (${limite.duracaoMs} ms ao todo): ${contagem}. ${avaliadas <= 5 ? `O limite segura a rajada: no máximo 5 avaliadas pela política (5 falhas em 15 min, reserva da vaga antes do bcrypt, DT09).` : `**Mais de 5 senhas avaliadas: o limite não segurou a rajada.**`} Logo depois, a senha **certa** recebeu \`${limite.senhaCertaDepois.status}\`${limite.senhaCertaDepois.status === 429 ? ' (esperado: com o e-mail bloqueado, nem a senha certa entra até a janela passar)' : ' (esperado era 429: confira a política)'}.
+
+## Arquivos
+
+- [\`baluarte-carga.jmx\`](baluarte-carga.jmx): o plano (abre na interface do JMeter);
+- [\`relatorio-html/index.html\`](relatorio-html/index.html): relatório do JMeter (aquecimento e preparação filtrados por \`relatorio.properties\`);
+- \`resultados.jtl\`: todas as amostras, em CSV (fora do git, ~9 MB; refeito a cada rodada);
+- [\`resultados.json\`](resultados.json): os números desta tabela.
+
+## Como repetir
+
+\`\`\`bash
+docker compose up -d db                                      # só o Postgres local
+cd backend
+JMETER_HOME=/caminho/apache-jmeter-5.6.3 npm run carga:jmeter  # prepara, mede, gera o relatório e limpa tudo
+\`\`\`
+
+Para abrir o plano na interface do JMeter com o ambiente no ar: \`npm run carga:ambiente\` (mostra as propriedades \`-J\` a passar; Ctrl+C derruba tudo).
+`;
+}
+
+async function rodarJmeter() {
+  const bin = executavelJmeter();
+  const props = propriedadesJmeter();
+  const jtl = join(PASTA_JMETER, 'resultados.jtl');
+  const html = join(PASTA_JMETER, 'relatorio-html');
+  const args = [
+    '-n', '-t', PLANO_JMETER, '-l', jtl, '-e', '-o', html, '-f',
+    '-q', join(PASTA_JMETER, 'relatorio.properties'),
+    '-j', join(LOGS, 'jmeter.log'),
+    ...Object.entries(props).map(([k, v]) => `-J${k}=${v}`),
+  ];
+  log(`JMeter: ${bin} (log em ${join(LOGS, 'jmeter.log')})`);
+  const inicio = Date.now();
+  const filho = WIN
+    ? spawn('cmd.exe', ['/d', '/c', bin, ...args], { cwd: PASTA_JMETER, stdio: 'inherit', env: { ...env, JVM_ARGS: env.JVM_ARGS ?? '-Xms1g -Xmx2g' } })
+    : spawn(bin, args, { cwd: PASTA_JMETER, stdio: 'inherit', env: { ...env, JVM_ARGS: env.JVM_ARGS ?? '-Xms1g -Xmx2g' } });
+  const codigo = await new Promise((ok) => filho.once('exit', ok));
+  const duracaoTotalS = Math.round((Date.now() - inicio) / 1000);
+  if (codigo !== 0) falhar(`o JMeter saiu com código ${codigo}`);
+  if (!existsSync(jtl)) falhar('o JMeter não gravou o resultados.jtl');
+
+  const { cenarios, exportacoes, limite } = resumirJtl(lerJtl(jtl));
+  if (cenarios.some((c) => c.requisicoes === 0)) falhar(`cenário sem amostras: ${cenarios.filter((c) => !c.requisicoes).map((c) => c.id).join(', ')}`);
+  const versaoJmeter = basenameVersao(env.JMETER_HOME);
+  const java = spawnSync('java', ['-version'], { encoding: 'utf8' });
+  const amb = { ...ambiente(), java: (java.stderr || java.stdout || '').split('\n')[0].trim() || 'java' };
+  writeFileSync(join(PASTA_JMETER, 'resultados.json'), `${JSON.stringify({ ambiente: amb, jmeter: versaoJmeter, duracaoTotalS, cenarios, exportacoes, limite }, null, 2)}\n`);
+  writeFileSync(join(PASTA_JMETER, 'RELATORIO.md'), relatorioJmeter({ amb, cenarios, exportacoes, limite, versaoJmeter, duracaoTotalS }));
+  log(`relatório em ${join(PASTA_JMETER, 'RELATORIO.md')} e ${join(html, 'index.html')}`);
+  for (const c of cenarios)
+    log(`${c.titulo}: ${c.requisicoes} req, p50 ${ms(c.p50)}, p90 ${ms(c.p90)}, p95 ${ms(c.p95)}, p99 ${ms(c.p99)}, não 2xx ${c.naoDois}, erros ${c.erros}`);
+  log(`limite: ${JSON.stringify(limite.contagem)}; senha certa depois → ${limite.senhaCertaDepois.status}`);
+  log(`exportações simultâneas: ${exportacoes.pdfs} PDF, ${exportacoes.recusas} × 429 (${exportacoes.atende ? "atende" : "NÃO atende"})`);
+  return !exportacoes.atende || cenarios.some((c) => c.meta !== null && veredito(c[c.metrica], c.meta, c) !== "atende") ? 1 : 0;
+}
+
+const basenameVersao = (pasta) => (pasta.match(/(\d+\.\d+(?:\.\d+)?)/) ?? [])[1] ?? 'desconhecida';
 
 function lerCenario(c) {
   const sem = c.naoDois === 0 && c.erros === 0 && c.timeouts === 0 ? 'sem nenhuma resposta fora de 2xx' : `com ${num(c.naoDois)} respostas fora de 2xx, ${num(c.erros)} erros e ${num(c.timeouts)} timeouts`;
@@ -573,9 +881,14 @@ function lerCenario(c) {
   if (c.meta === null)
     return `${base}. O bcrypt (custo 10, \`bcryptjs\` em JavaScript puro) gasta CPU de propósito e roda na mesma thread da API: o login é a rota mais cara (cerca de ${ms(c.semCarga)} sozinho, ~${Math.round(c.rps)} por segundo no máximo), e uma rajada de logins atrasa as outras rotas enquanto dura. O DRS não dá meta para o login; com ${c.conexoes} logins simultâneos a resposta passa de 3 s.`;
   const folga = c[c.metrica] !== null ? (c.meta / c[c.metrica]).toFixed(1).replace('.', ',') : '—';
-  const resultado = veredito(c[c.metrica], c.meta) === 'atende' ? `Atende com folga de ${folga}× sobre a meta.` : 'Fica acima da meta nesta máquina.';
+  const resultado =
+    veredito(c[c.metrica], c.meta, c) === 'atende'
+      ? `Atende com folga de ${folga}× sobre a meta.`
+      : c.naoDois > 0 || c.erros > 0 || c.timeouts > 0
+        ? 'Não atende: houve respostas fora de 2xx (o percentil é só das respostas 2xx, e uma recusa nunca conta a favor da meta).'
+        : 'Fica acima da meta nesta máquina.';
   if (c.id === 'pdf')
-    return `${base}. ${resultado} O PDF é o relatório com todos os achados do filtro, gerado em memória; a varredura simulada conclui em 20 s por construção (\`cicloVarredura.service.ts\`), então o relatório de uma varredura nova fica pronto em cerca de 20 s mais este tempo. Medido com ${c.conexoes} conexões: exportar o PDF é ação de quem opera, não de 200 pessoas ao mesmo tempo.`;
+    return `${base}. ${resultado} O PDF é o relatório com todos os achados do filtro, gerado em memória; a varredura simulada conclui em 20 s por construção (\`cicloVarredura.service.ts\`), então o relatório de uma varredura nova fica pronto em cerca de 20 s mais este tempo. Medido com ${c.conexoes} conexão: desde o DT36 a exportação tem vaga única (uma por vez; a regra é conferida no item "Exportações simultâneas").`;
   return `${base}. ${resultado}`;
 }
 

@@ -1,0 +1,168 @@
+{
+  "ambiente": {
+    "data": "2026-11-24T19:18:14.814Z",
+    "so": "Windows_NT 10.0.26300",
+    "cpu": "AMD Ryzen 7 5700X 8-Core Processor (16 núcleos lógicos)",
+    "memoriaGiB": 48,
+    "node": "v24.22.1",
+    "postgres": "postgres:16-alpine",
+    "autocannon": "8.0.0",
+    "java": "java version \"25.0.2\" 2026-01-20 LTS"
+  },
+  "jmeter": "5.6.3",
+  "duracaoTotalS": 222,
+  "cenarios": [
+    {
+      "id": "dashboard",
+      "prefixo": "Dashboard - ",
+      "titulo": "Dashboard (`GET /api/dashboard`)",
+      "meta": 3000,
+      "metrica": "p90",
+      "metaTexto": "p90 ≤ 3 s (RNF-004)",
+      "conexoes": 200,
+      "requisicoes": 5799,
+      "duracaoS": 30.7,
+      "rps": 189,
+      "p50": 1052,
+      "p90": 1083,
+      "p95": 1100,
+      "p99": 1148,
+      "max": 1286,
+      "ok2xx": 5799,
+      "status": {
+        "200": 5799
+      },
+      "naoDois": 0,
+      "erros": 0,
+      "acimaDoTempo": 0
+    },
+    {
+      "id": "vulnerabilidades",
+      "prefixo": "Vulnerabilidades - ",
+      "titulo": "Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=…&tamanho=20`)",
+      "meta": 3000,
+      "metrica": "p90",
+      "metaTexto": "p90 ≤ 3 s (US-003 / RNF-004)",
+      "conexoes": 200,
+      "requisicoes": 17517,
+      "duracaoS": 30.3,
+      "rps": 578.9,
+      "p50": 338,
+      "p90": 374,
+      "p95": 384,
+      "p99": 414,
+      "max": 498,
+      "ok2xx": 17517,
+      "status": {
+        "200": 17517
+      },
+      "naoDois": 0,
+      "erros": 0,
+      "acimaDoTempo": 0
+    },
+    {
+      "id": "ativos",
+      "prefixo": "Ativos - ",
+      "titulo": "Ativos com nota de risco (`GET /api/assets`)",
+      "meta": 3000,
+      "metrica": "p90",
+      "metaTexto": "p90 ≤ 3 s (mesma régua do dashboard)",
+      "conexoes": 200,
+      "requisicoes": 24738,
+      "duracaoS": 30.2,
+      "rps": 819.8,
+      "p50": 239,
+      "p90": 265,
+      "p95": 272,
+      "p99": 285,
+      "max": 367,
+      "ok2xx": 24738,
+      "status": {
+        "200": 24738
+      },
+      "naoDois": 0,
+      "erros": 0,
+      "acimaDoTempo": 0
+    },
+    {
+      "id": "pdf",
+      "prefixo": "PDF - ",
+      "titulo": "Relatório de vulnerabilidades em PDF (`GET /api/vulnerabilidades/relatorio.pdf`)",
+      "meta": 60000,
+      "metrica": "p95",
+      "metaTexto": "p95 ≤ 60 s (RNF-004)",
+      "conexoes": 1,
+      "requisicoes": 55,
+      "duracaoS": 30.3,
+      "rps": 1.8,
+      "p50": 550,
+      "p90": 563,
+      "p95": 563,
+      "p99": 571,
+      "max": 571,
+      "ok2xx": 55,
+      "status": {
+        "200": 55
+      },
+      "naoDois": 0,
+      "erros": 0,
+      "acimaDoTempo": 0
+    },
+    {
+      "id": "login",
+      "prefixo": "Login - ",
+      "titulo": "Login com senha certa (`POST /api/login`, bcrypt custo 10)",
+      "meta": null,
+      "metrica": "p90",
+      "metaTexto": "sem meta no DRS",
+      "conexoes": 50,
+      "requisicoes": 550,
+      "duracaoS": 31.8,
+      "rps": 17.3,
+      "p50": 2874,
+      "p90": 3138,
+      "p95": 3288,
+      "p99": 3642,
+      "max": 4126,
+      "ok2xx": 550,
+      "status": {
+        "200": 550
+      },
+      "naoDois": 0,
+      "erros": 0,
+      "acimaDoTempo": 0
+    }
+  ],
+  "exportacoes": {
+    "pedidos": 3,
+    "pdfs": 1,
+    "recusas": 2,
+    "respostas": [
+      {
+        "status": "429",
+        "ok": true
+      },
+      {
+        "status": "429",
+        "ok": true
+      },
+      {
+        "status": "200",
+        "ok": true
+      }
+    ],
+    "atende": true
+  },
+  "limite": {
+    "email": "ana.souza@empresa.com",
+    "tentativas": 20,
+    "duracaoMs": 306,
+    "contagem": {
+      "401": 5,
+      "429": 15
+    },
+    "senhaCertaDepois": {
+      "status": 429
+    }
+  }
+}
