@@ -1,0 +1,33 @@
+{
+ "registros": 2693,
+ "rotasApi": 58,
+ "protegidas": 47,
+ "publicas": 11,
+ "restritasPorPerfil": 32,
+ "com401SemToken": 28,
+ "restritasCom403": 31,
+ "completas": 28,
+ "percentual": 59.6,
+ "perfilNaoLido": []
+}
+
+FALTANDO (rota | perfis | chamadas nos testes | 401 sem token | 403 de perfil):
+POST /api/auth/renovar | Administrador/Analista/Colaborador | 3 | false | n/a
+GET /api/configuracoes/seguranca | Administrador/Analista/Colaborador | 11 | false | n/a
+POST /api/users | Administrador/Analista | 213 | false | true
+GET /api/usuarios | Administrador | 26 | false | true
+PATCH /api/users/:id | Administrador | 63 | false | true
+DELETE /api/users/:id | Administrador | 29 | false | true
+POST /api/departamentos | Administrador | 9 | false | true
+DELETE /api/departamentos/:id | Administrador | 5 | false | true
+GET /api/assets | Administrador/Analista | 17 | false | true
+POST /api/scans | Administrador/Analista | 35 | false | true
+GET /api/scans | Administrador/Analista | 18 | false | true
+GET /api/vulnerabilidades | Administrador/Analista | 164 | false | true
+GET /api/vulnerabilidades/:id | Administrador/Analista | 19 | false | false
+PATCH /api/vulnerabilidades/:id | Administrador/Analista | 30 | false | true
+POST /api/campaigns | Administrador/Analista | 92 | false | true
+GET /api/campanhas | Administrador/Analista | 12 | false | true
+GET /api/campanhas/:id | Administrador/Analista | 32 | false | true
+DELETE /api/campanhas/:id | Administrador/Analista | 10 | false | true
+PUT /api/configuracoes/notificacoes | Administrador/Analista/Colaborador | 12 | false | n/a
