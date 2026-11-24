@@ -78,78 +78,67 @@ o próprio código já consumido dá `401 SEGREDO_INVALIDO`, nunca é reaproveit
 importa para o texto da tela final, que manda gerar um novo no painel; se dissesse só "execute de
 novo", o operador ficaria preso.
 
-### Falha de inscrição não aparece no wizard
+### Como o wizard sabe se a estação se inscreveu (decidido em 24/11/2026)
 
-**Limitação conhecida, não resolvida.** A inscrição acontece quando o `osqueryd` sobe, *depois* que
-o `instalar-agente.ps1` termina, e o que o instalador confere é só que o serviço ficou em execução.
-Um código errado ou expirado produz exatamente o mesmo caminho: serviço de pé, enroll recusado com
-401, e nada no painel. **Serviço em execução não é estação inscrita.**
+A inscrição acontece quando o `osqueryd` sobe, *depois* que o `instalar-agente.ps1` termina, e
+**serviço em execução não é estação inscrita**: código errado ou expirado dá o mesmo caminho,
+serviço de pé, enroll recusado com 401, nada no painel. Até 21/10 a tela final por isso só mandava
+conferir no painel. Agora o `aplicar.ps1` confere de verdade (`ConferirInscricao`), sem mexer no
+`instalar-agente.ps1` nem no `osquery.flags.modelo`:
 
-Por isso a tela final não afirma que deu certo: ela manda conferir no painel e diz o que fazer se a
-máquina não aparecer.
+1. o `instalar-agente.ps1` instala e liga o serviço, que se inscreve com o código (como antes);
+2. 12 s depois, o `aplicar.ps1` **para o serviço** e roda o mesmo `osqueryd.exe` com a **mesma
+   linha de comando** do serviço (lida do Windows, `Win32_Service.PathName`, sem adivinhar caminho
+   de banco), em primeiro plano, com `--verbose --disable_watchdog`, por até 25 s, lendo o console;
+3. classifica o que viu e **religa o serviço sempre**, seja qual for o resultado.
 
-### Por que a correção óbvia não funciona (medido em 21/10/2026)
+É o "teste manual" que o próprio `instalar-agente.ps1` já recomenda no fim, automatizado. A sonda
+**não consome código**: quem consumiu (ou tentou) foi o serviço; ela só lê o estado do mesmo
+`osquery.db`. O `--disable_watchdog` deixa um processo só: com o watchdog, matar o pai poderia
+deixar o processo de trabalho segurando a trava do banco, e o serviço não subiria de novo.
 
-A ideia natural é o instalador ler o resultado da inscrição no log do osquery. **Não dá, com as
-flags de hoje.** Medido extraindo o `osqueryd.exe` do MSI (`msiexec /a`, sem instalar nada) e
-rodando-o contra a `localhost:8443` com ninguém escutando:
+Saída do `aplicar.ps1` e texto da tela final:
 
-- A falha sai assim, e só no console:
-  `W tls_enroll.cpp:101] Failed enrollment request to https://.../api/agentes/osquery/enroll
-  (Request error: ...) retrying...`, repetida a cada ~9 s.
-- **A pasta de log fica vazia.** Com `--logger_plugin=tls`, os logs de status vão para o servidor,
-  não para o disco — e quando a inscrição falha não há servidor com quem falar. Rodando como
-  serviço do Windows, esse texto não vai para lugar nenhum.
+| Console do osquery | Estado | Saída | Tela final |
+|---|---|---|---|
+| `POST ... /api/agentes/osquery/config` | inscrita | 0 | estação inscrita, já aparece no painel |
+| `Failed enrollment ... (No node key returned ...)` | recusada | 3 | código expirado, usado ou inexistente: gerar outro |
+| `Failed enrollment ... (Request error: ...)` | inacessível | 4 | não confirmada: conferir servidor, rede, certificado |
+| nada decisivo em 25 s | indeterminada | 4 | não confirmada: conferir no painel |
+| erro antes (formato, MSI, serviço) | — | 1 | instalação com erros, ver o diário |
 
-Ou seja: um detector que lesse o log local **nunca dispararia**, e pareceria funcionar. É a mesma
-armadilha da tela que ele deveria consertar.
+### O que foi medido (24/11/2026, osquery 5.23.1, binário extraído do MSI, sem instalar nada)
 
-### Três caminhos, e o que falta medir antes de escolher
+Contra o compose local do worktree do Backend (`feat/vinculo-agente`), com um código BLT emitido
+por `POST /api/estacoes/vinculos` como Administrador:
 
-1. ~~**Ligar `filesystem` no `osquery.flags.modelo`**~~ — **descartada pelo Backend em 21/10/2026.**
-   O modelo é o que **toda** estação usa em produção: ligaria log de status em disco em todas, para
-   sempre, por um benefício que só existe nos segundos da instalação. O flags permanente segue
-   `tls` apenas, e a restrição é: **nada de pegada permanente**. Não repropor.
-2. **Flags efêmeras só durante a instalação**: subir o serviço uma vez com um arquivo temporário
-   que inclui `filesystem`, observar, e depois gravar as flags permanentes e reiniciar. Não deixa
-   rastro no permanente, mas põe um para-e-sobe a mais no caminho da instalação.
+- **Sucesso:** um único `POST /enroll`, e logo em seguida o `POST /config` e o `TLSLogForwarder`.
+  Nenhuma linha de falha. No servidor, o vínculo passou a `consumido` com `assetId` preenchido, e
+  reusar o mesmo código deu `401 SEGREDO_INVALIDO`. **O vínculo funciona de ponta a ponta no
+  protocolo, com o osquery de verdade.**
+- **O osquery só pede a configuração depois de ter chave de nó.** Na recusa ele fica preso
+  repetindo o enroll a cada ~9 s e nunca chega ao `/config`. Por isso "pediu `/config`" é o sinal
+  positivo, venha a chave do serviço ou da própria sonda.
+- **A mesma linha `Failed enrollment` sai na recusa e na falta de rede**; só o motivo entre
+  parênteses muda. Tratar as duas como recusa mandaria gerar código novo quando o problema é o
+  servidor fora do ar. Por isso o estado "inacessível" é separado.
+- **A pasta de log continua vazia nos dois casos** (`--logger_plugin=tls`): ler log em disco nunca
+  detectaria nada. Ligar `filesystem` no modelo de flags foi descartado pelo Backend em 21/10
+  (pegada permanente em toda estação) e continua descartado.
+- **Permissão do banco:** na primeira execução o osquery aplica ACL "segura" aos arquivos do
+  `osquery.db`, com SISTEMA e Administradores em controle total e Todos só lendo permissões. Uma
+  segunda execução **sem elevação** não abre mais o banco (`LOCK: Acesso negado`). No cenário real
+  isso trabalha a favor, porque o serviço roda como SISTEMA e o instalador roda elevado, e a ACL dá
+  controle total aos dois. **Mas não foi possível medir daqui** (sem elevação), e é por isso que a
+  linha "banco travado" cai em "indeterminada", nunca em sucesso.
 
-   **Esse arquivo é do instalador, não do Backend.** É um flagfile temporário criado aqui, em
-   `{tmp}`, e nada tem a ver com o `agente/osquery.flags.modelo`, que continua intocado. Ou seja,
-   esta opção **não depende de ninguém** — está disponível mesmo se a 3 cair.
-3. **Sonda em primeiro plano, sem mudar flag nenhuma** (preferida). Antes de ligar o serviço, rodar
-   o `osqueryd.exe` uma vez em primeiro plano com as flags definitivas, lendo a saída padrão
-   diretamente — é exatamente ali que a linha de falha aparece, como medido acima. A inscrição fica
-   gravada no banco do osquery (`osquery.db`), então o serviço sobe depois já inscrito. Nenhum
-   arquivo de log, nenhuma flag a mais, nada permanente.
+O classificador (`EstadoDoConsole`) foi conferido contra as quatro saídas reais capturadas:
+sucesso → inscrita, código gasto → recusada, porta fechada → inacessível, banco travado →
+indeterminada.
 
-   **Duas armadilhas, as duas fatais se erradas:**
-   - A sonda tem de usar o **mesmo `--database_path` do serviço** (o padrão,
-     `C:\Program Files\osquery\osquery.db`). Com banco separado, a sonda consome o código e o
-     serviço tenta se inscrever de novo — e como o código é de **uso único**, ele toma `401` e a
-     estação nunca sobe. Ou seja, a sonda teria *causado* a falha que foi feita para detectar.
-     Na prática isso sai de graça passando o flagfile definitivo sem sobrescrever nada; o perigo é
-     alguém "isolar" a sonda num banco temporário achando que é mais limpo.
-   - O serviço roda como **SYSTEM** e a sonda rodaria como o **administrador** que abriu o
-     instalador. Os dois escrevem o mesmo `osquery.db`, e na medição da falha o osquery já
-     reclamou `Failed to apply safe permssions to the database`. Se o banco ficar com dono ou ACL
-     que o serviço não aceite, ele não abre — e a falha apareceria longe da causa. **Conferir isso
-     na medição**, não depois.
-
-A escolha entre 2 e 3 é do instalador, não do servidor — as duas respeitam "nada permanente" e
-nenhuma das duas exige o Backend tocar nas flags de produção. O endpoint vem na branch
-`feat/vinculo-agente` do Backend.
-
-A 3 é a preferida **por enquanto**, e o Backend também prefere ela — mas isso não a escolhe: a
-preferência dele foi dada antes do risco de ACL acima existir, e a medição (b) ainda pode derrubá-la.
-Se cair, a 2 assume sem depender de nada nem de ninguém.
-
-**O que impede escolher agora:** as duas dependem de reconhecer o **sucesso**, e só a falha está
-medida. Não se sabe o que o osquery escreve quando a inscrição dá certo — e tratar "não apareceu a
-linha de falha" como sucesso é a mesma troca que este documento inteiro critica: ausência de dado
-lida como ausência de risco. A medição do caso de sucesso exige o servidor de pé com o endpoint do
-Backend. **Até lá, nada disso é implementado**, e a tela final continua mandando conferir no painel
-— que é verdadeiro.
+**O que falta, e só a instalação real cobre:** (b) a sonda elevada abrindo o banco criado pelo
+serviço como SISTEMA; (c) o serviço religando depois da sonda sem reinscrever. Os dois dependem de
+rodar o `.exe` de verdade na máquina do Leo.
 
 ## O que o Backend ainda precisa fechar
 
@@ -232,12 +221,18 @@ Os certificados locais **foram gerados em 21/10/2026** (`sh scripts/gerar-certif
 openssl do próprio Git Bash — o `--docker` é opcional e não foi necessário). A CA é
 `CN=Baluarte CA local`, válida até 2036-10-18, e o `.exe` do `saida/` já vai **com ela embutida**.
 
-Falta subir o servidor antes do teste ponta a ponta:
+Para subir o servidor de teste (24/11/2026), do worktree do Backend e com nome de projeto próprio,
+para não usar o banco `baluarte` do projeto principal; os certificados são **copiados** de
+`Baluarte/certs/` (gerar de novo criaria outra CA, e o `.exe` deixaria de confiar no servidor):
 
 ```bash
-docker compose up --build -d app        # HTTPS em https://localhost:8443
-curl --cacert certs/ca.crt https://localhost:8443/
+SEED_CONTRATO=1 SEED_DEMO=1 docker compose -p baluarte-vinculo --env-file ../Baluarte/.env   -f docker-compose.yml -f sem-portas.yml up -d db backend app
 ```
+
+`sem-portas.yml` só tira a porta 5432 do `db` e as do `mailpit` (`ports: !reset []`): ao ligar o
+Docker, o `baluarte-db-1` do projeto principal volta sozinho e ocupa a 5432. O `curl` do Windows
+precisa de `--ssl-no-revoke` (a CA local não tem lista de revogação). As rotas ficam sob `/api`
+(`/api/login`, `/api/estacoes/vinculos`, `/api/agentes/osquery/enroll`).
 
 Depois é rodar o `.exe` como Administrador, com um código emitido pelo painel.
 
@@ -260,11 +255,15 @@ Verificado em 21/10/2026:
   4 últimos caracteres.
 - O ícone do produto está embutido no `.exe` (extraído do binário compilado e conferido na tela).
 
+Verificado em 24/11/2026: o MSI baixado de novo conferiu hash e assinatura; os dois `.exe`
+compilam; o vínculo ponta a ponta no protocolo com o osquery real (ver "O que foi medido"); o
+classificador da conferência contra as quatro saídas reais.
+
 **Não** verificado: o wizard rodando. As páginas, a acentuação na tela e o fluxo de Voltar/Avançar
 não foram vistos — o instalador exige elevação e o Windows não deixa um processo controlar um
 processo elevado. Rodar o `.exe` uma vez e clicar pelas 7 páginas é o próximo passo, e é da
-máquina do Leo. Também não foi testada a instalação real (depende dos certificados acima e de um
-código de vínculo válido, que depende do Backend).
+máquina do Leo. Também não foi feita a instalação real: certificados, servidor e endpoint
+estão de pé desde 24/11/2026, e o que falta é só rodar o `.exe` elevado (medições (b) e (c)).
 
 ## Pendências menores
 

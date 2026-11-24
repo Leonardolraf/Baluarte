@@ -59,6 +59,83 @@ function ApagarComRastro([string]$caminho) {
   Remove-Item -LiteralPath $caminho -Force -ErrorAction SilentlyContinue
 }
 
+# ---- Conferencia da inscricao -------------------------------------------------------------
+# O servico se inscreve sozinho quando sobe, e a falha nao deixa rastro em disco: com
+# --logger_plugin=tls os logs de status vao para o servidor, e o "Failed enrollment" so aparece
+# no console (medido em 21/10 e de novo em 24/11/2026 com o osquery 5.23.1). Servico em execucao
+# NAO e estacao inscrita. Entao a conferencia e o teste manual que o instalar-agente.ps1 ja
+# recomenda, automatizado: para o servico, roda o MESMO executavel com a MESMA linha de comando
+# (lida do registro do servico, sem adivinhar caminho de banco) em primeiro plano por alguns
+# segundos, le o console e religa o servico.
+#   - banco com chave de no valida: o osquery pede a configuracao direto, sem tentar inscrever;
+#   - sem chave (o servico nao conseguiu): tenta inscrever com o codigo ja gasto e o servidor
+#     recusa -> "tls_enroll.cpp ... Failed enrollment request".
+# A sonda NAO consome codigo: quem consumiu (ou tentou) foi o servico. --disable_watchdog deixa
+# um processo so; com o watchdog, matar o pai poderia deixar o processo de trabalho segurando a
+# trava do banco e o servico nao subiria de novo.
+# O osquery so pede a configuracao depois de ter chave de no (medido: na recusa ele fica preso
+# repetindo o enroll e nunca chega ao /config). Entao "pediu /config sem nenhuma recusa" e
+# inscrita, tenha a chave vindo do servico antes ou da propria sonda agora.
+# A MESMA linha "Failed enrollment" sai na recusa e na falta de rede; so o motivo entre
+# parenteses muda (medido em 24/11/2026, osquery 5.23.1):
+#   servidor respondeu e recusou (401): "(No node key returned from TLS enroll plugin)"
+#   sem conexao / TLS:                  "(Request error: Failed to connect to ...)"
+# Tratar os dois como recusa mandaria gerar codigo novo quando o problema e o servidor fora do ar.
+function EstadoDoConsole([string]$texto) {
+  if ($texto -match 'POST request to URI: \S+/api/agentes/osquery/config') { return 'inscrita' }
+  if ($texto -match 'tls_enroll\.cpp:\d+\] Failed enrollment[^\r\n]*No node key returned') { return 'recusada' }
+  if ($texto -match 'tls_enroll\.cpp:\d+\] Failed enrollment[^\r\n]*Request error') { return 'inacessivel' }
+  return 'indeterminada'
+}
+
+function ConferirInscricao {
+  $nome = 'osqueryd'
+  $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='$nome'"
+  if (-not $svc) { Info 'conferencia: servico osqueryd nao encontrado.'; return 'indeterminada' }
+  $linha = $svc.PathName.Trim()
+  if ($linha.StartsWith('"')) {
+    $fim = $linha.IndexOf('"', 1)
+    $exe = $linha.Substring(1, $fim - 1); $args0 = $linha.Substring($fim + 1).Trim()
+  } else {
+    $i = $linha.IndexOf(' '); if ($i -lt 0) { $exe = $linha; $args0 = '' } else { $exe = $linha.Substring(0, $i); $args0 = $linha.Substring($i + 1).Trim() }
+  }
+  # O servico pode passar --service para o modo de servico do Windows; em primeiro plano, nao.
+  $args0 = ($args0 -replace '(^|\s)--service(\s|$)', ' ').Trim()
+
+  # Da ao servico o tempo da primeira tentativa de inscricao (imediata ao subir; nova tentativa a ~9 s).
+  Start-Sleep -Seconds 12
+  $console = Join-Path $env:TEMP ("baluarte-conferencia-{0}.txt" -f ([guid]::NewGuid().ToString('N')))
+  $sonda = $null
+  try {
+    Stop-Service -Name $nome -Force
+    $limite = (Get-Date).AddSeconds(20)
+    while ((Get-Process -Name $nome -ErrorAction SilentlyContinue) -and (Get-Date) -lt $limite) { Start-Sleep -Milliseconds 500 }
+
+    $sonda = Start-Process -FilePath $exe -ArgumentList "$args0 --verbose --disable_watchdog" -RedirectStandardError $console -RedirectStandardOutput "$console.out" -WindowStyle Hidden -PassThru
+    $estado = 'indeterminada'
+    $limite = (Get-Date).AddSeconds(25)
+    while ((Get-Date) -lt $limite) {
+      Start-Sleep -Seconds 1
+      $texto = if (Test-Path -LiteralPath $console) { [IO.File]::ReadAllText($console) } else { '' }
+      $estado = EstadoDoConsole $texto
+      if ($estado -ne 'indeterminada') { break }
+      if ($sonda.HasExited) { break }
+    }
+    # Deixa no diario as linhas que decidiram (nenhuma delas tem o codigo ou a chave de no).
+    if (Test-Path -LiteralPath $console) {
+      Select-String -LiteralPath $console -Pattern 'tls_enroll|tls\.cpp|node_invalid|unsafe permissions|Rocksdb open failed' |
+        Select-Object -First 8 | ForEach-Object { Info ("osquery: " + ($_.Line -replace '^\S+ \S+ \d+ ', '')) }
+    }
+    return $estado
+  } finally {
+    if ($sonda -and -not $sonda.HasExited) { Stop-Process -Id $sonda.Id -Force -ErrorAction SilentlyContinue; $sonda.WaitForExit(10000) | Out-Null }
+    Remove-Item -LiteralPath $console, "$console.out" -Force -ErrorAction SilentlyContinue
+    # Religa o servico SEMPRE, seja qual for o resultado: recusado ele continua tentando, e um
+    # codigo novo via reinstalacao resolve sem desinstalar.
+    try { Start-Service -Name $nome } catch { Info "conferencia: nao consegui religar o servico: $($_.Exception.Message)" }
+  }
+}
+
 $Aqui = $PSScriptRoot
 $Instalador = Join-Path $Aqui 'instalar-agente.ps1'
 
@@ -99,7 +176,14 @@ try {
   # com 1 — e o wizard mostra o diario ao usuario.
   & $Instalador @argumentos
   Info 'configuracao aplicada.'
-  exit 0
+
+  $estado = ConferirInscricao
+  switch ($estado) {
+    'inscrita'      { Info 'inscricao confirmada: o agente ja tem chave de no e o servidor entregou a configuracao.'; exit 0 }
+    'recusada'      { Info 'inscricao RECUSADA pelo servidor: o codigo de vinculo expirou, ja foi usado ou nao existe.'; exit 3 }
+    'inacessivel'   { Info "inscricao NAO confirmada: o agente nao alcancou o servidor $Servidor (rede, porta ou certificado). O codigo pode continuar valido."; exit 4 }
+    default         { Info 'inscricao NAO confirmada: a conferencia nao viu nem sucesso nem recusa (servidor fora do ar? veja as linhas acima).'; exit 4 }
+  }
 } catch {
   Write-Host "ERRO: $($_.Exception.Message)"
   exit 1

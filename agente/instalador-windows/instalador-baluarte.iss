@@ -109,6 +109,8 @@ const
 var
   PaginaVinculo: TInputQueryWizardPage;
   Falhou: Boolean;
+  { Saida do aplicar.ps1 depois da conferencia: 0 inscrita, 3 recusada, 4 nao confirmada. }
+  Inscricao: Integer;
 
 { ---- Validacao -------------------------------------------------------------------------- }
 
@@ -223,6 +225,9 @@ begin
   Exit;
 #endif
 
+  { Variavel global comeca em 0, que aqui significa "inscrita": parte de "nao confirmada" para
+    que nenhum caminho que pule o Exec mostre sucesso por omissao. }
+  Inscricao := 4;
   ArqCodigo := ExpandConstant('{tmp}\vinculo.txt');
   ArqLog := ExpandConstant('{app}\instalacao.log');
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
@@ -239,13 +244,16 @@ begin
   if FileExists(ExpandConstant('{app}\ca.crt')) then
     Parametros := Parametros + ' -CaCert "' + ExpandConstant('{app}\ca.crt') + '"';
 
-  WizardForm.StatusLabel.Caption := 'Instalando o osquery e configurando o serviço...';
+  WizardForm.StatusLabel.Caption := 'Instalando o osquery, configurando o serviço e conferindo a inscrição no Baluarte...';
   WizardForm.Refresh();
 
   if not Exec(PowerShell, Parametros, '', SW_HIDE, ewWaitUntilTerminated, Resultado) then begin
     Falhou := True;
     MsgBox('Não foi possível executar a configuração do agente.', mbCriticalError, MB_OK);
-  end else if Resultado <> 0 then begin
+  end else if (Resultado = 0) or (Resultado = 3) or (Resultado = 4) then begin
+    { Instalado e servico de pe; o que muda e o que a conferencia viu da inscricao. }
+    Inscricao := Resultado;
+  end else begin
     Falhou := True;
     MsgBox('O osquery foi copiado, mas a configuração do agente falhou.' + #13#10#13#10 + 'O diário da instalação está em:' + #13#10 + ArqLog + #13#10#13#10 + 'Causas comuns: o código de vínculo já foi usado ou expirou, ou o servidor ' + ServidorInformado + ' não está respondendo.', mbError, MB_OK);
   end;
@@ -264,11 +272,12 @@ begin
 #endif
   if Falhou then
     WizardForm.FinishedLabel.Caption := 'A instalação terminou com erros e o agente pode não estar coletando.' + #13#10#13#10 + 'Veja o diário em ' + ExpandConstant('{app}\instalacao.log') + ' e, depois de corrigir, execute este instalador de novo com um código de vínculo novo.'
+  { Servico em execucao NAO e estacao inscrita: o texto sai do que a conferencia do aplicar.ps1
+    viu no console do osquery (ver ConferirInscricao), nunca so do servico estar de pe. }
+  else if Inscricao = 0 then
+    WizardForm.FinishedLabel.Caption := 'O Agente Baluarte está instalado e a estação foi inscrita no Baluarte: o servidor aceitou o código de vínculo e entregou a configuração.' + #13#10#13#10 + 'A máquina já aparece no painel, em Estações, vinculada ao ativo cadastrado. O inventário técnico chega no primeiro ciclo de coleta.'
+  else if Inscricao = 3 then
+    WizardForm.FinishedLabel.Caption := 'O osquery está instalado, mas o Baluarte RECUSOU o código de vínculo: ele expirou, já foi usado ou não existe.' + #13#10#13#10 + 'A estação não aparece no painel. Gere um código novo no Baluarte e execute este instalador de novo (não precisa desinstalar).' + #13#10#13#10 + 'Diário: ' + ExpandConstant('{app}\instalacao.log')
   else
-    { Cuidado: daqui NAO da para afirmar que a estacao se inscreveu. A inscricao acontece quando
-      o osqueryd sobe, depois que o instalar-agente.ps1 termina, e o que foi conferido ate aqui e
-      so que o servico esta em execucao. Codigo errado ou expirado da exatamente este mesmo
-      caminho: servico de pe, inscricao recusada com 401 e nada no painel. Por isso o texto manda
-      conferir no painel em vez de dizer que deu certo. }
-    WizardForm.FinishedLabel.Caption := 'O Agente Baluarte está instalado e o serviço do Windows está em execução.' + #13#10#13#10 + 'Confirme no painel do Baluarte, em Estações: a máquina deve aparecer em até um minuto, e o inventário técnico chega no primeiro ciclo de coleta.' + #13#10#13#10 + 'Se ela não aparecer, o código de vínculo provavelmente estava expirado ou já tinha sido usado. Gere um novo no painel e execute este instalador de novo.';
+    WizardForm.FinishedLabel.Caption := 'O osquery está instalado e o serviço do Windows está em execução, mas não foi possível confirmar a inscrição.' + #13#10#13#10 + 'Confira no painel do Baluarte, em Estações, se a máquina aparece em alguns minutos. Se não aparecer, verifique se o servidor ' + ServidorInformado + ' está no ar e veja o diário em ' + ExpandConstant('{app}\instalacao.log') + '.';
 end;
