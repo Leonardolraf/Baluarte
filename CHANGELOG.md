@@ -2,6 +2,39 @@
 
 > Histórico do que foi construído no repositório de código, do commit inicial até hoje. Para o que falta e o roteiro futuro, ver [`backend/PLANO.md`](backend/PLANO.md). Para como rodar cada peça, ver [`README.md`](README.md).
 
+## 2026-10-21 — Vínculo de inscrição da estação (#9), primeiro corte (servidor)
+
+Feature nova (melhoria #9), **branch `feat/vinculo-agente`, pós-demo, sem deploy**. O Administrador
+emite um código de vínculo no painel; o operador cola no instalador do agente; o código **é** o
+`enroll_secret` daquela estação (o osquery não tem campo livre no enroll). No enroll o código é
+consumido (uso único, TTL 24 h) e o ativo-estação nasce — ou é reinscrito — com os metadados da
+emissão (nome, host, ip, responsável), em vez do nome vindo do hostname.
+
+- **Banco (2 migrations aditivas, separadas):** `StationEnrollmentBinding` (só guarda o HASH do
+  código; `usuarioId`/`criadoPorId`/`assetId` são id simples sem FK, como o autor do AuditLog;
+  CHECK de ip/descrição, RLS, fechamento DT13) e `Workstation.responsavelId` (coluna própria,
+  droppable, sem FK).
+- **Emissão (só Administrador):** `POST /estacoes/vinculos` `{nome, host?, ip?, descricao?, usuarioId?}`
+  → `201 {idVinculo, codigo:"BLT-XXXX-XXXX-XXXX", expiraEm}` (código aparece uma vez). O tipo é
+  sempre "Estação de trabalho". `GET /estacoes/vinculos` (lista paginada com estado
+  pendente/consumido/expirado, nunca o código nem o hash) e `DELETE /estacoes/vinculos/:id`
+  (revoga/queima o pendente). Auditoria `EMITIR_VINCULO_ESTACAO`/`REVOGAR_VINCULO_ESTACAO`.
+- **Enroll:** `POST /agentes/osquery/enroll` ramifica pelo formato do `enroll_secret` (prefixo
+  `BLT-`): código de vínculo → consome e cria/reinscreve a estação; senão → `OSQUERY_ENROLL_SECRET`
+  da org, **intocado**. Código desconhecido/expirado/usado → `401 SEGREDO_INVALIDO` (sem distinguir,
+  evita enumeração). **Consumo atômico** no repository: trava a linha pendente (`FOR UPDATE`), lê o
+  relógio **depois** da trava (lição DT10) e marca consumido na mesma transação (uso único garantido).
+- **Código:** `BLT-` + 3 grupos de 4 no alfabeto `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (sem 0/O/1/I),
+  18 chars (≥16, o `instalar-agente.ps1 -Segredo` aceita); normalizado (trim+maiúsculas) e guardado
+  só como SHA-256 — o mesmo alfabeto que o instalador (.Exe) valida no wizard.
+- **Verificado:** `tsc` limpo; unidade 6/6 (`tests/unidade/vinculo-estacao.test.ts`: formato, hash
+  canônico, estado, TTL). **Pendente (Postgres local fora no momento):** `migrate reset`, a
+  integração (`tests/vinculo-estacao-enroll.test.ts`: emitir→enroll→estação vinculada, uso único,
+  expirado, desconhecido, revogar, RBAC) e o Newman — rodar quando o banco voltar.
+- **Falta (próximo corte, ainda na branch):** expor `responsavel {id,nome}` em `GET /estacoes[/:id]`
+  (a coluna já é populada no enroll) e fiação no `e2e-real`. Flags do osquery: **não** mudam
+  (`agente/osquery.flags.modelo` intacto; o instalador observa a inscrição do próprio lado).
+
 ## 2026-03-26 — Ponto de partida
 
 - **[`732a69f`](https://github.com/Leonardolraf/Baluarte/commit/732a69f)** `Initial commit` — repositório criado, só com um `README.md` mínimo.

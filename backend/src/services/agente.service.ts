@@ -24,6 +24,8 @@ import {
 import { registrarAuditoria } from './auditoria.service.js';
 import { verificarEmSegundoPlano } from './cruzamento.service.js';
 import * as repo from '../repositories/agente.repository.js';
+import { codigoHash, ehCodigoVinculo } from '../models/vinculoEstacao.model.js';
+import * as vinculoRepo from '../repositories/vinculoEstacao.repository.js';
 
 // Lado servidor do protocolo remoto TLS do osquery (B07). O osquery se inscreve com o
 // segredo compartilhado (OSQUERY_ENROLL_SECRET), recebe a chave da estacao (node_key) e
@@ -108,6 +110,10 @@ async function hostLivre(base: string, hostIdentifier: string): Promise<string> 
  * deixa de valer — e o que o osquery faz quando perde a chave ou recebe node_invalid.
  */
 export async function inscrever(dados: { segredo: unknown; hostIdentifier: string; hostDetails: unknown }): Promise<string> {
+  // #9: se o enroll_secret tem a cara de um codigo de vinculo (BLT-...), ele E o segredo daquela
+  // estacao (uso unico, emitido no painel); nao depende do OSQUERY_ENROLL_SECRET da org.
+  if (ehCodigoVinculo(dados.segredo)) return inscreverComVinculo(dados);
+
   const esperado = segredoConfigurado();
   if (!esperado) falhar(503, 'Inscrição de estações desligada no servidor', 'INSCRICAO_DESLIGADA');
   if (typeof dados.segredo !== 'string' || !segredoConfere(dados.segredo.trim(), esperado))
@@ -134,6 +140,29 @@ export async function inscrever(dados: { segredo: unknown; hostIdentifier: strin
     so,
   });
   await registrarAuditoria(null, 'INSCREVER_ESTACAO', `host_identifier=${dados.hostIdentifier}; ativo=${estacao.assetId}`);
+  return nodeKey;
+}
+
+/**
+ * Inscricao por codigo de vinculo (#9): o codigo e consumido (uso unico, TTL 24h) e o ativo-estacao
+ * nasce — ou e reinscrito — com os metadados da emissao (nome, host, ip, responsavel), em vez do
+ * nome vindo do hostname. Codigo desconhecido, expirado ou ja usado: 401 SEGREDO_INVALIDO, sem
+ * distinguir os tres (evita enumeracao). O consumo e atomico no repository (trava + relogio DT10).
+ */
+async function inscreverComVinculo(dados: { segredo: unknown; hostIdentifier: string; hostDetails: unknown }): Promise<string> {
+  const detalhes = detalhesInscricao.parse(dados.hostDetails ?? {});
+  const so = sistemaDe(detalhes.os_version, 'Desconhecido');
+  const nodeKey = gerarTokenLink();
+  const hostname = detalhes.system_info?.hostname ?? dados.hostIdentifier;
+  const r = await vinculoRepo.consumir({
+    hash: codigoHash(dados.segredo as string),
+    hostIdentifier: dados.hostIdentifier,
+    nodeKeyHash: hashToken(nodeKey),
+    so,
+    hostname,
+  });
+  if (!r) falhar(401, 'Segredo de inscrição inválido', 'SEGREDO_INVALIDO');
+  await registrarAuditoria(null, 'INSCREVER_ESTACAO', `host_identifier=${dados.hostIdentifier}; via vínculo; ativo=${r.assetId}`);
   return nodeKey;
 }
 
