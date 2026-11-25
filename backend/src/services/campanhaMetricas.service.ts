@@ -19,7 +19,24 @@ export function funilDe(eventos: EventoFunil[]) {
   };
 }
 
-export function mapCampaign(c: { id: string; nome: string; template: string; status: string; criadoEm: Date; eventos: { enviadoEm: Date | null; clicadoEm: Date | null }[] }) {
+/**
+ * Concluiu o treinamento: clicou e treinou. A mesma regra do detalhe (`treinamentos[]` de
+ * `GET /campanhas/:id` sao os eventos com clique, `concluido` = treinou), da lista e do KPI
+ * `colaboradoresTreinados`; regra nova de "treinado" muda so aqui.
+ */
+export function concluiuTreinamento(e: { clicadoEm: Date | null; treinou: boolean }) {
+  return !!e.clicadoEm && e.treinou;
+}
+
+/** Quantos destinatarios da campanha clicaram e concluiram o treinamento. */
+export function treinadosDe(eventos: { clicadoEm: Date | null; treinou: boolean }[]) {
+  return eventos.filter(concluiuTreinamento).length;
+}
+
+export function mapCampaign(c: {
+  id: string; nome: string; template: string; status: string; criadoEm: Date;
+  eventos: (EventoFunil & { treinou: boolean })[];
+}) {
   const enviados = c.eventos.filter((e) => e.enviadoEm).length;
   const clicados = c.eventos.filter((e) => e.clicadoEm).length;
   return {
@@ -33,6 +50,10 @@ export function mapCampaign(c: { id: string; nome: string; template: string; sta
     enviados,
     taxaClique: enviados ? Math.round((clicados / enviados) * 100) : 0,
     criadoEm: c.criadoEm,
+    // DT39 (aditivo): o funil e os treinados da campanha, com a mesma regra do detalhe, a partir
+    // dos eventos ja carregados. Sem eles a tela mostrava abertura desconhecida e "0%" treinados.
+    funil: funilDe(c.eventos),
+    treinados: treinadosDe(c.eventos),
   };
 }
 
@@ -42,7 +63,7 @@ export function mapCampaign(c: { id: string; nome: string; template: string; sta
  */
 export function colaboradoresTreinados(campanhas: { eventos: { userId: string; clicadoEm: Date | null; treinou: boolean }[] }[]) {
   const pessoas = new Set<string>();
-  for (const c of campanhas) for (const e of c.eventos) if (e.clicadoEm && e.treinou) pessoas.add(e.userId);
+  for (const c of campanhas) for (const e of c.eventos) if (concluiuTreinamento(e)) pessoas.add(e.userId);
   return pessoas.size;
 }
 

@@ -55,8 +55,8 @@ describe('erro de negócio (utils/resposta)', () => {
 
 describe('métricas de campanha', () => {
   const d = new Date('2026-10-01T12:00:00Z');
-  const ev = (o: Partial<Record<'enviadoEm' | 'abertoEm' | 'clicadoEm' | 'submeteuEm' | 'reportouEm', Date>>) =>
-    ({ enviadoEm: null, abertoEm: null, clicadoEm: null, submeteuEm: null, reportouEm: null, ...o });
+  const ev = (o: Partial<Record<'enviadoEm' | 'abertoEm' | 'clicadoEm' | 'submeteuEm' | 'reportouEm', Date>> & { treinou?: boolean }) =>
+    ({ enviadoEm: null, abertoEm: null, clicadoEm: null, submeteuEm: null, reportouEm: null, treinou: false, ...o });
 
   it('funilDe: valores e percentuais sobre os enviados', () => {
     const f = funilDe([
@@ -103,6 +103,22 @@ describe('métricas de campanha', () => {
     assert.equal(c.destinatarios, 4);
     assert.equal(c.enviados, 3);
     assert.equal(c.taxaClique, 33);
+  });
+
+  it('mapCampaign (DT39): expoe o funil e os treinados com a regra do detalhe', () => {
+    const c = mapCampaign({
+      id: 'c1', nome: 'Teste', template: 'urgencia', status: 'ATIVA', criadoEm: d,
+      eventos: [
+        ev({ enviadoEm: d, abertoEm: d, clicadoEm: d, treinou: true }),
+        ev({ enviadoEm: d, abertoEm: d, clicadoEm: d }),
+        // Treinou sem clique nao conta: o detalhe so lista quem clicou.
+        ev({ enviadoEm: d, abertoEm: d, treinou: true }),
+        ev({ enviadoEm: d }),
+      ],
+    });
+    assert.deepEqual(c.funil.abertos, { valor: 3, pct: 75 });
+    assert.deepEqual(c.funil.clicados, { valor: 2, pct: 50 });
+    assert.equal(c.treinados, 1);
   });
 
   it('statusEfetivo (DT34): sem envio AGENDADA, com envio ATIVA, ENCERRADA gravada respeitada', () => {

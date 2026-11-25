@@ -104,3 +104,91 @@ describe('status efetivo da campanha (DT34)', () => {
     );
   });
 });
+
+// DT39: a lista mostrava "Abertos —" e "Treinados 0%" para quem abriu e treinou. GET /campanhas
+// passa a expor, de forma aditiva, o funil (funilDe) e os treinados (treinadosDe), as mesmas
+// funcoes do detalhe, sobre os eventos que a lista ja carrega.
+describe('funil e treinados na lista = detalhe (DT39)', () => {
+  type Funil = Record<'enviados' | 'abertos' | 'clicados' | 'submeteram' | 'reportaram', { valor: number; pct: number }>;
+  type Item = { id: string; funil: Funil; treinados: number; taxaClique: number; enviados: number };
+
+  async function naLista(id: string) {
+    const item = ((await listar()).dados as unknown as Item[]).find((c) => c.id === id);
+    assert.ok(item, `campanha ${id} fora da lista`);
+    return item;
+  }
+
+  async function noDetalhe(id: string) {
+    const r = await chamar('GET', `/campanhas/${id}`, { token: analista });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    return r.body.dados as { funil: Funil; treinados: number; treinamentos: { concluido: boolean }[] };
+  }
+
+  it('quem abriu e treinou aparece na lista com os mesmos números do detalhe', async () => {
+    const t = new Date();
+    const c = await prisma.campaign.create({
+      data: {
+        nome: 'DT39 aberta e treinada', template: 'urgencia', status: 'AGENDADA',
+        eventos: {
+          create: [
+            // O caso do cartão: abriu, clicou e treinou.
+            { userId: pessoas[0].id, destinatario: pessoas[0].email, enviadoEm: t, abertoEm: t, clicadoEm: t, treinou: true, treinouEm: t },
+            // Abriu e clicou, não treinou; também reportou.
+            { userId: pessoas[1].id, destinatario: pessoas[1].email, enviadoEm: t, abertoEm: t, clicadoEm: t, reportouEm: t },
+            // Só recebeu.
+            { userId: pessoas[2].id, destinatario: pessoas[2].email, enviadoEm: t },
+          ],
+        },
+      },
+    });
+    const lista = await naLista(c.id);
+    const detalhe = await noDetalhe(c.id);
+    assert.deepEqual(lista.funil, detalhe.funil);
+    assert.equal(lista.treinados, detalhe.treinados);
+    assert.equal(lista.treinados, detalhe.treinamentos.filter((x) => x.concluido).length);
+    assert.deepEqual(lista.funil.abertos, { valor: 2, pct: 67 });
+    assert.deepEqual(lista.funil.clicados, { valor: 2, pct: 67 });
+    assert.deepEqual(lista.funil.reportaram, { valor: 1, pct: 33 });
+    assert.equal(lista.treinados, 1);
+    // Campos antigos intactos (aditivo).
+    assert.equal(lista.enviados, 3);
+    assert.equal(lista.taxaClique, lista.funil.clicados.pct);
+  });
+
+  it('treinou sem clique não conta, na lista nem no detalhe', async () => {
+    const t = new Date();
+    const c = await prisma.campaign.create({
+      data: {
+        nome: 'DT39 treinou sem clique', template: 'autoridade', status: 'AGENDADA',
+        eventos: { create: [{ userId: pessoas[0].id, destinatario: pessoas[0].email, enviadoEm: t, abertoEm: t, treinou: true }] },
+      },
+    });
+    const lista = await naLista(c.id);
+    const detalhe = await noDetalhe(c.id);
+    assert.equal(lista.treinados, 0);
+    assert.equal(detalhe.treinados, 0);
+    assert.deepEqual(lista.funil, detalhe.funil);
+  });
+
+  it('campanha sem eventos: funil zerado e 0 treinados, iguais na lista e no detalhe', async () => {
+    const c = await prisma.campaign.create({ data: { nome: 'DT39 sem eventos', template: 'curiosidade', status: 'AGENDADA' } });
+    const lista = await naLista(c.id);
+    const detalhe = await noDetalhe(c.id);
+    assert.deepEqual(lista.funil, detalhe.funil);
+    assert.equal(lista.treinados, detalhe.treinados);
+    assert.deepEqual(lista.funil.enviados, { valor: 0, pct: 100 });
+    assert.deepEqual(lista.funil.abertos, { valor: 0, pct: 0 });
+    assert.equal(lista.treinados, 0);
+  });
+
+  it('o dashboard (operador) leva os mesmos campos nas campanhas', async () => {
+    const r = await chamar('GET', '/dashboard', { token: analista });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const { dados } = await listar();
+    const porId = new Map((dados as unknown as Item[]).map((c) => [c.id, c]));
+    for (const c of r.body.dados.campanhas as Item[]) {
+      assert.deepEqual(c.funil, porId.get(c.id)?.funil);
+      assert.equal(c.treinados, porId.get(c.id)?.treinados);
+    }
+  });
+});

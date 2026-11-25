@@ -187,3 +187,53 @@ describe('services/adapters — alcance da lista de campanhas', () => {
     expect(c.metrics.openRate).toBeNull();
   });
 });
+
+// DT39: a lista mostrava "Abertos —" e "Treinados 0%" para campanha que tinha sido aberta e
+// treinada. A API passa a mandar o funil e `treinados` por campanha (mesma regra do detalhe).
+describe('services/adapters — funil e treinados da lista (DT39)', () => {
+  const funil = {
+    enviados: { valor: 4, pct: 100 },
+    abertos: { valor: 3, pct: 75 },
+    clicados: { valor: 2, pct: 50 },
+    submeteram: { valor: 1, pct: 25 },
+    reportaram: { valor: 1, pct: 25 },
+  };
+
+  it('com `funil` e `treinados`, usa os numeros do servidor', () => {
+    const c = toCampaign(
+      backendCampaign({ destinatarios: 5, enviados: 4, taxaClique: 50, funil, treinados: 1 }),
+    );
+    expect(c.metrics.sent).toBe(4);
+    expect(c.metrics.opened).toBe(3);
+    expect(c.metrics.openRate).toBe(75);
+    expect(c.metrics.clicked).toBe(2);
+    expect(c.metrics.clickRate).toBe(50);
+    expect(c.metrics.submitted).toBe(1);
+    expect(c.metrics.reported).toBe(1);
+    expect(c.metrics.trained).toBe(1);
+    // Treinados e sobre quem clicou, como no relatorio da campanha.
+    expect(c.metrics.trainedRate).toBe(50);
+  });
+
+  it('`treinados: 0` do servidor e medicao: 0%, nao desconhecido', () => {
+    const c = toCampaign(backendCampaign({ enviados: 4, taxaClique: 50, funil, treinados: 0 }));
+    expect(c.metrics.trained).toBe(0);
+    expect(c.metrics.trainedRate).toBe(0);
+  });
+
+  it('sem `funil` e sem `treinados` (API antiga): abertura e treinamento desconhecidos, nunca 0', () => {
+    const c = toCampaign(backendCampaign({ enviados: 180 }));
+    expect(c.metrics.opened).toBeNull();
+    expect(c.metrics.openRate).toBeNull();
+    expect(c.metrics.trained).toBeNull();
+    expect(c.metrics.trainedRate).toBeNull();
+  });
+
+  it('`treinados` sem `funil`: treinamento medido, abertura segue desconhecida', () => {
+    const c = toCampaign(backendCampaign({ enviados: 10, taxaClique: 40, treinados: 2 }));
+    expect(c.metrics.opened).toBeNull();
+    expect(c.metrics.clicked).toBe(4);
+    expect(c.metrics.trained).toBe(2);
+    expect(c.metrics.trainedRate).toBe(50);
+  });
+});

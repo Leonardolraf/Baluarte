@@ -207,7 +207,8 @@ describe('services/adapters', () => {
     expect(dashboard.kpis.phishingResilience).toBeNull();
     expect(dashboard.humanRisk).toBe(0);
     expect(dashboard.kpis.activeCampaigns).toBe(0);
-    expect(dashboard.kpis.trainedCollaborators).toBe(0);
+    // Backend anterior sem `colaboradoresTreinados` nem `treinados` (DT39): desconhecido, não 0.
+    expect(dashboard.kpis.trainedCollaborators).toBeNull();
     expect(dashboard.pendingTraining).toBeNull();
     expect(dashboard.severityDistribution).toMatchObject({
       critical: 1,
@@ -304,8 +305,16 @@ describe('services/adapters', () => {
       toDashboard(backendDashboard({ kpis: { ...kpis, colaboradoresTreinados: 59 }, campanhas })).kpis
         .trainedCollaborators,
     ).toBe(59);
-    // Backend anterior sem o campo: a soma das campanhas, nunca NaN.
-    expect(toDashboard(backendDashboard({ kpis, campanhas })).kpis.trainedCollaborators).toBe(0);
+    // Backend anterior sem o campo: soma os `treinados` das campanhas quando todas trazem (DT39)...
+    const comTreinados = [
+      backendCampaign({ status: 'Ativa', destinatarios: 10, taxaClique: 20, treinados: 2 }),
+      backendCampaign({ status: 'Ativa', destinatarios: 10, taxaClique: 20, treinados: 3 }),
+    ];
+    expect(toDashboard(backendDashboard({ kpis, campanhas: comTreinados })).kpis.trainedCollaborators).toBe(
+      5,
+    );
+    // ...e, se alguma não traz, é desconhecido (null, cartão oculto), nunca um 0 que pareça medição.
+    expect(toDashboard(backendDashboard({ kpis, campanhas })).kpis.trainedCollaborators).toBeNull();
     // Colaborador: contagem de campanha não é dele.
     const colaborador = toDashboard(
       backendDashboard({

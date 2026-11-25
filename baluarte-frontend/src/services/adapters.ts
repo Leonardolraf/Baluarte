@@ -203,6 +203,14 @@ export interface BackendCampaign {
   enviados?: number;
   taxaClique: number;
   criadoEm: string;
+  /**
+   * DT39: o funil da campanha (mesma regra e mesmo formato do `GET /campanhas/:id`). Opcional
+   * porque a API da VM só passa a mandar depois do release do DT39; sem ele, abertura,
+   * submissão e reporte ficam desconhecidos (`null`, "—" na tela), nunca 0.
+   */
+  funil?: BackendFunnel;
+  /** DT39: quem clicou e concluiu o treinamento (regra do detalhe). Ausente = desconhecido. */
+  treinados?: number;
 }
 
 export interface BackendFunnel {
@@ -691,10 +699,12 @@ export function toVulnerabilityList(
   };
 }
 
+// Sem default para `trained` (DT39): quem não sabe quantos treinaram passa `null`, que a tela
+// mostra como "—". Um 0 padrão virava "0%" e parecia medição.
 function metricsFromFunnel(
   recipients: number,
   funnel: BackendFunnel | null,
-  trained = 0,
+  trained: number | null,
 ): CampaignMetrics & { opened: number; openRate: number } {
   const sent = funnel?.enviados.valor ?? 0;
   const clicked = funnel?.clicados.valor ?? 0;
@@ -714,8 +724,18 @@ function metricsFromFunnel(
     clickRate: pct(clicked),
     submitRate: pct(submitted),
     reportRate: pct(reported),
-    trainedRate: clicked > 0 ? Math.round((trained / clicked) * 100) : 0,
+    trainedRate: trained === null ? null : clicked > 0 ? Math.round((trained / clicked) * 100) : 0,
   };
+}
+
+/** Soma das contagens, ou `null` se alguma for desconhecida (somar só as conhecidas subestimaria). */
+function sumIfAllKnown(values: Array<number | null>): number | null {
+  return values.every((v): v is number => v !== null) ? values.reduce((a, v) => a + v, 0) : null;
+}
+
+/** Contagem do servidor ou `null` quando a API não mandou o campo (nunca 0 por omissão). */
+function countOrUnknown(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 export function toCampaign(raw: BackendCampaign): Campaign {
@@ -738,21 +758,36 @@ export function toCampaign(raw: BackendCampaign): Campaign {
     createdBy: '—',
     createdAt: raw.criadoEm,
     trainingId: null,
-    metrics: {
-      recipients: raw.destinatarios,
-      sent,
-      // A lista não traz abertura: desconhecido, não zero (ver CampaignMetrics.opened).
-      opened: null,
-      clicked,
-      submitted: 0,
-      reported: 0,
-      trained: 0,
-      openRate: null,
-      clickRate: raw.taxaClique,
-      submitRate: 0,
-      reportRate: 0,
-      trainedRate: 0,
-    },
+    metrics: listMetrics(raw, sent, clicked),
+  };
+}
+
+/**
+ * Métricas do item da lista (DT39). Com `funil`/`treinados` (API desde o DT39), os números são os
+ * do servidor, com a mesma regra do relatório da campanha. Sem eles (API antiga), abertura e
+ * treinamento são desconhecidos: `null`, que a tela mostra como "—" — nunca 0, que afirmaria
+ * "ninguém abriu/treinou" sobre uma campanha que pode ter sido aberta por todos. Submissão e
+ * reporte não aparecem na lista; sem funil ficam 0, como antes.
+ */
+function listMetrics(raw: BackendCampaign, sent: number, clicked: number): CampaignMetrics {
+  const trained = countOrUnknown(raw.treinados);
+  if (raw.funil) {
+    // O funil do servidor é a fonte: enviados, cliques e taxas fecham com o relatório da campanha.
+    return metricsFromFunnel(raw.destinatarios, raw.funil, trained);
+  }
+  return {
+    recipients: raw.destinatarios,
+    sent,
+    opened: null,
+    clicked,
+    submitted: 0,
+    reported: 0,
+    trained,
+    openRate: null,
+    clickRate: raw.taxaClique,
+    submitRate: 0,
+    reportRate: 0,
+    trainedRate: trained === null ? null : clicked > 0 ? Math.round((trained / clicked) * 100) : 0,
   };
 }
 
@@ -922,11 +957,11 @@ export function toDashboard(raw: BackendDashboard, scans: ScanReport[] = []): Da
       monitoredAssets: raw.kpis.ativosMonitorados,
       // Contagens de campanha só existem para quem recebe as campanhas (operadores).
       activeCampaigns: technical ? campaigns.filter((c) => c.status === 'active').length : null,
-      // Vem pronto do servidor: a lista de campanhas do dashboard não traz conclusões (toCampaign
-      // zera `trained`), então somá-la dava sempre 0. Backend anterior sem o campo: mantém a soma.
+      // Vem pronto do servidor (pessoas distintas). Backend anterior sem o campo: soma as
+      // conclusões das campanhas só se todas trouxerem `treinados` (DT39); senão, desconhecido.
       trainedCollaborators: technical
         ? (countOrNull(raw.kpis.colaboradoresTreinados) ??
-          campaigns.reduce((sum, c) => sum + c.metrics.trained, 0))
+          sumIfAllKnown(campaigns.map((c) => c.metrics.trained)))
         : null,
     },
     severityDistribution,

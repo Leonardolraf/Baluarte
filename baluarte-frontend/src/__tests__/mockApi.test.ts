@@ -172,7 +172,9 @@ describe('mockApi — dashboard e vulnerabilidades', () => {
     expect(d.kpis.phishingResilience!).toBeLessThanOrEqual(100);
     // KPI de treinados vem da mesma fonte que as telas de campanha (totais autorais).
     const campaigns = await mockApi.listCampaigns();
-    expect(d.kpis.trainedCollaborators).toBe(campaigns.reduce((sum, c) => sum + c.metrics.trained, 0));
+    expect(d.kpis.trainedCollaborators).toBe(
+      campaigns.reduce((sum, c) => sum + (c.metrics.trained as number), 0),
+    );
     // O dashboard não transporta evidências/remediação/histórico.
     expect(d.recentFindings.every((v) => v.evidence.length === 0 && v.history.length === 0)).toBe(true);
     expect(d.pendingTraining).toMatchObject({ id: expect.stringMatching(/^trn-/) });
