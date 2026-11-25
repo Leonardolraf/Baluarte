@@ -120,6 +120,9 @@ model Workstation {
   vistaEm        DateTime @default(now()) // ultima requisicao do agente (config ou logger)
   inventarioEm   DateTime? // ultimo resultado de inventario recebido
   verificadaEm   DateTime? // ultimo cruzamento do inventario com as bases de vulnerabilidades (B14)
+  // #9: responsavel pela maquina (sem FK, como o autor do AuditLog); vem do vinculo de inscricao,
+  // resolvido por id na leitura (null/removido se a conta sumiu). Migration aditiva separada.
+  responsavelId  String?
   programas      WorkstationSoftware[]
   portas         WorkstationPort[]
   achados        Finding[]
@@ -156,6 +159,28 @@ model WorkstationPort {
   coletadoEm    DateTime    @default(now())
 
   @@unique([workstationId, porta, protocolo, endereco])
+}
+
+// #9 (vinculo de inscricao da estacao): codigo de uso unico que o Administrador emite no painel e
+// o operador cola no instalador. O codigo E o enroll_secret daquela estacao (o osquery nao tem
+// campo livre no enroll). No enroll o codigo e consumido (uso unico, TTL 24h) e o ativo-estacao
+// nasce com os metadados da emissao. Refs como id simples (SEM FK, como o autor do AuditLog): a
+// linha e um registro historico e sobrevive a exclusao do usuario/ativo. So guarda o HASH do codigo.
+model StationEnrollmentBinding {
+  id          String    @id @default(cuid())
+  codigoHash  String    @unique // SHA-256 (hex) do codigo canonico; o codigo em claro nunca e gravado
+  nome        String    // nome do ativo-estacao (da emissao, nao do hostname)
+  host        String?   // host preferido; nulo = usa o hostname na inscricao
+  ip          String?   // CHECK: IPv4 ou nulo
+  descricao   String?   // CHECK: ate 500 ou nulo
+  usuarioId   String?   // responsavel pela maquina (sem FK); copiado para Workstation.responsavelId no consumo
+  criadoPorId String    // operador (Administrador) que emitiu (sem FK)
+  criadoEm    DateTime  @default(now())
+  expiraEm    DateTime  // criadoEm + TTL (24h)
+  consumidoEm DateTime? // inscricao que consumiu (uso unico)
+  assetId     String?   // ativo-estacao criado/atualizado no consumo (sem FK; registro historico)
+
+  @@index([expiraEm])
 }
 
 // Restrict: ativo com historico de varredura nao e excluido (inativar preserva o historico).
