@@ -356,3 +356,38 @@ describe('proteções da gestão de administradores', () => {
     assert.equal((await chamar('DELETE', `/users/${pendente.id}`, { token: admin })).status, 200);
   });
 });
+
+// -----------------------------------------------------------------------------
+// Métrica S1 do Plano de Qualidade v2: toda rota protegida precisa ter teste de 401 sem token.
+// A lista sai do próprio roteador (apiRouter.stack), então uma rota nova com exigeToken ou
+// exigeSessao entra aqui sozinha; uma rota que perder a proteção sai da conta e o teste do
+// mínimo abaixo avisa. Parâmetros de caminho (":id", ":token") viram um valor qualquer: a
+// autenticação roda antes de qualquer validação de id ou de corpo.
+describe('fechado por padrão: toda rota protegida responde 401 sem token (S1)', () => {
+  it('cada rota com exigeToken/exigeSessao do roteador devolve 401 TOKEN_AUSENTE sem cabeçalho', async () => {
+    const { apiRouter } = await import('../../src/routes/index.js');
+    const rotas: { metodo: string; caminho: string }[] = [];
+    for (const camada of apiRouter.stack as any[]) {
+      if (!camada.route) continue;
+      const nomes = camada.route.stack.map((l: any) => l.name);
+      if (!nomes.includes('exigeToken') && !nomes.includes('exigeSessao')) continue;
+      for (const metodo of Object.keys(camada.route.methods)) {
+        rotas.push({ metodo: metodo.toUpperCase(), caminho: String(camada.route.path).replace(/:[A-Za-z]+/g, 'id-qualquer') });
+      }
+    }
+    // 47 rotas protegidas em 24/11/2026; menos que isso quer dizer que alguma perdeu a proteção.
+    assert.ok(rotas.length >= 47, `esperava ao menos 47 rotas protegidas, achei ${rotas.length}`);
+    const falhas: string[] = [];
+    for (const { metodo, caminho } of rotas) {
+      const r = await chamar(metodo, caminho, metodo === 'GET' || metodo === 'DELETE' ? {} : { body: {} });
+      if (r.status !== 401 || r.body?.codigoErro !== 'TOKEN_AUSENTE') falhas.push(`${metodo} ${caminho} -> ${r.status} ${r.body?.codigoErro ?? ''}`);
+    }
+    assert.deepEqual(falhas, [], 'rotas protegidas que não responderam 401 TOKEN_AUSENTE sem token');
+  });
+
+  it('Colaborador não lê o detalhe de um achado: GET /vulnerabilidades/:id → 403', async () => {
+    esperaErro(await chamar('GET', '/vulnerabilidades/qualquer', { token: colaborador }), 403, 'PERFIL_SEM_PERMISSAO');
+    // O mesmo pedido de quem opera a plataforma passa da autorização (o id não existe → 404).
+    assert.notEqual((await chamar('GET', '/vulnerabilidades/qualquer', { token: analista })).status, 403);
+  });
+});
