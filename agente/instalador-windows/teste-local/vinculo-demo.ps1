@@ -90,4 +90,9 @@ if ($Acao -eq 'Emitir') {
   Write-Host "  HTTP $($r.status)" -ForegroundColor $cor
   Write-Host "  $($r.corpo)"
   if ($r.status -eq 401) { Write-Host '  Codigo de uso unico: depois de consumido, nao inscreve outra maquina.' }
+  if ($r.status -eq 200) {
+    Write-Host '  ATENCAO: o codigo ainda estava valido e foi consumido AGORA, por este script.' -ForegroundColor Red
+    Write-Host '  Uma estacao falsa (reuso-demonstracao) entrou no painel. A instalacao nao chegou a usar' -ForegroundColor Red
+    Write-Host '  este codigo: o agente provavelmente reaproveitou a chave de um ensaio anterior.' -ForegroundColor Red
+  }
 }

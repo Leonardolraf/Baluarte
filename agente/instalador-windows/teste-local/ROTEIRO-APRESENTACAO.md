@@ -41,9 +41,14 @@ Depois confira:
 
 - `https://localhost:8443` abre o painel (admin@empresa.com, senha do seed de contrato) e
   Estações está **vazia**;
-- `Get-Service osqueryd`: se o serviço ficou de um ensaio, tudo bem, porque o instalador roda por
-  cima com o código novo. Para começar do zero, use `agente\desinstalar-agente.ps1` como
-  Administrador.
+- **o agente desinstalado** (obrigatório, medido em 24/11): `agente\desinstalar-agente.ps1` como
+  Administrador, e depois `Test-Path 'C:\Program Files\osquery'` deve dar `False`. Instalar por cima
+  de um ensaio **não usa o código novo**: o `osquery.db` guarda a chave de nó antiga, o osquery
+  nem tenta se inscrever de novo e o código fica válido, sem uso. A tela diria "inscrita" (o agente
+  está mesmo inscrito, mas com a chave do ensaio) e o passo 4 (reuso) daria `200` em vez de `401`.
+  O desinstalador apaga a pasta inteira, com o `osquery.db`;
+- a pasta de destino no wizard: `C:\Program Files\Baluarte\Agente`. O wizard sugere a pasta da
+  instalação anterior, então confira.
 
 ## Roteiro (cerca de 2 min: a instalação sozinha leva perto de 1)
 
