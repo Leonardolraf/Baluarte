@@ -313,22 +313,26 @@ export interface CampaignMetrics {
   recipients: number;
   sent: number;
   /**
-   * Aberturas do e-mail. `null` quando a fonte não sabe: o item de `GET /campanhas` não traz
-   * abertura nenhuma, e afirmar 0 ali diria "ninguém abriu" sobre uma campanha que pode ter
-   * sido aberta por todos. Só o relatório da campanha (`GET /campanhas/:id`) tem o funil.
+   * Aberturas do e-mail. `null` quando a fonte não sabe: o item de `GET /campanhas` de uma API
+   * anterior ao DT39 não traz o funil, e afirmar 0 ali diria "ninguém abriu" sobre uma campanha
+   * que pode ter sido aberta por todos. Desde o DT39 a lista traz o funil do servidor.
    */
   opened: number | null;
   clicked: number;
   submitted: number;
   reported: number;
-  trained: number;
-  /** Percentuais 0–100, calculados sobre `sent`. `openRate` é `null` junto com `opened`. */
+  /**
+   * Quem clicou e concluiu o treinamento. `null` quando a fonte não sabe (API anterior ao DT39
+   * sem `treinados` na lista): "—" na tela, nunca "0%".
+   */
+  trained: number | null;
+  /** Percentuais 0–100, calculados sobre `sent`; `null` junto com a contagem correspondente. */
   openRate: number | null;
   clickRate: number;
   submitRate: number;
   reportRate: number;
-  /** Percentual de quem clicou e concluiu o treinamento. */
-  trainedRate: number;
+  /** Percentual de quem clicou e concluiu o treinamento; `null` junto com `trained`. */
+  trainedRate: number | null;
 }
 
 export interface Campaign {

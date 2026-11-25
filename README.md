@@ -72,6 +72,9 @@ npm run dev
 | **Carga da API** (RNF-004, B30) | `backend/scripts/carga.mjs` | `cd backend && npm run carga` (instância isolada na 8100) | relatório em `testes/carga/RELATORIO.md`: dashboard, vulnerabilidades e ativos com 200 conexões dentro de p90 ≤ 3 s |
 | **Análise estática — SonarQube** (RNF-008, B30) | `scripts/sonarqube.mjs` | `node scripts/sonarqube.mjs` (depois da cobertura) | relatório em `testes/qualidade/sonarqube.md`: 0 bugs; 0 vulnerabilidades no backend |
 
+- **Quadro de segurança** (tipo de ataque × status × evidência, cartão #13): [`testes/qualidade/QUADRO-SEGURANCA.md`](testes/qualidade/QUADRO-SEGURANCA.md).
+- **Métodos de detecção** (o que é real e o que é simulado em cada detecção, com o limite de cada um, cartão #8): [`docs/METODOS-DE-DETECCAO.md`](docs/METODOS-DE-DETECCAO.md).
+
 ### Cobertura e relatório de testes (roteiro 3.2)
 
 ```bash

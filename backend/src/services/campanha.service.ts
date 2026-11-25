@@ -4,7 +4,7 @@ import { gerarTokenLink, hashToken } from '../utils/tokens.js';
 import { SEM_DEPARTAMENTO } from '../models/dominio.model.js';
 import { registrarAuditoria } from './auditoria.service.js';
 import { enviarEmailsCampanha } from './campanhaEmail.service.js';
-import { funilDe, mapCampaign, totais } from './campanhaMetricas.service.js';
+import { funilDe, mapCampaign, totais, treinadosDe } from './campanhaMetricas.service.js';
 import * as repo from '../repositories/campanha.repository.js';
 import { idsExistentes } from '../repositories/departamento.repository.js';
 import { anexosDaCampanha } from './analiseArquivo.service.js';
@@ -127,6 +127,8 @@ export async function relatorio(id: string) {
     id: c.id, nome: c.nome, template: c.template, status: statusEfetivo(c.status, c.eventos), criadoEm: c.criadoEm,
     destinatarios: c.eventos.length,
     funil: funilDe(c.eventos),
+    // DT39 (aditivo): o mesmo numero que a lista expoe; = `treinamentos` com `concluido`.
+    treinados: treinadosDe(c.eventos),
     // Resumo das aberturas do link do e-mail (Melhorias #6): o total conta toda abertura, nao pessoas.
     resumo: {
       aberturas: c.eventos.reduce((a, e) => a + e._count.aberturas, 0),

@@ -281,7 +281,8 @@ describe('mock de dados — invariantes', () => {
         expect(m.clickRate).toBe(rate(m.clicked, m.sent));
         expect(m.submitRate).toBe(rate(m.submitted, m.sent));
         expect(m.reportRate).toBe(rate(m.reported, m.sent));
-        expect(m.trainedRate).toBe(rate(m.trained, m.clicked));
+        expect(m.trained).not.toBeNull();
+        expect(m.trainedRate).toBe(rate(m.trained as number, m.clicked));
       },
     );
 

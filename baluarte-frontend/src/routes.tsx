@@ -86,21 +86,43 @@ export const routes: RouteObject[] = [
       {
         element: <AppLayout />,
         children: [
+          // Áreas abertas aos três perfis (ROUTE_ROLES.dashboard/files/training/settings/monitoring);
+          // o teste de coerência menu × rotas (globalSearch.test.tsx) falha se uma delas fechar
+          // no menu sem ganhar guarda aqui.
           { path: '/dashboard', element: page(<DashboardPage />) },
           { path: '/files', element: page(<FileAnalysisPage />) },
           { path: '/training/:id', element: page(<TrainingPage />) },
           { path: '/settings', element: page(<SettingsPage />) },
           // Aviso de monitoramento da estação (B18): texto, ciência e, para o Administrador, a lista.
           { path: '/monitoring', element: page(<MonitoringNoticePage />) },
+          // Uma guarda por área, cada uma com a sua chave de ROUTE_ROLES: é a mesma chave que o
+          // menu e as sugestões da busca do topo leem (Sidebar/navigation.tsx), então o que a
+          // busca oferece nunca diverge do que a rota deixa abrir (#27).
           {
             element: <ProtectedRoute roles={ROUTE_ROLES.vulnerabilities} />,
             children: [
               { path: '/vulnerabilities', element: page(<VulnListPage />) },
               { path: '/vulnerabilities/:id', element: page(<VulnDetailPage />) },
+            ],
+          },
+          {
+            element: <ProtectedRoute roles={ROUTE_ROLES.assets} />,
+            children: [
               { path: '/assets', element: page(<AssetListPage />) },
               { path: '/assets/new', element: page(<AssetFormPage />) },
-              { path: '/scans', element: page(<ScanListPage />) },
-              { path: '/trainings', element: page(<TrainedCollaboratorsPage />) },
+            ],
+          },
+          {
+            element: <ProtectedRoute roles={ROUTE_ROLES.scans} />,
+            children: [{ path: '/scans', element: page(<ScanListPage />) }],
+          },
+          {
+            element: <ProtectedRoute roles={ROUTE_ROLES.trainings} />,
+            children: [{ path: '/trainings', element: page(<TrainedCollaboratorsPage />) }],
+          },
+          {
+            element: <ProtectedRoute roles={ROUTE_ROLES.campaigns} />,
+            children: [
               { path: '/campaigns', element: page(<CampaignListPage />) },
               { path: '/campaigns/new', element: page(<CampaignFormPage />) },
               { path: '/campaigns/:id', element: page(<CampaignDetailPage />) },

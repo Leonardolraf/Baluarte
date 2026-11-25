@@ -2,6 +2,8 @@
 
 Inventário dos métodos usados para verificar o sistema: o que cada um verifica, onde está, como é executado e o número mais recente. Os números marcados como **medido em 14/10/2026** foram obtidos depois do rebase da branch `feat/mel-seg` sobre a `main` `84cacd1` (contagens do backend e Newman); os marcados como **medido em 13/10/2026** foram obtidos na primeira rodada desta revisão, sobre a `main` `4d5581a` acrescida dos testes do cartão #13 e #23 (branch `feat/mel-seg`), numa máquina Windows 11 com Node 24.16.0 e PostgreSQL 16 em contêiner. Os demais trazem a data e a fonte da última medição registrada; não foram repetidos nesta revisão, e a seção "Lacunas" explica por quê.
 
+O resumo por classe de ataque (tipo × status × evidência) está em [`QUADRO-SEGURANCA.md`](QUADRO-SEGURANCA.md).
+
 Convenções: "verde" significa zero falhas; nenhuma execução usa a porta 8080, a 5173, o banco `baluarte` ou o ambiente de produção.
 
 ## 1. Testes de unidade (backend)

@@ -2,6 +2,40 @@
 
 > Histórico do que foi construído no repositório de código, do commit inicial até hoje. Para o que falta e o roteiro futuro, ver [`backend/PLANO.md`](backend/PLANO.md). Para como rodar cada peça, ver [`README.md`](README.md).
 
+## 2026-11-24 — Frontend endurecido na demo (melhoria #14)
+
+O frontend publicado na Vercel respondia só com o HSTS da plataforma. Entram, no `vercel.json` (ao
+lado do rewrite do SPA, que não muda) e no Nginx do Docker, `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, um
+`Permissions-Policy` que desliga câmera, microfone, geolocalização, pagamento e USB, e uma CSP
+**só em modo relatório** (`Content-Security-Policy-Report-Only`: avisa no console, não bloqueia),
+derivada do código e do `dist/` (API do Funnel no `connect-src`, Analytics e fontes na mesma origem,
+`'unsafe-inline'` só em estilo por causa do `<style>` do react-hot-toast). O React DevTools fica
+desligado no bundle de produção (`src/lib/devtools.ts`, nunca lança). `baluarte-frontend/SEGURANCA.md`
+registra o alcance: o código do frontend é sempre inspecionável no F12; a proteção é o RBAC no
+servidor (S1: 47/47 rotas protegidas com 401 sem token). Ofuscação do bundle ficou de fora.
+Teste novo `src/__tests__/endurecimento.test.ts` (7): gancho do DevTools e cabeçalhos da Vercel e do
+Nginx em sincronia, sem a CSP bloqueante.
+
+## 2026-11-24 — DT39: "Abertos" e "Treinados" da lista de campanhas
+
+Defeito: em `/campaigns`, campanha aberta e treinada aparecia com "Abertos —" e "Treinados 0%".
+O item de `GET /campanhas` (`mapCampaign`) não trazia abertura nem treinamento, e o adapter do
+frontend fixava `trained: 0` (default de `metricsFromFunnel`), que a tela mostrava como medição.
+
+- **Backend (aditivo, sem consulta nova):** cada item de `GET /campanhas` (e de `campanhas[]` do
+  `GET /dashboard`, só operadores) ganha `funil` (o mesmo `funilDe` do detalhe) e `treinados`
+  (`treinadosDe`: clicou **e** treinou, a regra de `treinamentos[].concluido` do detalhe; o predicado
+  `concluiuTreinamento` também serve o KPI `colaboradoresTreinados`). `GET /campanhas/:id` ganha
+  `treinados`. Nenhum campo removido ou renomeado.
+- **Frontend:** `toCampaign` usa `funil`/`treinados` quando vêm; ausentes (API antiga) →
+  `opened`/`trained` `null` ("—"), nunca 0%. `CampaignMetrics.trained`/`trainedRate` passam a
+  `number | null`; o default `trained = 0` saiu. Fallback do KPI de treinados sem o campo do servidor:
+  soma só se todas as campanhas trouxerem `treinados`, senão `null`. Mock conta treinado com a
+  regra do servidor (clicou e concluiu).
+- **Release:** exige o backend novo na VM para a lista mostrar os números; o frontend sozinho
+  mostra "—" (correto, sem dado) até lá.
+
 ## 2026-10-21 — Vínculo de inscrição da estação (#9), primeiro corte (servidor)
 
 Feature nova (melhoria #9), **branch `feat/vinculo-agente`, pós-demo, sem deploy**. O Administrador

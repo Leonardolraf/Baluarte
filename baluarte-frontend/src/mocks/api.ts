@@ -624,7 +624,8 @@ function computeMetrics(campaignId: string, recipientsCount: number): CampaignMe
   const clicked = rows.filter((r) => r.clickedAt).length;
   const submitted = rows.filter((r) => r.submittedAt).length;
   const reported = rows.filter((r) => r.reportedAt).length;
-  const trained = rows.filter((r) => r.trainingCompleted).length;
+  // Mesma regra do servidor (DT39): conta quem clicou E concluiu o treinamento.
+  const trained = rows.filter((r) => r.clickedAt && r.trainingCompleted).length;
   return {
     recipients: Math.max(recipientsCount, rows.length),
     sent,
@@ -680,6 +681,15 @@ function comAberturas(m: CampaignMetrics): CampaignMetrics & { opened: number; o
   if (m.opened === null || m.openRate === null)
     throw new Error('campanha do mock sem abertura: o relatório precisa do funil completo');
   return { ...m, opened: m.opened, openRate: m.openRate };
+}
+
+/**
+ * Conclusões de treinamento de uma campanha do mock, que sempre as conhece (como o servidor desde
+ * o DT39). Falha alto em vez de assumir 0, pelo mesmo motivo de `comAberturas`.
+ */
+function treinadosDoMock(m: CampaignMetrics): number {
+  if (m.trained === null) throw new Error('campanha do mock sem contagem de treinados');
+  return m.trained;
 }
 
 function buildFunnel(bruto: CampaignMetrics): FunnelStage[] {
@@ -1161,7 +1171,9 @@ export const mockApi: BaluarteApi = {
           phishingResilience: totalSent > 0 ? 100 - clickRate : null,
           monitoredAssets: manager ? state.assets.filter((a) => a.status === 'active').length : null,
           activeCampaigns: manager ? campaigns.filter((c) => c.status === 'active').length : null,
-          trainedCollaborators: manager ? campaigns.reduce((sum, c) => sum + c.metrics.trained, 0) : null,
+          trainedCollaborators: manager
+            ? campaigns.reduce((sum, c) => sum + treinadosDoMock(c.metrics), 0)
+            : null,
         },
         severityDistribution: manager ? severityDistribution : null,
         recentFindings: manager ? byDate(open, 'detectedAt').slice(0, 5).map(digest) : [],
@@ -1634,7 +1646,7 @@ export const mockApi: BaluarteApi = {
       const ator = requireUser();
       requireRole(ator, ['admin', 'analyst']);
       const campanhas = state.campaigns;
-      const conclusoes = campanhas.reduce((soma, c) => soma + c.metrics.trained, 0);
+      const conclusoes = campanhas.reduce((soma, c) => soma + treinadosDoMock(c.metrics), 0);
       const cliques = campanhas.reduce((soma, c) => soma + c.metrics.clicked, 0);
 
       const porPessoa = new Map<string, TrainingOverview['people'][number]>();
@@ -1699,7 +1711,7 @@ export const mockApi: BaluarteApi = {
           r.trainingCompleted = true;
           const campaign = state.campaigns.find((c) => c.id === r.campaignId);
           if (campaign && !state.runtimeCampaigns.has(campaign.id)) {
-            campaign.metrics.trained += 1;
+            campaign.metrics.trained = treinadosDoMock(campaign.metrics) + 1;
             campaign.metrics.trainedRate = pct(campaign.metrics.trained, campaign.metrics.clicked);
           }
         }
