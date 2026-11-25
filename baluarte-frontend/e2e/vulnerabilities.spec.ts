@@ -28,11 +28,29 @@ test.describe('Vulnerabilidades', () => {
 
   test('busca global do topo leva à lista filtrada', async ({ page }) => {
     await page.goto('/dashboard');
-    const search = page.getByRole('search').getByRole('searchbox');
+    // #27: o campo virou combobox (sugestões de locais); Enter sem opção selecionada segue buscando.
+    const search = page.getByRole('search').getByRole('combobox');
     await search.fill('xz-utils');
     await search.press('Enter');
     await expect(page).toHaveURL(/\/vulnerabilities\?q=xz-utils$/);
     await expect(page.getByTestId('vuln-row')).toHaveCount(1);
+  });
+
+  test('sugestões da busca do topo levam ao local escolhido (#27)', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.keyboard.press('Control+k');
+    const search = page.getByRole('search').getByRole('combobox');
+    await expect(search).toBeFocused();
+    await expect(search).toHaveAttribute('aria-expanded', 'true');
+    const suggestions = page.getByRole('listbox', { name: 'Sugestões da busca' });
+    // Analista: sem Auditoria nem Usuários (rotas só do Administrador).
+    await expect(suggestions.getByRole('option', { name: /Auditoria/ })).toHaveCount(0);
+
+    await search.fill('AGENTE'); // só Estações casa (na descrição), mais a busca de vulnerabilidades
+    await expect(suggestions.getByRole('option')).toHaveCount(2);
+    await search.press('ArrowDown');
+    await search.press('Enter');
+    await expect(page).toHaveURL(/\/stations$/);
   });
 
   test('abre o detalhe, navega pelas abas e altera o status', async ({ page }) => {
