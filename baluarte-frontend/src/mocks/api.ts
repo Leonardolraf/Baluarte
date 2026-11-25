@@ -51,6 +51,10 @@ import type {
   Station,
   StationDetail,
   StationListResponse,
+  StationEnrollment,
+  StationEnrollmentCode,
+  StationEnrollmentInput,
+  StationEnrollmentListResponse,
   StationVerification,
   TimelineEvent,
   Training,
@@ -195,6 +199,46 @@ interface MockState {
   secondOpinionMode: MockSecondOpinionMode;
   /** Ciências do aviso de monitoramento (B18): uma por usuário e versão. */
   monitoringAcks: MockMonitoringAcknowledgement[];
+  /** Códigos de vínculo emitidos (#9). Como no servidor, só o estado fica guardado, não o código. */
+  stationEnrollments: MockStationEnrollment[];
+}
+
+interface MockStationEnrollment {
+  id: string;
+  name: string;
+  host: string | null;
+  createdAt: string;
+  expiresAt: string;
+  consumedAt: string | null;
+  assetId: string | null;
+}
+
+/** Validade do código de vínculo no mock: a mesma do servidor (24 h). */
+const MOCK_ENROLLMENT_TTL_MS = 24 * 60 * 60 * 1000;
+/** Alfabeto do código (sem 0/O/1/I), o mesmo do servidor e do instalador. */
+const ENROLLMENT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function mockEnrollmentCode(): string {
+  const group = () =>
+    Array.from({ length: 4 }, () => {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return ENROLLMENT_ALPHABET[buf[0] % ENROLLMENT_ALPHABET.length];
+    }).join('');
+  return `BLT-${group()}-${group()}-${group()}`;
+}
+
+function enrollmentView(e: MockStationEnrollment, nowMs: number = Date.now()): StationEnrollment {
+  const state = e.consumedAt ? 'consumed' : new Date(e.expiresAt).getTime() > nowMs ? 'pending' : 'expired';
+  return {
+    id: e.id,
+    name: e.name,
+    host: e.host,
+    createdAt: e.createdAt,
+    expiresAt: e.expiresAt,
+    state,
+    assetId: e.assetId,
+  };
 }
 
 export type MockSecondOpinionMode = 'enabled' | 'disabled' | 'quota';
@@ -234,6 +278,7 @@ function createState(): MockState {
     stations: buildMockStations(),
     secondOpinionMode: 'enabled',
     monitoringAcks: clone(MOCK_MONITORING_ACKS),
+    stationEnrollments: [],
   };
 }
 
@@ -2125,6 +2170,54 @@ export const mockApi: BaluarteApi = {
       const station = state.stations.find((s) => s.id === id);
       if (!station) throw new HttpError(404, 'ESTACAO_NAO_ENCONTRADA', 'Estação não encontrada');
       return stationView(station);
+    });
+  },
+
+  // #9: código de vínculo. O mock guarda só o estado; o código sai uma vez, na emissão.
+  async createStationEnrollment(input: StationEnrollmentInput): Promise<StationEnrollmentCode> {
+    return simulate(() => {
+      const user = requireUser();
+      requireRole(user, ['admin']);
+      const name = input.name?.trim() ?? '';
+      if (!name || name.length > 255) throw new HttpError(400, 'NOME_INVALIDO', 'Nome da estação inválido');
+      const host = input.host?.trim() || null;
+      if (host && !isValidHost(host)) throw new HttpError(400, 'HOST_INVALIDO', 'Host inválido');
+      const now = Date.now();
+      const entry: MockStationEnrollment = {
+        id: nextId('vin'),
+        name,
+        host,
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + MOCK_ENROLLMENT_TTL_MS).toISOString(),
+        consumedAt: null,
+        assetId: null,
+      };
+      state.stationEnrollments.unshift(entry);
+      pushAudit(user, 'EMITIR_VINCULO_ESTACAO', `estação=${entry.name}; vínculo=${entry.id}`);
+      return { id: entry.id, code: mockEnrollmentCode(), expiresAt: entry.expiresAt };
+    });
+  },
+
+  async listStationEnrollments(): Promise<StationEnrollmentListResponse> {
+    return simulate(() => {
+      requireRole(requireUser(), ['admin']);
+      const now = Date.now();
+      const items = state.stationEnrollments.slice(0, 20).map((e) => enrollmentView(e, now));
+      return { items, total: state.stationEnrollments.length };
+    });
+  },
+
+  async revokeStationEnrollment(id: string): Promise<void> {
+    // simulate clona o retorno por JSON: devolve null (undefined não é JSON).
+    await simulate(() => {
+      const user = requireUser();
+      requireRole(user, ['admin']);
+      const entry = state.stationEnrollments.find((e) => e.id === id);
+      if (!entry) throw new HttpError(404, 'VINCULO_NAO_ENCONTRADO', 'Vínculo não encontrado');
+      if (entry.consumedAt) throw new HttpError(409, 'VINCULO_JA_CONSUMIDO', 'Vínculo já consumido');
+      entry.consumedAt = new Date().toISOString();
+      pushAudit(user, 'REVOGAR_VINCULO_ESTACAO', `vínculo=${entry.id}`);
+      return null;
     });
   },
 

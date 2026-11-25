@@ -42,6 +42,10 @@ import type {
   SoftwareSource,
   Station,
   StationDetail,
+  StationEnrollment,
+  StationEnrollmentCode,
+  StationEnrollmentInput,
+  StationEnrollmentState,
   StationListResponse,
   StationPort,
   StationVerification,
@@ -1557,6 +1561,58 @@ export interface BackendStationDetail extends BackendStation {
   achadosAbertos?: number;
   programas: Array<{ nome: string; versao: string; fornecedor: string | null; fonte: string }>;
   portas: Array<{ porta: number; protocolo: string; endereco: string; processo: string | null }>;
+}
+
+// ---- Código de vínculo da estação (#9) ---------------------------------------
+
+export interface BackendStationEnrollmentCode {
+  idVinculo: string;
+  codigo: string;
+  expiraEm: string;
+}
+
+export interface BackendStationEnrollment {
+  idVinculo: string;
+  nome: string;
+  host: string | null;
+  ip?: string | null;
+  criadoEm: string;
+  expiraEm: string;
+  /** "pendente" | "consumido" | "expirado". */
+  estado: string;
+  assetId: string | null;
+}
+
+const ENROLLMENT_STATE: Record<string, StationEnrollmentState> = {
+  pendente: 'pending',
+  consumido: 'consumed',
+  expirado: 'expired',
+};
+
+export function toStationEnrollmentCode(raw: BackendStationEnrollmentCode): StationEnrollmentCode {
+  return { id: raw.idVinculo, code: raw.codigo, expiresAt: raw.expiraEm };
+}
+
+export function toStationEnrollment(raw: BackendStationEnrollment): StationEnrollment {
+  // Estado que a tela não conhece fica "unknown": nem pendente (revogável) nem expirado.
+  return {
+    id: raw.idVinculo,
+    name: raw.nome,
+    host: raw.host ?? null,
+    createdAt: raw.criadoEm,
+    expiresAt: raw.expiraEm,
+    state: ENROLLMENT_STATE[raw.estado] ?? 'unknown',
+    assetId: raw.assetId ?? null,
+  };
+}
+
+export function fromStationEnrollmentInput(input: StationEnrollmentInput): Record<string, string> {
+  const body: Record<string, string> = { nome: input.name.trim() };
+  const host = input.host?.trim();
+  if (host) body.host = host;
+  const description = input.description?.trim();
+  if (description) body.descricao = description;
+  return body;
 }
 
 export interface BackendStationSummary {

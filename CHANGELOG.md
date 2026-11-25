@@ -2,6 +2,22 @@
 
 > Histórico do que foi construído no repositório de código, do commit inicial até hoje. Para o que falta e o roteiro futuro, ver [`backend/PLANO.md`](backend/PLANO.md). Para como rodar cada peça, ver [`README.md`](README.md).
 
+## 2026-11-25 — Tela "Vincular estação": código do instalador pelo painel (#9)
+
+O código de vínculo (`BLT-XXXX-XXXX-XXXX`) que o instalador `.exe` do agente pede só podia ser
+emitido pela API (script `vinculo-demo.ps1`): as rotas `POST/GET/DELETE /estacoes/vinculos`
+(só Administrador) estavam prontas desde o #9, sem tela. Entra `/stations/enroll` (guarda
+`ROUTE_ROLES.stationEnrollment`, só Administrador; botão "Vincular estação" na lista de estações):
+formulário com nome (obrigatório), host e descrição opcionais; o código aparece **uma vez**, em
+destaque, com copiar, validade e o aviso de que não volta a ser mostrado; abaixo, os 20 códigos mais
+recentes com o estado (Aguardando instalação, Usado, Encerrado, Expirado) e "Revogar" para o pendente,
+com confirmação. Como o servidor marca a revogação como "consumido" sem ativo, "consumido" com ativo
+é "Usado" e sem ativo é "Encerrado"; estado desconhecido aparece como "Desconhecido", nunca como
+pendente. Sem mudança no backend. Camada mock com a mesma regra (uso único, 24 h, 403 para o Analista,
+409 ao revogar duas vezes, auditoria). Testes: `src/__tests__/stationEnrollment.test.tsx` (13),
+3 em `realApi.test.ts` (rotas, corpo e 409) e `e2e/station-enrollment.spec.ts` (2, Playwright mock).
+Vitest 768/768; Playwright mock 61 passed, 14 skipped.
+
 ## 2026-11-24 — Frontend endurecido na demo (melhoria #14)
 
 O frontend publicado na Vercel respondia só com o HSTS da plataforma. Entram, no `vercel.json` (ao

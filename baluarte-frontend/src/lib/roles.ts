@@ -29,6 +29,8 @@ export const ROUTE_ROLES = {
   campaigns: ['admin', 'analyst'],
   /** Estações monitoradas pelo agente osquery (B13): GET /estacoes só para Administrador/Analista. */
   stations: ['admin', 'analyst'],
+  /** Código de vínculo do instalador (#9): POST/GET/DELETE /estacoes/vinculos só para Administrador. */
+  stationEnrollment: ['admin'],
   /** Análise de arquivos (B05): aberta aos três perfis; o colaborador só vê as próprias análises. */
   files: ['admin', 'analyst', 'collaborator'],
   training: ['admin', 'analyst', 'collaborator'],

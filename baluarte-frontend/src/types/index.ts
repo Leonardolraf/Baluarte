@@ -929,6 +929,40 @@ export interface StationListResponse {
   summary: { total: number; online: number; offline: number; offlineAfterSec: number };
 }
 
+/** Estado do código de vínculo (#9), derivado pelo servidor; o código em si nunca volta. */
+export type StationEnrollmentState = 'pending' | 'consumed' | 'expired' | 'unknown';
+
+/** Dados que o Administrador informa ao emitir um código de vínculo para o instalador. */
+export interface StationEnrollmentInput {
+  name: string;
+  host?: string;
+  description?: string;
+}
+
+/** Resposta da emissão: o único momento em que o código aparece em claro. */
+export interface StationEnrollmentCode {
+  id: string;
+  code: string;
+  expiresAt: string;
+}
+
+/** Linha da lista de vínculos emitidos (sem o código nem o hash). */
+export interface StationEnrollment {
+  id: string;
+  name: string;
+  host: string | null;
+  createdAt: string;
+  expiresAt: string;
+  state: StationEnrollmentState;
+  /** Ativo-estação criado quando o agente usou o código (null enquanto pendente). */
+  assetId: string | null;
+}
+
+export interface StationEnrollmentListResponse {
+  items: StationEnrollment[];
+  total: number;
+}
+
 /**
  * Por que a cadeia de hash quebrou: registro sem hash, conteúdo que não confere com o hash
  * gravado, ou elo (hash anterior) que não aponta para o registro anterior.
