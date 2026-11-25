@@ -2,11 +2,14 @@ import { Link } from 'react-router-dom';
 import type { Station, StationListResponse } from '@/types';
 import { api } from '@/services/api';
 import { useAsync } from '@/hooks/useAsync';
+import { useAuth } from '@/contexts/AuthContext';
+import { ROUTE_ROLES } from '@/lib/roles';
 import { formatDateTime, formatNumber, formatRelative } from '@/lib/format';
 import { formatWindow, STATION_STATUS_CLASS, STATION_STATUS_DOT, STATION_STATUS_LABEL } from '@/lib/stations';
 import {
   Button,
   Card,
+  LinkButton,
   EmptyState,
   ErrorState,
   LoadingSpinner,
@@ -21,7 +24,7 @@ import {
   THead,
   Tr,
 } from '@/components';
-import { MonitorIcon, RefreshIcon } from '@/components/icons';
+import { KeyIcon, MonitorIcon, RefreshIcon } from '@/components/icons';
 
 function StationRows({ items }: { items: Station[] }) {
   return (
@@ -70,6 +73,8 @@ function StationRows({ items }: { items: Station[] }) {
 export default function StationListPage() {
   const { data, error, loading, reload } = useAsync<StationListResponse>(() => api.listStations(), []);
 
+  const { hasRole } = useAuth();
+  const canEnroll = hasRole(...ROUTE_ROLES.stationEnrollment);
   const items = data?.items ?? [];
   const summary = data?.summary;
 
@@ -79,14 +84,21 @@ export default function StationListPage() {
         title="Estações monitoradas"
         description="Estações de trabalho com o agente osquery: sistema, último contato e inventário."
         actions={
-          <Button
-            variant="outline"
-            leftIcon={<RefreshIcon size={16} />}
-            loading={loading}
-            onClick={() => void reload()}
-          >
-            Atualizar
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              leftIcon={<RefreshIcon size={16} />}
+              loading={loading}
+              onClick={() => void reload()}
+            >
+              Atualizar
+            </Button>
+            {canEnroll && (
+              <LinkButton to="/stations/enroll" leftIcon={<KeyIcon size={16} />}>
+                Vincular estação
+              </LinkButton>
+            )}
+          </>
         }
         meta={
           summary ? (
@@ -112,7 +124,11 @@ export default function StationListPage() {
         <EmptyState
           icon={<MonitorIcon size={28} />}
           title="Nenhuma estação inscrita"
-          description="Instale o osquery na estação e aponte-o para o Baluarte: ela aparece aqui depois da inscrição."
+          description={
+            canEnroll
+              ? 'Gere um código em “Vincular estação” e use-o no instalador do agente: a estação aparece aqui depois da inscrição.'
+              : 'Instale o agente na estação: ela aparece aqui depois da inscrição.'
+          }
         />
       ) : (
         <>

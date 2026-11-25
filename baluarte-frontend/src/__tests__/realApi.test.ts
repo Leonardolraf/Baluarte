@@ -1098,6 +1098,65 @@ describe('realApi — estações monitoradas (B13)', () => {
   });
 });
 
+describe('realApi — código de vínculo da estação (#9)', () => {
+  it('emite em POST /estacoes/vinculos só com os campos preenchidos', async () => {
+    on(
+      'POST /estacoes/vinculos',
+      ok({ idVinculo: 'cm-v1', codigo: 'BLT-ABCD-EFGH-JKLM', expiraEm: '2026-11-26T13:00:00.000Z' }),
+    );
+    const issued = await realApi.createStationEnrollment({
+      name: ' Notebook ',
+      host: '',
+      description: 'Demo',
+    });
+    expect(issued).toEqual({
+      id: 'cm-v1',
+      code: 'BLT-ABCD-EFGH-JKLM',
+      expiresAt: '2026-11-26T13:00:00.000Z',
+    });
+    expect(body()).toEqual({ nome: 'Notebook', descricao: 'Demo' });
+  });
+
+  it('lista em GET /estacoes/vinculos (primeira página) com o total do servidor', async () => {
+    on('GET /estacoes/vinculos', {
+      status: 200,
+      data: {
+        status: 'sucesso',
+        dados: [
+          {
+            idVinculo: 'cm-v1',
+            nome: 'Notebook',
+            host: null,
+            ip: null,
+            criadoEm: '2026-11-25T13:00:00.000Z',
+            expiraEm: '2026-11-26T13:00:00.000Z',
+            estado: 'consumido',
+            assetId: 'cm-a1',
+          },
+        ],
+        resumo: { total: 31, pagina: 1, tamanho: 20 },
+      },
+    });
+    const list = await realApi.listStationEnrollments();
+    expect(list.total).toBe(31);
+    expect(list.items[0]).toMatchObject({ id: 'cm-v1', state: 'consumed', assetId: 'cm-a1' });
+    expect(calls[calls.length - 1]?.params).toEqual({ pagina: '1', tamanho: '20' });
+  });
+
+  it('revoga em DELETE /estacoes/vinculos/:id e propaga o 409 de código já usado', async () => {
+    on('DELETE /estacoes/vinculos/cm-v1', {
+      status: 200,
+      data: { status: 'sucesso', mensagem: 'Vínculo revogado' },
+    });
+    await expect(realApi.revokeStationEnrollment('cm-v1')).resolves.toBeUndefined();
+    on('DELETE /estacoes/vinculos/cm-v1', fail(409, 'VINCULO_JA_CONSUMIDO', 'Vínculo já consumido'));
+    expect(await rejection(realApi.revokeStationEnrollment('cm-v1'))).toMatchObject({
+      status: 409,
+      code: 'VINCULO_JA_CONSUMIDO',
+    });
+  });
+});
+
 describe('realApi — aviso de monitoramento da estação (B18)', () => {
   const aviso = {
     versao: '2026-10-08',

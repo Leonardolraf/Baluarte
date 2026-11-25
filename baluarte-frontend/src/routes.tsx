@@ -20,6 +20,7 @@ const AssetFormPage = lazy(() => import('@/pages/Assets/AssetFormPage'));
 const ScanListPage = lazy(() => import('@/pages/Scans/ScanListPage'));
 const StationListPage = lazy(() => import('@/pages/Stations/StationListPage'));
 const StationDetailPage = lazy(() => import('@/pages/Stations/StationDetailPage'));
+const StationEnrollmentPage = lazy(() => import('@/pages/Stations/StationEnrollmentPage'));
 const FileAnalysisPage = lazy(() => import('@/pages/Files/FileAnalysisPage'));
 const CampaignListPage = lazy(() => import('@/pages/Campaigns/CampaignListPage'));
 const CampaignFormPage = lazy(() => import('@/pages/Campaigns/CampaignFormPage'));
@@ -135,6 +136,12 @@ export const routes: RouteObject[] = [
               { path: '/stations', element: page(<StationListPage />) },
               { path: '/stations/:id', element: page(<StationDetailPage />) },
             ],
+          },
+          {
+            // Código de vínculo do instalador do agente (#9): só Administrador. Rota estática,
+            // então o React Router a prefere a /stations/:id.
+            element: <ProtectedRoute roles={ROUTE_ROLES.stationEnrollment} />,
+            children: [{ path: '/stations/enroll', element: page(<StationEnrollmentPage />) }],
           },
           {
             element: <ProtectedRoute roles={ROUTE_ROLES.users} />,

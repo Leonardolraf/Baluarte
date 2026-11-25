@@ -97,6 +97,7 @@ const AREA_LABEL: Record<Area, string> = {
   assets: 'Ativos',
   scans: 'Varreduras',
   stations: 'Estações monitoradas',
+  stationEnrollment: 'Vincular estação (código do instalador)',
   campaigns: 'Campanhas',
   files: 'Análise de arquivos',
   training: 'Treinamento próprio',

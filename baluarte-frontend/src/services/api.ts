@@ -46,6 +46,9 @@ import type {
   SortState,
   StationDetail,
   StationListResponse,
+  StationEnrollmentCode,
+  StationEnrollmentInput,
+  StationEnrollmentListResponse,
   StationVerification,
   Training,
   TrainingOverview,
@@ -95,6 +98,9 @@ import {
   toStationDetail,
   toStationList,
   toStationVerification,
+  toStationEnrollment,
+  toStationEnrollmentCode,
+  fromStationEnrollmentInput,
   toTraining,
   toTrainingOverview,
   toUser,
@@ -129,6 +135,8 @@ import {
   type BackendStationDetail,
   type BackendStationSummary,
   type BackendStationVerification,
+  type BackendStationEnrollment,
+  type BackendStationEnrollmentCode,
   type BackendTraining,
   type BackendTrainingOverview,
   type BackendUser,
@@ -304,6 +312,9 @@ async function requestWithSummary<T>(
 }
 
 export { VULN_PAGE_SIZE };
+
+/** Códigos de vínculo mostrados na tela: os mais recentes (o servidor aceita até 100). */
+export const STATION_ENROLLMENT_PAGE_SIZE = 20;
 
 /**
  * Coluna da tela → ordenação do servidor (`ordenar`/`direcao`). A severidade sai da nota CVSS,
@@ -941,6 +952,31 @@ export const realApi: BaluarteApi = {
         url: `/estacoes/${encodeURIComponent(id)}/verificar`,
       }),
     );
+  },
+
+  async createStationEnrollment(input: StationEnrollmentInput): Promise<StationEnrollmentCode> {
+    return toStationEnrollmentCode(
+      await request<BackendStationEnrollmentCode>({
+        method: 'POST',
+        url: '/estacoes/vinculos',
+        data: fromStationEnrollmentInput(input),
+      }),
+    );
+  },
+
+  async listStationEnrollments(): Promise<StationEnrollmentListResponse> {
+    const { dados, resumo } = await requestWithSummary<BackendStationEnrollment[]>({
+      method: 'GET',
+      url: '/estacoes/vinculos',
+      params: { pagina: '1', tamanho: String(STATION_ENROLLMENT_PAGE_SIZE) },
+    });
+    const items = dados.map(toStationEnrollment);
+    const total = typeof resumo?.total === 'number' ? resumo.total : items.length;
+    return { items, total };
+  },
+
+  async revokeStationEnrollment(id: string): Promise<void> {
+    await request<unknown>({ method: 'DELETE', url: `/estacoes/vinculos/${encodeURIComponent(id)}` });
   },
 
   async verifyAuditIntegrity(): Promise<AuditIntegrity> {
