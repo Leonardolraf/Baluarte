@@ -1,0 +1,31 @@
+inicio 2026-11-24T16:20:34-03:00 codigo=4e5c285 (pai do 5459b65) + teste do 5459b65
+▶ mudança de status grava o histórico (mesma transação)
+  ✖ o instante do evento é o da gravação, depois da trava da linha, e não o do início da instrução (2299.683ms)
+✖ mudança de status grava o histórico (mesma transação) (4579.9459ms)
+ℹ tests 1
+ℹ suites 1
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16199.7079
+
+✖ failing tests:
+
+test at tests\historico-status.test.ts:3:1557
+✖ o instante do evento é o da gravação, depois da trava da linha, e não o do início da instrução (2299.683ms)
+  AssertionError [ERR_ASSERTION]: evento em 2026-11-24T19:20:49.998Z, trava liberada em 2026-11-24T19:20:50.230Z
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\wt\dt10-pai\backend\tests\historico-status.test.ts:151:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 3)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+exit=1

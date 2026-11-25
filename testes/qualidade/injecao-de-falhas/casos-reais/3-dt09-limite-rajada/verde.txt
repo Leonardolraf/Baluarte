@@ -1,0 +1,22 @@
+inicio 2026-11-24T16:20:08-03:00 codigo=4a7c00c (conserto)
+▶ DT09: limite de login sob rajada paralela
+  ✔ 20 senhas erradas simultaneas: no maximo o limite chega ao bcrypt (401), o resto e 429 (2377.5002ms)
+  ℹ login: 5 x 401, 15 x 429, 5 falhas gravadas
+  ✔ a rajada contra e-mail inexistente tambem para no limite (sem canal privilegiado para adivinhar contas) (320.2522ms)
+  ✔ senha certa no meio da rajada, depois de o limite estourar: 429 (como no caminho sequencial) (545.1672ms)
+  ✔ senha certa disparada junto com a rajada: nunca mais do que o limite de senhas erradas avaliadas por vez (534.1567ms)
+  ℹ mista: senha certa 429, 5 x 401 nas erradas
+✔ DT09: limite de login sob rajada paralela (5962.525ms)
+▶ DT09: limite de pedidos de redefinicao sob rajada paralela
+  ✔ 20 pedidos simultaneos para o mesmo e-mail: no maximo 3 passam (e geram link), o resto e 429 (277.3118ms)
+  ℹ reset: 3 x 200, 17 x 429
+✔ DT09: limite de pedidos de redefinicao sob rajada paralela (277.5537ms)
+ℹ tests 5
+ℹ suites 2
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17285.7749
+exit=0

@@ -1,0 +1,103 @@
+inicio 2026-11-24T16:19:24-03:00 codigo=64766a3 (pai do 4a7c00c) + teste do 4a7c00c
+▶ DT09: limite de login sob rajada paralela
+  ✖ 20 senhas erradas simultaneas: no maximo o limite chega ao bcrypt (401), o resto e 429 (3245.7503ms)
+  ✖ a rajada contra e-mail inexistente tambem para no limite (sem canal privilegiado para adivinhar contas) (1174.5019ms)
+  ✖ senha certa no meio da rajada, depois de o limite estourar: 429 (como no caminho sequencial) (1379.1977ms)
+  ✖ senha certa disparada junto com a rajada: nunca mais do que o limite de senhas erradas avaliadas por vez (1453.8944ms)
+✖ DT09: limite de login sob rajada paralela (9457.6638ms)
+▶ DT09: limite de pedidos de redefinicao sob rajada paralela
+  ✖ 20 pedidos simultaneos para o mesmo e-mail: no maximo 3 passam (e geram link), o resto e 429 (301.9585ms)
+✖ DT09: limite de pedidos de redefinicao sob rajada paralela (302.4377ms)
+ℹ tests 5
+ℹ suites 2
+ℹ pass 0
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 21355.4469
+
+✖ failing tests:
+
+test at tests\seguranca\limite-rajada.test.ts:1:2460
+✖ 20 senhas erradas simultaneas: no maximo o limite chega ao bcrypt (401), o resto e 429 (3245.7503ms)
+  AssertionError [ERR_ASSERTION]: 20 tentativas avaliaram a senha (limite 5)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\wt\dt09-pai\backend\tests\seguranca\limite-rajada.test.ts:87:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\limite-rajada.test.ts:1:3485
+✖ a rajada contra e-mail inexistente tambem para no limite (sem canal privilegiado para adivinhar contas) (1174.5019ms)
+  AssertionError [ERR_ASSERTION]: 20 tentativas avaliaram a senha (limite 5)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\wt\dt09-pai\backend\tests\seguranca\limite-rajada.test.ts:110:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\limite-rajada.test.ts:1:3914
+✖ senha certa no meio da rajada, depois de o limite estourar: 429 (como no caminho sequencial) (1379.1977ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(contar(respostas).s401.length <= maxFalhas)
+  
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\wt\dt09-pai\backend\tests\seguranca\limite-rajada.test.ts:126:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\limite-rajada.test.ts:1:4678
+✖ senha certa disparada junto com a rajada: nunca mais do que o limite de senhas erradas avaliadas por vez (1453.8944ms)
+  AssertionError [ERR_ASSERTION]: 20 senhas erradas avaliadas
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\wt\dt09-pai\backend\tests\seguranca\limite-rajada.test.ts:144:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\limite-rajada.test.ts:1:5734
+✖ 20 pedidos simultaneos para o mesmo e-mail: no maximo 3 passam (e geram link), o resto e 429 (301.9585ms)
+  AssertionError [ERR_ASSERTION]: 20 pedidos aceitos (limite 3)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\wt\dt09-pai\backend\tests\seguranca\limite-rajada.test.ts:164:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+exit=1
