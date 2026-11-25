@@ -88,6 +88,18 @@ function EstadoDoConsole([string]$texto) {
   return 'indeterminada'
 }
 
+function LerCompartilhado([string]$caminho) {
+  # O osqueryd da sonda mantem o arquivo de console aberto para escrita; ReadAllText exige acesso
+  # exclusivo e falha ("sendo usado por outro processo"). Le com compartilhamento de escrita.
+  if (-not (Test-Path -LiteralPath $caminho)) { return '' }
+  $fs = $null
+  try {
+    $fs = New-Object IO.FileStream($caminho, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+    $sr = New-Object IO.StreamReader($fs)
+    return $sr.ReadToEnd()
+  } catch { return '' } finally { if ($fs) { $fs.Dispose() } }
+}
+
 function ConferirInscricao {
   $nome = 'osqueryd'
   $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='$nome'"
@@ -116,17 +128,20 @@ function ConferirInscricao {
     $limite = (Get-Date).AddSeconds(25)
     while ((Get-Date) -lt $limite) {
       Start-Sleep -Seconds 1
-      $texto = if (Test-Path -LiteralPath $console) { [IO.File]::ReadAllText($console) } else { '' }
+      $texto = LerCompartilhado $console
       $estado = EstadoDoConsole $texto
       if ($estado -ne 'indeterminada') { break }
       if ($sonda.HasExited) { break }
     }
     # Deixa no diario as linhas que decidiram (nenhuma delas tem o codigo ou a chave de no).
-    if (Test-Path -LiteralPath $console) {
-      Select-String -LiteralPath $console -Pattern 'tls_enroll|tls\.cpp|node_invalid|unsafe permissions|Rocksdb open failed' |
-        Select-Object -First 8 | ForEach-Object { Info ("osquery: " + ($_.Line -replace '^\S+ \S+ \d+ ', '')) }
-    }
+    ((LerCompartilhado $console) -split "`r?`n") | Where-Object { $_ -match 'tls_enroll|tls\.cpp|node_invalid|unsafe permissions|Rocksdb open failed' } |
+      Select-Object -First 8 | ForEach-Object { Info ("osquery: " + ($_ -replace '^\S+ \S+ \d+ ', '')) }
     return $estado
+  } catch {
+    # Falha da propria conferencia nunca vira "instalacao falhou": o servico ja foi instalado e
+    # pode ter se inscrito. Vira "nao confirmada", e o diario guarda o motivo.
+    Info "conferencia: erro ao ler o console do osquery: $($_.Exception.Message)"
+    return 'indeterminada'
   } finally {
     if ($sonda -and -not $sonda.HasExited) { Stop-Process -Id $sonda.Id -Force -ErrorAction SilentlyContinue; $sonda.WaitForExit(10000) | Out-Null }
     Remove-Item -LiteralPath $console, "$console.out" -Force -ErrorAction SilentlyContinue
