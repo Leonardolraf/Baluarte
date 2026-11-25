@@ -16,6 +16,7 @@ import {
   login,
   prepararBanco,
 } from './helpers.js';
+import { ISCAS } from '../src/services/iscas.data.js';
 
 prepararBanco(import.meta.url);
 
@@ -92,12 +93,14 @@ describe('POST /campaigns envia o e-mail simulado', () => {
   });
 
   it('o texto segue o template, é identificado como simulação, não pede senha e não tem link externo', async () => {
-    const assuntos = new Set<string>();
+    // Melhorias #19/#26: cada template tem várias iscas e o servidor sorteia uma por destinatário
+    // (determinístico pelo token). O assunto é um dos assuntos daquele template, não um fixo.
     for (const template of ['urgencia', 'autoridade', 'curiosidade']) {
       const { emails } = await criarCampanha(template, [ana.email]);
       assert.equal(emails.length, 1);
       const [email] = emails;
-      assuntos.add(email.assunto);
+      const assuntosDoTemplate = ISCAS[template].map((i) => i.assunto);
+      assert.ok(assuntosDoTemplate.includes(email.assunto), `assunto fora do template ${template}: ${email.assunto}`);
       assert.match(email.texto, /SIMULAÇÃO DE PHISHING/);
       assert.match(email.texto, /plataforma Baluarte/);
       assert.match(email.texto, /Reporte aqui:/);
@@ -107,10 +110,6 @@ describe('POST /campaigns envia o e-mail simulado', () => {
       assert.equal(urls.length, 2);
       for (const url of urls) assert.ok(url.startsWith(`${FRONTEND}/t/`), `link externo: ${url}`);
     }
-    assert.equal(assuntos.size, 3, 'cada template tem o seu assunto');
-    assert.ok([...assuntos].some((a) => /24 horas/.test(a)));
-    assert.ok([...assuntos].some((a) => /Diretoria/.test(a)));
-    assert.ok([...assuntos].some((a) => /cargos e salários/.test(a)));
   });
 
   it('nada é enviado quando algum destinatário é rejeitado', async () => {

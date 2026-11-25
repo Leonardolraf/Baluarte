@@ -1,6 +1,7 @@
 import { enviarEmail, urlFrontend, type Email } from '../config/email.js';
 import type { DestinatarioCampanha } from '../models/campanha.model.js';
 import { marcarEnviados } from '../repositories/campanha.repository.js';
+import { ISCAS, TEMPLATE_PADRAO_ISCA, type Isca } from './iscas.data.js';
 
 // E-mail da campanha de phishing SIMULADO (treinamento interno). Regras:
 //  - sai pelo mesmo canal dos e-mails de conta (config/email.ts): remetente da plataforma
@@ -13,38 +14,23 @@ import { marcarEnviados } from '../repositories/campanha.repository.js';
 //    reporte. O token e o mesmo; no banco fica so o hash (CampaignEvent.tokenHash);
 //  - o rodape identifica a mensagem como simulacao da plataforma Baluarte.
 
-/** Isca de cada template (a mesma ideia que o frontend descreve no cadastro da campanha). */
-const ISCAS: Record<string, { assunto: string; corpo: (nome: string, link: string) => string }> = {
-  urgencia: {
-    assunto: 'Ação necessária: sua conta será bloqueada em 24 horas',
-    corpo: (nome, link) =>
-      `Olá, ${nome}.\n\n` +
-      'Identificamos uma pendência no cadastro da sua conta corporativa. Se ela não for ' +
-      'regularizada nas próximas 24 horas, o seu acesso será bloqueado.\n\n' +
-      `Regularize agora: ${link}\n\n` +
-      'Equipe de Suporte',
-  },
-  autoridade: {
-    assunto: 'Pedido da Diretoria: confirmação ainda hoje',
-    corpo: (nome, link) =>
-      `${nome},\n\n` +
-      'Preciso que você confirme com urgência o documento de aprovação abaixo, antes da reunião ' +
-      'do conselho. É um assunto sigiloso: trate diretamente comigo, sem envolver outras áreas.\n\n' +
-      `Documento: ${link}\n\n` +
-      'Diretoria Executiva',
-  },
-  curiosidade: {
-    assunto: 'Novo plano de cargos e salários (prévia)',
-    corpo: (nome, link) =>
-      `Oi, ${nome}!\n\n` +
-      'A prévia do novo plano de cargos e salários já está disponível para consulta. ' +
-      'Dá uma olhada antes da divulgação oficial:\n\n' +
-      `${link}\n\n` +
-      'Recursos Humanos',
-  },
-};
-
 export type { DestinatarioCampanha };
+
+// Sorteio da isca por destinatario. Deterministico: o mesmo destinatario recebe sempre a mesma
+// isca do template, mesmo que a campanha reenvie (idempotencia, como o clique). A chave e o token
+// do destinatario (um por CampaignEvent, reusado no reenvio; so o hash fica no banco). Hash djb2
+// estavel, so para espalhar por igual entre as iscas do array; nao e seguranca.
+function indiceEstavel(chave: string, tamanho: number): number {
+  let h = 5381;
+  for (let i = 0; i < chave.length; i++) h = ((h << 5) + h + chave.charCodeAt(i)) >>> 0;
+  return h % tamanho;
+}
+
+/** Isca sorteada de um template para um destinatario (determinístico pelo token). */
+export function selecionarIsca(template: string, token: string): Isca {
+  const iscas = ISCAS[template] ?? ISCAS[TEMPLATE_PADRAO_ISCA];
+  return iscas[indiceEstavel(token, iscas.length)];
+}
 
 /** Links do e-mail para um token: treinamento (clique) e reporte. */
 export function linksCampanha(token: string): { treinamento: string; reportar: string } {
@@ -54,7 +40,7 @@ export function linksCampanha(token: string): { treinamento: string; reportar: s
 
 /** Monta o e-mail simulado de um destinatario, pelo template da campanha. */
 export function mensagemCampanha(template: string, destinatario: DestinatarioCampanha): Email {
-  const isca = ISCAS[template] ?? ISCAS.urgencia;
+  const isca = selecionarIsca(template, destinatario.token);
   const { treinamento, reportar } = linksCampanha(destinatario.token);
   const texto =
     isca.corpo(destinatario.nome, treinamento) +
