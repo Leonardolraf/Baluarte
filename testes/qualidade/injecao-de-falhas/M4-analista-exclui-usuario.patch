@@ -1,0 +1,13 @@
+diff --git a/backend/src/routes/usuario.routes.ts b/backend/src/routes/usuario.routes.ts
+index c6c0c42..295cc8b 100644
+--- a/backend/src/routes/usuario.routes.ts
++++ b/backend/src/routes/usuario.routes.ts
+@@ -13,7 +13,7 @@ export function rotasUsuarios(r: Router) {
+   r.get('/me', exigeSessao, wrap(usuarioController.perfil));
+   r.get('/usuarios', exigeToken, exigePerfil('Administrador'), wrap(usuarioController.listar));
+   r.patch('/users/:id', exigeToken, exigePerfil('Administrador'), wrap(usuarioController.atualizar));
+-  r.delete('/users/:id', exigeToken, exigePerfil('Administrador'), wrap(usuarioController.excluir));
++  r.delete('/users/:id', exigeToken, exigePerfil(...OPERADORES), wrap(usuarioController.excluir));
+   r.post('/users/:id/convite', exigeToken, exigePerfil(...OPERADORES), wrap(usuarioController.reenviarConvite));
+   r.post('/users/:id/redefinir-senha', exigeToken, exigePerfil('Administrador'), wrap(usuarioController.enviarRedefinicao));
+ }

@@ -1,0 +1,54 @@
+# M1 - MUTACAO REVERTIDA (codigo original) - 2026-11-24T21:22:57-03:00
+# comando: node --import tsx --test tests/seguranca/autorizacao.test.ts
+# git diff -- src (vazio = original):
+
+▶ tokens forjados e adulterados → 401
+  ✔ sem cabeçalho Authorization → TOKEN_AUSENTE (6.5293ms)
+  ✔ esquema Bearer sem credencial válida é rejeitado (401) (4.5701ms)
+  ✔ esquema não-Bearer com credencial arbitrária → TOKEN_INVALIDO (4.0559ms)
+  ✔ token assinado com OUTRO segredo → TOKEN_INVALIDO (4.1531ms)
+  ✔ token com alg=none → TOKEN_INVALIDO (não aceita algoritmo sem assinatura) (3.0889ms)
+  ✔ payload editado sem re-assinar (perfil elevado) → TOKEN_INVALIDO (3.9979ms)
+  ✔ token expirado (exp no passado) → TOKEN_INVALIDO (2.2574ms)
+  ✔ token bem assinado para idUsuario inexistente → USUARIO_REMOVIDO (7.5164ms)
+✔ tokens forjados e adulterados → 401 (652.2381ms)
+▶ escalada vertical e horizontal → 403
+  ✔ Colaborador não opera a plataforma (scans, assets, campaigns, listas técnicas) (44.2444ms)
+  ✔ Colaborador não acessa a gestão de usuários (GET/POST/PATCH/DELETE) (28.3071ms)
+  ✔ Analista lê listas técnicas mas não gerencia usuários (GET/PATCH/DELETE /users) (82.7577ms)
+  ✔ Analista não cria Administrador (escalada vertical), mas cria Analista/Colaborador (232.11ms)
+  ✔ JWT com perfil "Administrador" NÃO vence: o servidor decide pelo perfil do banco → 403 (24.9834ms)
+✔ escalada vertical e horizontal → 403 (413.1172ms)
+▶ POST /assets — matriz de perfis (cartão #23)
+  ✔ sem token → 401 TOKEN_AUSENTE, sem ativo nem auditoria (13.9735ms)
+  ✔ Colaborador → 403 PERFIL_SEM_PERMISSAO, sem ativo nem auditoria (inclusive com corpo inválido) (18.7445ms)
+  ✔ Analista → 201, com o ativo gravado e a auditoria CRIAR_ATIVO (21.3615ms)
+  ✔ Administrador → 201 (21.4156ms)
+✔ POST /assets — matriz de perfis (cartão #23) (76.2371ms)
+▶ IDOR — treinamento pós-clique pertence ao destinatário
+  ✔ Colaborador não conclui o treinamento de OUTRO destinatário (403), mas o dono conclui (200) (688.958ms)
+✔ IDOR — treinamento pós-clique pertence ao destinatário (689.2652ms)
+▶ perfil defasado no token e ciclo de sessão
+  ✔ rebaixar um admin invalida o poder do token antigo (ainda "Administrador") → 403 (347.74ms)
+  ✔ conta inativada perde acesso na hora (401 USUARIO_INATIVO) e o login é recusado (403) (408.7971ms)
+  ✔ conta excluída invalida o token na hora → 401 USUARIO_REMOVIDO (349.6546ms)
+  ✔ redefinição de senha encerra as sessões abertas antes → 401 SENHA_REDEFINIDA (330.7605ms)
+✔ perfil defasado no token e ciclo de sessão (1437.3684ms)
+▶ proteções da gestão de administradores
+  ✔ o admin não inativa nem exclui a própria conta (422) (9.024ms)
+  ✔ não é possível rebaixar nem excluir o último administrador ativo (409 ULTIMO_ADMIN) (12.8784ms)
+  ✔ administrador Pendente não conta como outro admin: rebaixar ou excluir o único Ativo dá 409 ULTIMO_ADMIN (B10) (105.0442ms)
+✔ proteções da gestão de administradores (127.2231ms)
+▶ fechado por padrão: toda rota protegida responde 401 sem token (S1)
+  ✔ cada rota com exigeToken/exigeSessao do roteador devolve 401 TOKEN_AUSENTE sem cabeçalho (32.4462ms)
+  ✔ Colaborador não lê o detalhe de um achado: GET /vulnerabilidades/:id → 403 (9.963ms)
+✔ fechado por padrão: toda rota protegida responde 401 sem token (S1) (42.7088ms)
+ℹ tests 27
+ℹ suites 7
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9997.1287
+# exit=0

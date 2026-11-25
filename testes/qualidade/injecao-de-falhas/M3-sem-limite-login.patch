@@ -1,0 +1,13 @@
+diff --git a/backend/src/services/auth.service.ts b/backend/src/services/auth.service.ts
+index c8a51f4..2e41f43 100644
+--- a/backend/src/services/auth.service.ts
++++ b/backend/src/services/auth.service.ts
+@@ -17,7 +17,7 @@ import { gerarToken, SESSAO_MAXIMA_MS } from './token.service.js';
+ // As falhas ficam no banco (tabela LoginFailure), por e-mail digitado: o bloqueio vale
+ // depois de reiniciar a API e cobre tambem e-mails que nao existem.
+ const LOGIN_JANELA_MS = 15 * 60 * 1000;
+-const LOGIN_MAX_FALHAS = 5;
++const LOGIN_MAX_FALHAS = 1000;
+ // Hash de sacrificio: mantem o custo do bcrypt igual quando o e-mail nao existe
+ // (sem isso o tempo de resposta revelaria quais e-mails estao cadastrados).
+ const HASH_SACRIFICIO = bcrypt.hashSync('baluarte-sem-usuario', 10);
