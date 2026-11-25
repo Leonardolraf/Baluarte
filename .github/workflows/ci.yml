@@ -1,0 +1,106 @@
+# CI do Baluarte (B41): as suítes do dia a dia rodam sozinhas em todo pull request para a
+# main e em todo push na main, sem depender de alguém lembrar de rodar.
+#
+# - backend: npm ci, prisma generate, typecheck e `npm test` inteiro contra um Postgres 17
+#   descartável (serviço do Actions, mesmo major da produção, B37). Os testes criam um banco
+#   baluarte_test_<arquivo> por arquivo nesse servidor (tests/helpers.ts).
+# - frontend: npm ci, lint, Vitest, build e o Playwright em modo mock (chrome-desktop e
+#   chrome-mobile, no Google Chrome que já vem instalado no runner ubuntu-24.04).
+#
+# Nenhum segredo: a senha do Postgres e o JWT_SECRET abaixo são valores de teste, válidos só
+# dentro do contêiner do job. O workflow não lê `secrets.*`, não publica nada e não fala com a
+# VM, a Vercel ou o Supabase. Fora daqui: ClamAV real, e2e em modo real, Newman, Robot, carga.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (node --test + PostgreSQL 17)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: baluarte
+          POSTGRES_PASSWORD: senha-somente-ci
+          POSTGRES_DB: baluarte_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U baluarte -d baluarte_ci"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 30
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # 127.0.0.1: o helper dos testes só aceita servidor local e recusa qualquer outro host.
+      DATABASE_URL: postgresql://baluarte:senha-somente-ci@127.0.0.1:5432/baluarte_ci?schema=public
+      DIRECT_URL: postgresql://baluarte:senha-somente-ci@127.0.0.1:5432/baluarte_ci?schema=public
+      JWT_SECRET: segredo-somente-para-testes
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - name: Versão do Postgres
+        run: psql "$DATABASE_URL" -tAc "select version()"
+        env:
+          DATABASE_URL: postgresql://baluarte:senha-somente-ci@127.0.0.1:5432/baluarte_ci
+      - run: npm test
+
+  frontend:
+    name: Frontend (lint + Vitest + build + Playwright mock)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: baluarte-frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: baluarte-frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Google Chrome do runner
+        run: google-chrome --version
+      - name: Playwright (modo mock)
+        run: npm run test:e2e
+      - name: Relatório do Playwright
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            baluarte-frontend/playwright-report/
+            baluarte-frontend/test-results/
+          retention-days: 7

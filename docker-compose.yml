@@ -19,7 +19,12 @@ services:
   # PostgreSQL local. A senha vem do .env da raiz (nunca versionada); sem ela o compose
   # recusa subir. A porta só é publicada em 127.0.0.1: nada de fora da máquina alcança o banco.
   db:
-    image: postgres:16-alpine
+    # 17: mesmo major da produção (VM, docker-compose.servidor.yml) e do CI (B37). Um volume
+    # db-data criado pelo 16 NÃO abre no 17 (o contêiner sai com "database files are
+    # incompatible with server"): antes de subir, `pg_dump` do banco, `docker compose down`,
+    # `docker volume rm <projeto>_db-data` e restaurar o dump (ou só recriar com as migrations
+    # e os seeds, se o banco local for descartável). Ver README, "Banco local no PostgreSQL 17".
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=baluarte
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env da raiz (ver .env.example)}

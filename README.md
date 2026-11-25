@@ -9,7 +9,7 @@ Plataforma web de **segurança ofensiva e conscientização** (TCC de Engenharia
 | Camada | Pasta | Stack | Porta |
 |---|---|---|---|
 | **API** | `backend/` | Node + Express + TypeScript + Prisma · JWT (HS256) + bcrypt · RBAC · AuditLog | `8080` |
-| **Banco** | `docker-compose.yml` (`db`) | PostgreSQL 16 · migrations Prisma · restrições CHECK · `citext` | `5432` (só local) |
+| **Banco** | `docker-compose.yml` (`db`) | PostgreSQL 17 (o mesmo da produção e do CI) · migrations Prisma · restrições CHECK · `citext` | `5432` (só local) |
 | **Frontend (produto)** | `baluarte-frontend/` | React 18 + Vite + TypeScript + TailwindCSS · RBAC por rota · tema claro/escuro · camada mock ou backend real | `5173` (dev) · `8081` (Docker) · `8443` (Docker, HTTPS) |
 | **Frontend legado** | `frontend/` | React 18 + Vite (telas geradas do Figma) — mantido **só** como alvo das suítes Robot da N2 AT1 | `3000` |
 
@@ -23,6 +23,8 @@ cp .env.example .env   # na raiz; defina POSTGRES_PASSWORD (ex.: openssl rand -h
 docker compose up -d db
 ```
 Em `backend/.env`, `DATABASE_URL` e `DIRECT_URL` = `postgresql://baluarte:<POSTGRES_PASSWORD>@localhost:5432/baluarte?schema=public` (ver `backend/.env.example`).
+
+**Banco local no PostgreSQL 17 (B37).** O compose usa `postgres:17-alpine`, o mesmo major da produção e do CI. Um volume `db-data` criado pelo 16 não abre no 17 (o contêiner sai com "database files are incompatible with server"). Para trazer os dados: com o 16 ainda no ar, `docker compose exec db pg_dump -U baluarte -Fc baluarte > baluarte.dump`; depois `docker compose down`, `docker volume rm <projeto>_db-data`, `docker compose up -d db` e `docker compose exec -T db pg_restore -U baluarte -d baluarte --no-owner < baluarte.dump`. Se o banco local é descartável, basta remover o volume e rodar migrations e seeds de novo. O dump fica fora do repositório.
 
 ### Backend (`:8080`)
 ```bash
@@ -59,6 +61,8 @@ npm run dev
 | `ana.souza@empresa.com`, `edson@empresa.com`, … | `Mudar@123` | vários | `seed:demo` do backend (senha fixa só dos usuários de demonstração; contas criadas pelo administrador não têm senha provisória: recebem um convite por e-mail) |
 
 ## Testes
+
+**CI (B41):** `.github/workflows/ci.yml` roda sozinho em todo pull request para a `main` e em todo push nela: backend (`npm ci`, `prisma generate`, typecheck e `npm test` inteiro contra um PostgreSQL 17 descartável do Actions) e frontend (`npm ci`, lint, Vitest, build e Playwright em modo mock no Google Chrome do runner). Sem segredos: a senha do banco e o `JWT_SECRET` são valores de teste do próprio workflow. Ficam fora do CI o ClamAV real, o Playwright em modo real, o Newman, o Robot e a carga.
 
 | Suíte | Onde | Como rodar | Resultado esperado |
 |---|---|---|---|
