@@ -106,7 +106,7 @@ test.describe('Vulnerabilidades', () => {
     await page.goto('/vulnerabilities');
     await expect(page.getByRole('heading', { name: 'Vulnerabilidades' })).toBeVisible();
 
-    const seletor = page.getByRole('combobox', { name: 'Ativo' });
+    const seletor = page.getByRole('combobox', { name: 'Ativo', exact: true });
     await expect(seletor).toBeEnabled();
     // A lista vem da API: espera a primeira opção de ativo chegar.
     await expect
