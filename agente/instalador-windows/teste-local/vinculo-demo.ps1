@@ -9,8 +9,11 @@ script faz o que a tela faria: entra como Administrador e chama POST /api/estaco
   .\vinculo-demo.ps1 -Acao Emitir   pede e-mail e senha do Administrador, emite e mostra o codigo
   .\vinculo-demo.ps1 -Acao Reusar   pede um codigo ja usado e tenta inscrever com ele: deve dar 401
 
-So para o ambiente LOCAL (https://localhost:8443). Nunca apontar para a VM de producao: cada
-codigo consumido la cria uma estacao real.
+Por padrao, so o ambiente LOCAL (https://localhost:8443). Producao (o Funnel da VM) so com
+-Producao, que exige digitar PRODUCAO para confirmar: la, cada codigo consumido cria uma estacao
+REAL e a auditoria e permanente.
+
+  .\vinculo-demo.ps1 -Acao Emitir -Producao   (servidor e CA de producao ja preenchidos)
 
 A senha e o token nunca vao na linha de comando do curl (linha de comando de processo e visivel
 para qualquer usuario da maquina): o corpo vai pela entrada padrao e o cabecalho por arquivo
@@ -25,15 +28,26 @@ param(
   [SecureString]$Senha,
   [string]$Nome = 'Estacao da apresentacao',
   [string]$Descricao = 'Inscrita pelo instalador .exe',
-  [string]$Codigo
+  [string]$Codigo,
+  # Producao: baluarte.tail862474.ts.net:443 com a raiz ISRG X1 (producao\isrg-root-x1.crt).
+  [switch]$Producao
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
-if ($Servidor -notmatch '^(localhost|127\.0\.0\.1):\d+$') {
-  throw "este script e so para o ambiente local (localhost:PORTA). Recebi: $Servidor"
+$HostProducao = 'baluarte.tail862474.ts.net:443'
+if ($Producao) {
+  if ($PSBoundParameters.ContainsKey('Servidor') -and $Servidor -ne $HostProducao) { throw "-Producao so aceita $HostProducao (recebi $Servidor)." }
+  $Servidor = $HostProducao
+  if (-not $CaCert) { $CaCert = Join-Path $PSScriptRoot '..\producao\isrg-root-x1.crt' }
+  Write-Host ''
+  Write-Host "  PRODUCAO ($Servidor): $(if ($Acao -eq 'Emitir') { 'o codigo emitido inscreve uma estacao REAL' } else { 'se o codigo ainda for valido, ele e CONSUMIDO aqui e cria uma estacao REAL falsa' })." -ForegroundColor Yellow
+  Write-Host '  A auditoria de producao e permanente.' -ForegroundColor Yellow
+  if ((Read-Host '  Digite PRODUCAO para continuar') -cne 'PRODUCAO') { throw 'cancelado: nada foi enviado.' }
+} elseif ($Servidor -notmatch '^(localhost|127\.0\.0\.1):\d+$') {
+  throw "sem -Producao, este script e so para o ambiente local (localhost:PORTA). Recebi: $Servidor"
 }
 if (-not $CaCert) { $CaCert = Join-Path $PSScriptRoot '..\recursos\ca.crt' }
 if (-not (Test-Path -LiteralPath $CaCert)) { throw "nao achei a CA local: $CaCert (use -CaCert <caminho>\certs\ca.crt)" }
@@ -49,9 +63,11 @@ function Chamar([string]$metodo, [string]$url, [string]$corpo, [string]$token) {
       [IO.File]::WriteAllText($cab, "authorization: Bearer $token")
       $extra = @('-H', "@$cab")
     }
-    # --ssl-no-revoke: a CA local nao publica lista de revogacao e o curl do Windows (Schannel)
-    # recusaria a conexao por isso. A confianca continua restrita a --cacert.
-    $saida = $corpo | & $Curl -s --ssl-no-revoke --cacert $CaCert -X $metodo $url `
+    # --ssl-no-revoke so no local: a CA local nao publica lista de revogacao e o curl do Windows
+    # (Schannel) recusaria a conexao. Em producao (Let's Encrypt) a revogacao e conferida.
+    # A confianca continua restrita a --cacert nos dois casos.
+    $revog = @(); if (-not $Producao) { $revog += '--ssl-no-revoke' }
+    $saida = $corpo | & $Curl -s @revog --cacert $CaCert -X $metodo $url `
       -H 'content-type: application/json' @extra --data-binary '@-' -w "`n%{http_code}"
     $linhas = ($saida -join "`n").TrimEnd() -split "`n"
     return @{ status = [int]$linhas[-1]; corpo = (($linhas[0..($linhas.Count - 2)]) -join "`n") }

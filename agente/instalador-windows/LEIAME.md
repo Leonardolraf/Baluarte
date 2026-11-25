@@ -288,3 +288,32 @@ aviso de monitoramento. O aviso canônico mora só em
 já tem uma cópia literal no mock do frontend que um teste compara — uma terceira cópia aqui seria
 mais uma fonte de dessincronia. A seção 6 aponta para o aviso da plataforma e o declara oficial em
 caso de divergência.
+
+## Build de produção (caminho 3, 24/11/2026)
+
+```powershell
+.\empacotar.ps1 -CaCert producao\isrg-root-x1.crt -Servidor baluarte.tail862474.ts.net:443 `
+  -CaDescricao 'ISRG Root X1 (Lets Encrypt), servidor de produção' -Sufixo -PRODUCAO
+.\empacotar.ps1 -CaCert ..\..\certs\ca.crt     # depois, para devolver a CA local ao build local
+```
+
+Sai `saida\InstaladorAgenteBaluarte-0.1.0-PRODUCAO.exe`, ao lado do `.exe` local, sem sobrescrevê-lo.
+O `empacotar.ps1` copia a CA para `recursos\ca.crt`: rode o build local por último.
+
+O que foi medido, sem escrever nada em produção:
+
+- **Cadeia do Funnel** (`openssl s_client`): folha ← Let's Encrypt YE2 ← Root YE (com assinatura
+  cruzada da X2) ← ISRG Root X2 (com assinatura cruzada da X1). Só com a **ISRG Root X1**
+  (`producao\isrg-root-x1.crt`, tirada do repositório de raízes do Windows; SHA-256
+  `96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6`)
+  a verificação dá `0 (ok)`, com o nome do servidor conferido. O curl do Windows também conecta
+  só com ela, conferindo a revogação.
+- **Caminho da API:** atrás do Funnel ela fica sob `/api` (`GET /api/estacoes` = 401;
+  `/estacoes` = 404), então as flags `/api/agentes/osquery/*` valem sem mudança, com
+  `--tls_hostname=baluarte.tail862474.ts.net:443`.
+- **Não medido:** o osquery de verdade falando com produção, porque isso inscreveria uma estação
+  real. Esse é o ensaio do passo 5 do plano, com o "pode" do Leo.
+
+A emissão do código em produção usa `teste-local\vinculo-demo.ps1 -Acao Emitir -Producao`. A chave
+`-Producao` preenche servidor e CA e pede que se digite `PRODUCAO`, porque lá cada código consumido
+cria uma estação real. Sem `-Producao`, o script continua aceitando só o ambiente local.

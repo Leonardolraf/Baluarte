@@ -18,6 +18,17 @@
 #define MinhaVersao "0.1.0"
 #define MinhaEmpresa "Baluarte"
 #define OsqueryMsi "osquery-" + OsqueryVersao + ".msi"
+; Perfil do build (empacotar.ps1 -Servidor/-CaDescricao/-Sufixo): o servidor ja preenchido no
+; wizard, como a CA embutida aparece no resumo e o sufixo do nome do .exe. Sem nada, o build local.
+#ifndef ServidorPadrao
+  #define ServidorPadrao "localhost:8443"
+#endif
+#ifndef CaDescricao
+  #define CaDescricao "CA local do Baluarte (ca.crt)"
+#endif
+#ifndef SufixoSaida
+  #define SufixoSaida ""
+#endif
 
 ; Modo demonstracao (empacotar.ps1 -Demonstracao): o MESMO wizard, pelas mesmas 6 paginas, mas
 ; INCAPAZ de instalar. Serve para mostrar o fluxo numa maquina qualquer sem Docker, sem
@@ -34,7 +45,7 @@ DefaultDirName={localappdata}\Temp\BaluarteAgenteDemonstracao
 Uninstallable=no
 #else
 AppId={{B4A1F7C2-6E3D-4A58-9C0B-1D7E2A9F5C34}
-OutputBaseFilename=InstaladorAgenteBaluarte-{#MinhaVersao}
+OutputBaseFilename=InstaladorAgenteBaluarte-{#MinhaVersao}{#SufixoSaida}
 ; O agente roda como servico do Windows e o MSI do osquery escreve em Program Files:
 ; sem administrador nao ha instalacao possivel.
 PrivilegesRequired=admin
@@ -185,7 +196,7 @@ begin
     'O código de vínculo é gerado pelo Administrador no Baluarte, na tela de ativos, e já carrega o nome, o tipo e o IP deste equipamento. Ele é de uso único e expira em 24 horas.');
   PaginaVinculo.Add('Servidor (host:porta, sem https://)', False);
   PaginaVinculo.Add('Código de vínculo', False);
-  PaginaVinculo.Values[0] := 'localhost:8443';
+  PaginaVinculo.Values[0] := '{#ServidorPadrao}';
   PaginaVinculo.Values[1] := '';
 end;
 
@@ -194,7 +205,7 @@ begin
   Result := True;
   if CurPageID = PaginaVinculo.ID then begin
     if not ServidorValido(ServidorInformado) then begin
-      MsgBox('O servidor deve estar no formato HOST:PORTA, sem https:// e sem caminho.' + #13#10#13#10 + 'Exemplo para o ambiente local: localhost:8443', mbError, MB_OK);
+      MsgBox('O servidor deve estar no formato HOST:PORTA, sem https:// e sem caminho.' + #13#10#13#10 + 'Exemplo: {#ServidorPadrao}', mbError, MB_OK);
       Result := False;
       Exit;
     end;
@@ -212,7 +223,7 @@ var
   Ca: String;
 begin
   if FileExists(ExpandConstant('{src}\recursos\ca.crt')) then
-    Ca := 'CA local do Baluarte (ca.crt)'
+    Ca := '{#CaDescricao}'
   else
     Ca := 'autoridades públicas do pacote do osquery';
   Result := MemoDirInfo + NewLine + NewLine + 'Servidor:' + NewLine + Space + ServidorInformado + NewLine + NewLine + 'Código de vínculo:' + NewLine + Space + CodigoInformado + NewLine + NewLine + 'Agente:' + NewLine + Space + 'osquery {#OsqueryVersao} (MSI oficial, hash e assinatura conferidos)' + NewLine + Space + 'Serviço "osqueryd", início automático' + NewLine + Space + 'Confiança: ' + Ca;

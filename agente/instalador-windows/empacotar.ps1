@@ -29,7 +29,11 @@ param(
   [string]$CaCert,
   [switch]$SemCa,
   [switch]$Demonstracao,
-  [string]$Iscc
+  [string]$Iscc,
+  # Perfil do build. Sem eles, o build local (localhost:8443, CA local, nome sem sufixo).
+  [string]$Servidor,
+  [string]$CaDescricao,
+  [string]$Sufixo
 )
 
 Set-StrictMode -Version Latest
@@ -115,6 +119,12 @@ New-Item -ItemType Directory -Path $Saida -Force | Out-Null
 Info 'compilando o instalador'
 $defines = @("/DOsqueryVersao=$Versao")
 if ($Demonstracao) { $defines += '/DDemonstracao' }
+if ($Servidor) {
+  if ($Servidor -notmatch '^[A-Za-z0-9]([A-Za-z0-9.-]{0,252})?:[0-9]{1,5}$') { Falhar "-Servidor deve ser HOST:PORTA (recebido: $Servidor)." }
+  $defines += "/DServidorPadrao=$Servidor"
+}
+if ($CaDescricao) { if ($CaDescricao -match '[''"{}]') { Falhar '-CaDescricao sem aspas nem chaves.' }; $defines += "/DCaDescricao=$CaDescricao" }
+if ($Sufixo) { if ($Sufixo -notmatch '^-[A-Z0-9]+$') { Falhar '-Sufixo no formato -PALAVRA (ex.: -PRODUCAO).' }; $defines += "/DSufixoSaida=$Sufixo" }
 & $Iscc @defines $ArqIss
 if ($LASTEXITCODE -ne 0) { Falhar "o ISCC terminou com codigo $LASTEXITCODE." }
 
