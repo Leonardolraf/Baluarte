@@ -252,17 +252,21 @@ identificado como simulação, não pede senha e não tem link externo"),
   21/10/2026).
 - Emissão, lista e revogação só para Administrador (`EMITIR_VINCULO_ESTACAO` e
   `REVOGAR_VINCULO_ESTACAO` na auditoria).
-- Entrou na `main` pelo PR #79 (`f7308d3`). Segundo o cartão #9, está em produção desde
-  24/11/2026; este documento não conferiu o servidor.
+- Entrou na `main` pelo PR #79 (`f7308d3`) e está em produção desde 24/11/2026: a VM roda o
+  `f7308d3` (release conferido pela sessão VM: 21 migrations, rotas novas com 401 sem token) e o
+  ensaio do instalador `.exe` contra produção inscreveu uma estação real e recusou o reuso do
+  código com 401.
 
 **Limite honesto.**
-- **O segredo da organização continua valendo:** segredo sem o prefixo `BLT-` segue o caminho do
-  `OSQUERY_ENROLL_SECRET`, compartilhado por todas as estações (`agente.service.ts`). Quem tiver
-  esse segredo inscreve uma máquina qualquer sem passar pelo painel.
+- **O segredo da organização ainda existe no código:** segredo sem o prefixo `BLT-` segue o
+  caminho do `OSQUERY_ENROLL_SECRET`, compartilhado por todas as estações (`agente.service.ts`).
+  Em produção ele está **vazio** desde 24/11/2026, então esse caminho responde
+  `503 INSCRICAO_DESLIGADA` e só o código de vínculo inscreve. Se alguém preencher a variável, quem
+  tiver o segredo volta a inscrever qualquer máquina sem passar pelo painel.
 - **O código circula em claro até o uso:** quem o lê na tela ou no canal em que foi repassado e o
   usa primeiro, dentro das 24 h, inscreve a própria máquina; o dono legítimo recebe 401.
 - **O inventário é o que o agente relata:** uma estação comprometida pode mentir para o osquery.
-- O instalador `.exe` (Inno Setup) não está versionado neste repositório; aqui ficam
+- O instalador `.exe` (Inno Setup) fica na branch `feat/instalador-exe-agente` (`agente/instalador-windows/`), ainda fora da `main`; aqui ficam
   `agente/instalar-agente.ps1` e `agente/instalar-agente.sh`.
 
 **Melhorias possíveis.** Desligar o `OSQUERY_ENROLL_SECRET` quando todas as estações estiverem
