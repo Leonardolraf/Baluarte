@@ -1,7 +1,7 @@
 ﻿; Instalador do Agente Baluarte (melhoria #9) - Inno Setup 6
 ;
 ; Empacota o MSI OFICIAL do osquery + a configuracao do Baluarte num unico .exe, com um wizard
-; de 7 passos. O trabalho de maquina NAO esta aqui: quem mexe na estacao e o
+; de 6 passos. O trabalho de maquina NAO esta aqui: quem mexe na estacao e o
 ; agente\instalar-agente.ps1, chamado por aplicar.ps1 (ver LEIAME.md). Este script e o wizard
 ; e o empacotamento.
 ;
@@ -19,7 +19,7 @@
 #define MinhaEmpresa "Baluarte"
 #define OsqueryMsi "osquery-" + OsqueryVersao + ".msi"
 
-; Modo demonstracao (empacotar.ps1 -Demonstracao): o MESMO wizard, pelas mesmas 7 paginas, mas
+; Modo demonstracao (empacotar.ps1 -Demonstracao): o MESMO wizard, pelas mesmas 6 paginas, mas
 ; INCAPAZ de instalar. Serve para mostrar o fluxo numa maquina qualquer sem Docker, sem
 ; certificados, sem backend e sem administrador. O que muda: nao embute o MSI do osquery, nao
 ; chama o aplicar.ps1, nao pede elevacao, instala numa pasta temporaria do usuario e nao se
@@ -55,8 +55,14 @@ OutputDir=saida
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-; As 7 paginas do wizard: boas-vindas, termos, local, servidor+codigo, pronto, instalando,
-; concluido. O Inno esconde a de boas-vindas no estilo moderno; aqui ela faz parte do fluxo.
+; As 6 paginas do wizard: boas-vindas, termos, servidor+codigo, pronto, instalando, concluido.
+; Sem pagina de pasta (24/11/2026): o aplicar.ps1 roda ELEVADO a partir de {app}; numa pasta do
+; usuario (Documentos, por exemplo), qualquer programa dele poderia trocar o script antes da
+; execucao. Program Files so o administrador escreve. UsePreviousAppDir=no faz uma instalacao
+; antiga noutra pasta nao ser reaproveitada.
+DisableDirPage=yes
+UsePreviousAppDir=no
+; O Inno esconde a de boas-vindas no estilo moderno; aqui ela faz parte do fluxo.
 DisableWelcomePage=no
 LicenseFile=termos-instalacao.txt
 ; Marca: o escudo canonico do produto (baluarte-frontend\public\baluarte.svg), rasterizado por
@@ -220,7 +226,7 @@ begin
   if CurStep <> ssPostInstall then Exit;
 
 #ifdef Demonstracao
-  { Modo demonstracao: o wizard percorre as 7 paginas, mas NADA e instalado. Sem o MSI embutido,
+  { Modo demonstracao: o wizard percorre as 6 paginas, mas NADA e instalado. Sem o MSI embutido,
     sem chamar o aplicar.ps1, sem servico. Sair aqui e o que garante isso. }
   Exit;
 #endif

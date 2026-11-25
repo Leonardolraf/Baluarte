@@ -1,7 +1,7 @@
 # Instalador .exe do agente (melhoria #9)
 
 Empacota o agente de estação do Baluarte num único instalador do Windows: o MSI oficial do
-osquery + a configuração do Baluarte + um wizard de 7 passos que, no fim, deixa o serviço
+osquery + a configuração do Baluarte + um wizard de 6 passos que, no fim, deixa o serviço
 rodando e a estação vinculada a um ativo da plataforma.
 
 É **protótipo**, roda na máquina do Leo e **não é assinado** (Authenticode). O SmartScreen vai
@@ -150,7 +150,7 @@ tambem pode emitir codigo, alem do Administrador.
 
 | Arquivo | O que faz |
 |---|---|
-| `instalador-baluarte.iss` | O wizard (Inno Setup 6). 7 páginas: boas-vindas, termos, local, servidor+código, pronto para instalar, instalando, concluído. Valida o servidor e o código antes de deixar avançar. |
+| `instalador-baluarte.iss` | O wizard (Inno Setup 6). 6 páginas: boas-vindas, termos, servidor+código, pronto para instalar, instalando, concluído. Valida o servidor e o código antes de deixar avançar. |
 | `aplicar.ps1` | Ponte entre o wizard e o `instalar-agente.ps1`: valida o código, entrega como `SecureString` e apaga o rastro. |
 | `empacotar.ps1` | Gera o `.exe`: baixa e confere o MSI, copia o `ca.crt`, chama o ISCC. |
 | `baixar-osquery.ps1` | Baixa o MSI oficial na versão fixa de `agente/osquery-versao.conf` e recusa se o SHA-256 ou a assinatura não baterem. |
@@ -183,7 +183,7 @@ powershell -ExecutionPolicy Bypass -File agente\instalador-windows\empacotar.ps1
 ```
 
 Sai em `saida\InstaladorAgenteBaluarte-0.1.0-DEMONSTRACAO.exe` (~2 MB). É o **mesmo wizard**,
-pelas mesmas 7 páginas, mas **incapaz de instalar**: não embute o MSI do osquery, não chama o
+pelas mesmas 6 páginas, mas **incapaz de instalar**: não embute o MSI do osquery, não chama o
 `aplicar.ps1`, não pede elevação, grava os poucos arquivos numa pasta temporária do usuário e não
 se registra em Aplicativos Instalados. A tela final diz, com todas as letras, que nada foi alterado
 no computador.
@@ -259,11 +259,14 @@ Verificado em 24/11/2026: o MSI baixado de novo conferiu hash e assinatura; os d
 compilam; o vínculo ponta a ponta no protocolo com o osquery real (ver "O que foi medido"); o
 classificador da conferência contra as quatro saídas reais.
 
-**Não** verificado: o wizard rodando. As páginas, a acentuação na tela e o fluxo de Voltar/Avançar
-não foram vistos — o instalador exige elevação e o Windows não deixa um processo controlar um
-processo elevado. Rodar o `.exe` uma vez e clicar pelas 7 páginas é o próximo passo, e é da
-máquina do Leo. Também não foi feita a instalação real: certificados, servidor e endpoint
-estão de pé desde 24/11/2026, e o que falta é só rodar o `.exe` elevado (medições (b) e (c)).
+Instalação real, 24/11/2026, na máquina do Leo, contra o compose local: a primeira execução
+inscreveu a estação, mas a conferência lia o console do osquery com acesso exclusivo e a tela disse
+"falhou" (corrigido: leitura compartilhada, e erro da própria conferência vira "não confirmada").
+Na segunda, com o `.exe` corrigido, a tela disse "inscrita" e as medições (b) e (c) passaram. A
+segunda execução também mostrou que **reinstalar por cima não usa o código novo**: o `osquery.db`
+guarda a chave de nó antiga e o osquery não se inscreve de novo. Para inscrever com outro código,
+desinstale antes (o `desinstalar-agente.ps1` apaga o `osquery.db`). Limite conhecido: com chave
+antiga que o servidor já esqueceu, a regra "pediu `/config` = inscrita" pode dar falso positivo.
 
 ## Pendências menores
 
@@ -272,9 +275,10 @@ estão de pé desde 24/11/2026, e o que falta é só rodar o `.exe` elevado (med
   "BALUARTE" (exigiria embutir a fonte Archivo). O resto do wizard é o visual padrão do Inno: a
   trilha de passos à esquerda do protótipo em HTML não existe no Inno, que marca a posição pelo
   próprio fluxo de páginas.
-- **Página "Local de instalação".** Ela escolhe onde ficam os nossos arquivos (scripts, `ca.crt`,
-  desinstalador). O osquery em si vai para `C:\Program Files\osquery`, onde o MSI oficial o
-  coloca, e isso não é configurável sem mexer no MSI.
+- **Sem página "Local de instalação" (desde 24/11/2026).** Os nossos arquivos vão sempre para
+  `C:\Program Files\Baluarte\Agente`: o `aplicar.ps1` roda elevado a partir dali, e numa pasta do
+  usuário qualquer programa dele poderia trocar o script antes. O osquery vai para
+  `C:\Program Files\osquery`, onde o MSI oficial o coloca.
 
 ## Sobre o texto dos termos
 

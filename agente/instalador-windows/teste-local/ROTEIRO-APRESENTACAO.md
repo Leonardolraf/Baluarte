@@ -47,8 +47,11 @@ Depois confira:
   nem tenta se inscrever de novo e o código fica válido, sem uso. A tela diria "inscrita" (o agente
   está mesmo inscrito, mas com a chave do ensaio) e o passo 4 (reuso) daria `200` em vez de `401`.
   O desinstalador apaga a pasta inteira, com o `osquery.db`;
-- a pasta de destino no wizard: `C:\Program Files\Baluarte\Agente`. O wizard sugere a pasta da
-  instalação anterior, então confira.
+- o `.exe` da noite de 24/11 ou mais novo (o wizard não pergunta mais a pasta: instala sempre em
+  `C:\Program Files\Baluarte\Agente`). A cópia antiga em `Documentos\Baluarte\Agente` pode ser
+  apagada depois de desinstalar;
+- abrir o painel **local** (`https://localhost:8443/stations`), não a demo da Vercel: o agente da
+  apresentação nunca fala com produção.
 
 ## Roteiro (cerca de 2 min: a instalação sozinha leva perto de 1)
 
@@ -74,7 +77,7 @@ Depois confira:
 
 Se a instalação der errado na hora, ou se não houver tempo:
 
-- `saida\InstaladorAgenteBaluarte-0.1.0-DEMONSTRACAO.exe`: as mesmas 7 páginas, sem elevação e
+- `saida\InstaladorAgenteBaluarte-0.1.0-DEMONSTRACAO.exe`: as mesmas 6 páginas, sem elevação e
   sem instalar nada;
 - e o vínculo direto pelo script: `Emitir`, depois uma inscrição com o código (o osquery faria
   isso) e por fim `Reusar` com o mesmo código, que mostra `200` e depois `401`.
