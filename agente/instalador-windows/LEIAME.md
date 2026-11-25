@@ -1,0 +1,319 @@
+# Instalador .exe do agente (melhoria #9)
+
+Empacota o agente de estação do Baluarte num único instalador do Windows: o MSI oficial do
+osquery + a configuração do Baluarte + um wizard de 6 passos que, no fim, deixa o serviço
+rodando e a estação vinculada a um ativo da plataforma.
+
+É **protótipo**, roda na máquina do Leo e **não é assinado** (Authenticode). O SmartScreen vai
+avisar na primeira execução; é esperado. Essa decisão vale só para o nosso `.exe` — a conferência
+de hash **e** de assinatura do **MSI do osquery** (emitido pela LF Projects) continua valendo em
+dois momentos: ao empacotar e ao instalar na estação.
+
+## Como funciona o vínculo
+
+Decidido em 21/10/2026 (Leo, pelo hub): **o Administrador emite o código no painel**, o wizard
+só o consome.
+
+O osquery **não tem campo livre no enroll**: `POST /agentes/osquery/enroll` recebe só
+`enroll_secret`, `host_identifier` e `host_details`. Não existe flag que faça o agente mandar um
+token extra. Logo, o código de vínculo só chega ao servidor de um jeito: **sendo** o
+`enroll_secret` daquela estação.
+
+1. O Administrador, logado no painel, gera o código para um ativo novo e informa ali o nome, o
+   tipo e o IP. O servidor grava uma inscrição pendente com esses dados e devolve
+   `BLT-XXXX-XXXX-XXXX`.
+2. O wizard pede o servidor e o código. Ele **não faz chamada de rede nenhuma**.
+3. O código é gravado em `C:\Program Files\osquery\baluarte.secret`, com ACL só de SYSTEM e
+   Administradores.
+4. O osqueryd sobe e manda o código como `enroll_secret`. O servidor reconhece o formato,
+   consome a inscrição pendente e a estação nasce já vinculada e com o nome escolhido.
+
+O ganho sobre a alternativa (o instalador emitindo o código) é que o `.exe` **não carrega
+segredo nenhum**. Se ele emitisse, precisaria do `OSQUERY_ENROLL_SECRET` da organização embutido,
+e qualquer um com o arquivo inscreveria estação falsa e leria a configuração da org.
+
+## Contrato fechado com o Backend (21/10/2026)
+
+O formato bate com o que já estava implementado, sem mudança: `BLT-` + três grupos de 4 no alfabeto
+`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, 18 caracteres. O agente manda com os traços e em maiúsculas,
+como o wizard grava; o servidor normaliza (`trim` + maiúsculas) e compara por hash. Código
+desconhecido, expirado ou já usado dão todos **`401 SEGREDO_INVALIDO`**, mensagem única, de
+propósito, para não permitir enumeração. A emissão é `POST /estacoes/vinculos` (Administrador).
+Uso único, TTL de 24 h, e o relógio lido depois do `FOR UPDATE`.
+
+A implementação do servidor é do Backend, na branch `feat/vinculo-agente` (worktree em
+`../Baluarte-vinculo`, `.git` compartilhado — dá para ler daqui sem push).
+
+**Conformidade conferida estaticamente contra `86edcab` (21/10/2026):** o alfabeto
+(`ALFABETO_CODIGO` em `backend/src/models/vinculoEstacao.model.ts`) é literalmente o mesmo, o
+`FORMATO_CODIGO` deles equivale ao `CodigoValido` daqui (prefixo + 3 grupos de 4), e o
+`normalizarCodigo` deles (`trim` + `toUpperCase`) equivale ao que o wizard e o `aplicar.ps1` fazem
+antes de gravar. `agente/osquery.flags.modelo` está intocado na branch deles, conferido por `git
+diff`. Nenhum ajuste necessário deste lado.
+
+**Mas isso não é o teste ponta a ponta.** Naquele corte só `tsc` e os testes de unidade rodaram; a
+integração não, porque o Postgres local estava fora. Um código emitido ainda não existe.
+
+### Não há verificação de código pela rede, e é de propósito
+
+Uma versão anterior do contrato oferecia um `GET /agentes/osquery/vinculos/:codigo` **público**,
+para o wizard pré-validar o código com um botão "Testar código". Foi recusado aqui e **retirado do
+contrato** pelo Backend em 21/10/2026, por dois motivos:
+
+1. **Contradizia o próprio contrato.** O enroll devolve um 401 único para desconhecido, expirado e
+   usado justamente para não permitir enumeração — e aquele endpoint devolvia
+   `motivo: EXPIRADO | USADO | DESCONHECIDO` numa rota aberta. Era o oráculo que o 401 nega.
+2. **Reintroduzia rede no instalador.** O `.exe` não fazer chamada nenhuma é a propriedade que
+   torna o desenho limpo: sem segredo embutido, sem CA para validar na hora do wizard, sem
+   servidor precisando estar de pé para a instalação andar.
+
+Quem vê o estado de um código é o **painel**, por `GET /estacoes/vinculos` (Administrador,
+autenticado). O instalador valida só o formato, localmente.
+
+### Reexecutar o instalador exige um código novo
+
+O consumo é uso único por código, sempre. Reexecutar numa máquina já inscrita é uma reinscrição
+legítima — é o caminho de recuperação que a tela de falha indica — e **exige um código fresco**:
+o próprio código já consumido dá `401 SEGREDO_INVALIDO`, nunca é reaproveitado em silêncio. Isso
+importa para o texto da tela final, que manda gerar um novo no painel; se dissesse só "execute de
+novo", o operador ficaria preso.
+
+### Como o wizard sabe se a estação se inscreveu (decidido em 24/11/2026)
+
+A inscrição acontece quando o `osqueryd` sobe, *depois* que o `instalar-agente.ps1` termina, e
+**serviço em execução não é estação inscrita**: código errado ou expirado dá o mesmo caminho,
+serviço de pé, enroll recusado com 401, nada no painel. Até 21/10 a tela final por isso só mandava
+conferir no painel. Agora o `aplicar.ps1` confere de verdade (`ConferirInscricao`), sem mexer no
+`instalar-agente.ps1` nem no `osquery.flags.modelo`:
+
+1. o `instalar-agente.ps1` instala e liga o serviço, que se inscreve com o código (como antes);
+2. 12 s depois, o `aplicar.ps1` **para o serviço** e roda o mesmo `osqueryd.exe` com a **mesma
+   linha de comando** do serviço (lida do Windows, `Win32_Service.PathName`, sem adivinhar caminho
+   de banco), em primeiro plano, com `--verbose --disable_watchdog`, por até 25 s, lendo o console;
+3. classifica o que viu e **religa o serviço sempre**, seja qual for o resultado.
+
+É o "teste manual" que o próprio `instalar-agente.ps1` já recomenda no fim, automatizado. A sonda
+**não consome código**: quem consumiu (ou tentou) foi o serviço; ela só lê o estado do mesmo
+`osquery.db`. O `--disable_watchdog` deixa um processo só: com o watchdog, matar o pai poderia
+deixar o processo de trabalho segurando a trava do banco, e o serviço não subiria de novo.
+
+Saída do `aplicar.ps1` e texto da tela final:
+
+| Console do osquery | Estado | Saída | Tela final |
+|---|---|---|---|
+| `POST ... /api/agentes/osquery/config` | inscrita | 0 | estação inscrita, já aparece no painel |
+| `Failed enrollment ... (No node key returned ...)` | recusada | 3 | código expirado, usado ou inexistente: gerar outro |
+| `Failed enrollment ... (Request error: ...)` | inacessível | 4 | não confirmada: conferir servidor, rede, certificado |
+| nada decisivo em 25 s | indeterminada | 4 | não confirmada: conferir no painel |
+| erro antes (formato, MSI, serviço) | — | 1 | instalação com erros, ver o diário |
+
+### O que foi medido (24/11/2026, osquery 5.23.1, binário extraído do MSI, sem instalar nada)
+
+Contra o compose local do worktree do Backend (`feat/vinculo-agente`), com um código BLT emitido
+por `POST /api/estacoes/vinculos` como Administrador:
+
+- **Sucesso:** um único `POST /enroll`, e logo em seguida o `POST /config` e o `TLSLogForwarder`.
+  Nenhuma linha de falha. No servidor, o vínculo passou a `consumido` com `assetId` preenchido, e
+  reusar o mesmo código deu `401 SEGREDO_INVALIDO`. **O vínculo funciona de ponta a ponta no
+  protocolo, com o osquery de verdade.**
+- **O osquery só pede a configuração depois de ter chave de nó.** Na recusa ele fica preso
+  repetindo o enroll a cada ~9 s e nunca chega ao `/config`. Por isso "pediu `/config`" é o sinal
+  positivo, venha a chave do serviço ou da própria sonda.
+- **A mesma linha `Failed enrollment` sai na recusa e na falta de rede**; só o motivo entre
+  parênteses muda. Tratar as duas como recusa mandaria gerar código novo quando o problema é o
+  servidor fora do ar. Por isso o estado "inacessível" é separado.
+- **A pasta de log continua vazia nos dois casos** (`--logger_plugin=tls`): ler log em disco nunca
+  detectaria nada. Ligar `filesystem` no modelo de flags foi descartado pelo Backend em 21/10
+  (pegada permanente em toda estação) e continua descartado.
+- **Permissão do banco:** na primeira execução o osquery aplica ACL "segura" aos arquivos do
+  `osquery.db`, com SISTEMA e Administradores em controle total e Todos só lendo permissões. Uma
+  segunda execução **sem elevação** não abre mais o banco (`LOCK: Acesso negado`). No cenário real
+  isso trabalha a favor, porque o serviço roda como SISTEMA e o instalador roda elevado, e a ACL dá
+  controle total aos dois. **Mas não foi possível medir daqui** (sem elevação), e é por isso que a
+  linha "banco travado" cai em "indeterminada", nunca em sucesso.
+
+O classificador (`EstadoDoConsole`) foi conferido contra as quatro saídas reais capturadas:
+sucesso → inscrita, código gasto → recusada, porta fechada → inacessível, banco travado →
+indeterminada.
+
+**O que falta, e só a instalação real cobre:** (b) a sonda elevada abrindo o banco criado pelo
+serviço como SISTEMA; (c) o serviço religando depois da sonda sem reinscrever. Os dois dependem de
+rodar o `.exe` de verdade na máquina do Leo.
+
+## O que o Backend ainda precisa fechar
+
+Nada do contrato. Ficaram dois pontos em aberto do lado dele, nenhum travando este diretorio:
+se o responsavel pela maquina aparece no ativo-estacao (hoje fica so no vinculo) e se o Analista
+tambem pode emitir codigo, alem do Administrador.
+
+## Arquivos
+
+| Arquivo | O que faz |
+|---|---|
+| `instalador-baluarte.iss` | O wizard (Inno Setup 6). 6 páginas: boas-vindas, termos, servidor+código, pronto para instalar, instalando, concluído. Valida o servidor e o código antes de deixar avançar. |
+| `aplicar.ps1` | Ponte entre o wizard e o `instalar-agente.ps1`: valida o código, entrega como `SecureString` e apaga o rastro. |
+| `empacotar.ps1` | Gera o `.exe`: baixa e confere o MSI, copia o `ca.crt`, chama o ISCC. |
+| `baixar-osquery.ps1` | Baixa o MSI oficial na versão fixa de `agente/osquery-versao.conf` e recusa se o SHA-256 ou a assinatura não baterem. |
+| `termos-instalacao.txt` | O texto do passo 2 (UTF-8 com BOM: o Inno lê a licença assim). |
+| `recursos/gerar-imagens.py` | Rasteriza o escudo canônico do produto no ícone e nas duas imagens do wizard. Rodado uma vez; as saídas estão versionadas ao lado. |
+
+## O trabalho de máquina não está aqui
+
+`agente/instalar-agente.ps1` já faz tudo o que precisa ser feito na estação: confere o MSI, instala
+em silêncio por `msiexec /qn`, para o serviço, grava as flags a partir de `osquery.flags.modelo`,
+grava a CA e o segredo com ACL só de SYSTEM e Administradores (`icacls`), põe o serviço em início
+automático com política de reinício (`sc failure`) e espera ele subir.
+
+O `.exe` é **wizard + empacotamento**, não uma reimplementação. Dois pontos conferidos em
+21/10/2026: `-Msi <caminho>` já aceita o MSI embutido (sem internet), e `-Segredo` exige 16+
+caracteres, sendo que um código tem 18 — ou seja, o script aceita um código de vínculo como
+segredo **sem nenhuma alteração**. Por isso este diretório não altera nada em `agente/`.
+
+### O código nunca passa por linha de comando
+
+Linha de comando de processo é visível para qualquer usuário da máquina
+(`Get-CimInstance Win32_Process`). O wizard grava o código num arquivo em `{tmp}` e passa o
+caminho; o `aplicar.ps1` lê, converte para `SecureString`, e no `finally` sobrescreve o arquivo
+com zeros antes de apagá-lo. O diário da instalação mostra só os 4 últimos caracteres.
+
+## Modo demonstração
+
+```powershell
+powershell -ExecutionPolicy Bypass -File agente\instalador-windows\empacotar.ps1 -Demonstracao
+```
+
+Sai em `saida\InstaladorAgenteBaluarte-0.1.0-DEMONSTRACAO.exe` (~2 MB). É o **mesmo wizard**,
+pelas mesmas 6 páginas, mas **incapaz de instalar**: não embute o MSI do osquery, não chama o
+`aplicar.ps1`, não pede elevação, grava os poucos arquivos numa pasta temporária do usuário e não
+se registra em Aplicativos Instalados. A tela final diz, com todas as letras, que nada foi alterado
+no computador.
+
+Serve para mostrar o fluxo numa máquina qualquer, sem Docker, sem certificados e sem backend.
+
+**Por que existe:** no instalador real, a página "Pronto para instalar" tem um botão que inicia uma
+instalação de verdade do osquery — o MSI está embutido e não precisa de servidor nenhum para rodar.
+Num walkthrough, um clique a mais instala um serviço na máquina de quem está apresentando. O modo
+demonstração torna esse clique inofensivo em vez de depender de cuidado.
+
+O nome do arquivo carrega `DEMONSTRACAO` de propósito: os dois binários são parecidos na tela, e a
+diferença importa.
+
+## Como gerar
+
+```powershell
+powershell -ExecutionPolicy Bypass -File agente\instalador-windows\empacotar.ps1
+```
+
+Sai em `saida\InstaladorAgenteBaluarte-0.1.0.exe` (~20,5 MB com o MSI embutido). Para empacotar de
+propósito sem a CA local (servidor com certificado público), `-SemCa`.
+
+Precisa do Inno Setup: `winget install JRSoftware.InnoSetup`. O winget instala **por usuário**, em
+`%LOCALAPPDATA%\Programs\Inno Setup 6`, não em Program Files — o `empacotar.ps1` procura nos três
+lugares.
+
+## Pré-requisito para testar de verdade
+
+O plugin `tls` do osquery **exige HTTPS**: o alvo local é `localhost:8443` + a CA local, **não**
+`localhost:8080` (essa é a API em HTTP, o osqueryd não fala com ela). O certificado local já traz
+`DNS:localhost` e `IP:127.0.0.1` no SAN.
+
+Os certificados locais **foram gerados em 21/10/2026** (`sh scripts/gerar-certificados.sh`, pelo
+openssl do próprio Git Bash — o `--docker` é opcional e não foi necessário). A CA é
+`CN=Baluarte CA local`, válida até 2036-10-18, e o `.exe` do `saida/` já vai **com ela embutida**.
+
+Para subir o servidor de teste (24/11/2026), do worktree do Backend e com nome de projeto próprio,
+para não usar o banco `baluarte` do projeto principal; os certificados são **copiados** de
+`Baluarte/certs/` (gerar de novo criaria outra CA, e o `.exe` deixaria de confiar no servidor):
+
+```bash
+SEED_CONTRATO=1 SEED_DEMO=1 docker compose -p baluarte-vinculo --env-file ../Baluarte/.env   -f docker-compose.yml -f sem-portas.yml up -d db backend app
+```
+
+`sem-portas.yml` só tira a porta 5432 do `db` e as do `mailpit` (`ports: !reset []`): ao ligar o
+Docker, o `baluarte-db-1` do projeto principal volta sozinho e ocupa a 5432. O `curl` do Windows
+precisa de `--ssl-no-revoke` (a CA local não tem lista de revogação). As rotas ficam sob `/api`
+(`/api/login`, `/api/estacoes/vinculos`, `/api/agentes/osquery/enroll`).
+
+Depois é rodar o `.exe` como Administrador, com um código emitido pelo painel.
+
+**Trocou a CA?** Gere o pacote de novo: a `ca.crt` vai dentro do `.exe`, e um instalador antigo
+passa a confiar numa autoridade que não existe mais.
+
+**Nunca apontar para a VM de produção** (`baluarte.tail862474.ts.net` / o Funnel): cada teste do
+agente criaria uma estação real na produção.
+
+## O que foi verificado e o que não foi
+
+Verificado em 21/10/2026:
+
+- O download traz `osquery-5.23.1.msi` (19,1 MB), com o SHA-256 igual ao de `osquery-versao.conf`
+  e assinatura válida da `OSQUERY a Series of LF Projects, LLC`.
+- O `.iss` compila e gera o `.exe` de 20,5 MB.
+- A validação do código no `aplicar.ps1`, contra uma cópia do layout instalado: código com
+  caractere fora do alfabeto, vazio e de tamanho errado são recusados; minúsculo e com espaços é
+  normalizado e repassado; o arquivo temporário é apagado nos quatro casos; o diário mostra só os
+  4 últimos caracteres.
+- O ícone do produto está embutido no `.exe` (extraído do binário compilado e conferido na tela).
+
+Verificado em 24/11/2026: o MSI baixado de novo conferiu hash e assinatura; os dois `.exe`
+compilam; o vínculo ponta a ponta no protocolo com o osquery real (ver "O que foi medido"); o
+classificador da conferência contra as quatro saídas reais.
+
+Instalação real, 24/11/2026, na máquina do Leo, contra o compose local: a primeira execução
+inscreveu a estação, mas a conferência lia o console do osquery com acesso exclusivo e a tela disse
+"falhou" (corrigido: leitura compartilhada, e erro da própria conferência vira "não confirmada").
+Na segunda, com o `.exe` corrigido, a tela disse "inscrita" e as medições (b) e (c) passaram. A
+segunda execução também mostrou que **reinstalar por cima não usa o código novo**: o `osquery.db`
+guarda a chave de nó antiga e o osquery não se inscreve de novo. Para inscrever com outro código,
+desinstale antes (o `desinstalar-agente.ps1` apaga o `osquery.db`). Limite conhecido: com chave
+antiga que o servidor já esqueceu, a regra "pediu `/config` = inscrita" pode dar falso positivo.
+
+## Pendências menores
+
+- **A marca aparece, o texto do protótipo não.** O painel da página de boas-vindas traz o escudo
+  sobre a tinta escura `#0B1220`, a mesma do cabeçalho do protótipo, mas sem o letreiro
+  "BALUARTE" (exigiria embutir a fonte Archivo). O resto do wizard é o visual padrão do Inno: a
+  trilha de passos à esquerda do protótipo em HTML não existe no Inno, que marca a posição pelo
+  próprio fluxo de páginas.
+- **Sem página "Local de instalação" (desde 24/11/2026).** Os nossos arquivos vão sempre para
+  `C:\Program Files\Baluarte\Agente`: o `aplicar.ps1` roda elevado a partir dali, e numa pasta do
+  usuário qualquer programa dele poderia trocar o script antes. O osquery vai para
+  `C:\Program Files\osquery`, onde o MSI oficial o coloca.
+
+## Sobre o texto dos termos
+
+`termos-instalacao.txt` cobre a **instalação nesta estação** e de propósito **não** é cópia do
+aviso de monitoramento. O aviso canônico mora só em
+`backend/src/models/avisoMonitoramento.model.ts` (`TEXTO_AVISO`), é versionado por `VERSAO_AVISO` e
+já tem uma cópia literal no mock do frontend que um teste compara — uma terceira cópia aqui seria
+mais uma fonte de dessincronia. A seção 6 aponta para o aviso da plataforma e o declara oficial em
+caso de divergência.
+
+## Build de produção (caminho 3, 24/11/2026)
+
+```powershell
+.\empacotar.ps1 -CaCert producao\isrg-root-x1.crt -Servidor baluarte.tail862474.ts.net:443 `
+  -CaDescricao 'ISRG Root X1 (Lets Encrypt), servidor de produção' -Sufixo -PRODUCAO
+.\empacotar.ps1 -CaCert ..\..\certs\ca.crt     # depois, para devolver a CA local ao build local
+```
+
+Sai `saida\InstaladorAgenteBaluarte-0.1.0-PRODUCAO.exe`, ao lado do `.exe` local, sem sobrescrevê-lo.
+O `empacotar.ps1` copia a CA para `recursos\ca.crt`: rode o build local por último.
+
+O que foi medido, sem escrever nada em produção:
+
+- **Cadeia do Funnel** (`openssl s_client`): folha ← Let's Encrypt YE2 ← Root YE (com assinatura
+  cruzada da X2) ← ISRG Root X2 (com assinatura cruzada da X1). Só com a **ISRG Root X1**
+  (`producao\isrg-root-x1.crt`, tirada do repositório de raízes do Windows; SHA-256
+  `96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6`)
+  a verificação dá `0 (ok)`, com o nome do servidor conferido. O curl do Windows também conecta
+  só com ela, conferindo a revogação.
+- **Caminho da API:** atrás do Funnel ela fica sob `/api` (`GET /api/estacoes` = 401;
+  `/estacoes` = 404), então as flags `/api/agentes/osquery/*` valem sem mudança, com
+  `--tls_hostname=baluarte.tail862474.ts.net:443`.
+- **Não medido:** o osquery de verdade falando com produção, porque isso inscreveria uma estação
+  real. Esse é o ensaio do passo 5 do plano, com o "pode" do Leo.
+
+A emissão do código em produção usa `teste-local\vinculo-demo.ps1 -Acao Emitir -Producao`. A chave
+`-Producao` preenche servidor e CA e pede que se digite `PRODUCAO`, porque lá cada código consumido
+cria uma estação real. Sem `-Producao`, o script continua aceitando só o ambiente local.

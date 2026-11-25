@@ -1,0 +1,69 @@
+﻿TERMOS DE USO DO AGENTE BALUARTE
+
+Versão do texto: 2026-10-21
+Aplica-se à instalação do agente de monitoramento técnico nesta estação de trabalho.
+
+
+1. SOBRE O AGENTE
+
+O Agente Baluarte é o osquery, programa de código aberto mantido pela Linux Foundation,
+configurado pela plataforma Baluarte. Instalado como serviço do Windows, ele realiza
+verificações técnicas periódicas nesta estação e as envia ao servidor Baluarte da sua
+organização, por conexão cifrada (TLS), com finalidade preventiva de segurança da informação.
+
+
+2. QUAIS INFORMAÇÕES SÃO COLETADAS
+
+- Programas instalados: nome, versão e identificação de origem de cada software.
+- Sistema operacional: nome, versão, número de compilação (build) e plataforma.
+- Portas de rede em escuta: a porta, o protocolo, o endereço de escuta e o nome do processo
+  associado - apenas o nome, sem o caminho do arquivo nem a linha de comando.
+- Identificação do equipamento: nome da estação e identificador técnico do dispositivo.
+- Informações de comunicação: data e hora do último contato entre o agente e o servidor.
+
+Essas informações compõem um inventário técnico de segurança. As frequências de coleta são
+definidas pelo servidor e podem ser consultadas no aviso de monitoramento da plataforma.
+
+
+3. O QUE NÃO É COLETADO
+
+O agente, na configuração prevista para o Baluarte, não lê, captura nem transmite:
+
+- Arquivos pessoais ou documentos armazenados no computador;
+- Conteúdo de e-mails ou mensagens particulares;
+- Histórico de navegação na internet;
+- Senhas ou informações digitadas no teclado;
+- Capturas de tela, imagens ou gravações da atividade do usuário;
+- Dados de localização geográfica.
+
+O monitoramento não tem como objetivo acompanhar atividades pessoais, avaliar produtividade
+nem fiscalizar o comportamento individual dos colaboradores.
+
+
+4. FINALIDADE E PROTEÇÃO DE DADOS
+
+As informações são utilizadas exclusivamente para identificar softwares com vulnerabilidades
+conhecidas, detectar serviços de rede potencialmente expostos e acompanhar as condições de
+segurança do equipamento. O tratamento observa a Lei Geral de Proteção de Dados (Lei nº
+13.709/2018) e os princípios da necessidade, finalidade, segurança e prevenção.
+
+O acesso ao inventário técnico é restrito aos perfis Administrador e Analista da plataforma,
+por controle de acesso baseado em funções (RBAC). O perfil Colaborador não tem acesso.
+
+
+5. EXECUÇÃO E REMOÇÃO
+
+O agente é instalado como serviço do Windows com início automático e sobe junto com o sistema.
+Pode ser removido a qualquer momento pelo desinstalador do Baluarte, em Aplicativos Instalados.
+A remoção interrompe a coleta; o inventário já enviado permanece na plataforma conforme a
+política de retenção da organização.
+
+
+6. AVISO COMPLETO
+
+Este texto cobre a instalação nesta estação. O aviso de monitoramento completo da organização,
+com as frequências de coleta em produção, as finalidades, quem acessa os dados e os direitos do
+titular, está na plataforma Baluarte, em Monitoramento, e é a versão oficial em caso de
+divergência.
+
+O reconhecimento destes termos é condição para a instalação.

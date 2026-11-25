@@ -1,0 +1,11 @@
+# Override da regra global `* text=auto eol=lf` da raiz, so nesta pasta e so no que precisa.
+#
+# O Inno Setup renderiza o arquivo da licenca (termos-instalacao.txt) num controle de texto do
+# Windows, que espera CRLF: normalizado para LF o texto sai errado na tela. O .iss acompanha por
+# convencao da ferramenta. O BOM UTF-8 desses dois arquivos tambem e exigido pelo Inno (sem ele
+# a acentuacao vira mojibake) e nao deve ser removido.
+#
+# Nao inclui *.ps1: o PowerShell le LF sem problema, e assim a pasta segue a regra da raiz no
+# resto. Nenhum dos dois alcanca o Prettier nem o ESLint, que rodam so em baluarte-frontend/.
+*.iss text eol=crlf
+*.txt text eol=crlf

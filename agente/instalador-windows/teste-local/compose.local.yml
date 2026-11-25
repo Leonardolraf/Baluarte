@@ -1,0 +1,25 @@
+# Override do docker-compose.yml para o teste e a apresentacao do instalador (melhoria #9).
+# Uso, do worktree do Backend (feat/vinculo-agente), com nome de projeto proprio para nao tocar
+# no banco do projeto principal:
+#
+#   docker compose -p baluarte-vinculo --env-file ../Baluarte/.env \
+#     -f docker-compose.yml -f <caminho>/teste-local/compose.local.yml up -d db backend app
+#
+# O que muda:
+#   - nada publicado em 0.0.0.0: so 127.0.0.1, entao outra maquina da rede (a da apresentacao,
+#     inclusive) nao alcanca a API nem o painel;
+#   - a API (8080) nao e publicada: o agente e o painel falam pela 8443 (Nginx -> /api), e a
+#     8080 fica livre para as suites que a usam;
+#   - banco e Mailpit sem porta no host: ao ligar o Docker, o baluarte-db-1 e o
+#     baluarte-mailpit-1 do projeto principal voltam sozinhos e ocupam a 5432/1025/8025.
+services:
+  db:
+    ports: !reset []
+  mailpit:
+    ports: !reset []
+  backend:
+    ports: !reset []
+  app:
+    ports: !override
+      - "127.0.0.1:8081:80"
+      - "127.0.0.1:8443:443"
