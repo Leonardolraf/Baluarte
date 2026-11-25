@@ -6,6 +6,7 @@ import type { Campaign, CampaignFilters, Vulnerability, VulnerabilityFilters } f
 import { CampaignTable } from '@/components/Table/CampaignTable';
 import { VulnTable } from '@/components/Table/VulnTable';
 import { MOCK_CAMPAIGNS, MOCK_VULNERABILITIES } from '@/mocks/data';
+import { toCampaign, type BackendCampaign } from '@/services/adapters';
 
 // Tabelas de vulnerabilidades e de campanhas: ordenação por coluna, filtros
 // controlados pela página, linhas clicáveis, estado vazio e esqueleto de carga.
@@ -153,6 +154,46 @@ describe('VulnTable', () => {
 
 describe('CampaignTable', () => {
   const items = MOCK_CAMPAIGNS;
+
+  // DT39: a celula mostra o numero do servidor quando ele vem e "—" quando a API nao manda o
+  // campo, nunca "0%". As colunas "Abertos"/"Treinados" ficam no DOM (so escondidas por breakpoint).
+  it('Abertos e Treinados: numero quando a API manda, "—" quando nao manda (DT39)', () => {
+    const base: BackendCampaign = {
+      id: 'camp-dt39',
+      nome: 'DT39',
+      template: 'urgencia',
+      status: 'ATIVA',
+      destinatarios: 1,
+      enviados: 1,
+      taxaClique: 100,
+      criadoEm: '2026-10-01T12:00:00.000Z',
+    };
+    const funil = {
+      enviados: { valor: 1, pct: 100 },
+      abertos: { valor: 1, pct: 100 },
+      clicados: { valor: 1, pct: 100 },
+      submeteram: { valor: 0, pct: 0 },
+      reportaram: { valor: 0, pct: 0 },
+    };
+    const cells = (c: Campaign) => {
+      const { unmount } = inRouter(
+        <CampaignTable items={[c]} filters={NO_CAMPAIGN_FILTERS} onFiltersChange={vi.fn()} pageSize={50} />,
+      );
+      const row = screen.getAllByRole('row').find((r) => r.textContent?.includes('DT39'))!;
+      const texts = within(row)
+        .getAllByRole('cell')
+        .map((td) => td.textContent?.trim());
+      unmount();
+      return texts;
+    };
+    const novo = cells(toCampaign({ ...base, funil, treinados: 1 }));
+    // Enviados, Abertos, Clicados, Treinados: abertura e treinamento medidos (100%).
+    expect(novo.filter((t) => t === '100%')).toHaveLength(3);
+    expect(novo).not.toContain('—');
+    const antigo = cells(toCampaign(base));
+    expect(antigo.filter((t) => t === '—')).toHaveLength(2);
+    expect(antigo).not.toContain('0%');
+  });
 
   it('começa pela data mais recente e ordena pelas demais colunas', async () => {
     const user = userEvent.setup();

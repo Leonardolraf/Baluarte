@@ -17,6 +17,25 @@ servidor (S1: 47/47 rotas protegidas com 401 sem token). Ofuscação do bundle f
 Teste novo `src/__tests__/endurecimento.test.ts` (7): gancho do DevTools e cabeçalhos da Vercel e do
 Nginx em sincronia, sem a CSP bloqueante.
 
+## 2026-11-24 — DT39: "Abertos" e "Treinados" da lista de campanhas
+
+Defeito: em `/campaigns`, campanha aberta e treinada aparecia com "Abertos —" e "Treinados 0%".
+O item de `GET /campanhas` (`mapCampaign`) não trazia abertura nem treinamento, e o adapter do
+frontend fixava `trained: 0` (default de `metricsFromFunnel`), que a tela mostrava como medição.
+
+- **Backend (aditivo, sem consulta nova):** cada item de `GET /campanhas` (e de `campanhas[]` do
+  `GET /dashboard`, só operadores) ganha `funil` (o mesmo `funilDe` do detalhe) e `treinados`
+  (`treinadosDe`: clicou **e** treinou, a regra de `treinamentos[].concluido` do detalhe; o predicado
+  `concluiuTreinamento` também serve o KPI `colaboradoresTreinados`). `GET /campanhas/:id` ganha
+  `treinados`. Nenhum campo removido ou renomeado.
+- **Frontend:** `toCampaign` usa `funil`/`treinados` quando vêm; ausentes (API antiga) →
+  `opened`/`trained` `null` ("—"), nunca 0%. `CampaignMetrics.trained`/`trainedRate` passam a
+  `number | null`; o default `trained = 0` saiu. Fallback do KPI de treinados sem o campo do servidor:
+  soma só se todas as campanhas trouxerem `treinados`, senão `null`. Mock conta treinado com a
+  regra do servidor (clicou e concluiu).
+- **Release:** exige o backend novo na VM para a lista mostrar os números; o frontend sozinho
+  mostra "—" (correto, sem dado) até lá.
+
 ## 2026-10-21 — Vínculo de inscrição da estação (#9), primeiro corte (servidor)
 
 Feature nova (melhoria #9), **branch `feat/vinculo-agente`, pós-demo, sem deploy**. O Administrador
