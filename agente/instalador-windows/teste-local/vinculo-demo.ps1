@@ -16,8 +16,9 @@ REAL e a auditoria e permanente.
   .\vinculo-demo.ps1 -Acao Emitir -Producao   (servidor e CA de producao ja preenchidos)
 
 A senha e o token nunca vao na linha de comando do curl (linha de comando de processo e visivel
-para qualquer usuario da maquina): o corpo vai pela entrada padrao e o cabecalho por arquivo
-temporario, apagado no fim.
+para qualquer usuario da maquina): corpo e cabecalho vao por arquivos temporarios na pasta TEMP
+do proprio usuario, apagados no fim de cada chamada. O corpo vai em bytes UTF-8, para nomes com
+acento chegarem inteiros.
 #>
 [CmdletBinding()]
 param(
@@ -56,7 +57,13 @@ $Curl = Join-Path $env:SystemRoot 'System32\curl.exe'
 
 function Chamar([string]$metodo, [string]$url, [string]$corpo, [string]$token) {
   $cab = $null
+  $arqCorpo = $null
   try {
+    # O corpo vai por arquivo, em bytes UTF-8 sem BOM. Pelo pipe (corpo | curl ... '@-') o
+    # PowerShell 5.1 converte o texto antes de entregar ao curl e troca acentos por '?'
+    # (medido em 24/11: o nome com cedilha e til chegou ao banco como "Esta??o").
+    $arqCorpo = [IO.Path]::GetTempFileName()
+    [IO.File]::WriteAllBytes($arqCorpo, (New-Object System.Text.UTF8Encoding($false)).GetBytes($corpo))
     $extra = @()
     if ($token) {
       $cab = [IO.Path]::GetTempFileName()
@@ -67,12 +74,13 @@ function Chamar([string]$metodo, [string]$url, [string]$corpo, [string]$token) {
     # (Schannel) recusaria a conexao. Em producao (Let's Encrypt) a revogacao e conferida.
     # A confianca continua restrita a --cacert nos dois casos.
     $revog = @(); if (-not $Producao) { $revog += '--ssl-no-revoke' }
-    $saida = $corpo | & $Curl -s @revog --cacert $CaCert -X $metodo $url `
-      -H 'content-type: application/json' @extra --data-binary '@-' -w "`n%{http_code}"
+    $saida = & $Curl -s @revog --cacert $CaCert -X $metodo $url `
+      -H 'content-type: application/json; charset=utf-8' @extra --data-binary "@$arqCorpo" -w "`n%{http_code}"
     $linhas = ($saida -join "`n").TrimEnd() -split "`n"
     return @{ status = [int]$linhas[-1]; corpo = (($linhas[0..($linhas.Count - 2)]) -join "`n") }
   } finally {
     if ($cab) { Remove-Item -LiteralPath $cab -Force -ErrorAction SilentlyContinue }
+    if ($arqCorpo) { Remove-Item -LiteralPath $arqCorpo -Force -ErrorAction SilentlyContinue }
   }
 }
 
