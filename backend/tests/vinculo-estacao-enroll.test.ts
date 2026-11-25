@@ -5,7 +5,7 @@
 // em tests/agente*.
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ADMIN, ANALISTA, chamar, criarUsuario, encerrarServidor, esperaErro, iniciarServidor, login, prepararBanco } from './helpers.js';
+import { ADMIN, ANALISTA, chamar, criarUsuario, encerrarServidor, esperaErro, iniciarServidor, login, prepararBanco, SENHA_CONTA } from './helpers.js';
 
 prepararBanco(import.meta.url);
 
@@ -141,5 +141,18 @@ describe('vinculo de inscricao da estacao (#9)', () => {
     assert.equal(analistaEmite.status, 403, 'so Administrador emite');
     esperaErro(await emitir({}), 400, 'NOME_INVALIDO');
     esperaErro(await emitir({ nome: 'Fantasma', usuarioId: 'nao-existe-123' }), 404, 'USUARIO_NAO_ENCONTRADO');
+  });
+
+  it('RBAC da listagem e da revogacao: so Administrador (Analista e Colaborador 403, sem revogar)', async () => {
+    const emitido = await emitir({ nome: 'Alvo do RBAC' });
+    assert.equal(emitido.status, 201);
+    const id = emitido.body.dados.idVinculo;
+    const colaborador = await login(responsavel.email, SENHA_CONTA);
+    for (const token of [analista, colaborador]) {
+      esperaErro(await chamar('GET', '/estacoes/vinculos', { token }), 403, 'PERFIL_SEM_PERMISSAO');
+      esperaErro(await chamar('DELETE', `/estacoes/vinculos/${id}`, { token }), 403, 'PERFIL_SEM_PERMISSAO');
+    }
+    // A revogacao recusada nao mexeu no codigo: o Administrador ainda o revoga.
+    assert.equal((await chamar('DELETE', `/estacoes/vinculos/${id}`, { token: admin })).status, 200);
   });
 });
