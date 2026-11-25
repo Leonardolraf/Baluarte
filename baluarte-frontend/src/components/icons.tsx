@@ -236,6 +236,14 @@ export const LockIcon = (p: IconProps) => (
     <path d="M8 11V7a4 4 0 0 1 8 0v4" />
   </svg>
 );
+export const KeyIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="M10.7 12.3L21 2" />
+    <path d="M16 7l3 3" />
+    <path d="M18.5 4.5l2 2" />
+  </svg>
+);
 export const SendIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />

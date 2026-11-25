@@ -33,6 +33,9 @@ import type {
   SecurityPolicy,
   StationDetail,
   StationListResponse,
+  StationEnrollmentCode,
+  StationEnrollmentInput,
+  StationEnrollmentListResponse,
   StationVerification,
   Training,
   User,
@@ -178,6 +181,14 @@ export interface BaluarteApi {
   getStation(id: string): Promise<StationDetail>;
   /** Cruza o inventário com as bases públicas de vulnerabilidades agora (B14). */
   verifyStation(id: string): Promise<StationVerification>;
+
+  // Código de vínculo do instalador do agente (#9): só Administrador
+  /** Emite um código de uso único (24 h); é a única resposta que traz o código em claro. */
+  createStationEnrollment(input: StationEnrollmentInput): Promise<StationEnrollmentCode>;
+  /** Códigos emitidos, mais recentes primeiro, com o estado (pendente/usado/expirado). */
+  listStationEnrollments(): Promise<StationEnrollmentListResponse>;
+  /** Revoga um código pendente (409 se a estação já o usou). */
+  revokeStationEnrollment(id: string): Promise<void>;
 
   // Aviso de monitoramento da estação (B18, LGPD)
   /** Texto em vigor (servido pela API), a versão e a ciência do usuário atual nela. Qualquer perfil. */
