@@ -7,7 +7,7 @@ name: baluarte-validacao-agente
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine   # mesmo major da produção (B37); tmpfs, nada a migrar
     environment:
       - POSTGRES_USER=baluarte
       - POSTGRES_PASSWORD=${VAL_DB_SENHA:?}

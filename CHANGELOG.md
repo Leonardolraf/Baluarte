@@ -2,6 +2,18 @@
 
 > Histórico do que foi construído no repositório de código, do commit inicial até hoje. Para o que falta e o roteiro futuro, ver [`backend/PLANO.md`](backend/PLANO.md). Para como rodar cada peça, ver [`README.md`](README.md).
 
+## 2026-11-25 — CI no GitHub Actions (B41) e Postgres 17 nos testes (B37)
+
+- **CI (B41):** `.github/workflows/ci.yml`, em todo pull request para a `main` e todo push nela.
+  Backend: `npm ci`, `prisma generate`, typecheck e `npm test` inteiro contra um serviço
+  `postgres:17-alpine` do Actions. Frontend: `npm ci`, lint, Vitest, build e Playwright em modo
+  mock (Google Chrome do runner). Actions fixadas por SHA, `permissions: contents: read`, nenhum
+  `secrets.*`: senha do banco e `JWT_SECRET` são valores de teste do workflow.
+- **Postgres 17 (B37):** `docker-compose.yml` e a stack de validação do agente passam de
+  `postgres:16-alpine` para `postgres:17-alpine`, o mesmo major da VM. Volume `db-data` antigo
+  não abre no 17: dump/restore descrito no README. Suíte do backend medida em 25/11 nos dois:
+  1086/1086 no 17.11 e no 16.15, sobre a main a7ee5f4.
+
 ## 2026-11-25 — Tela "Vincular estação": código do instalador pelo painel (#9)
 
 O código de vínculo (`BLT-XXXX-XXXX-XXXX`) que o instalador `.exe` do agente pede só podia ser
