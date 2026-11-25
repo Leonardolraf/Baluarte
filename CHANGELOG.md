@@ -2,6 +2,21 @@
 
 > Histórico do que foi construído no repositório de código, do commit inicial até hoje. Para o que falta e o roteiro futuro, ver [`backend/PLANO.md`](backend/PLANO.md). Para como rodar cada peça, ver [`README.md`](README.md).
 
+## 2026-11-24 — Frontend endurecido na demo (melhoria #14)
+
+O frontend publicado na Vercel respondia só com o HSTS da plataforma. Entram, no `vercel.json` (ao
+lado do rewrite do SPA, que não muda) e no Nginx do Docker, `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, um
+`Permissions-Policy` que desliga câmera, microfone, geolocalização, pagamento e USB, e uma CSP
+**só em modo relatório** (`Content-Security-Policy-Report-Only`: avisa no console, não bloqueia),
+derivada do código e do `dist/` (API do Funnel no `connect-src`, Analytics e fontes na mesma origem,
+`'unsafe-inline'` só em estilo por causa do `<style>` do react-hot-toast). O React DevTools fica
+desligado no bundle de produção (`src/lib/devtools.ts`, nunca lança). `baluarte-frontend/SEGURANCA.md`
+registra o alcance: o código do frontend é sempre inspecionável no F12; a proteção é o RBAC no
+servidor (S1: 47/47 rotas protegidas com 401 sem token). Ofuscação do bundle ficou de fora.
+Teste novo `src/__tests__/endurecimento.test.ts` (7): gancho do DevTools e cabeçalhos da Vercel e do
+Nginx em sincronia, sem a CSP bloqueante.
+
 ## 2026-10-21 — Vínculo de inscrição da estação (#9), primeiro corte (servidor)
 
 Feature nova (melhoria #9), **branch `feat/vinculo-agente`, pós-demo, sem deploy**. O Administrador
