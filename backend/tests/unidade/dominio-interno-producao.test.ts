@@ -1,11 +1,14 @@
 // Testes de UNIDADE da exigencia de DOMINIO_INTERNO em producao (DT28): sem banco. O padrao
 // @empresa.com e o do contrato N2 AT1 e tem dono real; em producao a API recusa subir sem um
 // dominio valido e proprio. Fora de producao nada muda (padrao @empresa.com).
-// O ultimo bloco sobe o src/server.ts de verdade num processo filho (porta 0, sem banco) para
-// conferir que a checagem esta ligada na subida, como a do JWT_SECRET.
+// O ultimo bloco sobe o src/server.ts de verdade num processo filho (numa porta livre reservada na
+// hora, sem banco) para conferir que a checagem esta ligada na subida, como a do JWT_SECRET.
+// PORT=0 nao serve: o src/server.ts faz `Number(PORT) || 8080` e o 0 cai na 8080, entao o teste
+// falhava com EADDRINUSE sempre que outra API ocupava a 8080 (achado em 24/11/2026).
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { dominioInterno, destinatarioInterno, validarDominioInterno } from '../../src/models/dominio.model.js';
 
@@ -68,14 +71,28 @@ describe('validarDominioInterno (DT28)', () => {
   });
 });
 
+// Porta livre: o sistema escolhe uma (listen na 0), o teste le o numero e solta antes de subir o filho.
+function portaLivre(): Promise<number> {
+  return new Promise((ok, erro) => {
+    const s = createServer();
+    s.once('error', erro);
+    s.listen(0, '127.0.0.1', () => {
+      const endereco = s.address();
+      const porta = typeof endereco === 'object' && endereco ? endereco.port : 0;
+      s.close(() => ok(porta));
+    });
+  });
+}
+
 // Sobe src/server.ts e espera sair (recusa) ou anunciar que está ouvindo (sobe).
-function subirServidor(dominio: string): Promise<{ subiu: boolean; codigo: number | null; saida: string }> {
+async function subirServidor(dominio: string): Promise<{ subiu: boolean; codigo: number | null; saida: string }> {
+  const porta = await portaLivre();
   return new Promise((ok) => {
     const filho = spawn(process.execPath, ['--import', 'tsx', 'src/server.ts'], {
       cwd: resolve(import.meta.dirname, '../..'),
       // DOMINIO_INTERNO vazio (não ausente): o dotenv não sobrescreve variável já definida,
       // então o backend/.env local não interfere.
-      env: { ...process.env, NODE_ENV: 'production', PORT: '0', JWT_SECRET: 'segredo-de-producao-do-teste-dt28', DOMINIO_INTERNO: dominio },
+      env: { ...process.env, NODE_ENV: 'production', PORT: String(porta), JWT_SECRET: 'segredo-de-producao-do-teste-dt28', DOMINIO_INTERNO: dominio },
     });
     let saida = '';
     const ler = (b: Buffer) => {

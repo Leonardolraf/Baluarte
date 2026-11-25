@@ -1,0 +1,109 @@
+inicio 2026-11-24T16:01:27-03:00 cmd: npm run carga
+
+> baluarte-v2-backend@0.1.0 carga
+> node scripts/carga.mjs
+
+[carga] banco baluarte_carga: migrations do zero…
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "baluarte_carga", schema "public" at "localhost:5432"
+
+PostgreSQL database baluarte_carga created at localhost:5432
+
+Applying migration `20261007184231_init`
+Applying migration `20261007195320_habilita_rls`
+Applying migration `20261007211705_conta_convite_login`
+Applying migration `20261007212417_limite_reset_no_banco`
+Applying migration `20261008120000_analise_arquivos`
+Applying migration `20261008130000_agente_osquery`
+Applying migration `20261008140000_ativo_ip_descricao`
+Applying migration `20261008150000_virustotal`
+Applying migration `20261008160000_cruzamento_vulnerabilidades`
+Applying migration `20261008170000_auditoria_cadeia_hash`
+Applying migration `20261008175000_auditoria_sequencia_sem_salto`
+Applying migration `20261008180000_historico_status_achado`
+Applying migration `20261008190000_ciencia_monitoramento`
+Applying migration `20261008200000_analise_origem_campanha`
+Applying migration `20261008220000_reserva_analise_arquivo`
+Applying migration `20261010120000_revoga_permissoes_sobrando`
+Applying migration `20261012120000_auditoria_imutavel`
+Applying migration `20261014120000_termos_aceite`
+Applying migration `20261014120100_aberturas_link_campanha`
+
+Database reset successful
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261007184231_init/
+    └─ migration.sql
+  └─ 20261007195320_habilita_rls/
+    └─ migration.sql
+  └─ 20261007211705_conta_convite_login/
+    └─ migration.sql
+  └─ 20261007212417_limite_reset_no_banco/
+    └─ migration.sql
+  └─ 20261008120000_analise_arquivos/
+    └─ migration.sql
+  └─ 20261008130000_agente_osquery/
+    └─ migration.sql
+  └─ 20261008140000_ativo_ip_descricao/
+    └─ migration.sql
+  └─ 20261008150000_virustotal/
+    └─ migration.sql
+  └─ 20261008160000_cruzamento_vulnerabilidades/
+    └─ migration.sql
+  └─ 20261008170000_auditoria_cadeia_hash/
+    └─ migration.sql
+  └─ 20261008175000_auditoria_sequencia_sem_salto/
+    └─ migration.sql
+  └─ 20261008180000_historico_status_achado/
+    └─ migration.sql
+  └─ 20261008190000_ciencia_monitoramento/
+    └─ migration.sql
+  └─ 20261008200000_analise_origem_campanha/
+    └─ migration.sql
+  └─ 20261008220000_reserva_analise_arquivo/
+    └─ migration.sql
+  └─ 20261010120000_revoga_permissoes_sobrando/
+    └─ migration.sql
+  └─ 20261012120000_auditoria_imutavel/
+    └─ migration.sql
+  └─ 20261014120000_termos_aceite/
+    └─ migration.sql
+  └─ 20261014120100_aberturas_link_campanha/
+    └─ migration.sql
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v5.22.0) to .\node_modules\@prisma\client in 124ms
+
+[carga] seed de contrato…
+[seed] usuários, departamentos e ativos criados.
+[carga] seed de demonstração…
+[seed:demo] senhas da demonstração gravadas em C:\Users\Leo\AppData\Local\Temp\baluarte-carga-senhas-iByKMy\senhas-demo.txt
+[seed:demo] 8 findings, 3 campanhas, 210 usuarios.
+[carga] massa de carga…
+[seed:carga] 25 ativos, 1208 achados no banco baluarte_carga.
+[carga] API iniciada (pid 36184; log em C:\Users\Leo\AppData\Local\Temp\baluarte-carga\api.log)
+[carga] API em http://127.0.0.1:8100 (NODE_ENV=production)
+[carga] massa: 1.208 achados em 25 ativos
+[carga] cenário: Dashboard (`GET /api/dashboard`) (200 conexões, 30 s)
+[carga] cenário: Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`) (200 conexões, 30 s)
+[carga] cenário: Ativos com nota de risco (`GET /api/assets`) (200 conexões, 30 s)
+[carga] cenário: relatório em PDF (1 conexões, 30 s)
+[carga] vaga única de exportação: 3 pedidos simultâneos do PDF
+[carga] cenário: login (50 conexões, 30 s)
+[carga] limite de tentativas de login
+[carga] relatório em C:\Users\Leo\Desktop\Baluarte\Baluarte\.claude\worktrees\testes-jmeter-e774a0\testes\carga\RELATORIO.md
+[carga] Dashboard (`GET /api/dashboard`): 5218 req, p50 1.105 ms, p90 1.288 ms, p95 1.330 ms, p99 1.400 ms, não 2xx 0, erros 0
+[carga] Vulnerabilidades paginadas (`GET /api/vulnerabilidades?pagina=1..61&tamanho=20`): 17031 req, p50 345 ms, p90 375 ms, p95 386 ms, p99 432 ms, não 2xx 0, erros 0
+[carga] Ativos com nota de risco (`GET /api/assets`): 24200 req, p50 242 ms, p90 273 ms, p95 289 ms, p99 309 ms, não 2xx 0, erros 0
+[carga] Relatório de vulnerabilidades em PDF, 1.208 achados (`GET /api/vulnerabilidades/relatorio.pdf`): 55 req, p50 543 ms, p90 563 ms, p95 574 ms, p99 585 ms, não 2xx 0, erros 0
+[carga] Login com senha certa (`POST /api/login`, bcrypt custo 10): 498 req, p50 2.900 ms, p90 3.148 ms, p95 3.167 ms, p99 3.839 ms, não 2xx 0, erros 0
+[carga] limite: {"401":5,"429":15}; senha certa depois → 429
+[carga] exportações simultâneas: 1 PDF, 2 × 429 EXPORTACAO_EM_ANDAMENTO (atende)
+[carga] API parada
+Script executed successfully.
+[carga] banco baluarte_carga apagado
+exit=0 dur=221s fim 2026-11-24T16:05:08-03:00

@@ -1,0 +1,40 @@
+# M2 - MUTACAO REVERTIDA (codigo original) - 2026-11-24T21:23:08-03:00
+# comando: node --import tsx --test tests/unidade/cvss-catalogo.test.ts
+# git diff -- src (vazio = original):
+
+▶ notaCvss: nota base CVSS v3.1 (valores da calculadora oficial do FIRST)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H -> 9.8 (6.9062ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H -> 10 (0.1788ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N -> 6.1 (0.0988ms)
+  ✔ CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H -> 7.8 (0.1157ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N -> 6.5 (0.1077ms)
+  ✔ CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N -> 5.9 (0.0763ms)
+  ✔ CVSS:3.1/AV:P/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N -> 1.6 (0.0762ms)
+  ✔ sem impacto (C/I/A = N) a nota é 0 (0.0983ms)
+  ✔ a ordem das métricas não importa (0.177ms)
+  ✔ vetor inválido -> null (versão errada, métrica faltando, repetida, desconhecida ou valor fora da lista) (0.2075ms)
+✔ notaCvss: nota base CVSS v3.1 (valores da calculadora oficial do FIRST) (9.2934ms)
+▶ faixaCvss: severidade pela nota
+  ✔ limites das faixas (0.1339ms)
+✔ faixaCvss: severidade pela nota (0.2393ms)
+▶ cweValido / cveValido
+  ✔ aceita os formatos oficiais (0.2735ms)
+  ✔ recusa o resto (0.0942ms)
+✔ cweValido / cveValido (0.4493ms)
+▶ catálogo de achados
+  ✔ todo item do catálogo gera um achado consistente (nota do vetor, severidade da nota) (0.4345ms)
+  ✔ lerRemediacao numera os passos e descarta os fora do formato (0.6043ms)
+✔ catálogo de achados (1.1307ms)
+▶ varredura simulada
+  ✔ statusPorTempo: fila, andamento e concluída nos limites (0.1449ms)
+  ✔ gerarFindings sorteia de 2 a 4 tipos distintos do catálogo (1.2164ms)
+✔ varredura simulada (1.4631ms)
+ℹ tests 17
+ℹ suites 5
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 233.4285
+# exit=0

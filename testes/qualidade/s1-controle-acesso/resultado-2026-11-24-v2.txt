@@ -1,0 +1,14 @@
+{
+ "registros": 2742,
+ "rotasApi": 58,
+ "protegidas": 47,
+ "publicas": 11,
+ "restritasPorPerfil": 32,
+ "com401SemToken": 47,
+ "restritasCom403": 32,
+ "completas": 47,
+ "percentual": 100,
+ "perfilNaoLido": []
+}
+
+FALTANDO (rota | perfis | chamadas nos testes | 401 sem token | 403 de perfil):

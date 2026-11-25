@@ -1,0 +1,13 @@
+inicio 2026-11-24T16:20:50-03:00 codigo=5459b65 (conserto)
+▶ mudança de status grava o histórico (mesma transação)
+  ✔ o instante do evento é o da gravação, depois da trava da linha, e não o do início da instrução (2293.9678ms)
+✔ mudança de status grava o histórico (mesma transação) (4568.472ms)
+ℹ tests 1
+ℹ suites 1
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15669.016
+exit=0

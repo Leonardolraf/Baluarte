@@ -1,0 +1,67 @@
+# M2 - MUTACAO APLICADA (M2-faixa-alto.patch) - 2026-11-24T21:23:07-03:00
+# comando: node --import tsx --test tests/unidade/cvss-catalogo.test.ts
+ backend/src/services/cvss.service.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+▶ notaCvss: nota base CVSS v3.1 (valores da calculadora oficial do FIRST)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H -> 9.8 (7.6883ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H -> 10 (0.1978ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N -> 6.1 (0.1308ms)
+  ✔ CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H -> 7.8 (0.1282ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N -> 6.5 (0.1051ms)
+  ✔ CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N -> 5.9 (0.0828ms)
+  ✔ CVSS:3.1/AV:P/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N -> 1.6 (0.0691ms)
+  ✔ sem impacto (C/I/A = N) a nota é 0 (0.1016ms)
+  ✔ a ordem das métricas não importa (0.1644ms)
+  ✔ vetor inválido -> null (versão errada, métrica faltando, repetida, desconhecida ou valor fora da lista) (0.2759ms)
+✔ notaCvss: nota base CVSS v3.1 (valores da calculadora oficial do FIRST) (10.3308ms)
+▶ faixaCvss: severidade pela nota
+  ✖ limites das faixas (5.789ms)
+✖ faixaCvss: severidade pela nota (6.0356ms)
+▶ cweValido / cveValido
+  ✔ aceita os formatos oficiais (0.5387ms)
+  ✔ recusa o resto (0.1626ms)
+✔ cweValido / cveValido (0.9416ms)
+▶ catálogo de achados
+  ✔ todo item do catálogo gera um achado consistente (nota do vetor, severidade da nota) (0.7416ms)
+  ✔ lerRemediacao numera os passos e descarta os fora do formato (0.9592ms)
+✔ catálogo de achados (1.8536ms)
+▶ varredura simulada
+  ✔ statusPorTempo: fila, andamento e concluída nos limites (0.2002ms)
+  ✔ gerarFindings sorteia de 2 a 4 tipos distintos do catálogo (2.2806ms)
+✔ varredura simulada (2.6109ms)
+ℹ tests 17
+ℹ suites 5
+ℹ pass 16
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 355.2673
+
+✖ failing tests:
+
+test at tests\unidade\cvss-catalogo.test.ts:1:1919
+✖ limites das faixas (5.789ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'Crítico' !== 'Alto'
+  
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\unidade\cvss-catalogo.test.ts:55:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at node:internal/test_runner/test:1903:71
+      at node:internal/per_context/primordials:504:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:478:3)
+      at node:internal/per_context/primordials:504:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Crítico',
+    expected: 'Alto',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+# exit=1

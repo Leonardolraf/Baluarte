@@ -1,0 +1,12 @@
+diff --git a/backend/src/services/cvss.service.ts b/backend/src/services/cvss.service.ts
+index 9c2d34f..d215cf0 100644
+--- a/backend/src/services/cvss.service.ts
++++ b/backend/src/services/cvss.service.ts
+@@ -70,6 +70,6 @@ export function cveValido(cve: unknown): cve is string {
+ export function faixaCvss(cvss: number): 'Baixo' | 'Médio' | 'Alto' | 'Crítico' {
+   if (cvss <= 3.9) return 'Baixo';
+   if (cvss <= 6.9) return 'Médio';
+-  if (cvss <= 8.9) return 'Alto';
++  if (cvss < 8.9) return 'Alto';
+   return 'Crítico';
+ }

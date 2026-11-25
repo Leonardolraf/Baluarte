@@ -1,0 +1,617 @@
+inicio 2026-11-24T15:44:59-03:00
+
+> baluarte-v2-backend@0.1.0 cobertura:unidade
+> c8 --reports-dir=coverage-unidade --reporter=text --reporter=html --reporter=json-summary --all --include="src/config/**/*.ts" --include="src/utils/**/*.ts" --include="src/models/dominio.model.ts" --include="src/middlewares/auth.middleware.ts" --include="src/services/cvss.service.ts" --include="src/models/catalogoAchado.model.ts" --include="src/services/cicloVarredura.service.ts" --include="src/services/campanhaEmail.service.ts" --include="src/services/token.service.ts" --include="src/services/linkConta.service.ts" --include="src/repositories/usuario.repository.ts" --include="src/services/campanhaMetricas.service.ts" --include="src/models/treinamento.model.ts" --include="src/models/segundaOpiniao.model.ts" --include="src/services/relatorioVulnerabilidade.service.ts" --include="src/services/relatorioPdf.service.ts" --include="src/services/relatorioExcel.service.ts" --check-coverage --lines 75 --branches 85 --functions 70 node --import tsx --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=coverage-unidade/junit.xml "tests/unidade/**/*.test.ts"
+
+▶ CAMPANHA_SEM_TRAVA_DOMINIO (allowlist)
+  ✔ OFF por padrão (1.9402ms)
+  ✔ só "1" liga; outros valores não (0.5803ms)
+  ✔ ON: qualquer domínio passa (0.2566ms)
+  ✔ OFF respeita a lista DOMINIO_INTERNO (DT19) como antes (0.3216ms)
+✔ CAMPANHA_SEM_TRAVA_DOMINIO (allowlist) (5.1473ms)
+▶ analisar (INSTREAM)
+  ✔ arquivo comum: LIMPO, e o clamd recebe exatamente o conteúdo enviado em vários blocos (16.5801ms)
+  ✔ arquivo de teste EICAR: AMEACA com o nome da assinatura (6.3994ms)
+  ✔ arquivo vazio também é analisado (só o bloco final) (3.479ms)
+  ✔ erro do clamd vira AntivirusIndisponivel, nunca "limpo" (3.2486ms)
+  ✔ clamd que não responde: tempo esgotado vira AntivirusIndisponivel (308.4555ms)
+  ✔ tempo limite: 5 min por padrão; vazio, zero, negativo ou texto voltam ao padrão (zero desligaria o socket) (0.5986ms)
+  ✔ DT26: clamd que responde "OK" antes do fim do envio nunca vira "limpo" (60.4116ms)
+  ✔ DT26: clamd que responde "OK" e fecha no meio do envio também é falha, não "limpo" (6.248ms)
+  ✔ sem CLAMAV_HOST ou com o clamd fora do ar: AntivirusIndisponivel (2.6457ms)
+✔ analisar (INSTREAM) (420.0705ms)
+▶ lerVeredito
+  ✔ interpreta as respostas do clamd (0.4189ms)
+✔ lerVeredito (0.5508ms)
+▶ escrever: ouvintes do socket não acumulam (contrapressão)
+  ✔ depois de cada drain não sobra ouvinte de error nem de drain, em muitos blocos seguidos (1.3998ms)
+  ✔ erro durante a espera vira AntivirusIndisponivel e tira o ouvinte de drain (0.3666ms)
+  ✔ arquivo grande pelo clamd falso: nenhum MaxListenersExceededWarning (473.0756ms)
+✔ escrever: ouvintes do socket não acumulam (contrapressão) (475.2027ms)
+▶ envelope de resposta (util)
+  ✔ agora() é ISO em UTC sem milissegundos (2.6989ms)
+  ✔ erro() monta o envelope do contrato (0.4312ms)
+  ✔ wrap() transforma exceção do handler em 500 padronizado, sem vazar detalhe (10.3514ms)
+  ✔ wrap() não sobrescreve resposta já enviada (2.2539ms)
+✔ envelope de resposta (util) (17.962ms)
+▶ JWT
+  ✔ gerarToken: HS256, 30 min, com início de sessão e emissão em milissegundos (6.3672ms)
+  ✔ gerarToken preserva o início de sessão na renovação (0.532ms)
+  ✔ gerarToken não copia campos extras do payload para o token (0.419ms)
+✔ JWT (7.6155ms)
+▶ validarSegredoJwt
+  ✔ em produção recusa segredo ausente, curto ou de exemplo (1.6042ms)
+  ✔ fora de produção só avisa (1.058ms)
+✔ validarSegredoJwt (3.1833ms)
+▶ exigeToken (caminhos sem banco) e exigePerfil
+  ✔ sem token -> 401 TOKEN_AUSENTE; token adulterado ou de outro segredo -> 401 TOKEN_INVALIDO (2.105ms)
+  ✔ exigePerfil decide pelo perfil carregado do banco, não pelo do token (0.3813ms)
+✔ exigeToken (caminhos sem banco) e exigePerfil (2.8112ms)
+▶ e-mail
+  ✔ urlFrontend tira a barra final (0.3988ms)
+  ✔ em teste vai para a caixa em memória (0.3897ms)
+  ✔ em produção sem SMTP não envia nem imprime o conteúdo (0.3588ms)
+  ✔ fora de produção sem SMTP imprime o e-mail no log (0.3121ms)
+✔ e-mail (1.8213ms)
+▶ e-mail simulado da campanha
+  ✔ links só para o frontend da plataforma (1.4801ms)
+  ✔ cada template tem assunto próprio e todos trazem os dois links e o aviso de simulação (1.4493ms)
+  ✔ template desconhecido cai no de urgência (0.1503ms)
+✔ e-mail simulado da campanha (3.3509ms)
+▶ exigeCienciaAviso
+  ✔ sem ciência da versão em vigor (ou sem usuário carregado) -> 403 CIENCIA_AVISO_PENDENTE (1.713ms)
+  ✔ com ciência segue adiante (0.1065ms)
+  ✔ exigeToken e exigeSessao recusam token ausente antes de olhar a ciência (0.2256ms)
+  ✔ o código de RBAC continua o mesmo (o gate não substitui exigePerfil) (0.133ms)
+✔ exigeCienciaAviso (3.2915ms)
+▶ introspecção do router: o gate cobre toda rota autenticada
+  ✔ toda rota autenticada usa exigeToken (com o gate), menos as 5 exceções (0.9915ms)
+  ✔ as rotas públicas continuam sem sessão e sem gate (0.1705ms)
+  ✔ o gate vem antes do RBAC: exigeToken é o primeiro middleware de toda rota com perfil (0.13ms)
+  ✔ GET /monitoramento/ciencias segue com exigeToken (gate) e perfil de Administrador (0.1273ms)
+  ✔ as rotas do #5 (termos de uso) não existem mais (0.1145ms)
+✔ introspecção do router: o gate cobre toda rota autenticada (1.8133ms)
+▶ configuração do clamd no docker-compose.yml
+  ✔ o fluxo aceita o arquivo inteiro do limite da API (1.5965ms)
+  ✔ só a cota corta, e ela avisa: AlertExceedsMax ligado e os limites silenciosos acima do MaxScanSize (0.4699ms)
+  ✔ o limite de tempo do clamd vem antes do tempo limite da API, e é explícito (0.2279ms)
+  ✔ a busca por Zip64 da API (DT27) descomprime até a cota do clamd, nem mais nem menos (0.195ms)
+✔ configuração do clamd no docker-compose.yml (4.8016ms)
+▶ limites de memória do docker-compose.servidor.yml (VM)
+  ✔ o db não tem mem_limit (o OOM-killer no postmaster derrubaria o banco em crash recovery) (1.9524ms)
+  ✔ a recarga das assinaturas não soma ao pico do clamav (ConcurrentDatabaseReload no) (0.8612ms)
+  ✔ o clamav fica acima do pico medido do clamd (2,7 GiB) (0.2381ms)
+  ✔ o heap do Node fica abaixo do mem_limit da API, com folga, e acima do pico do relatório no teto (1.1161ms)
+✔ limites de memória do docker-compose.servidor.yml (VM) (8.5223ms)
+▶ pacote do inventário -> consulta ao OSV
+  ✔ deb no Debian e no Ubuntu: ecossistema com a versão da distribuição (LTS com sufixo) (1.7231ms)
+  ✔ rpm no AlmaLinux e no Rocky; RHEL, SUSE, Windows e macOS ficam sem cobertura (0.368ms)
+  ✔ deb consulta o pacote-fonte; a versão entre parênteses vence a do binário (1.8797ms)
+✔ pacote do inventário -> consulta ao OSV (5.9852ms)
+▶ tabela Windows -> CPE do NVD
+  ✔ casa o nome que o osquery lê e monta o CPE 2.3 com a versão do NVD (1.0552ms)
+  ✔ programa fora da tabela, Edge WebView ou sem versão numérica não vira consulta (0.3305ms)
+  ✔ a tabela cobre os programas mais comuns com CPE bem formado (0.5411ms)
+✔ tabela Windows -> CPE do NVD (2.2787ms)
+▶ leitura das respostas do OSV
+  ✔ querybatch: ids por consulta, na ordem, sem repetição; formato errado = null (5.0487ms)
+  ✔ registro do Ubuntu: CVE do id, vetor CVSS_V3 e versão corrigida por ecossistema (7.091ms)
+  ✔ boletim (USN/DSA) junta vários CVEs; registro do Debian sem nota; retirado; vetor no pacote afetado (1.3494ms)
+  ✔ CWE do registro só quando é CWE válido (1.5381ms)
+✔ leitura das respostas do OSV (16.1561ms)
+▶ leitura das respostas do NVD
+  ✔ vetor 3.1 da métrica Primary; sem 3.1, o 3.0; CWE válido das fraquezas; rejeitado sai (4.6472ms)
+  ✔ resposta fora do formato = null; lista vazia = nenhuma vulnerabilidade (0.2445ms)
+✔ leitura das respostas do NVD (5.1071ms)
+▶ vetor, nota e severidade do achado de estação
+  ✔ vetorBase31: só as 8 métricas base, na ordem; 3.0 vira 3.1; inválido = null (1.1532ms)
+  ✔ a nota sai do vetor e a severidade da nota, nas quatro faixas (1.0037ms)
+  ✔ achado do OSV: categoria de componente, CVE, programa, evidência e passos com a versão corrigida (0.3492ms)
+  ✔ achado do NVD: passos apontam o CVE; vetor 3.0 fica registrado na evidência (0.3001ms)
+  ✔ vetor inválido ou CVE fora do formato não vira achado (nada de nota inventada) (0.662ms)
+  ✔ validade do cache: 24 h por padrão; VULN_CACHE_HORAS dentro de 1 a 720 (0.6053ms)
+✔ vetor, nota e severidade do achado de estação (10.0992ms)
+▶ clientes HTTP do OSV e do NVD (servidor falso local)
+  ✔ OSV: querybatch manda pacote, ecossistema e versão; vulns/{id} codifica o id (102.7937ms)
+  ✔ 404 é "não existe" (null), não falha (4.6591ms)
+  ✔ NVD: cpeName com até 2000 por página; chave só pelo ambiente, no cabeçalho apiKey (10.2823ms)
+  ✔ erro 5xx, limite (403), corpo que não é JSON, tempo esgotado e servidor fora do ar: BaseIndisponivel (316.6954ms)
+  ✔ tempo limite padrão de 15 s; VULN_TIMEOUT_MS muda (0.3601ms)
+✔ clientes HTTP do OSV e do NVD (servidor falso local) (475.5954ms)
+▶ notaCvss: nota base CVSS v3.1 (valores da calculadora oficial do FIRST)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H -> 9.8 (19.8846ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H -> 10 (0.2743ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N -> 6.1 (0.1768ms)
+  ✔ CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H -> 7.8 (0.1393ms)
+  ✔ CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N -> 6.5 (0.1343ms)
+  ✔ CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N -> 5.9 (0.1035ms)
+  ✔ CVSS:3.1/AV:P/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N -> 1.6 (0.1014ms)
+  ✔ sem impacto (C/I/A = N) a nota é 0 (0.1432ms)
+  ✔ a ordem das métricas não importa (0.1994ms)
+  ✔ vetor inválido -> null (versão errada, métrica faltando, repetida, desconhecida ou valor fora da lista) (0.2403ms)
+✔ notaCvss: nota base CVSS v3.1 (valores da calculadora oficial do FIRST) (23.8177ms)
+▶ faixaCvss: severidade pela nota
+  ✔ limites das faixas (0.2093ms)
+✔ faixaCvss: severidade pela nota (0.3526ms)
+▶ cweValido / cveValido
+  ✔ aceita os formatos oficiais (0.4641ms)
+  ✔ recusa o resto (0.1759ms)
+✔ cweValido / cveValido (0.8337ms)
+▶ catálogo de achados
+  ✔ todo item do catálogo gera um achado consistente (nota do vetor, severidade da nota) (0.6949ms)
+  ✔ lerRemediacao numera os passos e descarta os fora do formato (1.2758ms)
+✔ catálogo de achados (2.1548ms)
+▶ varredura simulada
+  ✔ statusPorTempo: fila, andamento e concluída nos limites (1.856ms)
+  ✔ gerarFindings sorteia de 2 a 4 tipos distintos do catálogo (2.0448ms)
+✔ varredura simulada (4.1536ms)
+▶ detector de Zip64: a forma que o clamd não lê é detectada
+  ✔ 0xFFFFFFFF no cabeçalho local, sem descritor (Python force_zip64, 7-Zip -si) (6.1017ms)
+  ✔ a mesma, com um campo extra comum antes do Zip64 (0.7251ms)
+  ✔ 0xFFFFFFFF no cabeçalho local sem o campo extra Zip64 (montado à mão) (0.7175ms)
+  ✔ 0xFFFFFFFF só no tamanho comprimido (0.3148ms)
+  ✔ docx Zip64 nessa forma (o container de docx/xlsx/jar/apk/odt é zip) (0.8049ms)
+  ✔ depois de outro conteúdo (executável autoextraível, zip colado no fim) (12.7797ms)
+  ✔ só na última entrada de um arquivo grande (vários blocos antes) (53.4483ms)
+✔ detector de Zip64: a forma que o clamd não lê é detectada (77.708ms)
+▶ detector de Zip64: as formas que o clamd lê não contam (seguem o veredito dele)
+  ✔ 0xFFFFFFFF no cabeçalho local com descritor de dados (Info-ZIP por pipe) (3.2925ms)
+  ✔ tamanhos reais no cabeçalho local com o campo extra 0x0001 (NetBeans) (1.3982ms)
+  ✔ Zip64 só no diretório central e no registro de fim Zip64 (0.9589ms)
+  ✔ Zip64 só no diretório central (0.7185ms)
+  ✔ só o registro de fim Zip64 + localizador (1.0433ms)
+  ✔ docx com Zip64 na forma do NetBeans e na do Info-ZIP por pipe (7.3865ms)
+✔ detector de Zip64: as formas que o clamd lê não contam (seguem o veredito dele) (15.6666ms)
+▶ detector de Zip64: zip dentro de zip
+  ✔ a forma não lida (0xFFFFFFFF no cabeçalho local, sem descritor (Python force_zip64, 7-Zip -si)) comprimida dentro de zip comum (6.0929ms)
+  ✔ a forma não lida (a mesma, com um campo extra comum antes do Zip64) comprimida dentro de zip comum (1.2399ms)
+  ✔ a forma não lida (0xFFFFFFFF no cabeçalho local sem o campo extra Zip64 (montado à mão)) comprimida dentro de zip comum (1.1933ms)
+  ✔ a forma não lida (0xFFFFFFFF só no tamanho comprimido) comprimida dentro de zip comum (0.9618ms)
+  ✔ forma lida (0xFFFFFFFF no cabeçalho local com descritor de dados (Info-ZIP por pipe)) dentro de zip comum: sem alarme (1.129ms)
+  ✔ forma lida (tamanhos reais no cabeçalho local com o campo extra 0x0001 (NetBeans)) dentro de zip comum: sem alarme (2.112ms)
+  ✔ forma lida (Zip64 só no diretório central e no registro de fim Zip64) dentro de zip comum: sem alarme (1.9249ms)
+  ✔ forma lida (Zip64 só no diretório central) dentro de zip comum: sem alarme (9.2142ms)
+  ✔ forma lida (só o registro de fim Zip64 + localizador) dentro de zip comum: sem alarme (3.3849ms)
+  ✔ a forma não lida guardada (sem compressão) dentro de zip comum (0.8541ms)
+  ✔ a forma não lida dentro de um Zip64 que o clamd lê (Info-ZIP por pipe e NetBeans) (2.3511ms)
+  ✔ três níveis abaixo, todos comprimidos, depois de outras entradas (4.0961ms)
+  ✔ entrada deflate corrompida antes não esconde a entrada seguinte (2.2916ms)
+  ✔ arquivo cortado no meio de uma entrada comprimida não derruba a busca (31.1989ms)
+✔ detector de Zip64: zip dentro de zip (69.4544ms)
+▶ detector de Zip64: cabeçalho atravessando a fronteira entre blocos
+  ✔ 0xFFFFFFFF no cabeçalho local, sem descritor (Python force_zip64, 7-Zip -si): todo ponto de corte em dois blocos (9.4554ms)
+  ✔ a mesma, com um campo extra comum antes do Zip64: todo ponto de corte em dois blocos (14.1013ms)
+  ✔ 0xFFFFFFFF no cabeçalho local sem o campo extra Zip64 (montado à mão): todo ponto de corte em dois blocos (5.7954ms)
+  ✔ 0xFFFFFFFF só no tamanho comprimido: todo ponto de corte em dois blocos (6.2206ms)
+  ✔ formas lidas: nenhum ponto de corte cria alarme (1017.0975ms)
+  ✔ blocos de 1, 2, 3 e 5 bytes, direto e dentro de zip comprimido (100.7954ms)
+  ✔ zip comum e Info-ZIP por pipe em blocos de 1 byte continuam sem alarme (122.655ms)
+✔ detector de Zip64: cabeçalho atravessando a fronteira entre blocos (1277.0133ms)
+▶ detector de Zip64: sem falso positivo em binário
+  ✔ 32 MiB de bytes aleatórios (257.8654ms)
+  ✔ assinaturas soltas no meio de bytes aleatórios (sem a estrutura em volta) não contam (82.9457ms)
+  ✔ 0xFFFFFFFF e o id 0x0001 fora de um cabeçalho local válido não contam (0.7771ms)
+✔ detector de Zip64: sem falso positivo em binário (341.9544ms)
+▶ detector de Zip64: tetos (zip-bomba) viram verificação incompleta, nunca "sem Zip64"
+  ✔ passou do limite de bytes descomprimidos (34.9601ms)
+  ✔ passou da profundidade máxima (4.8488ms)
+  ✔ Zip64 achado vale mais que o teto (zip64: true, incompleta: false) (17.8404ms)
+  ✔ o detector não lança: depois de finalizar, observar e finalizar de novo não mudam nada (0.4581ms)
+  ✔ descartar no meio (análise interrompida) solta tudo sem lançar (6.5959ms)
+✔ detector de Zip64: tetos (zip-bomba) viram verificação incompleta, nunca "sem Zip64" (65.4868ms)
+▶ veredito com Zip64 (DT27)
+  ✔ clamd "OK" + Zip64 = AMEACA Baluarte.Zip64.NaoAnalisavel (0.4058ms)
+  ✔ clamd "OK" + busca incompleta = AMEACA Baluarte.Zip64.VerificacaoIncompleta (0.1426ms)
+  ✔ clamd "OK" sem Zip64 continua limpo (0.2261ms)
+  ✔ detecção do clamd vale como veio, com ou sem Zip64 (0.2282ms)
+  ✔ a mensagem diz que o antivírus não lê essa variante, e nunca "limpo" ou "seguro" (1.379ms)
+  ✔ não se confunde com regra própria nem com limite do clamd (0.331ms)
+✔ veredito com Zip64 (DT27) (3.1794ms)
+▶ validarDominioInterno (DT28)
+  ✔ produção sem a variável (ausente, vazia ou só espaços): recusa (2.4911ms)
+  ✔ produção com valor inválido (sozinho ou no meio de uma lista válida): recusa (1.1145ms)
+  ✔ produção com @empresa.com (sozinho, na lista, endereço ou subdomínio): recusa como domínio de terceiro (0.7059ms)
+  ✔ produção com domínio válido: sobe e usa o valor da variável (0.8087ms)
+  ✔ dev e teste sem a variável: não recusa e o padrão continua @empresa.com (0.5961ms)
+✔ validarDominioInterno (DT28) (7.7197ms)
+▶ src/server.ts em produção (DT28)
+  ✔ sem DOMINIO_INTERNO o processo não sobe e o log explica o motivo (4988.1778ms)
+  ✔ com @empresa.com o processo não sobe (2853.5789ms)
+  ✖ com um domínio válido o processo sobe (2846.1091ms)
+✖ src/server.ts em produção (DT28) (10690.0019ms)
+▶ transporte Brevo
+  ✔ envia pela API com a chave no cabeçalho, remetente separado em nome e e-mail, e só texto (67.8672ms)
+  ✔ tem prioridade sobre o SMTP quando os dois estão configurados (9.6468ms)
+  ✔ erro da API vira false, e o log não leva a chave nem o conteúdo do e-mail (18.5048ms)
+✔ transporte Brevo (107.7825ms)
+▶ lerRemetente
+  ✔ separa nome e e-mail nos formatos aceitos (0.3361ms)
+✔ lerRemetente (0.4918ms)
+▶ docker-entrypoint.sh: seeds (DT28)
+  ✔ sem variáveis, nenhum seed roda: só migrations e a API (845.3019ms)
+  ✔ SEED_CONTRATO=1 roda o seed uma vez; na segunda subida o marcador impede (1235.2748ms)
+  ✔ SEED_DEMO=1 também tem marcador próprio (888.5315ms)
+  ✔ SEED_DEMO=1 grava as senhas da demonstração no volume, ao lado do jwt.secret (DT32) (611.1537ms)
+  ✔ seed de contrato que falha derruba a subida e não grava o marcador (408.3734ms)
+  ✔ SEMEAR_PROIBIDO=1 com SEED_CONTRATO=1 recusa antes de tocar no banco (78.5609ms)
+  ✔ NODE_ENV=production com SEED_DEMO=1 recusa (70.7727ms)
+  ✔ SEMEAR_PROIBIDO=1 sem seed pedido sobe normalmente (caso da VM) (302.8625ms)
+  ✔ DATABASE_URL que não é PostgreSQL continua recusado (64.8193ms)
+✔ docker-entrypoint.sh: seeds (DT28) (4507.5353ms)
+▶ validar: regras aplicadas na ordem do contrato
+  ✔ a primeira regra que falha decide o erro, mesmo com outros campos errados (5.0514ms)
+  ✔ corpo válido volta inteiro; corpo ausente vira objeto vazio (0.8682ms)
+  ✔ mensagem calculada a partir do valor e status próprio (0.7535ms)
+  ✔ opcional: ausente passa, presente é validado (null não é ausência) (0.6821ms)
+✔ validar: regras aplicadas na ordem do contrato (11.1375ms)
+▶ schemas de campo
+  ✔ preenchido: só undefined, null e "" falham (0 e false passam) (0.5921ms)
+  ✔ umDe aceita só valores da lista, com o mesmo texto (0.6095ms)
+  ✔ normalizarHost: tira esquema http(s), caminho, query, porta e barra final; sem esquema, só o trim (B10) (2.8316ms)
+  ✔ ipOpcional e descricaoOpcional: ausente passa; IPv4 e até 500 caracteres (B10) (1.018ms)
+  ✔ host: IPv4 válido, domínio, e recusa números sem formato de IPv4 (0.4202ms)
+  ✔ senhaNova e problemaDaSenha concordam em cada regra da política (0.8329ms)
+  ✔ notaCvss: 0 a 10, aceita texto numérico; recusa vazio, ausente e fora da faixa (0.4785ms)
+  ✔ textoDeQuery: string passa; objeto ou array vira undefined (injeção de operador) (1.0341ms)
+✔ schemas de campo (8.461ms)
+▶ consulta do histórico de análises (B17): resultado e paginação
+  ✔ aceita ausente, vazio, LIMPO, AMEACA e os limites de página e tamanho (0.5981ms)
+  ✔ recusa valor fora da lista, caixa diferente, objeto e lista, cada um com o próprio código (0.6351ms)
+  ✔ a regra de paginação compartilhada mantém as mensagens da auditoria (0.9057ms)
+✔ consulta do histórico de análises (B17): resultado e paginação (2.4269ms)
+▶ pesos únicos e índice global
+  ✔ a nota do ativo e o índice usam a mesma soma ponderada (PESO_SEVERIDADE) (27.3183ms)
+  ✔ curva de saturação (12/10/2026): os números da decisão do Leo, com os pesos 10/7/4/1 (0.3955ms)
+  ✔ com pouca carga é a régua linear antiga; com muita, fica abaixo dela e nunca trava antes de corrigir tudo (0.3671ms)
+  ✔ a troca de pesos do DT07 continua valendo (exemplo do CHANGELOG, agora pela curva) (0.1644ms)
+  ✔ piso 0, teto 100 e pelo menos 1 ativo na capacidade (0.2569ms)
+✔ pesos únicos e índice global (30.9749ms)
+▶ dias da janela (fuso de Brasília)
+  ✔ 30 dias, do mais antigo a hoje; hoje termina agora, os outros 1 ms antes da meia-noite local (1.4946ms)
+  ✔ 23h30 em Brasília já é o dia seguinte em UTC, mas o dia é o local (2.4566ms)
+  ✔ virada de mês e de ano (2.0053ms)
+  ✔ meia-noite local em outro fuso com horário de verão (1.3556ms)
+✔ dias da janela (fuso de Brasília) (8.0083ms)
+▶ montagem dos pontos
+  ✔ dia sem linha fica zerado; contagens por severidade; índice com a fórmula do KPI (0.8728ms)
+  ✔ arquivo malicioso pesa como crítico no índice, mas não entra na contagem de críticos (0.44ms)
+✔ montagem dos pontos (1.584ms)
+▶ HASH_TEXTO_AVISO
+  ✔ é o SHA-256 do texto servido nesta versão (2.0384ms)
+  ✔ a versão segue o formato aceito pela rota e pela CHECK do banco (0.9401ms)
+  ✔ a serialização é determinística: a ordem das chaves não muda o hash, a das listas sim (0.9183ms)
+  ✔ qualquer mudança de texto (uma letra numa frase) muda o hash (0.3374ms)
+✔ HASH_TEXTO_AVISO (6.1839ms)
+▶ erro de negócio (utils/resposta)
+  ✔ falhar lança ErroNegocio com status, mensagem e código (1.513ms)
+  ✔ wrap devolve o envelope do contrato para ErroNegocio, sem logar como erro interno (11.6032ms)
+  ✔ wrap não responde de novo se a resposta já saiu (6.6275ms)
+✔ erro de negócio (utils/resposta) (21.8213ms)
+▶ métricas de campanha
+  ✔ funilDe: valores e percentuais sobre os enviados (0.6082ms)
+  ✔ riscoHumano: pesos 2/2 sobre as taxas de clique e de submissão de todas as campanhas, com teto 100 (0.5631ms)
+  ✔ riscoHumano sem envio é null (não medido), nunca 0 (0.1501ms)
+  ✔ funilDe sem envios não divide por zero (0.1566ms)
+  ✔ mapCampaign: destinatários e taxa de clique arredondada (0.3082ms)
+  ✔ statusEfetivo (DT34): sem envio AGENDADA, com envio ATIVA, ENCERRADA gravada respeitada (0.1695ms)
+  ✔ mapCampaign expõe o status efetivo, não o gravado (0.2524ms)
+  ✔ totais soma enviados e clicados de todas as campanhas (0.3445ms)
+✔ métricas de campanha (3.047ms)
+▶ treinamento
+  ✔ podeVerTreinamento: dono, Administrador e Analista sim; outro Colaborador não (0.2727ms)
+  ✔ dadosTreinamento: conteúdo pelo template, progresso e template desconhecido cai em urgência (0.1918ms)
+✔ treinamento (0.6067ms)
+▶ constantes de domínio
+  ✔ operadores são Administrador e Analista; status encerrados são subconjunto dos status de achado (0.214ms)
+  ✔ dominioInterno: DOMINIO_INTERNO do ambiente, normalizado, com @empresa.com por padrão (B10) (0.4741ms)
+  ✔ destinatarioInterno (DT19): lista de domínios e endereços liberados, sem liberar o provedor inteiro (0.6032ms)
+✔ constantes de domínio (1.4974ms)
+▶ elegibilidade de destinatário de campanha (fonte única da criação e do filtro por departamento)
+  ✔ só Ativo recebe (Pendente e Inativo não); e-mail precisa ser do domínio interno (0.3825ms)
+  ✔ filtroDestinatarios: ids sem repetição, todos=1 vira null, e os erros de entrada (4.6032ms)
+  ✔ trava de envio em massa: limite configurável (padrão 50) ou todos os elegíveis (0.5425ms)
+✔ elegibilidade de destinatário de campanha (fonte única da criação e do filtro por departamento) (5.7904ms)
+▶ progressoPorTempo: bordas do ciclo
+  ✔ 0 s: na fila, 0%, conclusão prevista para criação + duração (15.9621ms)
+  ✔ um instante antes de 5 s ainda é fila com 0% (0.3271ms)
+  ✔ 5 s: começa o andamento, com 1% e a primeira etapa (nunca 0% em andamento) (0.2845ms)
+  ✔ meio do andamento: 50% e a terceira etapa (0.182ms)
+  ✔ um instante antes de 20 s: 99% e "Gerando relatório" (só a conclusão é 100%) (0.1489ms)
+  ✔ 20 s e depois: concluída, 100% (0.2081ms)
+  ✔ as etapas se distribuem por igual no andamento e o progresso nunca diminui (0.7094ms)
+  ✔ relógio antes da criação (criada por outra instância) conta como fila (0.347ms)
+✔ progressoPorTempo: bordas do ciclo (20.3004ms)
+▶ progressoDaVarredura: coerente com o status gravado
+  ✔ concluída é 100%, com a data real de conclusão como estimativa (0.3966ms)
+  ✔ concluída logo ao nascer (seed:demo) continua 100%, mesmo com pouco tempo decorrido (0.1726ms)
+  ✔ concluída sem data de conclusão usa a prevista (0.1484ms)
+  ✔ em fila gravada é 0%, e em andamento gravada nunca passa de 99% nem fica em 0% (0.2138ms)
+  ✔ acompanha o tempo dentro do andamento (0.1605ms)
+✔ progressoDaVarredura: coerente com o status gravado (1.4125ms)
+▶ GET /scans/:id: regra do parâmetro
+  ✔ aceita cuid e id legível (0.9752ms)
+  ✔ recusa vazio, longo demais e caracteres fora do formato (1.1286ms)
+✔ GET /scans/:id: regra do parâmetro (2.3252ms)
+▶ limite do antivírus excedido -> ameaça por precaução (AlertExceedsMax, Melhorias #18)
+  ✔ o clamd devolve o limite excedido como ameaça, e ela vira AMEACA (2.3882ms)
+  ✔ só os nomes Heuristics.Limits.Exceeded[.<Limite>] contam como limite excedido (0.4535ms)
+  ✔ a mensagem explica o nome técnico e não diz "seguro" (0.4452ms)
+✔ limite do antivírus excedido -> ameaça por precaução (AlertExceedsMax, Melhorias #18) (5.2555ms)
+▶ veredito com nome de regra YARA -> rótulo (B23)
+  ✔ o clamd devolve o nome da regra YARA como ameaça (0.3187ms)
+  ✔ regras do Baluarte são próprias; assinaturas oficiais e YARA de terceiros, não (0.21ms)
+  ✔ a mensagem leva o rótulo só na regra própria e nunca diz "seguro" (0.1599ms)
+✔ veredito com nome de regra YARA -> rótulo (B23) (0.9638ms)
+▶ arquivos de antivirus/regras respeitam os limites do ClamAV 1.5 (B23)
+  ✔ existem as regras do cartão, com o prefixo que o compose copia (baluarte_*.yar) (0.2895ms)
+  ✔ baluarte_macro.yar: regras com nome Baluarte* (vira o rótulo de regra própria) e sem recurso que o ClamAV recusa (2.5163ms)
+  ✔ baluarte_payload_base64.yar: regras com nome Baluarte* (vira o rótulo de regra própria) e sem recurso que o ClamAV recusa (0.3371ms)
+  ✔ baluarte_powershell.yar: regras com nome Baluarte* (vira o rótulo de regra própria) e sem recurso que o ClamAV recusa (0.1277ms)
+  ✔ baluarte_teste.yar: regras com nome Baluarte* (vira o rótulo de regra própria) e sem recurso que o ClamAV recusa (0.1395ms)
+✔ arquivos de antivirus/regras respeitam os limites do ClamAV 1.5 (B23) (3.7862ms)
+▶ marcador em HTML: regra case-insensitive e varredura crua religada (DT26)
+  ✔ o marcador tem `nocase`: a forma normalizada é toda em minúsculas (1.7594ms)
+  ✔ baluarte_html_cru.cfg: uma linha DOCUMENT que desliga só o HTMLSKIPRAW (0x10) e mantém o resto ligado (1.1101ms)
+  ✔ o compose copia também os baluarte_*.cfg para o diretório de banco do clamd (0.4308ms)
+✔ marcador em HTML: regra case-insensitive e varredura crua religada (DT26) (3.5379ms)
+▶ filtro por ativo no texto do relatório (#16)
+  ✔ sem ativo, o texto de sempre; com ativo, nome e host (e o id só na auditoria) (0.9873ms)
+  ✔ o modelo do relatório leva o ativo do filtro (ou null) (0.9408ms)
+✔ filtro por ativo no texto do relatório (#16) (3.5095ms)
+▶ datas e nome do arquivo da planilha (#17)
+  ✔ nome .xlsx com a data de Brasília; o PDF segue .pdf (5.7974ms)
+  ✔ a hora de Brasília é gravada como está (a planilha não tem fuso) (0.5974ms)
+  ✔ texto de célula sem caracteres que o XML da planilha recusa (0.3233ms)
+✔ datas e nome do arquivo da planilha (#17) (7.0093ms)
+▶ planilha desenhada (#17)
+  ✔ abre no exceljs com as duas abas, propriedades e o cabeçalho do relatório (105.3866ms)
+  ✔ aba de achados: cabeçalho fixo, ordem por CVSS, CVSS número e data como data (36.831ms)
+  ✔ texto vindo do banco nunca vira fórmula, e caractere de controle não corrompe o arquivo (32.2818ms)
+  ✔ relatório vazio ainda abre: resumo com zero e traço no CVSS, aba de achados só com o cabeçalho (31.0218ms)
+✔ planilha desenhada (#17) (206.4069ms)
+▶ maior CVSS sem espalhar a lista como argumentos
+  ✔ maximo() com 300.000 notas não estoura a pilha (Math.max(...) estoura) (77.2532ms)
+  ✔ maximo(): lista vazia é null; negativos e um item só (0.239ms)
+  ✔ montarRelatorio com 300.000 achados calcula o máximo e a média (542.5518ms)
+✔ maior CVSS sem espalhar a lista como argumentos (622.2214ms)
+▶ teto de achados por exportação
+  ✔ a constante de produção é 50.000 (0.6482ms)
+  ✔ sem variável (ou vazia, inválida, zero, negativa, decimal), vale a constante (0.6328ms)
+  ✔ a variável só baixa o teto: valor maior que a constante não afrouxa o limite (0.4105ms)
+  ✔ as mensagens dizem o total, o máximo e o que fazer (0.7592ms)
+✔ teto de achados por exportação (2.8842ms)
+▶ montagem do relatório (dados antes do desenho)
+  ✔ resume por severidade e status (com zeros, na ordem oficial) e calcula CVSS médio e máximo (4.2218ms)
+  ✔ ordena por CVSS desc e, no empate, o achado mais recente primeiro (0.562ms)
+  ✔ sem achados: total zero e CVSS nulo (0.4942ms)
+  ✔ datas e nome do arquivo no horário de Brasília (o servidor roda em UTC) (8.4691ms)
+  ✔ descreve os filtros para o cabeçalho e a auditoria (0.2655ms)
+✔ montagem do relatório (dados antes do desenho) (16.5993ms)
+▶ texto nas fontes padrão do PDF (WinAnsi)
+  ✔ mantém o português e troca o que a fonte não tem (0.4818ms)
+✔ texto nas fontes padrão do PDF (WinAnsi) (0.6381ms)
+▶ PDF desenhado
+  ✔ é um PDF com cabeçalho, resumo, achados e acentos legíveis (61.7242ms)
+  ✔ quebra a página sem cortar linha, repete o cabeçalho da tabela e numera "Página X de Y" (127.3908ms)
+  ✔ relatório vazio ainda abre, com a mensagem de nenhum achado (13.6319ms)
+✔ PDF desenhado (203.2285ms)
+▶ nota de risco do ativo
+  ✔ pesos = piso da faixa CVSS 3.1 de cada severidade (escala 10/7/4/1 aprovada no DT07; trocar = mudar só a constante) (9.3243ms)
+  ✔ soma ponderada dos abertos, com teto 100 (0.3246ms)
+  ✔ riscoDe completa as quatro severidades e conta os abertos (0.2555ms)
+  ✔ ranking: nota, pontos, críticos..., nome e id (1.2455ms)
+✔ nota de risco do ativo (12.581ms)
+▶ histórico de status (regra do completo)
+  ✔ completo só quando a cadeia sai de "Aberta" e chega no status atual sem buraco (0.2102ms)
+✔ histórico de status (regra do completo) (0.3208ms)
+▶ regras da consulta paginada
+  ✔ aceita ausente, vazio e valores válidos (1.051ms)
+  ✔ recusa com o código do primeiro parâmetro inválido, na ordem das regras (0.5828ms)
+  ✔ tamanho no limite: 100 passa, 101 não (0.2299ms)
+✔ regras da consulta paginada (2.0676ms)
+▶ extração do rótulo do files.ts (o parser tolera a formatação do prettier)
+  ✔ valor numa linha só passa (2.7871ms)
+  ✔ valor quebrado em 2 linhas por concatenação passa (0.5531ms)
+  ✔ valor em template literal quebrado em 2 linhas (espaço normalizado) passa (0.4781ms)
+  ✔ uma palavra trocada falha (7.9274ms)
+  ✔ assinatura faltando ou com outro nome falha (1.261ms)
+✔ extração do rótulo do files.ts (o parser tolera a formatação do prettier) (15.9148ms)
+▶ rótulo do Zip64 no frontend = backend (baluarte-frontend/src/lib/files.ts, só leitura)
+  ✔ cada assinatura Baluarte.Zip64.* tem no files.ts o texto idêntico a ROTULO_ZIP64 / ROTULO_ZIP64_INCOMPLETA (9.3803ms)
+✔ rótulo do Zip64 no frontend = backend (baluarte-frontend/src/lib/files.ts, só leitura) (9.6188ms)
+▶ X-Real-IP não é lido pela API
+  ✔ nenhum arquivo de src/ lê o cabeçalho X-Real-IP (fora comentários) (142.8479ms)
+  ✔ o aviso em config/trustProxy.ts continua lá (e não conta como leitura) (1.1977ms)
+  ✔ o detector pega leitura em qualquer caixa e em subpasta, e ignora so comentario (7.4996ms)
+✔ X-Real-IP não é lido pela API (153.4379ms)
+▶ guarda do DT32: senha literal com hash em backend/prisma/
+  ✔ o detector pega as formas comuns (controle negativo) e ignora hash de variável (1.4818ms)
+  ✔ nenhum arquivo de backend/prisma/ fora do seed.ts faz hash de string literal (10.8387ms)
+✔ guarda do DT32: senha literal com hash em backend/prisma/ (14.1698ms)
+▶ arquivo de senhas da demonstração: caminho (DT32)
+  ✔ a raiz do repositório contém o backend (2.2518ms)
+  ✔ sem SENHAS_DEMO_ARQUIVO, o padrão é ~/.baluarte/senhas-demo.txt (2.8453ms)
+  ✔ caminho fora do repositório é aceito e sai absoluto (2.0118ms)
+  ✔ caminho dentro do repositório é recusado: backend, raiz, .git e relativo (11.7045ms)
+  ✔ no Windows, maiúsculas trocadas não escapam da recusa (1.5979ms)
+  ✔ pasta existente é recusada (3.3135ms)
+  ✔ backend fora de checkout git (imagem Docker em /app): a raiz é o próprio backend e /data fica fora (2.9353ms)
+  ✔ checkout sem .git (zip): a raiz é backend/.. (2.4972ms)
+✔ arquivo de senhas da demonstração: caminho (DT32) (30.1002ms)
+▶ arquivo de senhas da demonstração: conteúdo e gravação (DT32)
+  ✔ senha: 24 caracteres base64url (144 bits de randomBytes), sem repetição (2.6675ms)
+  ✔ conteúdo: cabeçalho com escopo honesto e linha e-mail/perfil/senha, lido de volta (1.9678ms)
+  ✔ gravação: nada no destino antes de confirmar; depois, arquivo com permissão restrita e sem temporário (99.2225ms)
+  ✔ gravação: substitui o arquivo anterior por inteiro; descartar não deixa resto (124.393ms)
+✔ arquivo de senhas da demonstração: conteúdo e gravação (DT32) (231.2079ms)
+▶ prazo para receber o corpo
+  ✔ padrões: 5 min no total, 60 s de ociosidade no envio; o servidor desliga o requestTimeout global e mantém o de cabeçalhos (2.1461ms)
+  ✔ rota comum: corpo que chega aos poucos além do total cai sem resposta (slow-loris) (825.6537ms)
+  ✔ rota comum: corpo dentro do total passa; GET sem corpo também (247.7647ms)
+  ✔ rota de envio: lenta porém estável passa do total sem ser cortada (1399.3888ms)
+  ✔ rota de envio: parada por mais que a ociosidade é interrompida (625.5747ms)
+✔ prazo para receber o corpo (3111.4527ms)
+▶ lerTrustProxy
+  ✔ aceita undefined → 0 (1.4809ms)
+  ✔ aceita "" → 0 (0.2407ms)
+  ✔ aceita "0" → 0 (0.1962ms)
+  ✔ aceita "1" → 1 (0.1526ms)
+  ✔ aceita "2" → 2 (0.1125ms)
+  ✔ aceita "5" → 5 (0.1095ms)
+  ✔ recusa "true" (0.7202ms)
+  ✔ recusa "false" (0.1849ms)
+  ✔ recusa "abc" (0.1454ms)
+  ✔ recusa "-1" (0.1161ms)
+  ✔ recusa "6" (0.1087ms)
+  ✔ recusa "10" (0.1738ms)
+  ✔ recusa "1.5" (0.1586ms)
+  ✔ recusa "01" (0.1342ms)
+  ✔ recusa " 1" (0.1341ms)
+  ✔ recusa "loopback" (0.2283ms)
+  ✔ recusa "10.0.0.1" (0.1353ms)
+  ✔ recusa "10.0.0.0/8, 127.0.0.1" (0.1307ms)
+  ✔ a mensagem explica por que "true" é recusado (0.1998ms)
+✔ lerTrustProxy (7.5896ms)
+▶ subida da API com TRUST_PROXY
+  ✔ TRUST_PROXY=true: a API não sobe e diz por quê (3532.8719ms)
+  ✔ TRUST_PROXY=6: a API não sobe e diz por quê (2851.3332ms)
+  ✔ TRUST_PROXY=1: a API sobe (controle do teste acima) (2670.1026ms)
+✔ subida da API com TRUST_PROXY (9054.7778ms)
+▶ validação de entrada
+  ✔ vazio e textoPreenchido (7.0195ms)
+  ✔ queryString só deixa passar string (bloqueia ?q[$ne]=x) (0.6987ms)
+  ✔ emailFormatoValido (0.5596ms)
+  ✔ hostValido: IPv4 com octetos de 0 a 255 e nomes de domínio (0.9381ms)
+✔ validação de entrada (10.4014ms)
+▶ política de senha
+  ✔ aceita senha que cumpre a política (0.2706ms)
+  ✔ recusa cada regra com a mensagem própria (0.4175ms)
+✔ política de senha (0.9624ms)
+▶ tokens de link
+  ✔ gerarTokenLink: 256 bits em hexadecimal, sem repetir (1.5394ms)
+  ✔ hashToken: SHA-256 determinístico e diferente do token (0.6293ms)
+✔ tokens de link (2.5619ms)
+▶ helpers de conta
+  ✔ normalizarEmail: sem espaços e em minúsculas (0.3534ms)
+  ✔ mapUsuario achata o departamento para o nome (1.3499ms)
+  ✔ hashSemSenha: nenhuma senha digitada confere, e cada conta recebe um hash diferente (628.058ms)
+  ✔ validade dos links: convite 24 h, redefinição 10 min (#20, #21) (0.2704ms)
+  ✔ validadeEmTexto: o e-mail diz a validade das constantes (0.2135ms)
+  ✔ mensagemSenhaAlterada: data e hora de Brasília, orientação e nenhum link (#4) (9.0988ms)
+✔ helpers de conta (640.068ms)
+▶ cliente do VirusTotal (config/virustotal)
+  ✔ consulta só pelo hash: GET /files/<sha256>, chave no cabeçalho x-apikey e nenhum corpo (53.9641ms)
+  ✔ arquivo sem detecção: relatório com zero malicioso e zero suspeito (8.3133ms)
+  ✔ 404: hash desconhecido pelo VirusTotal (e nada é enviado) (7.2096ms)
+[virustotal] respondeu 401 WrongCredentialsError
+[virustotal] respondeu 429 QuotaExceededError
+[virustotal] respondeu 500
+[virustotal] resposta sem last_analysis_stats
+  ✔ 401 (chave inválida), 429 (limite do VirusTotal), 500 e resposta torta viram INDISPONIVEL (11.1594ms)
+  ✔ tempo esgotado: INDISPONIVEL rápido, sem lançar (310.5445ms)
+  ✔ não segue redirecionamento (a chave não vai para outro endereço) (5.9087ms)
+  ✔ VirusTotal fora do ar (porta fechada): INDISPONIVEL (1.1048ms)
+  ✔ a chave nunca aparece no log, em nenhum caso de falha (321.0548ms)
+  ✔ hash inválido ou sem chave: não faz requisição (0.6014ms)
+  ✔ lerEstatisticas recusa formato inesperado (0.6184ms)
+  ✔ link do relatório público usa só o hash (0.1492ms)
+✔ cliente do VirusTotal (config/virustotal) (735.7841ms)
+▶ veredito e mensagem da segunda opinião (models/segundaOpiniao)
+  ✔ malicioso, suspeito, sem detecção e sem análise (0.2969ms)
+  ✔ mensagens: nunca dizem "seguro"; cota diz "indisponível agora (cota)" (0.6024ms)
+  ✔ DTO: null para análise anterior ao B20; com link e mensagem quando há consulta (0.2861ms)
+  ✔ inteiroDoAmbiente: valor válido ou padrão (0.3307ms)
+✔ veredito e mensagem da segunda opinião (models/segundaOpiniao) (1.7712ms)
+ℹ tests 351
+ℹ suites 82
+ℹ pass 350
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11914.0523
+
+✖ failing tests:
+
+test at tests\unidade\dominio-interno-producao.test.ts:1:3831
+✖ com um domínio válido o processo sobe (2846.1091ms)
+  AssertionError [ERR_ASSERTION]: node:net:2390
+      const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+                 ^
+  
+  Error: listen EADDRINUSE: address already in use :::8080
+      at Server.setupListenHandle [as _listen2] (node:net:2390:16)
+      at listenInCluster (node:net:2499:12)
+      at Server.listen (node:net:2624:7)
+      at <anonymous> (C:\Users\Leo\Desktop\Baluarte\Baluarte\.claude\worktrees\testes-jmeter-e774a0\backend\src\config\servidorHttp.ts:26:19)
+      at new Promise (<anonymous>)
+      at escutar (C:\Users\Leo\Desktop\Baluarte\Baluarte\.claude\worktrees\testes-jmeter-e774a0\backend\src\config\servidorHttp.ts:19:10)
+      at <anonymous> (C:\Users\Leo\Desktop\Baluarte\Baluarte\.claude\worktrees\testes-jmeter-e774a0\backend\src\server.ts:14:7)
+      at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+      at async node:internal/modules/esm/loader:647:26
+      at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+    code: 'EADDRINUSE',
+    errno: -4091,
+    syscall: 'listen',
+    address: '::',
+    port: 8080
+  }
+  
+  Node.js v24.22.1
+  
+  
+  false !== true
+  
+      at TestContext.<anonymous> (C:\Users\Leo\Desktop\Baluarte\Baluarte\.claude\worktrees\testes-jmeter-e774a0\backend\tests\unidade\dominio-interno-producao.test.ts:107:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+--------------------------------------|---------|----------|---------|---------|--------------------
+File                                  | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s  
+--------------------------------------|---------|----------|---------|---------|--------------------
+All files                             |    93.9 |    94.36 |   86.16 |    93.9 |                    
+ config                               |   96.48 |    89.59 |   97.67 |   96.48 |                    
+  antivirus.ts                        |   97.85 |    95.23 |     100 |   97.85 | 62-64              
+  baseExterna.ts                      |     100 |    94.44 |     100 |     100 | 34                 
+  db.ts                               |     100 |      100 |     100 |     100 |                    
+  email.ts                            |   84.95 |    81.25 |   85.71 |   84.95 | 41-56,103          
+  nvd.ts                              |     100 |    76.47 |     100 |     100 | 15,19,36,43        
+  osv.ts                              |     100 |    83.33 |     100 |     100 | 17                 
+  servidorHttp.ts                     |     100 |      100 |     100 |     100 |                    
+  trustProxy.ts                       |     100 |      100 |     100 |     100 |                    
+  virustotal.ts                       |     100 |    90.47 |     100 |     100 | 32,62,89,95        
+ middlewares                          |   76.34 |       90 |   71.42 |   76.34 |                    
+  auth.middleware.ts                  |   76.34 |       90 |   71.42 |   76.34 | 19-20,24-25,43-60  
+ models                               |   98.27 |    97.26 |   86.95 |   98.27 |                    
+  catalogoAchado.model.ts             |     100 |     90.9 |     100 |     100 | 143                
+  dominio.model.ts                    |     100 |      100 |     100 |     100 |                    
+  segundaOpiniao.model.ts             |     100 |    95.23 |     100 |     100 | 80                 
+  treinamento.model.ts                |   90.52 |      100 |      50 |   90.52 | 81-85,89-90,94-95  
+ repositories                         |    63.3 |      100 |    12.5 |    63.3 |                    
+  usuario.repository.ts               |    63.3 |      100 |    12.5 |    63.3 | ...100-101,108-109 
+ services                             |   92.04 |     95.6 |   87.83 |   92.04 |                    
+  campanhaEmail.service.ts            |   82.95 |      100 |      75 |   82.95 | 74-88              
+  campanhaMetricas.service.ts         |   94.11 |      100 |   83.33 |   94.11 | 44-47              
+  cicloVarredura.service.ts           |    86.6 |      100 |      75 |    86.6 | 96-103,106-112     
+  cvss.service.ts                     |     100 |    95.34 |     100 |     100 | 51                 
+  linkConta.service.ts                |   61.15 |      100 |      50 |   61.15 | ...5,88-93,113-121 
+  relatorioExcel.service.ts           |     100 |      100 |     100 |     100 |                    
+  relatorioPdf.service.ts             |   99.31 |    88.23 |     100 |   99.31 | 102-103            
+  relatorioVulnerabilidade.service.ts |     100 |      100 |     100 |     100 |                    
+  token.service.ts                    |   93.44 |    91.66 |   83.33 |   93.44 | 58-61              
+ utils                                |   98.79 |    96.01 |   96.72 |   98.79 |                    
+  ambiente.ts                         |     100 |      100 |     100 |     100 |                    
+  detectorZip64.ts                    |   97.79 |    93.75 |      96 |   97.79 | ...344-345,358-361 
+  esquemas.ts                         |     100 |    98.27 |     100 |     100 | 152                
+  resposta.ts                         |     100 |      100 |      90 |     100 |                    
+  tokens.ts                           |     100 |      100 |     100 |     100 |                    
+  validacao.ts                        |     100 |      100 |     100 |     100 |                    
+--------------------------------------|---------|----------|---------|---------|--------------------
+exit=1 dur=14s fim 2026-11-24T15:45:13-03:00

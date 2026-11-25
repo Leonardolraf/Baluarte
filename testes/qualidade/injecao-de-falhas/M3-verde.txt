@@ -1,0 +1,41 @@
+# M3 - MUTACAO REVERTIDA (codigo original) - 2026-11-24T21:23:25-03:00
+# comando: node --import tsx --test tests/seguranca/conta-forca-bruta.test.ts
+# git diff -- src (vazio = original):
+
+▶ login: limite de tentativas / forca bruta
+  ✔ bloqueia com 429 MUITAS_TENTATIVAS apos 5 falhas e a conta segue bloqueada mesmo com a senha correta (625.6482ms)
+  ✔ o bloqueio e por conta: uma conta travada nao afeta outra conta nem o seed (953.7541ms)
+  ✔ um login valido zera o contador de falhas da conta (802.7838ms)
+  ✔ o limitador tambem cobre e-mails inexistentes (nao ha canal privilegiado para adivinhar contas) (390.3043ms)
+✔ login: limite de tentativas / forca bruta (2954.0555ms)
+▶ login: nao-enumeracao de usuarios
+  ✔ e-mail inexistente e senha errada de conta real respondem com status/mensagem/codigo identicos (144.71ms)
+  ✔ varias amostras: inexistente x senha-errada permanecem indistinguiveis (sem oraculo de enumeracao) (700.061ms)
+  ✔ senha errada nao revela existencia via status: nunca devolve 404 para conta desconhecida (74.7122ms)
+✔ login: nao-enumeracao de usuarios (920.1276ms)
+▶ redefinicao de senha: token, expiracao, limite e enumeracao
+  ✔ responde a MESMA mensagem generica para e-mail conhecido e desconhecido (273.1163ms)
+  ✔ conta Inativa nao recebe token de redefinicao (resposta segue generica) (272.1847ms)
+  ✔ token de redefinicao e de uso unico: reuso apos consumir -> TOKEN_RESET_INVALIDO (491.6635ms)
+  ✔ token expira em ~10 min: token vencido -> TOKEN_RESET_INVALIDO (326.4748ms)
+  ✔ limita a 3 solicitacoes por e-mail em 15 min (4a -> 429) (23.6428ms)
+  ✔ valida formato/tamanho do e-mail antes de qualquer processamento (2.4391ms)
+  ✔ a redefinicao de uma conta nao altera a senha de outra (isolamento por usuario) (768.9869ms)
+  ✔ redefinir a senha encerra sessoes abertas antes (cenario de credencial comprometida) (1737.141ms)
+✔ redefinicao de senha: token, expiracao, limite e enumeracao (3896.5846ms)
+▶ politica de senha e senha provisoria
+  ✔ reset/confirm aplica a politica de senha e exige token valido (459.2838ms)
+  ✔ change-password exige token, campos e a senha atual correta (361.3246ms)
+  ✔ change-password rejeita senhas fracas e a repetida (362.6262ms)
+  ✔ sem senha provisoria: conta Pendente nao entra por senha nenhuma e vira Ativa so pelo convite (454.8265ms)
+  ✔ o hash de senha nunca volta em nenhuma resposta (login, /me, /usuarios, PATCH) (317.2538ms)
+✔ politica de senha e senha provisoria (1955.8326ms)
+ℹ tests 20
+ℹ suites 4
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16544.7601
+# exit=0

@@ -1,0 +1,12 @@
+diff --git a/backend/src/routes/ativo.routes.ts b/backend/src/routes/ativo.routes.ts
+index 2949b91..94b74ec 100644
+--- a/backend/src/routes/ativo.routes.ts
++++ b/backend/src/routes/ativo.routes.ts
+@@ -6,6 +6,6 @@ import { wrap } from '../utils/resposta.js';
+ 
+ // Rotas de ativos. POST /assets e do contrato N2 AT1.
+ export function rotasAtivos(r: Router) {
+-  r.post('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(ativoController.cadastrar));
++  r.post('/assets', exigePerfil(...OPERADORES), wrap(ativoController.cadastrar));
+   r.get('/assets', exigeToken, exigePerfil(...OPERADORES), wrap(ativoController.listar));
+ }

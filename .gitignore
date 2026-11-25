@@ -35,3 +35,6 @@ e2e/resultados*/
 
 # DT32: senhas da demonstração nunca entram no repositório (o seed:demo já recusa caminho aqui dentro)
 senhas-demo*.txt
+
+# Amostras brutas do JMeter (9 MB por rodada); o relatorio-html e o RELATORIO.md ficam versionados.
+testes/carga/jmeter/resultados.jtl

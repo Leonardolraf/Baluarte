@@ -1,0 +1,103 @@
+# M3 - MUTACAO APLICADA (M3-sem-limite-login.patch) - 2026-11-24T21:23:08-03:00
+# comando: node --import tsx --test tests/seguranca/conta-forca-bruta.test.ts
+ backend/src/services/auth.service.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+▶ login: limite de tentativas / forca bruta
+  ✖ bloqueia com 429 MUITAS_TENTATIVAS apos 5 falhas e a conta segue bloqueada mesmo com a senha correta (689.3262ms)
+  ✖ o bloqueio e por conta: uma conta travada nao afeta outra conta nem o seed (638.5204ms)
+  ✔ um login valido zera o contador de falhas da conta (771.1781ms)
+  ✖ o limitador tambem cobre e-mails inexistentes (nao ha canal privilegiado para adivinhar contas) (412.5206ms)
+✖ login: limite de tentativas / forca bruta (2682.6393ms)
+▶ login: nao-enumeracao de usuarios
+  ✔ e-mail inexistente e senha errada de conta real respondem com status/mensagem/codigo identicos (145.6302ms)
+  ✔ varias amostras: inexistente x senha-errada permanecem indistinguiveis (sem oraculo de enumeracao) (631.4077ms)
+  ✔ senha errada nao revela existencia via status: nunca devolve 404 para conta desconhecida (70.3893ms)
+✔ login: nao-enumeracao de usuarios (848.0108ms)
+▶ redefinicao de senha: token, expiracao, limite e enumeracao
+  ✔ responde a MESMA mensagem generica para e-mail conhecido e desconhecido (251.8997ms)
+  ✔ conta Inativa nao recebe token de redefinicao (resposta segue generica) (239.2932ms)
+  ✔ token de redefinicao e de uso unico: reuso apos consumir -> TOKEN_RESET_INVALIDO (440.9134ms)
+  ✔ token expira em ~10 min: token vencido -> TOKEN_RESET_INVALIDO (315.7485ms)
+  ✔ limita a 3 solicitacoes por e-mail em 15 min (4a -> 429) (28.3816ms)
+  ✔ valida formato/tamanho do e-mail antes de qualquer processamento (3.5393ms)
+  ✔ a redefinicao de uma conta nao altera a senha de outra (isolamento por usuario) (773.3465ms)
+  ✔ redefinir a senha encerra sessoes abertas antes (cenario de credencial comprometida) (1732.9371ms)
+✔ redefinicao de senha: token, expiracao, limite e enumeracao (3786.8987ms)
+▶ politica de senha e senha provisoria
+  ✔ reset/confirm aplica a politica de senha e exige token valido (476.2572ms)
+  ✔ change-password exige token, campos e a senha atual correta (359.1921ms)
+  ✔ change-password rejeita senhas fracas e a repetida (359.87ms)
+  ✔ sem senha provisoria: conta Pendente nao entra por senha nenhuma e vira Ativa so pelo convite (465.8299ms)
+  ✔ o hash de senha nunca volta em nenhuma resposta (login, /me, /usuarios, PATCH) (319.315ms)
+✔ politica de senha e senha provisoria (1980.9749ms)
+ℹ tests 20
+ℹ suites 4
+ℹ pass 17
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16335.7471
+
+✖ failing tests:
+
+test at tests\seguranca\conta-forca-bruta.test.ts:1:1555
+✖ bloqueia com 429 MUITAS_TENTATIVAS apos 5 falhas e a conta segue bloqueada mesmo com a senha correta (689.3262ms)
+  AssertionError [ERR_ASSERTION]: esperava 429 MUITAS_TENTATIVAS, veio 401 {"status":"erro","mensagem":"E-mail ou senha inválidos","codigoErro":"CREDENCIAIS_INVALIDAS","timestamp":"2026-11-25T00:23:16Z"}
+  
+  401 !== 429
+  
+      at esperaErro (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\helpers.ts:151:10)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\conta-forca-bruta.test.ts:76:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 401,
+    expected: 429,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\conta-forca-bruta.test.ts:1:2063
+✖ o bloqueio e por conta: uma conta travada nao afeta outra conta nem o seed (638.5204ms)
+  AssertionError [ERR_ASSERTION]: esperava 429 MUITAS_TENTATIVAS, veio 401 {"status":"erro","mensagem":"E-mail ou senha inválidos","codigoErro":"CREDENCIAIS_INVALIDAS","timestamp":"2026-11-25T00:23:17Z"}
+  
+  401 !== 429
+  
+      at esperaErro (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\helpers.ts:151:10)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\conta-forca-bruta.test.ts:86:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 401,
+    expected: 429,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\conta-forca-bruta.test.ts:1:3119
+✖ o limitador tambem cobre e-mails inexistentes (nao ha canal privilegiado para adivinhar contas) (412.5206ms)
+  AssertionError [ERR_ASSERTION]: esperava 429 MUITAS_TENTATIVAS, veio 401 {"status":"erro","mensagem":"E-mail ou senha inválidos","codigoErro":"CREDENCIAIS_INVALIDAS","timestamp":"2026-11-25T00:23:18Z"}
+  
+  401 !== 429
+  
+      at esperaErro (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\helpers.ts:151:10)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\conta-forca-bruta.test.ts:113:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 401,
+    expected: 429,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+# exit=1

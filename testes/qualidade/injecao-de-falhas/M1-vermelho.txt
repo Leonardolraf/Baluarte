@@ -1,0 +1,152 @@
+# M1 - MUTACAO APLICADA (M1-sem-exigeToken.patch) - 2026-11-24T21:22:47-03:00
+# comando: node --import tsx --test tests/seguranca/autorizacao.test.ts
+ backend/src/routes/ativo.routes.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+▶ tokens forjados e adulterados → 401
+  ✖ sem cabeçalho Authorization → TOKEN_AUSENTE (6.9776ms)
+  ✔ esquema Bearer sem credencial válida é rejeitado (401) (3.3163ms)
+  ✔ esquema não-Bearer com credencial arbitrária → TOKEN_INVALIDO (3.2588ms)
+  ✔ token assinado com OUTRO segredo → TOKEN_INVALIDO (2.9594ms)
+  ✔ token com alg=none → TOKEN_INVALIDO (não aceita algoritmo sem assinatura) (2.2157ms)
+  ✔ payload editado sem re-assinar (perfil elevado) → TOKEN_INVALIDO (2.1856ms)
+  ✔ token expirado (exp no passado) → TOKEN_INVALIDO (1.4997ms)
+  ✔ token bem assinado para idUsuario inexistente → USUARIO_REMOVIDO (5.1949ms)
+✖ tokens forjados e adulterados → 401 (557.504ms)
+▶ escalada vertical e horizontal → 403
+  ✔ Colaborador não opera a plataforma (scans, assets, campaigns, listas técnicas) (27.971ms)
+  ✔ Colaborador não acessa a gestão de usuários (GET/POST/PATCH/DELETE) (18.922ms)
+  ✔ Analista lê listas técnicas mas não gerencia usuários (GET/PATCH/DELETE /users) (47.5474ms)
+  ✔ Analista não cria Administrador (escalada vertical), mas cria Analista/Colaborador (170.448ms)
+  ✔ JWT com perfil "Administrador" NÃO vence: o servidor decide pelo perfil do banco → 403 (14.3416ms)
+✔ escalada vertical e horizontal → 403 (279.7465ms)
+▶ POST /assets — matriz de perfis (cartão #23)
+  ✖ sem token → 401 TOKEN_AUSENTE, sem ativo nem auditoria (1.8777ms)
+  ✔ Colaborador → 403 PERFIL_SEM_PERMISSAO, sem ativo nem auditoria (inclusive com corpo inválido) (7.6589ms)
+  ✖ Analista → 201, com o ativo gravado e a auditoria CRIAR_ATIVO (1.7993ms)
+  ✖ Administrador → 201 (1.7413ms)
+✖ POST /assets — matriz de perfis (cartão #23) (13.4936ms)
+▶ IDOR — treinamento pós-clique pertence ao destinatário
+  ✔ Colaborador não conclui o treinamento de OUTRO destinatário (403), mas o dono conclui (200) (607.2673ms)
+✔ IDOR — treinamento pós-clique pertence ao destinatário (607.4466ms)
+▶ perfil defasado no token e ciclo de sessão
+  ✔ rebaixar um admin invalida o poder do token antigo (ainda "Administrador") → 403 (319.5038ms)
+  ✔ conta inativada perde acesso na hora (401 USUARIO_INATIVO) e o login é recusado (403) (361.5539ms)
+  ✔ conta excluída invalida o token na hora → 401 USUARIO_REMOVIDO (313.4002ms)
+  ✔ redefinição de senha encerra as sessões abertas antes → 401 SENHA_REDEFINIDA (280.1649ms)
+✔ perfil defasado no token e ciclo de sessão (1274.9498ms)
+▶ proteções da gestão de administradores
+  ✔ o admin não inativa nem exclui a própria conta (422) (8.3422ms)
+  ✔ não é possível rebaixar nem excluir o último administrador ativo (409 ULTIMO_ADMIN) (12.3046ms)
+  ✔ administrador Pendente não conta como outro admin: rebaixar ou excluir o único Ativo dá 409 ULTIMO_ADMIN (B10) (102.3206ms)
+✔ proteções da gestão de administradores (123.2813ms)
+▶ fechado por padrão: toda rota protegida responde 401 sem token (S1)
+  ✖ cada rota com exigeToken/exigeSessao do roteador devolve 401 TOKEN_AUSENTE sem cabeçalho (0.9707ms)
+  ✔ Colaborador não lê o detalhe de um achado: GET /vulnerabilidades/:id → 403 (8.3971ms)
+✖ fechado por padrão: toda rota protegida responde 401 sem token (S1) (9.5425ms)
+ℹ tests 27
+ℹ suites 7
+ℹ pass 22
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9320.0047
+
+✖ failing tests:
+
+test at tests\seguranca\autorizacao.test.ts:1:1302
+✖ sem cabeçalho Authorization → TOKEN_AUSENTE (6.9776ms)
+  AssertionError [ERR_ASSERTION]: esperava 401 TOKEN_AUSENTE, veio 403 {"status":"erro","mensagem":"Acesso negado para o seu perfil","codigoErro":"PERFIL_SEM_PERMISSAO","timestamp":"2026-11-25T00:22:55Z"}
+  
+  403 !== 401
+  
+      at esperaErro (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\helpers.ts:151:10)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\autorizacao.test.ts:70:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 403,
+    expected: 401,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\autorizacao.test.ts:1:7903
+✖ sem token → 401 TOKEN_AUSENTE, sem ativo nem auditoria (1.8777ms)
+  AssertionError [ERR_ASSERTION]: esperava 401 TOKEN_AUSENTE, veio 403 {"status":"erro","mensagem":"Acesso negado para o seu perfil","codigoErro":"PERFIL_SEM_PERMISSAO","timestamp":"2026-11-25T00:22:55Z"}
+  
+  403 !== 401
+  
+      at esperaErro (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\helpers.ts:151:10)
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\autorizacao.test.ts:193:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 403,
+    expected: 401,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\autorizacao.test.ts:1:8615
+✖ Analista → 201, com o ativo gravado e a auditoria CRIAR_ATIVO (1.7993ms)
+  AssertionError [ERR_ASSERTION]: {"status":"erro","mensagem":"Acesso negado para o seu perfil","codigoErro":"PERFIL_SEM_PERMISSAO","timestamp":"2026-11-25T00:22:55Z"}
+  
+  403 !== 201
+  
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\autorizacao.test.ts:208:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 403,
+    expected: 201,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\autorizacao.test.ts:1:8974
+✖ Administrador → 201 (1.7413ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  403 !== 201
+  
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\autorizacao.test.ts:215:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 403,
+    expected: 201,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\seguranca\autorizacao.test.ts:1:15485
+✖ cada rota com exigeToken/exigeSessao do roteador devolve 401 TOKEN_AUSENTE sem cabeçalho (0.9707ms)
+  AssertionError [ERR_ASSERTION]: esperava ao menos 47 rotas protegidas, achei 46
+      at TestContext.<anonymous> (C:\Users\Leo\AppData\Local\Temp\claude\90691141517afe03\b224fffc-c248-4810-b1db-ad5af614b1f8\scratchpad\mut\backend\tests\seguranca\autorizacao.test.ts:379:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+# exit=1
