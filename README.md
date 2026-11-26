@@ -73,7 +73,9 @@ npm run dev
 | **Funcional — Playwright, modo mock** (suíte funcional oficial, desktop + mobile) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e` | 46 testes (+14 capturas de tela de referência, só com `E2E_SCREENSHOTS=1`) |
 | **Funcional — Playwright, modo real** (suíte funcional oficial contra a API real) | `baluarte-frontend/e2e/real/` | `cd baluarte-frontend && npm run test:e2e:real` (sobe e derruba tudo; ver abaixo) | 21 testes (com ClamAV: 20 + 1 na 2ª rodada; sem ClamAV: 16, e os 5 que dependem dele ficam como *skipped*) |
 | **Funcional — Playwright, outros navegadores** (RNF-007, B30) | `baluarte-frontend/e2e/` | `cd baluarte-frontend && npm run test:e2e:navegadores` (instalar antes: `npm run test:e2e:navegadores:instalar`) | 126 testes (42 de desktop × Firefox, WebKit e Edge, em 1366×768) |
-| **Carga da API** (RNF-004, B30) | `backend/scripts/carga.mjs` | `cd backend && npm run carga` (instância isolada na 8100) | relatório em `testes/carga/RELATORIO.md`: dashboard, vulnerabilidades e ativos com 200 conexões dentro de p90 ≤ 3 s |
+| **Carga da API — autocannon** (RNF-004, B30) | `backend/scripts/carga.mjs` | `cd backend && npm run carga` (instância isolada na 8100) | relatório em `testes/carga/RELATORIO.md`: dashboard, vulnerabilidades e ativos com 200 conexões dentro de p90 ≤ 3 s; PDF com p95 ≤ 60 s |
+| **Carga da API — Apache JMeter** (RNF-004) | `testes/carga/jmeter/baluarte-carga.jmx` | `cd backend && JMETER_HOME=<pasta do JMeter 5.6.3> npm run carga:jmeter` (mesma instância isolada) | relatório em `testes/carga/jmeter/RELATORIO.md` + relatório HTML do JMeter: mesmos cenários com login real e token extraído da resposta, todos dentro da meta, 0 respostas fora de 2xx |
+| **Injeção de falhas** (prova de que os testes pegam o erro) | `testes/qualidade/injecao-de-falhas/` | `sh rodar-mutacoes.sh <worktree descartável> <pasta>` | 4 mutações (M1–M4), cada uma deixa um teste vermelho; 4 defeitos reais com a saída vermelha e a verde |
 | **Análise estática — SonarQube** (RNF-008, B30) | `scripts/sonarqube.mjs` | `node scripts/sonarqube.mjs` (depois da cobertura) | relatório em `testes/qualidade/sonarqube.md`: 0 bugs; 0 vulnerabilidades no backend |
 
 - **Quadro de segurança** (tipo de ataque × status × evidência, cartão #13): [`testes/qualidade/QUADRO-SEGURANCA.md`](testes/qualidade/QUADRO-SEGURANCA.md).
@@ -82,7 +84,7 @@ npm run dev
 ### Cobertura e relatório de testes (roteiro 3.2)
 
 ```bash
-cd backend && npm run test:unidade      # só os 254 testes de unidade (sem banco, ~6 s: sobe o server.ts três vezes)
+cd backend && npm run test:unidade      # só os 351 testes de unidade (sem banco: sobe o server.ts em processos filhos)
 cd backend && npm run test:relatorio    # cobertura de unidade + completa e coverage/RELATORIO.md
 cd baluarte-frontend && npm run test:coverage
 ```
@@ -95,7 +97,7 @@ O `test:relatorio` mede a cobertura com o c8 e escreve `backend/coverage/RELATOR
 | Backend — completa (unidade + banco + integração + pentest) | 747 | 100% | 99,2% | 94,4% | 99,3% |
 | Frontend (Vitest) | 523 | 100% | 91,8% | 84,7% | 83,9% |
 
-Backend medido em 13/10/2026, com 747 testes (hoje são 928, sem nova medição de cobertura); frontend na última medição registrada aqui. As três medidas das três suítes estão acima dos 70% do RNF-08 (as funções do frontend subiram de 63,2% para 81,8% no DT03).
+Backend medido em 13/10/2026, com 747 testes (hoje são 1.058, sem nova medição de cobertura); frontend na última medição registrada aqui. As três medidas das três suítes estão acima dos 70% do RNF-08 (as funções do frontend subiram de 63,2% para 81,8% no DT03).
 
 **Todos os métodos de verificação** (o que cada um verifica, como rodar, o número mais recente, `npm audit` e as lacunas conhecidas) estão reunidos em [`testes/qualidade/metodos-verificacao.md`](testes/qualidade/metodos-verificacao.md).
 
@@ -149,15 +151,73 @@ Três verificações dos requisitos não funcionais que rodam à parte das suít
 
 **Carga (RNF-004).** `cd backend && npm run carga` ([`backend/scripts/carga.mjs`](backend/scripts/carga.mjs), ~5 min) sobe uma instância **isolada** (banco descartável `baluarte_carga` no Postgres local com `seed` + `seed:demo` + `seed:carga`, 1.208 achados em 25 ativos, com o histórico de status do B25b; API na `8100` com `NODE_ENV=production`), mede com o **autocannon 8.0.0** (versão fixa em `devDependencies`), escreve [`testes/carga/RELATORIO.md`](testes/carga/RELATORIO.md) e `resultados.json` e apaga tudo no fim. Nunca usa a `8080`, o banco `baluarte` nem a Vercel/Supabase. Resultado com 200 conexões simultâneas (o "200 usuários" do RNF-004), 30 s por cenário:
 
-| Cenário | p50 | p90 | p99 | Req/s | Meta | |
-|---|---:|---:|---:|---:|---|---|
-| `GET /api/dashboard` (com a evolução de 30 dias) | 1.268 ms | 1.354 ms | 1.425 ms | 154 | p90 ≤ 3 s | atende |
-| `GET /api/vulnerabilidades` (páginas de 20) | 387 ms | 412 ms | 450 ms | 511 | p90 ≤ 3 s (US-003) | atende |
-| `GET /api/assets` | 274 ms | 296 ms | 317 ms | 722 | p90 ≤ 3 s | atende |
-| PDF com 1.208 achados (10 conexões) | 5,9 s | 6,3 s | 6,3 s | 1,7 | p95 ≤ 60 s | atende |
-| Login com senha certa (50 conexões) | 3,0 s | 3,4 s | 4,1 s | 16 | sem meta | informativo |
+| Cenário (rodada de 24/11/2026) | p50 | p90 | p95 | p99 | Req/s | Meta | |
+|---|---:|---:|---:|---:|---:|---|---|
+| `GET /api/dashboard` (com a evolução de 30 dias), 200 conexões | 1.105 ms | 1.288 ms | 1.330 ms | 1.400 ms | 174 | p90 ≤ 3 s | atende |
+| `GET /api/vulnerabilidades` (todas as páginas de 20), 200 conexões | 345 ms | 375 ms | 386 ms | 432 ms | 568 | p90 ≤ 3 s (US-003) | atende |
+| `GET /api/assets`, 200 conexões | 242 ms | 273 ms | 289 ms | 309 ms | 807 | p90 ≤ 3 s | atende |
+| PDF com 1.208 achados, 1 conexão | 543 ms | 563 ms | 574 ms | 585 ms | 1,8 | p95 ≤ 60 s | atende |
+| Login com senha certa, 50 conexões | 2,9 s | 3,1 s | 3,2 s | 3,8 s | 17 | sem meta | informativo |
+
+Os percentis contam só as respostas 2xx, e qualquer resposta fora de 2xx reprova o cenário. Essa regra veio de um **falso verde corrigido em 24/11** (`87a3459`). Desde o DT36, a exportação tem vaga única. O cenário antigo do PDF, com 10 conexões, recebia 3.105 × 429 em 3.159 respostas, e o p95 saía "atende" porque contava as recusas rápidas. Agora o PDF roda com 1 conexão, e um cenário à parte dispara 3 exportações simultâneas e exige exatamente 1 PDF e 2 × 429 `EXPORTACAO_EM_ANDAMENTO` (atende).
 
 Sem o B30, o **dashboard reprova** (p90 de 8,75 s, 20 req/s, sobre a main `4f6faf7`): ele trazia todos os achados do banco a cada leitura, a evolução de 30 dias do B25b fazia ~30 buscas no índice por achado (e ligava o JIT do Postgres) e a janela de dias montava dezenas de formatadores de data por leitura. O B30 agrega no banco (`panoramaAbertos`), lê o histórico como trechos de status (`abertosPorDia`) e reaproveita um formatador por fuso, com o mesmo resultado (`tests/dashboard.test.ts`). O login é a rota mais cara (bcrypt em JavaScript puro, ~70 ms de CPU cada) e não tem meta no DRS. O limite de tentativas segura a rajada: 20 senhas erradas simultâneas dão 5 × 401 e 15 × 429 (a primeira rodada do B30 mostrou 20 × 401; corrigido no DT09).
+
+**Carga no Apache JMeter (RNF-004, 24/11/2026).** Os mesmos cenários também têm um plano no JMeter, [`testes/carga/jmeter/baluarte-carga.jmx`](testes/carga/jmeter/baluarte-carga.jmx), que abre na interface do JMeter. O `npm run carga:jmeter` (`carga.mjs --jmeter`) reaproveita a preparação do `npm run carga`: banco descartável `baluarte_carga` e API isolada na `8100`. Em seguida ele:
+
+1. roda o plano sem interface (`jmeter -n`);
+2. gera o relatório HTML do JMeter (`relatorio-html/index.html`, sem o aquecimento e a preparação, conforme `relatorio.properties`);
+3. calcula os percentis pelo mesmo método do autocannon e escreve [`testes/carga/jmeter/RELATORIO.md`](testes/carga/jmeter/RELATORIO.md) e `resultados.json`;
+4. apaga tudo no fim.
+
+O `npm run carga:ambiente` só sobe o banco e a API e mostra as propriedades `-J`, para quem quiser rodar o plano pela interface. Como o plano é montado:
+
+- **Login real e token extraído da resposta.** Um grupo de preparação faz login de verdade com três contas (Administrador e dois Analistas). Um `JSON Extractor` tira o token de `$.dados.token`, e os grupos de carga mandam `Authorization: Bearer` revezando as três sessões.
+- **Paginação lida da API.** O número de páginas da lista vem de `$.resumo.total`.
+- **Cenários.** Cada grupo tem 3 s de aquecimento fora da medição. Dashboard, lista paginada e ativos rodam com **200 usuários simultâneos** sem pausa. O PDF roda com 1 usuário, mais 3 exportações sincronizadas (Synchronizing Timer). O login com senha certa roda com 50 usuários. Há ainda uma rajada de 20 senhas erradas sincronizadas seguida da senha certa.
+- **Asserções.** Status 200, corpo do PDF começando com `%PDF-`, e Duration Assertion de 3 s (dashboard e lista) e de 60 s (PDF).
+- **Sem scripts.** O plano não usa JSR223: o Groovy 3.0.20 do JMeter 5.6.3 não roda no Java 25.
+
+| Cenário (JMeter 5.6.3, 24/11/2026) | Usuários | Requisições | p50 | p90 | p95 | p99 | Req/s | não 2xx | Meta | |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| Dashboard | 200 | 5.799 | 1.052 ms | 1.083 ms | 1.100 ms | 1.148 ms | 189 | 0 | p90 ≤ 3 s | atende |
+| Vulnerabilidades paginadas | 200 | 17.517 | 338 ms | 374 ms | 384 ms | 414 ms | 579 | 0 | p90 ≤ 3 s | atende |
+| Ativos com nota de risco | 200 | 24.738 | 239 ms | 265 ms | 272 ms | 285 ms | 820 | 0 | p90 ≤ 3 s | atende |
+| PDF do relatório | 1 | 55 | 550 ms | 563 ms | 563 ms | 571 ms | 1,8 | 0 | p95 ≤ 60 s | atende |
+| Login com senha certa | 50 | 550 | 2,9 s | 3,1 s | 3,3 s | 3,6 s | 17 | 0 | sem meta | informativo |
+
+Os resultados conferem com os da segunda ferramenta:
+
+- **Exportações simultâneas:** 1 × 200 e 2 × 429 `EXPORTACAO_EM_ANDAMENTO`, como exige o DT36.
+- **Rajada de senhas erradas:** 5 × 401 e 15 × 429, e logo depois a senha certa também recebe 429, porque o e-mail fica bloqueado até a janela passar (DT09).
+
+Ressalvas: JMeter, API e banco dividem a mesma máquina, então os números são conservadores para a API e não medem a demonstração pública. O `resultados.jtl` bruto (~9 MB) fica fora do git.
+
+### Prova de que os testes detectam erros (24/11/2026)
+
+[`testes/qualidade/injecao-de-falhas/`](testes/qualidade/injecao-de-falhas/README.md) tem duas partes, que não se misturam:
+
+- **Falhas injetadas de propósito (M1–M4).** Cada mutação foi aplicada numa worktree descartável, nunca no código do produto. Cada uma deixou vermelho um teste que já existia, e a saída real ficou guardada antes e depois de reverter (`M<n>-vermelho.txt` / `M<n>-verde.txt`):
+  - **M1:** tirar o `exigeToken` do `POST /assets` derruba 5 testes de autorização;
+  - **M2:** mudar a borda da faixa CVSS "Alto", que faz 8,9 cair em Crítico, derruba o teste dos limites das faixas;
+  - **M3:** desligar o limite de login derruba 3 testes de força bruta;
+  - **M4:** deixar o Analista excluir usuários derruba 2 testes de RBAC.
+- **Defeitos reais que um teste pegou (`casos-reais/`).** Cada um tem a saída vermelha e a verde:
+  - a porta 8080 fixa no teste do DT28;
+  - o falso verde do PDF na carga;
+  - o limite de login furado sob rajada (DT09);
+  - o histórico de status fora de ordem (DT10).
+
+  O DT09 e o DT10 foram reproduzidos com o código antigo do próprio histórico do git.
+
+**Controle de acesso testado rota a rota (métrica S1 do Plano de Qualidade).** [`testes/qualidade/s1-controle-acesso/`](testes/qualidade/s1-controle-acesso/) lê o inventário de rotas do próprio roteador da API (`apiRouter.stack`) e cruza com as respostas registradas durante a suíte. Uma rota protegida só conta quando:
+
+- respondeu 401 a um pedido sem token;
+- e, se for restrita por perfil, respondeu 403 `PERFIL_SEM_PERMISSAO` a um perfil não permitido.
+
+Resultado: **47 de 47 rotas protegidas (100%)**, contra 29 de 47 antes dos testes acrescentados no `3a191bc`. São 58 rotas ao todo, 11 delas públicas.
+
+**IQG de 24/11/2026.** O cálculo do Plano de Qualidade v2 está em [`testes/qualidade/IQG-2026-11-24.md`](testes/qualidade/IQG-2026-11-24.md). O resultado é **parcial**: 15 de 23 métricas foram medidas, e as 8 restantes são manuais ou dependem da base da demonstração. Com as ausentes valendo 0, o IQG fica em **56,0**, reprovado. Só sobre as medidas, fica em **90,0**. Nenhum dos dois números aprova o sistema: o segundo esconde três métricas manuais da Adequação Funcional, e a S4 (SonarQube) e a M2 (manutenibilidade) ficaram em 0 por medição.
 
 **Análise estática (RNF-008).** [`scripts/sonarqube.mjs`](scripts/sonarqube.mjs) sobe o **SonarQube Community 26.8** num contêiner local e temporário, gera o token na hora (nunca vai para arquivo), roda o **sonar-scanner** oficial (contêiner `12.2.0.4256_8.1.0`) no backend e no frontend com o `sonar-project.properties` de cada pasta e o lcov da cobertura, grava [`testes/qualidade/sonarqube.md`](testes/qualidade/sonarqube.md) (+ `sonarqube.json`) e remove contêineres, volumes e rede. Antes, gere a cobertura: `cd backend && TEST_DB_PREFIXO=sonar_ npm run cobertura` e `cd baluarte-frontend && npm run test:coverage`. Resultado (análise feita sobre a base `d89cc3f`, antes dos rebases): **0 bugs** nos dois projetos, **0 vulnerabilidades** no backend e 6 no frontend (todas na camada mock, que não entra no build de produção), cobertura 98,2% / 90,9%, duplicação 1,4% / 0,8%. O "zero issues críticos" do RNF-008 **não é atendido ao pé da letra**: restam 5 (backend) e 22 (frontend) issues CRITICAL/BLOCKER de manutenibilidade (complexidade cognitiva, aninhamento e um script de capturas sem asserção), sem nenhum bug ou vulnerabilidade crítica. Triagem completa no relatório.
 
@@ -459,7 +519,7 @@ Roteiro completo (serviço, variáveis, migração dos dados do Supabase, troca 
 ```
 backend/            API real (Express + Prisma/PostgreSQL)
   prisma/           schema + seed (contrato) + seed-demo + seed-carga (massa do teste de carga, B30)
-  scripts/          relatorio-testes.mjs (B03), carga.mjs (teste de carga, B30), aplicar-retencao-auditoria.ts
+  scripts/          relatorio-testes.mjs (B03), carga.mjs (teste de carga, B30; --jmeter roda o plano do JMeter, --ambiente só sobe banco e API), aplicar-retencao-auditoria.ts
   src/              arquitetura em camadas: rota → controller → service → repository
                     (um arquivo por funcionalidade em cada camada: auth, usuario, departamento, ativo,
                     varredura, vulnerabilidade, campanha, treinamento, dashboard, notificacao, auditoria,
@@ -483,5 +543,5 @@ agente/             instaladores do agente osquery (Linux .sh, Windows .ps1), ve
 scripts/            gerar-certificados.sh (B06), validar-agente-docker.sh + validacao-agente/ (B08), e2e-real.mjs (B15), sonarqube.mjs (B30)
 e2e/                6 suítes Robot apontando para o frontend legado
 testes-api/         collection + environment do Postman
-testes/             materiais originais da N2 AT1 (stubs, evidências) + carga/ e qualidade/ (relatórios do B30)
+testes/             materiais originais da N2 AT1 (stubs, evidências) + carga/ (autocannon e jmeter/, plano .jmx e relatórios) e qualidade/ (SonarQube, IQG, injeção de falhas, S1)
 ```
